@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { memo, useState } from "react";
 import { Icon } from "../icons";
 import { formatClock } from "../lib/format";
-import { quotaPace } from "../lib/quotaPace";
 import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
@@ -95,7 +94,6 @@ function QuotaRow({
   onRefresh?: () => void;
 }) {
   const tone = row.freshness === "official" ? "ok" : row.freshness === "stale" ? "warn" : "idle";
-  const capturedAt = row.captured_at ? Date.parse(row.captured_at) : Number.NaN;
   return (
     <li className={`official-quota-row tone-${tone}`}>
       <div className="official-quota-head">
@@ -124,9 +122,6 @@ function QuotaRow({
         <div className="official-quota-windows">
           {row.windows.map((window) => {
             const percent = window.used_percent;
-            // 只看百分比看不出好坏，配上「窗口已过多少」才知道是不是烧超了。
-            // 基准取抓取时刻而不是当下：百分比本来就是那一刻的快照，两边要对齐。
-            const pace = quotaPace(window.kind, percent, window.resets_at, capturedAt);
             return (
               <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
                 <span>{window.label}</span>
@@ -136,7 +131,6 @@ function QuotaRow({
                 </div>
                 <span className="muted">
                   {window.resets_at ? `重置 ${formatClock(window.resets_at)}` : "重置时间未知"}
-                  {pace ? <em className={`quota-pace tone-${pace.tone}`}>{pace.label}</em> : null}
                 </span>
               </div>
             );

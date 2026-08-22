@@ -5778,15 +5778,3 @@ td.row-actions {
   overflow-wrap: anywhere;
 }
 
-.quota-pace {
-  margin-left: 6px;
-  font-style: normal;
-}
-
-.quota-pace.tone-behind {
-  color: var(--red-fg);
-}
-
-.quota-pace.tone-ahead {
-  color: var(--green-fg);
-}
