@@ -1,0 +1,86 @@
+src-tauri/src/tests/dsh_droid_conversation.rs
+  s_4ba7aa50f29b98::t_ad72a6c5bb25d5 88-95
+  s_4ba7aa50f29b98::t_888795166db29b 173,175
+  s_4ba7aa50f29b98::t_3c98bd1d66e8c3 153-157
+src-tauri/src/lib.rs
+  s_4ba7aa50f29b98::t_cdb44dccf405f9 560-575
+  s_4ba7aa50f29b98::t_27870801b46900 1182
+  s_4ba7aa50f29b98::t_2891828c3432f7 42
+  s_4ba7aa50f29b98::t_e6a1d0d2e6ddcf 43-47,559
+src-tauri/src/test_support/helpers.rs
+  s_4ba7aa50f29b98::t_8557b7a5898eb5 4-7,14-27
+  s_4ba7aa50f29b98::t_efd0c1d6842ef3 1-3,8-13
+src-tauri/src/tests/cursor_conversation.rs
+  s_4ba7aa50f29b98::t_5d787a97a08c71 177,179
+  s_4ba7aa50f29b98::t_3951a7c9ed2a4e 144-147,149
+  s_4ba7aa50f29b98::t_6bb81373e6176d 196-200
+  s_4ba7aa50f29b98::t_1beebdf294b405 220-221
+  s_4ba7aa50f29b98::t_b9f694f6d0b881 191-192
+src/types.ts
+  s_4ba7aa50f29b98::t_a3c5d0c6226f58 441-445
+src-tauri/src/tests/conversation.rs
+  s_4ba7aa50f29b98::t_24637b3eafad7f 582-583,585-588
+  s_4ba7aa50f29b98::t_0c5bed2a91580f 344
+  s_4ba7aa50f29b98::t_bc05750b711d13 2190-2192
+  s_4ba7aa50f29b98::t_34d561273ebe6e 491-492,494-497
+  s_4ba7aa50f29b98::t_ca207221a2528d 1298
+  s_4ba7aa50f29b98::t_f0540aae6a9688 1300-1305
+  s_4ba7aa50f29b98::t_0dcbcd9ea47ac6 1541-1550,1552-1553,1555-1556
+  s_4ba7aa50f29b98::t_7dc6391049f293 2209
+  s_4ba7aa50f29b98::t_728c05fd32bd50 1310,1383-1448
+  s_4ba7aa50f29b98::t_8a1f4dafd285ef 566
+  s_4ba7aa50f29b98::t_25d72635c34cb3 685
+  s_4ba7aa50f29b98::t_1d02dbfc791ffa 2170
+  s_4ba7aa50f29b98::t_cd2b4190240dc3 1311-1382
+  s_4ba7aa50f29b98::t_2f17f4ac60085b 472
+  s_4ba7aa50f29b98::t_797d9734684d18 553
+  s_4ba7aa50f29b98::t_0b12dd211554c7 2223
+  s_4ba7aa50f29b98::t_d8fadb0047904d 2241
+  s_4ba7aa50f29b98::t_45861a18193346 2229
+  s_4ba7aa50f29b98::t_564308715a5236 2291,2293
+  s_4ba7aa50f29b98::t_677965ece1090b 1299
+src-tauri/src/tests/qwen_copilot_conversation.rs
+  s_4ba7aa50f29b98::t_5cb4035fc14665 109-111,113-117
+  s_4ba7aa50f29b98::t_1c1d1f4e7f9298 239-245
+src-tauri/src/tests/kimi_grok_conversation.rs
+  s_4ba7aa50f29b98::t_7f4bf52d055903 116-125
+  s_4ba7aa50f29b98::t_8b4f03a6be2169 225-235
+src/components/Conversations.tsx
+  s_4ba7aa50f29b98::t_2c64b6c042d871 124-127,129-132
+  s_4ba7aa50f29b98::t_eee44d04badeb8 828-830
+  s_4ba7aa50f29b98::t_1e05195ecb1470 877,880
+  s_4ba7aa50f29b98::t_8f72d99b009c75 128
+  s_4ba7aa50f29b98::t_a65101cdeac6da 876,878-879,881-883
+  s_4ba7aa50f29b98::t_bf605df82bd46a 37,52
+src-tauri/src/conversation.rs
+  s_4ba7aa50f29b98::t_35928d2f052ad6 699-723
+  s_4ba7aa50f29b98::t_7f04f14f9017b6 21
+  s_4ba7aa50f29b98::t_4c1d2bc452c13c 22
+src/components/ConversationUsageTable.tsx
+  s_4ba7aa50f29b98::t_0438dda255b663 1-26,28-40,43,46-56,60-128
+  s_4ba7aa50f29b98::t_99a6bb3e8cafa1 27,41-42,44-45,57-59
+src-tauri/src/domain.rs
+  s_4ba7aa50f29b98::t_12094522ab62c7 692-696
+  s_4ba7aa50f29b98::t_7802e6b2b13f9d 691
+src-tauri/src/tests/opencode_conversation.rs
+  s_4ba7aa50f29b98::t_df838d19cf72d8 313
+  s_4ba7aa50f29b98::t_c7aede531b0133 180-187
+  s_4ba7aa50f29b98::t_bd2f52018ad419 270,272
+  s_4ba7aa50f29b98::t_1b7047f70c656e 233-234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fbe2650dafcacf019bd7d3df3e1787adc6312bdd",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
