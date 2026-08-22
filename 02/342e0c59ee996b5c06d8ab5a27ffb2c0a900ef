@@ -1,0 +1,93 @@
+src-tauri/src/tray_popup.rs
+  s_b7249fd4884382::t_e3b9ed763d6cc9 26,28-36,41,48-49,57,75,85,97,101,106-107,118-119,124,156,189,191,201-202,226-227
+  s_b7249fd4884382::t_aeb88c97edf7ee 166-171
+  s_b7249fd4884382::t_a7e0352c857a34 1-25,27,37-40,42-47,50-56,58-74,76-84,86-96,98-100,102-105,108-117,120-123,125-155,157-165,172-188,190,192-200,203-225
+src-tauri/src/bin/quota.rs
+  s_ff70cd2df7ecb9::t_abcea0e6314e3d 50
+  s_ff70cd2df7ecb9::t_43df1bc7f878d1 69
+src-tauri/src/tests/official_quota.rs
+  s_ff70cd2df7ecb9::t_6955ef165d33e6 220-270
+  s_b7249fd4884382::t_6c6997e362cff2 302-310,312-315
+  s_ff70cd2df7ecb9::t_beac766c050be3 96
+src/App.tsx
+  s_b7249fd4884382::t_aa683d5fc90558 35,37
+  s_ff70cd2df7ecb9::t_4d02bba1f8498d 2,12
+  s_ff70cd2df7ecb9::t_d615db3b1a0176 36,38-60,62-63
+  s_ff70cd2df7ecb9::t_0da13da93114ae 61
+src-tauri/src/domain.rs
+  s_ff70cd2df7ecb9::t_fc45b34ce0c37d 251-254,265,279-282
+src-tauri/src/tests/quota_alerts.rs
+  s_ff70cd2df7ecb9::t_1ef1f11965c5a8 22
+  s_ff70cd2df7ecb9::t_40e587f346e236 59
+src/types.ts
+  s_b7249fd4884382::t_512454c79b480e 102
+  s_ff70cd2df7ecb9::t_bb8356a72bcef5 103,112-113
+src-tauri/Cargo.toml
+  s_b7249fd4884382::t_f1db89e6a4abfe 29
+src/components/OfficialQuotaSettingsPanel.tsx
+  s_ff70cd2df7ecb9::t_5fe317caec9179 49-50,52-55
+src-tauri/capabilities/default.json
+  s_b7249fd4884382::t_ac91b72885f15a 4-6
+src/components/type.ts
+  s_b7249fd4884382::t_3e032c6a0adf1e 9,65-68
+  s_b7249fd4884382::t_1fdaefaaf046e7 69-70
+src/components/OfficialQuotaPanel.tsx
+  s_b7249fd4884382::t_6cfe12162a9293 78
+  s_b7249fd4884382::t_117a626825349d 75-77
+  s_b7249fd4884382::t_cbe494c839dab1 79-81
+src/styles.css
+  s_b7249fd4884382::t_35bf9a8f940b91 149-154,3596-3606
+  s_b7249fd4884382::t_1760a2c1083d0d 3607
+src/lib/overviewLayout.ts
+  s_b7249fd4884382::t_dcace1d087d8a7 193-204
+src/lib/overviewLayout.test.ts
+  s_b7249fd4884382::t_1c03d351a512d1 29
+  s_b7249fd4884382::t_780b97928cefd7 189-197
+src-tauri/src/tests/mod.rs
+  s_b7249fd4884382::t_66f038b0199c78 39
+src-tauri/src/tray.rs
+  s_b7249fd4884382::t_e3b24e5206dc6e 76
+  s_ff70cd2df7ecb9::t_9bfad84d3c3c6a 109-110
+  s_b7249fd4884382::t_6b09babcb33f8f 9
+  s_ff70cd2df7ecb9::t_106c43ebd709da 213-216,220-222
+  s_b7249fd4884382::t_f95337d722455e 90-91
+  s_b7249fd4884382::t_7ced3abed0bcff 77
+src-tauri/tauri.conf.json
+  s_b7249fd4884382::t_3fdb94f1bd147f 13
+src-tauri/src/official_quota/mod.rs
+  s_b7249fd4884382::t_fbf8775baef2e3 103
+  s_ff70cd2df7ecb9::t_df90816bb5824a 99,104-116
+  s_ff70cd2df7ecb9::t_eaf5ad12f2b11a 117-118
+src/components/OverviewLayoutControls.tsx
+  s_b7249fd4884382::t_8c1e4738a3b3be 75
+src-tauri/src/lib.rs
+  s_b7249fd4884382::t_ae7629f56ce122 23
+src-tauri/src/query.rs
+  s_b7249fd4884382::t_6053a51278d2b5 703
+src-tauri/src/tests/rollup.rs
+  s_b7249fd4884382::t_5d8dde138ba637 200-203,217-248,260-264,267-271,274-280,352-355,376-379,523,552-556,560-564,566-570,572-576,631-635
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "02342e0c59ee996b5c06d8ab5a27ffb2c0a900ef",
+  "prompts": {},
+  "sessions": {
+    "s_b7249fd4884382": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a029a4-550c-7280-a1da-65a665663043",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_ff70cd2df7ecb9": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "d1877879-6c49-49ce-baf1-11536aa6e2d2",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
