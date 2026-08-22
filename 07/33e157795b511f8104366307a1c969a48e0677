@@ -1,0 +1,24 @@
+src/components/DonutChart.tsx
+  s_4ba7aa50f29b98::t_20cf2380aaba97 2
+src/components/ExportableChart.tsx
+  s_4ba7aa50f29b98::t_d79e12f2ab60f0 4
+  s_4ba7aa50f29b98::t_db3ff609789f02 23
+src/lib/echarts.ts
+  s_4ba7aa50f29b98::t_066217d1301b5a 1-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0733e157795b511f8104366307a1c969a48e0677",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
