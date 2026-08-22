@@ -26,6 +26,7 @@ import {
   summarizeOverviewLayout,
   visibleModuleCount,
   visibleOfficialProviderCount,
+  visibleOfficialQuotaRows,
   visibleQuotaSourceCount,
   writeOverviewLayout,
 } from "./overviewLayout";
@@ -183,6 +184,15 @@ describe("visibility helpers", () => {
     expect(officialQuotaProviderLabel("claude")).toBe("Claude Code");
     expect(officialQuotaProviderLabel("devin")).toBe("Devin");
     expect(officialQuotaProviderLabel("custom_acct")).toBe("custom_acct");
+  });
+
+  it("filters tray quota rows by hidden_providers without touching the rest", () => {
+    const rows = [{ provider: "claude" }, { provider: "cursor" }, { provider: "grok" }];
+    expect(visibleOfficialQuotaRows(rows, undefined)).toEqual(rows);
+    expect(visibleOfficialQuotaRows(rows, [])).toEqual(rows);
+    expect(visibleOfficialQuotaRows(rows, ["claude", "grok"]).map((row) => row.provider)).toEqual([
+      "cursor",
+    ]);
   });
 
   it("toggles modules and sources without mutating the original", () => {

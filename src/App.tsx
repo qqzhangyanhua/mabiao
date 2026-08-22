@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import { Sidebar } from "./components/Sidebar";
@@ -9,6 +9,7 @@ import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
 import { clearDimensionFilters, withModelFilter } from "./lib/filterChips";
+import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
 import {
   LazyApplicationAnalytics,
   LazyBreakdown,
@@ -30,6 +31,35 @@ export default function App() {
   const { layout: overviewLayout, setLayout: setOverviewLayout } = useOverviewLayout();
   const { view } = data;
   const detectedSources = data.diagnostics.filter((row) => row.detected).map((row) => row.source);
+
+  // 托盘额度面板没有自己的显示配置，复用这份「配置显示」——一处关掉两边同步隐藏。
+  // 托盘运行在 Rust 进程里，够不到 localStorage，所以每次这份配置变化都顺手
+  // 写一份到 official_quota.json，托盘下次打开/刷新面板时直接读那份文件。
+  useEffect(() => {
+    const quota = data.officialQuota;
+    if (!quota) {
+      return;
+    }
+    const hidden = OFFICIAL_QUOTA_PROVIDER_IDS.filter(
+      (id) => !isOfficialProviderVisible(overviewLayout, id),
+    );
+    const current = quota.hidden_providers ?? [];
+    const unchanged =
+      hidden.length === current.length && hidden.every((id) => current.includes(id));
+    if (unchanged) {
+      return;
+    }
+    void invoke("save_official_quota_config", {
+      config: { alerts_enabled: quota.alerts_enabled, hidden_providers: hidden },
+    })
+      .then(() => {
+        data.setOfficialQuota((prev) => (prev ? { ...prev, hidden_providers: hidden } : prev));
+      })
+      .catch(() => {
+        // 同步失败不影响主窗口本地显示，下次配置变化或重启应用时还会再推一次。
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只需在官方额度可见性或已加载快照变化时同步，modules/quotaSources 与此无关
+  }, [overviewLayout.officialProviders, data.officialQuota]);
 
   useKeyboardShortcuts({
     onNavigate: data.navigate,

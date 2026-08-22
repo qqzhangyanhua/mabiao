@@ -99,6 +99,8 @@ export type OfficialQuotaRow = {
 
 export type OfficialQuotaConfig = {
   alerts_enabled: boolean;
+  /** 主窗口「配置显示」里关掉的官方额度账号，托盘额度面板复用同一份配置。 */
+  hidden_providers: string[];
 };
 
 export type OfficialQuotaDto = {
@@ -107,6 +109,8 @@ export type OfficialQuotaDto = {
   stale_after_minutes: number;
   /** 本机没检测到登录态、因而没出现在 rows 里的账号（展示名）。 */
   undetected: string[];
+  /** 与 OfficialQuotaConfig.hidden_providers 一致，供本地状态对齐用。 */
+  hidden_providers: string[];
 };
 
 export type OfficialQuotaHookDto = {

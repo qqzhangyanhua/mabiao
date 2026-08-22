@@ -72,7 +72,7 @@ export function OverviewLayoutControls({
       </ToggleGroup>
       <ToggleGroup
         title="官方额度中的账号"
-        note="只影响首页官方额度区块。关掉后仍会采集，只是不展示。"
+        note="同时影响首页官方额度区块和菜单栏额度面板。关掉后仍会采集，只是不展示。"
         actions={
           <>
             <Button

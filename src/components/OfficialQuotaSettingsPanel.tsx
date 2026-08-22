@@ -46,8 +46,13 @@ export function OfficialQuotaSettingsPanel({
   async function toggleAlerts() {
     setBusy("alerts");
     try {
+      // 配置文件是整份覆盖写入，漏带 hidden_providers 会把「配置显示」里
+      // 关掉的账号悄悄重新打开——这里必须带上当前值再改 alerts_enabled。
       await invoke("save_official_quota_config", {
-        config: { alerts_enabled: !alertsEnabled },
+        config: {
+          alerts_enabled: !alertsEnabled,
+          hidden_providers: quota?.hidden_providers ?? [],
+        },
       });
       const next = await invoke<OfficialQuotaDto>("get_official_quota");
       onQuota(next);

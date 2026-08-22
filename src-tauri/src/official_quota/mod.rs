@@ -96,7 +96,24 @@ pub fn load_dto(
         alerts_enabled: config.alerts_enabled,
         stale_after_minutes: STALE_AFTER_MINUTES,
         undetected,
+        hidden_providers: config.hidden_providers.clone(),
     }
+}
+
+/// 按 `hidden_providers` 挑出用户还想看的行，托盘额度面板用它瘦身。
+/// 独立成纯函数是为了不用 `AppHandle` 就能单测。
+pub fn visible_rows(
+    rows: Vec<OfficialQuotaRow>,
+    hidden_providers: &[String],
+) -> Vec<OfficialQuotaRow> {
+    if hidden_providers.is_empty() {
+        return rows;
+    }
+    let hidden: std::collections::HashSet<&str> =
+        hidden_providers.iter().map(String::as_str).collect();
+    rows.into_iter()
+        .filter(|row| !hidden.contains(row.provider.as_str()))
+        .collect()
 }
 
 fn load_row(

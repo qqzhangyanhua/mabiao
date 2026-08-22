@@ -6,6 +6,7 @@ import { quotaPace } from "../lib/quotaPace";
 import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
+import type { OfficialQuotaListProps } from "./type";
 import { Button } from "./ui/Button";
 
 const FRESHNESS_LABEL: Record<OfficialQuotaFreshness, string> = {
@@ -52,27 +53,35 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
           icon="clock"
           title={data ? "所选账号均已隐藏" : "正在读取官方额度…"}
           hint={
-            data
-              ? "在「配置显示」里打开要看的账号"
-              : "先显示上次缓存，再后台刷新"
+            data ? "在「配置显示」里打开要看的账号" : "先显示上次缓存，再后台刷新"
           }
         />
       ) : (
-        <ul className="official-quota-list">
-          {rows.map((row) => (
-            <QuotaRow
-              key={row.provider}
-              row={row}
-              busy={busyProvider === row.provider}
-              disabled={busyProvider !== null}
-              onRefresh={() => void refreshProvider(row.provider)}
-            />
-          ))}
-        </ul>
+        <OfficialQuotaList
+          rows={rows}
+          busyProvider={busyProvider}
+          onRefresh={(provider) => void refreshProvider(provider)}
+        />
       )}
     </article>
   );
 });
+
+export function OfficialQuotaList({ rows, busyProvider, onRefresh }: OfficialQuotaListProps) {
+  return (
+    <ul className="official-quota-list">
+      {rows.map((row) => (
+        <QuotaRow
+          key={row.provider}
+          row={row}
+          busy={busyProvider === row.provider}
+          disabled={busyProvider != null}
+          onRefresh={onRefresh ? () => onRefresh(row.provider) : undefined}
+        />
+      ))}
+    </ul>
+  );
+}
 
 function QuotaRow({
   row,
@@ -83,7 +92,7 @@ function QuotaRow({
   row: OfficialQuotaRow;
   busy: boolean;
   disabled: boolean;
-  onRefresh: () => void;
+  onRefresh?: () => void;
 }) {
   const tone = row.freshness === "official" ? "ok" : row.freshness === "stale" ? "warn" : "idle";
   const capturedAt = row.captured_at ? Date.parse(row.captured_at) : Number.NaN;
@@ -94,16 +103,18 @@ function QuotaRow({
           <strong>
             <SourceLabel source={row.provider} fallback={row.application} />
           </strong>
-          <Button
-            variant="icon"
-            className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
-            disabled={disabled}
-            onClick={onRefresh}
-            title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
-            aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
-          >
-            <Icon name="refresh" size={13} />
-          </Button>
+          {onRefresh ? (
+            <Button
+              variant="icon"
+              className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
+              disabled={disabled}
+              onClick={onRefresh}
+              title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
+              aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
+            >
+              <Icon name="refresh" size={13} />
+            </Button>
+          ) : null}
         </div>
         <em>{FRESHNESS_LABEL[row.freshness]}</em>
       </div>

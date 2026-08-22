@@ -6,6 +6,7 @@ import type {
   ConversationSessionRow,
   CursorSessionDetailDto,
   CursorSessionListRow,
+  OfficialQuotaRow,
 } from "../types";
 
 export type ThemeOption = {
@@ -59,6 +60,12 @@ export type CursorSessionTableSelect = (row: CursorSessionListRow) => void;
 export type ConversationOpenRequest = {
   id: string;
   source: string;
+};
+
+export type OfficialQuotaListProps = {
+  rows: OfficialQuotaRow[];
+  busyProvider?: string | null;
+  onRefresh?: (provider: string) => void;
 };
 
 export type ConversationDetailHeadProps = {

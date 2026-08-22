@@ -197,7 +197,10 @@ fn rollup_overview_matches_raw_table() {
         via_rollup.total_tokens,
         500 + 1000 + 250 + 450 + 740 + 10 + 20 + 30
     );
-    assert!(via_rollup.unpriced, "claude-sonnet-5 没有价目，应标记未定价");
+    assert!(
+        via_rollup.unpriced,
+        "claude-sonnet-5 没有价目，应标记未定价"
+    );
 }
 
 #[test]
@@ -211,12 +214,38 @@ fn rollup_trend_matches_raw_table_for_every_supported_grain() {
         assert_eq!(via_rollup.len(), via_raw.len(), "grain={grain} 桶数不一致");
         for (a, b) in via_rollup.iter().zip(via_raw.iter()) {
             assert_eq!(a.bucket, b.bucket, "grain={grain}");
-            assert_eq!(a.total_tokens, b.total_tokens, "grain={grain} 桶 {}", a.bucket);
-            assert_eq!(a.input_tokens, b.input_tokens, "grain={grain} 桶 {}", a.bucket);
-            assert_eq!(a.output_tokens, b.output_tokens, "grain={grain} 桶 {}", a.bucket);
-            assert_eq!(a.cache_read_tokens, b.cache_read_tokens, "grain={grain} 桶 {}", a.bucket);
-            assert_eq!(a.reasoning_tokens, b.reasoning_tokens, "grain={grain} 桶 {}", a.bucket);
-            assert!(cost_close(a.cost, b.cost), "grain={grain} 桶 {} cost {:?} vs {:?}", a.bucket, a.cost, b.cost);
+            assert_eq!(
+                a.total_tokens, b.total_tokens,
+                "grain={grain} 桶 {}",
+                a.bucket
+            );
+            assert_eq!(
+                a.input_tokens, b.input_tokens,
+                "grain={grain} 桶 {}",
+                a.bucket
+            );
+            assert_eq!(
+                a.output_tokens, b.output_tokens,
+                "grain={grain} 桶 {}",
+                a.bucket
+            );
+            assert_eq!(
+                a.cache_read_tokens, b.cache_read_tokens,
+                "grain={grain} 桶 {}",
+                a.bucket
+            );
+            assert_eq!(
+                a.reasoning_tokens, b.reasoning_tokens,
+                "grain={grain} 桶 {}",
+                a.bucket
+            );
+            assert!(
+                cost_close(a.cost, b.cost),
+                "grain={grain} 桶 {} cost {:?} vs {:?}",
+                a.bucket,
+                a.cost,
+                b.cost
+            );
         }
     }
 }
@@ -228,13 +257,27 @@ fn rollup_breakdown_matches_raw_table_for_every_dimension() {
     for dimension in ["source", "model", "provider", "project", "application"] {
         let via_rollup = query::breakdown(&conn, &Filter::default(), &prices, dimension).unwrap();
         let via_raw = query::breakdown(&conn, &full_range(), &prices, dimension).unwrap();
-        assert_eq!(via_rollup.len(), via_raw.len(), "dimension={dimension} 行数不一致");
+        assert_eq!(
+            via_rollup.len(),
+            via_raw.len(),
+            "dimension={dimension} 行数不一致"
+        );
         for (a, b) in via_rollup.iter().zip(via_raw.iter()) {
             assert_eq!(a.name, b.name, "dimension={dimension}");
-            assert_eq!(a.total_tokens, b.total_tokens, "dimension={dimension} {}", a.name);
+            assert_eq!(
+                a.total_tokens, b.total_tokens,
+                "dimension={dimension} {}",
+                a.name
+            );
             assert_eq!(a.share, b.share, "dimension={dimension} {}", a.name);
             assert_eq!(a.unpriced, b.unpriced, "dimension={dimension} {}", a.name);
-            assert!(cost_close(a.cost, b.cost), "dimension={dimension} {} cost {:?} vs {:?}", a.name, a.cost, b.cost);
+            assert!(
+                cost_close(a.cost, b.cost),
+                "dimension={dimension} {} cost {:?} vs {:?}",
+                a.name,
+                a.cost,
+                b.cost
+            );
         }
     }
 }
@@ -306,7 +349,10 @@ fn rebuilding_rollup_reflects_later_writes() {
     store::rebuild_rollup(&conn).unwrap();
     let after = query::overview(&conn, &Filter::default(), &prices).unwrap();
     assert_eq!(after.total_tokens, before.total_tokens + 100);
-    assert_overview_eq(&after, &query::overview(&conn, &full_range(), &prices).unwrap());
+    assert_overview_eq(
+        &after,
+        &query::overview(&conn, &full_range(), &prices).unwrap(),
+    );
 }
 
 /// 老库升级 / 从旧备份恢复时，`usage_rollup` 还没建起来。开库不该同步补建
@@ -327,7 +373,10 @@ fn opening_a_stale_database_falls_back_until_backfilled() {
     // 补建是后台做的，开库时还没就绪——此时查询必须回退原始表给出正确数字，
     // 而不是照着空表答 0。
     assert!(!store::rollup_is_ready(&conn), "开库不应同步补建");
-    assert!(store::rollup_needs_backfill(&conn).unwrap(), "应识别出待补建");
+    assert!(
+        store::rollup_needs_backfill(&conn).unwrap(),
+        "应识别出待补建"
+    );
     let before = query::overview(&conn, &Filter::default(), &prices).unwrap();
     assert_eq!(
         before.total_tokens,
@@ -471,8 +520,7 @@ fn touched_days_cover_both_the_old_and_the_new_dates() {
     store::insert_records(&conn, &[moved]).unwrap();
     let after = store::days_for_file(&conn, "/same.jsonl").unwrap();
 
-    let touched: std::collections::BTreeSet<String> =
-        before.into_iter().chain(after).collect();
+    let touched: std::collections::BTreeSet<String> = before.into_iter().chain(after).collect();
     store::rebuild_rollup_days(&conn, &touched).unwrap();
 
     let stale: i64 = conn
@@ -501,15 +549,31 @@ fn rollup_top_sessions_matches_raw_table() {
         for (a, b) in via_rollup.iter().zip(via_raw.iter()) {
             assert_eq!(a.session_id, b.session_id, "limit={limit}");
             assert_eq!(a.source, b.source, "limit={limit}");
-            assert_eq!(a.total_tokens, b.total_tokens, "limit={limit} {}", a.session_id);
+            assert_eq!(
+                a.total_tokens, b.total_tokens,
+                "limit={limit} {}",
+                a.session_id
+            );
             assert_eq!(a.started_at, b.started_at, "limit={limit} {}", a.session_id);
             assert_eq!(a.ended_at, b.ended_at, "limit={limit} {}", a.session_id);
             // 展示标签走的是「最晚非空」，预聚合版用 last_at 现拼键，必须选出同一个值。
-            assert_eq!(a.project, b.project, "limit={limit} {} 的项目", a.session_id);
+            assert_eq!(
+                a.project, b.project,
+                "limit={limit} {} 的项目",
+                a.session_id
+            );
             assert_eq!(a.model, b.model, "limit={limit} {} 的模型", a.session_id);
-            assert_eq!(a.source_file, b.source_file, "limit={limit} {} 的文件", a.session_id);
+            assert_eq!(
+                a.source_file, b.source_file,
+                "limit={limit} {} 的文件",
+                a.session_id
+            );
             assert_eq!(a.unpriced, b.unpriced, "limit={limit} {}", a.session_id);
-            assert!(cost_close(a.cost, b.cost), "limit={limit} {} cost", a.session_id);
+            assert!(
+                cost_close(a.cost, b.cost),
+                "limit={limit} {} cost",
+                a.session_id
+            );
         }
     }
 }
@@ -564,7 +628,11 @@ fn rollup_sessions_page_matches_raw_table() {
             assert_eq!(a.project, b.project, "{query:?} {}", a.session_id);
             assert_eq!(a.model, b.model, "{query:?} {}", a.session_id);
             assert_eq!(a.source_file, b.source_file, "{query:?} {}", a.session_id);
-            assert!(cost_close(a.cost, b.cost), "{query:?} {} cost", a.session_id);
+            assert!(
+                cost_close(a.cost, b.cost),
+                "{query:?} {} cost",
+                a.session_id
+            );
         }
     }
 }

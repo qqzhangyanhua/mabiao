@@ -93,6 +93,7 @@ fn tightest_window_picks_highest_cursor_dimension() {
         alerts_enabled: true,
         stale_after_minutes: 10,
         undetected: Vec::new(),
+        hidden_providers: Vec::new(),
     };
     let tightest = official_quota::tightest_window(&quota).unwrap();
     assert_eq!(tightest.provider, "Cursor");
@@ -217,6 +218,57 @@ fn apply_fetch_results_isolates_provider_failures() {
 }
 
 #[test]
+fn visible_rows_drops_only_hidden_providers() {
+    let rows = vec![
+        crate::domain::OfficialQuotaRow {
+            provider: "claude".into(),
+            application: "Claude".into(),
+            windows: Vec::new(),
+            freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
+            captured_at: None,
+            error: None,
+        },
+        crate::domain::OfficialQuotaRow {
+            provider: "devin".into(),
+            application: "Devin".into(),
+            windows: Vec::new(),
+            freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
+            captured_at: None,
+            error: None,
+        },
+    ];
+    let hidden = vec!["devin".to_string()];
+    let shown = official_quota::visible_rows(rows, &hidden);
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].provider, "claude");
+}
+
+#[test]
+fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
+    let conn = store::open_memory().unwrap();
+    official_quota::apply_success(
+        &conn,
+        crate::domain::OfficialQuotaProvider::Claude,
+        vec![crate::domain::OfficialQuotaWindow {
+            kind: "session_5h".into(),
+            label: "5 小时".into(),
+            used_percent: Some(10.0),
+            resets_at: None,
+        }],
+        "2026-08-18T12:00:00+00:00",
+    )
+    .unwrap();
+    let config = crate::domain::OfficialQuotaConfig {
+        alerts_enabled: true,
+        hidden_providers: vec!["claude".to_string()],
+    };
+    let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
+    // 设置页/主窗口的官方额度请求都走 load_dto，隐藏账号的状态仍要能看到。
+    assert!(dto.rows.iter().any(|row| row.provider == "claude"));
+    assert_eq!(dto.hidden_providers, vec!["claude".to_string()]);
+}
+
+#[test]
 fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
     let conn = store::open_memory().unwrap();
     // 曾经拉到过数据的 provider 即使当下读不到凭证也要留着，别一登出就丢历史。
@@ -247,9 +299,18 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
     );
     let shown: Vec<&str> = dto.rows.iter().map(|row| row.provider.as_str()).collect();
     assert!(shown.contains(&"claude"));
-    assert!(!shown.contains(&"copilot"));
-    // 没显示的要在 undetected 里报出来，不能悄悄消失。
-    assert!(dto.undetected.contains(&"Copilot".to_string()));
+    // 从没成功过的行默认不占位置；本机如果已经有登录态，就要露出来让刷新去报错。
+    let copilot_logged_in = official_quota::detect::has_local_credentials(
+        crate::domain::OfficialQuotaProvider::Copilot,
+    );
+    assert_eq!(shown.contains(&"copilot"), copilot_logged_in);
+    assert_eq!(
+        dto.undetected.contains(&"Copilot".to_string()),
+        !copilot_logged_in
+    );
     assert!(!dto.undetected.contains(&"Claude".to_string()));
-    assert_eq!(dto.rows.len() + dto.undetected.len(), 9);
+    assert_eq!(
+        dto.rows.len() + dto.undetected.len(),
+        crate::domain::OfficialQuotaProvider::ALL.len()
+    );
 }

@@ -36,4 +36,5 @@ mod qwen_copilot_conversation;
 mod read_pool;
 mod rollup;
 mod store;
+mod tray_popup;
 mod work_timeline;

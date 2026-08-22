@@ -20,6 +20,7 @@ pub mod paths;
 pub mod query;
 pub mod store;
 pub mod tray;
+pub mod tray_popup;
 pub mod user_files;
 pub mod vscode_state;
 pub mod work_timeline;

@@ -146,6 +146,12 @@ body,
   background: var(--bg);
 }
 
+html.tray-popup,
+html.tray-popup body,
+html.tray-popup #root {
+  background: transparent;
+}
+
 ::selection {
   background: rgba(139, 108, 255, 0.28);
   color: var(--text);
@@ -3585,6 +3591,18 @@ td.row-actions {
   background: var(--overlay-recessed);
   font-size: 12px;
   overflow: auto;
+}
+
+.tray-quota-app {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 8px;
+}
+
+.tray-quota-app .official-quota-panel {
+  height: 100%;
+  overflow: auto;
+  box-shadow: 0 18px 50px var(--shadow-strong);
 }
 
 .budget-status {

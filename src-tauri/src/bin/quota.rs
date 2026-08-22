@@ -47,6 +47,7 @@ fn run(refresh: bool) -> Result<String, String> {
             alerts_enabled: false,
             stale_after_minutes: official_quota::STALE_AFTER_MINUTES,
             undetected: Vec::new(),
+            hidden_providers: Vec::new(),
         });
     }
     let path = db_path.to_string_lossy().to_string();
@@ -65,6 +66,7 @@ fn run(refresh: bool) -> Result<String, String> {
         &conn,
         &OfficialQuotaConfig {
             alerts_enabled: config.alerts_enabled,
+            hidden_providers: config.hidden_providers,
         },
         chrono::Utc::now(),
     ))

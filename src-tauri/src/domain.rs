@@ -248,6 +248,10 @@ pub struct OfficialQuotaRow {
 pub struct OfficialQuotaConfig {
     #[serde(default = "default_alerts_enabled")]
     pub alerts_enabled: bool,
+    /// 主窗口「配置显示」里关掉的账号（provider id）。托盘额度区块复用这份配置，
+    /// 一处关掉两边都不再展示；不影响告警和本机采集。
+    #[serde(default)]
+    pub hidden_providers: Vec<String>,
 }
 
 fn default_alerts_enabled() -> bool {
@@ -258,6 +262,7 @@ impl Default for OfficialQuotaConfig {
     fn default() -> Self {
         Self {
             alerts_enabled: true,
+            hidden_providers: Vec::new(),
         }
     }
 }
@@ -271,6 +276,10 @@ pub struct OfficialQuotaDto {
     /// 本机没检测到登录态、因而没出现在 `rows` 里的账号（展示名）。
     /// 隐藏可以少一堆红字，但不能让用户不知道我们支持它。
     pub undetected: Vec<String>,
+    /// 与 `OfficialQuotaConfig::hidden_providers` 原样对照，前端用它跟本地
+    /// 「配置显示」状态对齐，不参与 `rows` 的过滤（各家状态仍要能在设置页看到）。
+    #[serde(default)]
+    pub hidden_providers: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

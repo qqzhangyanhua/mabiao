@@ -190,6 +190,18 @@ export function filterOfficialQuotaRows<T extends { provider: string }>(
   return rows.filter((row) => isOfficialProviderVisible(layout, row.provider));
 }
 
+/** 托盘额度面板按 official_quota.json 的 hidden_providers 过滤，和主窗口配置显示同步。 */
+export function visibleOfficialQuotaRows<T extends { provider: string }>(
+  rows: T[],
+  hiddenProviders: string[] | undefined,
+): T[] {
+  if (!hiddenProviders || hiddenProviders.length === 0) {
+    return rows;
+  }
+  const hidden = new Set(hiddenProviders);
+  return rows.filter((row) => !hidden.has(row.provider));
+}
+
 export function isOfficialQuotaProviderId(value: string): value is OfficialQuotaProviderId {
   return (OFFICIAL_QUOTA_PROVIDER_IDS as readonly string[]).includes(value);
 }
