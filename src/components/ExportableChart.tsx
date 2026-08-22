@@ -1,7 +1,7 @@
 import type { EChartsOption } from "echarts";
-import ReactECharts from "echarts-for-react";
 import { useRef, useState, type CSSProperties } from "react";
 import { Icon } from "../icons";
+import { ReactECharts, type ReactEChartsInstance } from "../lib/echarts";
 import { exportImage } from "../lib/exportFile";
 
 /**
@@ -20,7 +20,7 @@ export function ExportableChart({
   filename: string;
   onEvents?: Record<string, ChartEventHandler>;
 }) {
-  const chartRef = useRef<ReactECharts | null>(null);
+  const chartRef = useRef<ReactEChartsInstance | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function handleExport() {
