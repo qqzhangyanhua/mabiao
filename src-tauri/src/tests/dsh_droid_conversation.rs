@@ -85,10 +85,14 @@ fn dsh_compressed_session_feeds_semantic_detail_and_preserves_last_good_index() 
     assert_eq!(session.support_status, "experimental");
 
     let detail = conversation::load_detail(&conn, home, "dsh", "dsh-session-1").unwrap();
-    assert_eq!(detail.usage_records.len(), 1);
-    assert_eq!(detail.messages.len(), 2);
-    assert_eq!(detail.messages[0].text, "Inspect the compressed session");
-    assert_eq!(detail.messages[1].text, "The session is valid");
+    assert_eq!(usage_rows(&conn, "dsh", "dsh-session-1").len(), 1);
+    assert_eq!(
+        message_texts(&detail),
+        vec![
+            "Inspect the compressed session".to_string(),
+            "The session is valid".to_string()
+        ]
+    );
     assert!(detail.events.iter().any(|event| {
         event.kind == ConversationEventKind::ToolCall
             && event.name.as_deref() == Some("read")
@@ -146,10 +150,11 @@ fn droid_raw_sessions_link_cumulative_usage_and_degrade_sparse_fields() {
     let detail = conversation::load_detail(&conn, home, "factory", "droid-session-1").unwrap();
     assert_eq!(detail.session.project, "/workspace/project");
     assert_eq!(detail.session.model, "claude-test");
-    assert_eq!(detail.usage_records.len(), 1);
-    assert_eq!(detail.usage_records[0].session_id, "droid-session-1");
-    assert_eq!(detail.messages.len(), 2);
-    assert_eq!(detail.messages[0].text, "Inspect the Droid session");
+    let usage = usage_rows(&conn, "factory", "droid-session-1");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].session_id, "droid-session-1");
+    assert_eq!(message_texts(&detail)[0], "Inspect the Droid session");
+    assert_eq!(message_texts(&detail).len(), 2);
     assert!(detail.events.iter().any(|event| {
         event.kind == ConversationEventKind::ToolCall
             && event.name.as_deref() == Some("Shell")
@@ -165,9 +170,9 @@ fn droid_raw_sessions_link_cumulative_usage_and_degrade_sparse_fields() {
     }));
 
     let sparse = conversation::load_detail(&conn, home, "factory", "droid-sparse").unwrap();
-    assert!(sparse.messages.is_empty());
+    assert!(message_texts(&sparse).is_empty());
     assert!(sparse.session.model.is_empty());
-    assert!(sparse.usage_records.is_empty());
+    assert!(usage_rows(&conn, "factory", "droid-sparse").is_empty());
     let sparse_call = sparse
         .events
         .iter()

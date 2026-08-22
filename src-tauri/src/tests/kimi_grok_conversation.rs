@@ -113,11 +113,16 @@ fn kimi_wire_feeds_experimental_detail_and_tracks_trusted_sidecar_revision() {
     assert_eq!(session.capabilities, ["messages", "events", "usage"]);
 
     let detail = conversation::load_detail(&conn, home, "kimi", "kimi-session-1").unwrap();
-    assert_eq!(detail.messages.len(), 2);
-    assert_eq!(detail.messages[0].text, "Inspect the Kimi wire");
-    assert_eq!(detail.messages[1].text, "The wire is readable");
-    assert_eq!(detail.usage_records.len(), 1);
-    assert_eq!(detail.usage_records[0].input_tokens, 12);
+    assert_eq!(
+        message_texts(&detail),
+        vec![
+            "Inspect the Kimi wire".to_string(),
+            "The wire is readable".to_string()
+        ]
+    );
+    let usage = usage_rows(&conn, "kimi", "kimi-session-1");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].input_tokens, 12);
     assert!(detail.events.iter().any(|event| {
         event.kind == ConversationEventKind::ToolCall
             && event.name.as_deref() == Some("read")
@@ -217,12 +222,17 @@ fn grok_updates_merge_streams_and_track_summary_without_changing_usage_identity(
     assert_eq!(session.capabilities, ["messages", "events", "usage"]);
 
     let detail = conversation::load_detail(&conn, home, "grok", "grok-session-1").unwrap();
-    assert_eq!(detail.messages.len(), 3);
-    assert_eq!(detail.messages[0].text, "Inspect the Grok updates");
-    assert_eq!(detail.messages[1].text, "The update is readable");
-    assert_eq!(detail.messages[2].text, "A separate reply");
-    assert_eq!(detail.usage_records.len(), 1);
-    assert_eq!(detail.usage_records[0].input_tokens, 12);
+    assert_eq!(
+        message_texts(&detail),
+        vec![
+            "Inspect the Grok updates".to_string(),
+            "The update is readable".to_string(),
+            "A separate reply".to_string()
+        ]
+    );
+    let usage = usage_rows(&conn, "grok", "grok-session-1");
+    assert_eq!(usage.len(), 1);
+    assert_eq!(usage[0].input_tokens, 12);
     assert!(!detail
         .events
         .iter()

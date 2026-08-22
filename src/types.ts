@@ -438,6 +438,11 @@ export type ConversationAttachmentContentDto = {
   data_url: string;
 };
 
+export type ConversationUsagePage = {
+  rows: ConversationUsageRecord[];
+  total: number;
+};
+
 export type ConversationUsageRecord = {
   occurred_at: string;
   source: string;
@@ -481,9 +486,7 @@ export type ConversationAgentRelations = {
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;
-  messages: ConversationMessage[];
   events: ConversationEvent[];
-  usage_records: ConversationUsageRecord[];
   agent_relations: ConversationAgentRelations;
   cursor_behavior?: CursorSessionDetailDto | null;
 }

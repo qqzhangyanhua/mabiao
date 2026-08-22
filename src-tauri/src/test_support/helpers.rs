@@ -1,3 +1,30 @@
+pub fn message_events(
+    detail: &crate::domain::ConversationDetailDto,
+) -> Vec<&crate::domain::ConversationEvent> {
+    detail
+        .events
+        .iter()
+        .filter(|event| event.kind == crate::domain::ConversationEventKind::Message)
+        .collect()
+}
+
+pub fn message_texts(detail: &crate::domain::ConversationDetailDto) -> Vec<String> {
+    message_events(detail)
+        .into_iter()
+        .filter_map(|event| event.text.clone())
+        .collect()
+}
+
+pub fn usage_rows(
+    conn: &rusqlite::Connection,
+    source: &str,
+    session_id: &str,
+) -> Vec<crate::domain::UsageRecord> {
+    crate::conversation::usage_records_page(conn, source, session_id, 1, 200)
+        .unwrap()
+        .rows
+}
+
 pub fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

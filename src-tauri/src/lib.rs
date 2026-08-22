@@ -39,12 +39,12 @@ use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, BudgetConfig, BudgetStatusDto, CodeVolumeSummary,
     ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
     ConversationEventContentDto, ConversationExportFormat, ConversationPage, ConversationQuery,
-    CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto, CursorSessionDetailDto,
-    CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter, FilterOptions,
-    GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig, OfficialQuotaDto,
-    OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot, PriceSnapshotMeta,
-    PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic, WorkTimelineDto,
-    WriteUserFileRequest, WriteUserFileResult,
+    ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
+    CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
+    FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
+    OfficialQuotaDto, OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot,
+    PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
+    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
 
 /// 只读连接池。
@@ -551,6 +551,23 @@ async fn get_conversation_detail(
         let prepared = conversation::prepare_detail(&conn, &source, &session_id)?;
         drop(conn);
         conversation::load_prepared_detail(&home, prepared)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_conversation_usage_records(
+    app: tauri::AppHandle,
+    source: String,
+    session_id: String,
+    page: u32,
+    page_size: u32,
+) -> Result<ConversationUsagePage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        conversation::usage_records_page(&conn, &source, &session_id, page, page_size)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1162,6 +1179,7 @@ pub fn run() {
             get_cursor_session_detail,
             get_conversation_sessions_page,
             get_conversation_detail,
+            get_conversation_usage_records,
             get_conversation_detail_state,
             get_conversation_event_content,
             get_conversation_attachment,

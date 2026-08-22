@@ -18,7 +18,8 @@ use crate::domain::{
     ConversationEventContentDto, ConversationEventContentStatus as ContentStatus,
     ConversationEventKind as EventKind, ConversationExportDto, ConversationExportFormat,
     ConversationMessage, ConversationPage, ConversationQuery, ConversationSessionRow,
-    CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source, UsageRecord,
+    ConversationUsagePage, CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source,
+    UsageRecord,
 };
 use crate::ingest;
 use crate::query;
@@ -695,6 +696,31 @@ pub fn sessions_page(
     sessions_page_with_prices(conn, query, &PriceTable::default())
 }
 
+pub fn usage_records_page(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    page: u32,
+    page_size: u32,
+) -> Result<ConversationUsagePage, String> {
+    let source = Source::parse(source).filter(|source| CONVERSATION_SOURCES.contains(source));
+    let Some(source) = source else {
+        return Err("该来源尚未支持对话详情".to_string());
+    };
+    let records = load_usage_records(conn, source, session_id)?;
+    let total = records.len() as u32;
+    let page = page.max(1);
+    let page_size = page_size.clamp(1, MAX_PAGE_SIZE);
+    let start = ((page - 1) * page_size) as usize;
+    let rows = if start >= records.len() {
+        Vec::new()
+    } else {
+        let end = (start + page_size as usize).min(records.len());
+        records[start..end].to_vec()
+    };
+    Ok(ConversationUsagePage { rows, total })
+}
+
 pub fn sessions_page_with_prices(
     conn: &Connection,
     query: &ConversationQuery,
@@ -840,9 +866,7 @@ pub(crate) fn load_prepared_detail(
         return Ok(ConversationDetailDto {
             revision: cursor_metadata_revision(&usage_records, cursor_session_stats.as_ref()),
             session,
-            messages: Vec::new(),
             events,
-            usage_records,
             agent_relations,
             cursor_behavior,
         });
@@ -861,9 +885,7 @@ pub(crate) fn load_prepared_detail(
     Ok(ConversationDetailDto {
         revision,
         session,
-        messages: parsed.messages,
         events,
-        usage_records,
         agent_relations,
         cursor_behavior,
     })

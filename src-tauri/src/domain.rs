@@ -689,6 +689,12 @@ pub struct ConversationPage {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConversationUsagePage {
+    pub rows: Vec<UsageRecord>,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationMessage {
     pub role: String,
     pub occurred_at: String,
@@ -865,9 +871,7 @@ pub struct ConversationAgentRelations {
 pub struct ConversationDetailDto {
     pub revision: String,
     pub session: ConversationSessionRow,
-    pub messages: Vec<ConversationMessage>,
     pub events: Vec<ConversationEvent>,
-    pub usage_records: Vec<UsageRecord>,
     pub agent_relations: ConversationAgentRelations,
     /// Cursor 本机行为聚合；非 Cursor 或对不上 `cursor_sessions` 时为空。
     #[serde(default, skip_serializing_if = "Option::is_none")]

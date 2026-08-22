@@ -106,13 +106,15 @@ fn qwen_tokenless_log_feeds_partial_detail_export_search_and_missing_file_state(
     assert_eq!(session.support_status, "experimental");
 
     let detail = conversation::load_detail(&conn, home, "qwen", "qwen-session-1").unwrap();
-    assert_eq!(detail.messages.len(), 2);
-    assert!(detail.messages.iter().all(|message| message.role == "user"));
-    assert!(detail.usage_records.is_empty());
-    assert!(!detail
-        .messages
+    let messages = message_events(&detail);
+    assert_eq!(messages.len(), 2);
+    assert!(messages
         .iter()
-        .any(|message| message.role == "assistant"));
+        .all(|event| event.actor.map(ConversationEventActor::as_str) == Some("user")));
+    assert!(usage_rows(&conn, "qwen", "qwen-session-1").is_empty());
+    assert!(!messages
+        .iter()
+        .any(|event| event.actor.map(ConversationEventActor::as_str) == Some("assistant")));
     let degraded = detail
         .events
         .iter()
@@ -234,12 +236,13 @@ fn copilot_events_feed_lifecycle_tools_code_changes_usage_and_missing_body_statu
         "c0ffee11-2222-4333-8444-555566667777",
     )
     .unwrap();
-    assert!(detail.messages.is_empty());
-    assert_eq!(detail.usage_records.len(), 2);
-    assert_eq!(detail.usage_records[0].model, "claude-sonnet-4.5");
-    assert_eq!(detail.usage_records[0].input_tokens, 21_583);
-    assert_eq!(detail.usage_records[1].model, "gpt-5.4");
-    assert_eq!(detail.usage_records[1].input_tokens, 244_120);
+    assert!(message_texts(&detail).is_empty());
+    let usage = usage_rows(&conn, "copilot", "c0ffee11-2222-4333-8444-555566667777");
+    assert_eq!(usage.len(), 2);
+    assert_eq!(usage[0].model, "claude-sonnet-4.5");
+    assert_eq!(usage[0].input_tokens, 21_583);
+    assert_eq!(usage[1].model, "gpt-5.4");
+    assert_eq!(usage[1].input_tokens, 244_120);
     assert!(detail
         .events
         .iter()

@@ -177,10 +177,14 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
     assert_eq!(detail.session.title, "Inspect OpenCode");
     assert_eq!(detail.session.project, "/workspace/opencode");
     assert_eq!(detail.session.model, "opencode-test-model");
-    assert_eq!(detail.usage_records.len(), 1);
-    assert_eq!(detail.messages.len(), 2);
-    assert_eq!(detail.messages[0].text, "Read the manifest");
-    assert_eq!(detail.messages[1].text, "I will inspect it.");
+    assert_eq!(usage_rows(&conn, "opencode", "ses-usage").len(), 1);
+    assert_eq!(
+        message_texts(&detail),
+        vec![
+            "Read the manifest".to_string(),
+            "I will inspect it.".to_string()
+        ]
+    );
     assert!(detail.events.iter().any(|event| {
         event.kind == ConversationEventKind::ToolCall && event.name.as_deref() == Some("read")
     }));
@@ -226,8 +230,8 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
         2
     );
     let no_usage = conversation::load_detail(&conn, home, "opencode", "ses-no-usage").unwrap();
-    assert!(no_usage.usage_records.is_empty());
-    assert_eq!(no_usage.messages[0].text, "This session has no usage");
+    assert!(usage_rows(&conn, "opencode", "ses-no-usage").is_empty());
+    assert_eq!(message_texts(&no_usage)[0], "This session has no usage");
     assert_eq!(std::fs::read(&db_path).unwrap(), database_before_reads);
     assert_eq!(std::fs::read(&wal_path).unwrap(), wal_before_reads);
 
@@ -263,10 +267,9 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
     assert!(state.file_available);
     ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
     let refreshed = conversation::load_detail(&conn, home, "opencode", "ses-usage").unwrap();
-    assert!(refreshed
-        .messages
+    assert!(message_texts(&refreshed)
         .iter()
-        .any(|message| message.text == "WAL follow-up"));
+        .any(|text| text == "WAL follow-up"));
     let refreshed_event_ids = refreshed
         .events
         .iter()
@@ -307,7 +310,7 @@ fn opencode_schema_degrades_optional_parts_and_preserves_last_good_sessions_on_f
     let degraded_report =
         ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
     let degraded = conversation::load_detail(&conn, home, "opencode", "ses-usage").unwrap();
-    assert!(degraded.messages.is_empty());
+    assert!(message_texts(&degraded).is_empty());
     assert!(degraded.events.is_empty());
     assert_eq!(degraded.session.capabilities, vec!["usage"]);
     assert!(degraded_report.conversation_issues.iter().any(|issue| {

@@ -141,12 +141,12 @@ fn cursor_transcripts_usage_and_behavior_feed_one_exact_conversation_detail() {
 
     let parent_detail =
         conversation::load_detail(&conn, home, "cursor_agent", "sess-parent").unwrap();
-    assert_eq!(parent_detail.usage_records.len(), 1);
-    assert_eq!(parent_detail.usage_records[0].session_id, "sess-parent");
-    assert!(parent_detail
-        .messages
+    let parent_usage = usage_rows(&conn, "cursor_agent", "sess-parent");
+    assert_eq!(parent_usage.len(), 1);
+    assert_eq!(parent_usage[0].session_id, "sess-parent");
+    assert!(message_texts(&parent_detail)
         .iter()
-        .any(|message| message.text == "Inspect the project"));
+        .any(|text| text == "Inspect the project"));
     assert!(parent_detail.events.iter().any(|event| {
         event.kind == ConversationEventKind::ToolCall && event.name.as_deref() == Some("Read")
     }));
@@ -174,10 +174,9 @@ fn cursor_transcripts_usage_and_behavior_feed_one_exact_conversation_detail() {
     let child_session = child.session.as_ref().unwrap();
     let child_detail =
         conversation::load_detail(&conn, home, "cursor_agent", &child_session.session_id).unwrap();
-    assert!(child_detail
-        .messages
+    assert!(message_texts(&child_detail)
         .iter()
-        .any(|message| message.text == "Child complete"));
+        .any(|text| text == "Child complete"));
     assert_eq!(
         child_detail
             .agent_relations
@@ -189,13 +188,16 @@ fn cursor_transcripts_usage_and_behavior_feed_one_exact_conversation_detail() {
 
     let transcript_only =
         conversation::load_detail(&conn, home, "cursor_agent", "sess-transcript-only").unwrap();
-    assert!(transcript_only.usage_records.is_empty());
-    assert_eq!(transcript_only.messages[0].text, "No token wrapper");
+    assert!(usage_rows(&conn, "cursor_agent", "sess-transcript-only").is_empty());
+    assert_eq!(message_texts(&transcript_only)[0], "No token wrapper");
 
     let usage_only =
         conversation::load_detail(&conn, home, "cursor_agent", "sess-usage-only").unwrap();
-    assert_eq!(usage_only.usage_records.len(), 1);
-    assert!(usage_only.messages.is_empty());
+    assert_eq!(
+        usage_rows(&conn, "cursor_agent", "sess-usage-only").len(),
+        1
+    );
+    assert!(message_texts(&usage_only).is_empty());
     assert!(usage_only.cursor_behavior.is_none());
     assert!(usage_only.events.iter().any(|event| {
         event.kind == ConversationEventKind::SystemStatus
@@ -215,8 +217,8 @@ fn cursor_transcripts_usage_and_behavior_feed_one_exact_conversation_detail() {
         row.source == "cursor_agent" && row.session_id == "sess-parent" && !row.file_available
     }));
     let missing = conversation::load_detail(&conn, home, "cursor_agent", "sess-parent").unwrap();
-    assert_eq!(missing.usage_records.len(), 1);
-    assert!(missing.messages.is_empty());
+    assert_eq!(usage_rows(&conn, "cursor_agent", "sess-parent").len(), 1);
+    assert!(message_texts(&missing).is_empty());
     assert!(missing.cursor_behavior.is_none());
     assert!(missing.events.iter().any(|event| {
         event.kind == ConversationEventKind::SystemStatus

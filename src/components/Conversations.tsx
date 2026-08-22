@@ -34,7 +34,7 @@ import {
   shouldRequestConversationDetail,
   transitionConversationNavigation,
 } from "../lib/conversationNavigation";
-import { formatClock, formatTokens, humanStatus } from "../lib/format";
+import { humanStatus } from "../lib/format";
 import type {
   ConversationAgentLink,
   ConversationDetailDto,
@@ -43,13 +43,13 @@ import type {
   ConversationFocus,
   ConversationPage,
   ConversationSessionRow,
-  ConversationUsageRecord,
   Filter,
 } from "../types";
 import { ConversationCatalogRow } from "./ConversationCatalogRow";
 import { ConversationDetailHead } from "./ConversationDetailHead";
 import { ConversationJumpBar } from "./ConversationJumpBar";
 import { ConversationTimeline } from "./ConversationTimeline";
+import { ConversationUsageTable } from "./ConversationUsageTable";
 import { CursorSessionDetail } from "./CursorSessionDetail";
 import { EmptyState } from "./EmptyState";
 import { LoadingOverlay } from "./LoadingOverlay";
@@ -59,7 +59,6 @@ import type { ConversationExportFormat } from "./type";
 import { Button } from "./ui/Button";
 import { SearchField } from "./ui/Field";
 import { Segmented } from "./ui/Segmented";
-import { ModelLabel } from "./VendorIcon";
 
 const PAGE_SIZE = 20;
 
@@ -82,55 +81,6 @@ const AGENT_CAPABILITY_MESSAGES = {
   partial: "部分子代理关系可确定，其余会话保持分离。",
   unavailable: "无法确定子代理关系，相关会话保持独立。",
 } as const;
-
-
-function UsageRecordsTable({ records }: { records: ConversationUsageRecord[] }) {
-  return (
-    <div className="table-scroll conversation-usage-scroll">
-      <table className="conversation-usage-table">
-        <thead>
-          <tr>
-            <th>时间</th>
-            <th>模型</th>
-            <th>Provider</th>
-            <th>输入</th>
-            <th>输出</th>
-            <th>缓存读</th>
-            <th>缓存写</th>
-            <th>推理</th>
-            <th>总量</th>
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((record, index) => (
-            <tr key={`${record.occurred_at}-${record.source_file}-${index}`}>
-              <td>{formatClock(record.occurred_at)}</td>
-              <td>
-                <ModelLabel name={record.model} provider={record.provider} />
-              </td>
-              <td>{record.provider || "未标注"}</td>
-              <td>{formatTokens(record.input_tokens)}</td>
-              <td>{formatTokens(record.output_tokens)}</td>
-              <td>{formatTokens(record.cache_read_tokens)}</td>
-              <td>{formatTokens(record.cache_creation_tokens)}</td>
-              <td>{formatTokens(record.reasoning_tokens)}</td>
-              <td>
-                <strong>{formatTokens(record.total_tokens)}</strong>
-              </td>
-            </tr>
-          ))}
-          {records.length === 0 ? (
-            <tr>
-              <td colSpan={9} className="analytics-empty">
-                <EmptyState icon="chat" title="这条会话暂无用量明细" />
-              </td>
-            </tr>
-          ) : null}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export function Conversations({
   filter,
@@ -171,6 +121,15 @@ export function Conversations({
     ? (fileAvailableByKey[selectedKey] ?? selected?.file_available ?? true)
     : true;
   const pollError = selectedKey ? (pollErrorsByKey[selectedKey] ?? null) : null;
+  const usageIdentity = selected && detail
+    ? `${selected.source}:${selected.session_id}:${detail.revision}:${revision}`
+    : "";
+  const [usageIdentitySeen, setUsageIdentitySeen] = useState("");
+  const [usageTotal, setUsageTotal] = useState<number | null>(null);
+  if (usageIdentity !== usageIdentitySeen) {
+    setUsageIdentitySeen(usageIdentity);
+    setUsageTotal(null);
+  }
   const [exportFormat, setExportFormat] = useState<ConversationExportFormat | null>(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [exportError, setExportError] = useState(false);
@@ -866,7 +825,9 @@ export function Conversations({
                   ? `${detail.events.length} 条事件`
                   : detailTab === "behavior"
                     ? "Cursor 行为聚合"
-                    : `${detail.usage_records.length} 条记录`}
+                    : usageTotal === null
+                      ? "用量明细"
+                      : `${usageTotal} 条记录`}
               </span>
             ) : null}
           </div>
@@ -912,7 +873,14 @@ export function Conversations({
             </div>
           ) : detail ? (
             detailTab === "usage" ? (
-              <UsageRecordsTable records={detail.usage_records} />
+              <ConversationUsageTable
+                key={usageIdentity}
+                source={session.source}
+                sessionId={session.session_id}
+                refreshKey={usageIdentity}
+                onTotalChange={setUsageTotal}
+                onError={onError}
+              />
             ) : detailTab === "behavior" && detail.cursor_behavior ? (
               <CursorSessionDetail detail={detail.cursor_behavior} embedded />
             ) : (

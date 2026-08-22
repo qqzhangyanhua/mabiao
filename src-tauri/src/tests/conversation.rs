@@ -341,7 +341,7 @@ fn conversation_detail_prepared_context_loads_after_connection_is_dropped() {
 
     let detail = crate::conversation::load_prepared_detail(home, prepared).unwrap();
     assert_eq!(detail.session.session_id, "conv-1");
-    assert!(!detail.messages.is_empty());
+    assert!(!message_texts(&detail).is_empty());
 }
 
 #[test]
@@ -469,7 +469,7 @@ fn conversation_detail_state_detects_append_delete_and_restore_without_refresh()
     assert!(!unchanged.changed);
     assert!(unchanged.file_available);
 
-    let initial_message_count = initial.messages.len();
+    let initial_message_count = message_texts(&initial).len();
     let initial_event_count = initial.events.len();
     writeln!(
         std::fs::OpenOptions::new()
@@ -488,9 +488,13 @@ fn conversation_detail_state_detects_append_delete_and_restore_without_refresh()
     assert_ne!(changed.revision, initial.revision);
 
     let updated = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
-    assert_eq!(updated.messages.len(), initial_message_count + 1);
+    let updated_messages = message_texts(&updated);
+    assert_eq!(updated_messages.len(), initial_message_count + 1);
     assert_eq!(updated.events.len(), initial_event_count + 1);
-    assert_eq!(updated.messages.last().unwrap().text, "follow-up");
+    assert_eq!(
+        updated_messages.last().map(String::as_str),
+        Some("follow-up")
+    );
     assert_eq!(updated.revision, changed.revision);
 
     std::fs::remove_file(&path).unwrap();
@@ -546,7 +550,7 @@ fn conversation_detail_state_tracks_an_incomplete_trailing_jsonl_line_until_comp
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
     let initial = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
-    let initial_message_count = initial.messages.len();
+    let initial_message_count = message_texts(&initial).len();
     let initial_event_count = initial.events.len();
     let mut file = std::fs::OpenOptions::new()
         .append(true)
@@ -559,7 +563,7 @@ fn conversation_detail_state_tracks_an_incomplete_trailing_jsonl_line_until_comp
     file.flush().unwrap();
 
     let partial = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
-    assert_eq!(partial.messages.len(), initial_message_count);
+    assert_eq!(message_texts(&partial).len(), initial_message_count);
     assert_eq!(partial.events.len(), initial_event_count);
     assert_ne!(partial.revision, initial.revision);
 
@@ -575,9 +579,13 @@ fn conversation_detail_state_tracks_an_incomplete_trailing_jsonl_line_until_comp
     assert!(completed_state.file_available);
 
     let completed = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
-    assert_eq!(completed.messages.len(), initial_message_count + 1);
+    let completed_messages = message_texts(&completed);
+    assert_eq!(completed_messages.len(), initial_message_count + 1);
     assert_eq!(completed.events.len(), initial_event_count + 1);
-    assert_eq!(completed.messages.last().unwrap().text, "streamed");
+    assert_eq!(
+        completed_messages.last().map(String::as_str),
+        Some("streamed")
+    );
     assert_eq!(completed.revision, completed_state.revision);
 }
 
@@ -674,7 +682,7 @@ fn codex_conversation_detail_deduplicates_final_messages_across_protocol_channel
             (Some("user"), Some("同一条用户消息")),
         ]
     );
-    assert_eq!(detail.messages.len(), 3);
+    assert_eq!(message_texts(&detail).len(), 3);
 }
 
 #[test]
@@ -1287,15 +1295,155 @@ fn codex_conversation_detail_links_existing_usage_by_exact_source_and_session_id
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
     let detail = crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
+    assert_eq!(detail.session.session_id, "semantic-1");
 
-    assert_eq!(detail.usage_records.len(), 2);
-    assert_eq!(detail.usage_records[0].occurred_at, "2026-08-21T00:00:05Z");
-    assert_eq!(detail.usage_records[0].output_tokens, 10);
-    assert_eq!(detail.usage_records[1].occurred_at, "2026-08-21T00:01:00Z");
-    assert!(detail
-        .usage_records
+    let usage = usage_rows(&conn, "codex", "semantic-1");
+    assert_eq!(usage.len(), 2);
+    assert_eq!(usage[0].occurred_at, "2026-08-21T00:00:05Z");
+    assert_eq!(usage[0].output_tokens, 10);
+    assert_eq!(usage[1].occurred_at, "2026-08-21T00:01:00Z");
+    assert!(usage
         .iter()
         .all(|record| record.source == Source::Codex && record.session_id == "semantic-1"));
+}
+
+#[test]
+fn conversation_usage_records_page_returns_the_first_page() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_codex_fixture(
+        home,
+        "rollout-semantic-1.jsonl",
+        "codex-semantic-events.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    store::insert_records(
+        &conn,
+        &[
+            rec(
+                "2026-08-21T00:00:01Z",
+                Source::Codex,
+                "gpt-5.6-sol",
+                "openai",
+                "/workspace/semantic-project",
+                "semantic-1",
+                10,
+            ),
+            rec(
+                "2026-08-21T00:00:02Z",
+                Source::Codex,
+                "gpt-5.6-sol",
+                "openai",
+                "/workspace/semantic-project",
+                "semantic-1",
+                20,
+            ),
+            rec(
+                "2026-08-21T00:00:03Z",
+                Source::Codex,
+                "gpt-5.6-sol",
+                "openai",
+                "/workspace/semantic-project",
+                "semantic-1",
+                30,
+            ),
+            rec(
+                "2026-08-21T00:00:04Z",
+                Source::Codex,
+                "gpt-5.6-sol",
+                "openai",
+                "/workspace/semantic-project",
+                "semantic-1",
+                40,
+            ),
+            rec(
+                "2026-08-21T00:00:05Z",
+                Source::Codex,
+                "gpt-5.6-sol",
+                "openai",
+                "/workspace/semantic-project",
+                "semantic-1",
+                50,
+            ),
+        ],
+    )
+    .unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let page = crate::conversation::usage_records_page(&conn, "codex", "semantic-1", 1, 2).unwrap();
+
+    assert_eq!(page.total, 5);
+    assert_eq!(page.rows.len(), 2);
+    assert_eq!(page.rows[0].occurred_at, "2026-08-21T00:00:01Z");
+    assert_eq!(page.rows[0].total_tokens, 10);
+    assert_eq!(page.rows[1].occurred_at, "2026-08-21T00:00:02Z");
+    assert_eq!(page.rows[1].total_tokens, 20);
+}
+
+fn seed_five_codex_usage_records(home: &std::path::Path) -> rusqlite::Connection {
+    seed_codex_fixture(
+        home,
+        "rollout-semantic-1.jsonl",
+        "codex-semantic-events.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    store::insert_records(
+        &conn,
+        &(1..=5)
+            .map(|index| {
+                rec(
+                    &format!("2026-08-21T00:00:0{index}Z"),
+                    Source::Codex,
+                    "gpt-5.6-sol",
+                    "openai",
+                    "/workspace/semantic-project",
+                    "semantic-1",
+                    index * 10,
+                )
+            })
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    conn
+}
+
+#[test]
+fn conversation_usage_records_page_returns_the_last_partial_page() {
+    let temp = tempfile::tempdir().unwrap();
+    let conn = seed_five_codex_usage_records(temp.path());
+
+    let page = crate::conversation::usage_records_page(&conn, "codex", "semantic-1", 3, 2).unwrap();
+
+    assert_eq!(page.total, 5);
+    assert_eq!(page.rows.len(), 1);
+    assert_eq!(page.rows[0].occurred_at, "2026-08-21T00:00:05Z");
+    assert_eq!(page.rows[0].total_tokens, 50);
+}
+
+#[test]
+fn conversation_usage_records_page_past_the_end_is_empty() {
+    let temp = tempfile::tempdir().unwrap();
+    let conn = seed_five_codex_usage_records(temp.path());
+
+    let page = crate::conversation::usage_records_page(&conn, "codex", "semantic-1", 4, 2).unwrap();
+
+    assert_eq!(page.total, 5);
+    assert!(page.rows.is_empty());
+}
+
+#[test]
+fn conversation_usage_records_page_is_empty_when_the_session_has_no_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_codex_conversation(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let page = crate::conversation::usage_records_page(&conn, "codex", "conv-1", 1, 20).unwrap();
+
+    assert_eq!(page.total, 0);
+    assert!(page.rows.is_empty());
 }
 
 #[test]
@@ -1390,15 +1538,22 @@ fn codex_conversation_catalog_indexes_and_loads_messages_without_caching_body() 
 
     let detail = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
     assert_eq!(detail.session, *row);
-    assert_eq!(detail.messages.len(), 3);
-    assert_eq!(detail.messages[0].role, "user");
+    let messages = message_events(&detail);
+    assert_eq!(messages.len(), 3);
     assert_eq!(
-        detail.messages[0].text,
-        "发布 Tray 客户端版本支持图片编辑透传"
+        messages[0].actor.map(ConversationEventActor::as_str),
+        Some("user")
     );
-    assert_eq!(detail.messages[1].role, "assistant");
-    assert_eq!(detail.messages[1].text, "我先检查现有实现。");
-    assert_eq!(detail.messages[2].text, "已完成提交。");
+    assert_eq!(
+        messages[0].text.as_deref(),
+        Some("发布 Tray 客户端版本支持图片编辑透传")
+    );
+    assert_eq!(
+        messages[1].actor.map(ConversationEventActor::as_str),
+        Some("assistant")
+    );
+    assert_eq!(messages[1].text.as_deref(), Some("我先检查现有实现。"));
+    assert_eq!(messages[2].text.as_deref(), Some("已完成提交。"));
 
     std::fs::remove_file(source_file).unwrap();
     let error = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap_err();
@@ -2012,7 +2167,7 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
 
     let claude =
         crate::conversation::load_detail(&conn, home, "claude", "claude-parent-1").unwrap();
-    assert_eq!(claude.usage_records.len(), 1);
+    assert_eq!(usage_rows(&conn, "claude", "claude-parent-1").len(), 1);
     assert!(claude.events.iter().any(|event| {
         event.kind == crate::domain::ConversationEventKind::ToolCall
             && event.name.as_deref() == Some("Agent")
@@ -2032,8 +2187,9 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
     assert!(child_links["claude-child-1"].is_some());
     assert!(child_links["claude-child-2"].is_none());
     let child = crate::conversation::load_detail(&conn, home, "claude", "claude-child-1").unwrap();
-    assert_eq!(child.usage_records.len(), 1);
-    assert_eq!(child.usage_records[0].session_id, "claude-child-1");
+    let child_usage = usage_rows(&conn, "claude", "claude-child-1");
+    assert_eq!(child_usage.len(), 1);
+    assert_eq!(child_usage[0].session_id, "claude-child-1");
     assert!(child
         .events
         .iter()
@@ -2050,7 +2206,7 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
         .any(|event| event.text.as_deref() == Some("The audit is complete.")));
 
     let pi = crate::conversation::load_detail(&conn, home, "pi", "pi-session-1").unwrap();
-    assert_eq!(pi.usage_records.len(), 1);
+    assert_eq!(usage_rows(&conn, "pi", "pi-session-1").len(), 1);
     assert!(pi.events.iter().any(|event| {
         event.kind == crate::domain::ConversationEventKind::ModelChange
             && event.name.as_deref() == Some("pi-model-test")
@@ -2064,13 +2220,13 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
         .iter()
         .any(|event| event.kind == crate::domain::ConversationEventKind::ToolResult));
     let pi_no_usage = crate::conversation::load_detail(&conn, home, "pi", "pi-no-usage").unwrap();
-    assert!(pi_no_usage.usage_records.is_empty());
+    assert!(usage_rows(&conn, "pi", "pi-no-usage").is_empty());
     assert!(pi_no_usage.session.model.is_empty());
     assert!(pi_no_usage
         .session
         .capabilities
         .contains(&"usage".to_string()));
-    assert_eq!(pi_no_usage.messages.len(), 2);
+    assert_eq!(message_texts(&pi_no_usage).len(), 2);
     assert_eq!(
         pi.events
             .iter()
@@ -2082,7 +2238,7 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
 
     let gemini =
         crate::conversation::load_detail(&conn, home, "gemini", "gemini-session-1").unwrap();
-    assert_eq!(gemini.usage_records.len(), 1);
+    assert_eq!(usage_rows(&conn, "gemini", "gemini-session-1").len(), 1);
     assert!(gemini.events.iter().any(|event| {
         event.kind == crate::domain::ConversationEventKind::ToolCall
             && event.name.as_deref() == Some("read_file")
@@ -2132,9 +2288,9 @@ fn configured_claude_pi_and_gemini_roots_feed_the_unified_conversation_services(
     assert!(raw_export.default_name.ends_with(".json"));
     let gemini_no_usage =
         crate::conversation::load_detail(&conn, home, "gemini", "gemini-no-usage").unwrap();
-    assert!(gemini_no_usage.usage_records.is_empty());
+    assert!(usage_rows(&conn, "gemini", "gemini-no-usage").is_empty());
     assert!(gemini_no_usage.session.model.is_empty());
-    assert_eq!(gemini_no_usage.messages.len(), 2);
+    assert_eq!(message_texts(&gemini_no_usage).len(), 2);
 }
 
 #[test]
