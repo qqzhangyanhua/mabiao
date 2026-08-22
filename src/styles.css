@@ -4034,6 +4034,18 @@ td.row-actions {
   padding-bottom: 52px;
 }
 
+.conversation-timeline-earlier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 10px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+}
+
 .conversation-jump-bar {
   position: absolute;
   right: 22px;

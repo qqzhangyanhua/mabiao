@@ -17,17 +17,19 @@ pub mod qwen;
 
 use crate::domain::UsageRecord;
 
-pub fn parse_jsonl_values(content: &str) -> Vec<serde_json::Value> {
-    content
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim();
-            if line.is_empty() {
-                return None;
-            }
-            serde_json::from_str(line).ok()
-        })
-        .collect()
+/// 惰性逐行产出 `Value`，同一时刻只有一行的解析结果活着。
+///
+/// 会话 jsonl 单文件可以到几十 MB，`Value` 的堆表示又是原文的数倍；
+/// 一次性 collect 成 `Vec` 会让整轮摄取的常驻内存和最大文件成正比。
+/// 需要多趟扫描的适配器请重复调用本函数，重复解析比把整份文件留在内存里便宜。
+pub fn parse_jsonl_values(content: &str) -> impl Iterator<Item = serde_json::Value> + '_ {
+    content.lines().filter_map(|line| {
+        let line = line.trim();
+        if line.is_empty() {
+            return None;
+        }
+        serde_json::from_str(line).ok()
+    })
 }
 
 pub fn i64_field(value: &serde_json::Value, keys: &[&str]) -> i64 {

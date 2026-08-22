@@ -6,17 +6,15 @@ use crate::domain::{Source, UsageRecord};
 /// token 只出现在 `type=result` 事件的 `usage` 子对象里；model/cwd 来自开头的 `type=system` 事件。
 /// 每条 result 归一为一条 Usage Record。详见 docs/probe/cursor-agent.md。
 pub fn parse_cursor_agent_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
-    let values = parse_jsonl_values(content);
-
     let mut model = String::new();
     let mut project = String::new();
-    for value in &values {
+    for value in parse_jsonl_values(content) {
         if value.get("type").and_then(|v| v.as_str()) == Some("system") {
-            let candidate_model = text_field(value, &["model"]);
+            let candidate_model = text_field(&value, &["model"]);
             if !candidate_model.is_empty() {
                 model = candidate_model;
             }
-            let candidate_cwd = text_field(value, &["cwd"]);
+            let candidate_cwd = text_field(&value, &["cwd"]);
             if !candidate_cwd.is_empty() {
                 project = candidate_cwd;
             }
@@ -30,7 +28,7 @@ pub fn parse_cursor_agent_jsonl(content: &str, source_file: &str) -> Vec<UsageRe
         .to_string();
 
     let mut records = Vec::new();
-    for value in &values {
+    for value in parse_jsonl_values(content) {
         if value.get("type").and_then(|v| v.as_str()) != Some("result") {
             continue;
         }
@@ -39,23 +37,23 @@ pub fn parse_cursor_agent_jsonl(content: &str, source_file: &str) -> Vec<UsageRe
             _ => continue,
         };
         let session_id = {
-            let value = text_field(value, &["session_id"]);
-            if value.is_empty() {
+            let session_id = text_field(&value, &["session_id"]);
+            if session_id.is_empty() {
                 file_session.clone()
             } else {
-                value
+                session_id
             }
         };
         let record_model = {
-            let value = text_field(value, &["model"]);
-            if value.is_empty() {
+            let record_model = text_field(&value, &["model"]);
+            if record_model.is_empty() {
                 model.clone()
             } else {
-                value
+                record_model
             }
         };
         records.push(finish(UsageRecord {
-            occurred_at: text_field(value, &["captured_at"]),
+            occurred_at: text_field(&value, &["captured_at"]),
             source: Source::CursorAgent,
             model: record_model,
             provider: String::new(),

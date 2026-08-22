@@ -10,26 +10,28 @@ use crate::domain::{Source, UsageRecord};
 /// 避免把同一份累计用量重复计入——与 Codex 适配器「取最后一次快照，不逐条累加」的策略一致。
 /// 详见 docs/probe/copilot.md。
 pub fn parse_copilot_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
-    let values = parse_jsonl_values(content);
-
     let mut session_id = String::new();
     let mut project = String::new();
-    for value in &values {
-        if value.get("type").and_then(|v| v.as_str()) != Some("session.start") {
-            continue;
-        }
-        let data = value.get("data").cloned().unwrap_or(Value::Null);
-        let candidate_session = text_field(&data, &["sessionId"]);
-        if !candidate_session.is_empty() {
-            session_id = candidate_session;
-        }
-        let candidate_cwd = data
-            .get("context")
-            .and_then(|context| context.get("cwd"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("");
-        if !candidate_cwd.is_empty() {
-            project = candidate_cwd.to_string();
+    let mut last_shutdown: Option<Value> = None;
+    for value in parse_jsonl_values(content) {
+        match value.get("type").and_then(|v| v.as_str()) {
+            Some("session.start") => {
+                let data = value.get("data").unwrap_or(&Value::Null);
+                let candidate_session = text_field(data, &["sessionId"]);
+                if !candidate_session.is_empty() {
+                    session_id = candidate_session;
+                }
+                let candidate_cwd = data
+                    .get("context")
+                    .and_then(|context| context.get("cwd"))
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("");
+                if !candidate_cwd.is_empty() {
+                    project = candidate_cwd.to_string();
+                }
+            }
+            Some("session.shutdown") => last_shutdown = Some(value),
+            _ => {}
         }
     }
     if session_id.is_empty() {
@@ -42,15 +44,11 @@ pub fn parse_copilot_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord>
             .to_string();
     }
 
-    let Some(shutdown) = values
-        .iter()
-        .rev()
-        .find(|value| value.get("type").and_then(|v| v.as_str()) == Some("session.shutdown"))
-    else {
+    let Some(shutdown) = last_shutdown else {
         return Vec::new();
     };
-    let timestamp = text_field(shutdown, &["timestamp"]);
-    let data = shutdown.get("data").cloned().unwrap_or(Value::Null);
+    let timestamp = text_field(&shutdown, &["timestamp"]);
+    let data = shutdown.get("data").unwrap_or(&Value::Null);
     let Some(metrics) = data.get("modelMetrics").and_then(|value| value.as_object()) else {
         return Vec::new();
     };

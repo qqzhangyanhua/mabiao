@@ -37,13 +37,20 @@ pub fn open_readonly(path: &str) -> Result<Connection, String> {
 ///   WAL 让前端查询（读者）不必等这次写事务提交就能读到旧版本页，避免 UI 卡顿。
 /// - `synchronous=NORMAL`：WAL 模式下官方推荐搭配 NORMAL，牺牲的持久性仅在系统级崩溃
 ///   （断电/内核崩溃，而非应用崩溃）时才可能丢最后几条已提交事务，可接受，换来显著更少的 fsync。
+/// - `journal_size_limit`：整轮摄取是一个大事务，「重建全部」会把整库的页都写进 WAL；
+///   不设上限的话 checkpoint 之后 WAL 文件仍按峰值大小常驻磁盘。
 fn configure_connection(conn: &Connection) -> Result<(), String> {
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| e.to_string())?;
     conn.pragma_update(None, "synchronous", "NORMAL")
         .map_err(|e| e.to_string())?;
+    conn.pragma_update(None, "journal_size_limit", WAL_SIZE_LIMIT_BYTES)
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+/// 32 MiB：够装下一轮增量摄取的全部脏页，又不至于让「重建全部」之后留下一个上百 MB 的 WAL。
+const WAL_SIZE_LIMIT_BYTES: i64 = 32 * 1024 * 1024;
 
 fn init_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(

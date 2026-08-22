@@ -10,15 +10,17 @@ struct ClaudeTurn {
 }
 
 pub fn parse_claude_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
-    let values = parse_jsonl_values(content);
     let mut project = String::new();
     let mut session_id = String::new();
-    for value in &values {
+    for value in parse_jsonl_values(content) {
         if project.is_empty() {
-            project = text_field(value, &["cwd"]);
+            project = text_field(&value, &["cwd"]);
         }
         if session_id.is_empty() {
-            session_id = text_field(value, &["sessionId", "session_id"]);
+            session_id = text_field(&value, &["sessionId", "session_id"]);
+        }
+        if !project.is_empty() && !session_id.is_empty() {
+            break;
         }
     }
     if project.is_empty() {
@@ -32,7 +34,7 @@ pub fn parse_claude_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> 
     let mut order: Vec<String> = Vec::new();
     let mut anonymous = Vec::new();
 
-    for value in values {
+    for value in parse_jsonl_values(content) {
         if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
             continue;
         }

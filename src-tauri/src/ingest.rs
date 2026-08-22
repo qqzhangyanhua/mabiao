@@ -658,9 +658,9 @@ fn ingest_jsonl_tree(
         for path in walk_files(root, ext)? {
             seen.insert(path.to_string_lossy().to_string());
             ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                validate_jsonl(&content)?;
-                parse(&content, loc)
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                validate_jsonl(content)?;
+                parse(content, loc)
             })?;
         }
     }
@@ -766,7 +766,8 @@ fn validate_jsonl(content: &str) -> Result<(), String> {
         if line.is_empty() {
             continue;
         }
-        serde_json::from_str::<serde_json::Value>(line)
+        // 只校验语法，不建 `Value` 树——正文随后由适配器逐行解析，这里没必要留下整份堆表示。
+        serde_json::from_str::<serde::de::IgnoredAny>(line)
             .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1))?;
     }
     Ok(())
@@ -825,9 +826,9 @@ fn ingest_kimi(
                         .to_string()
                 });
             ingest_one(conn, source, &path, &fingerprint, report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                validate_jsonl(&content)?;
-                Ok(kimi::parse_kimi_wire(&content, loc, &project))
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                validate_jsonl(content)?;
+                Ok(kimi::parse_kimi_wire(content, loc, &project))
             })?;
         }
     }
@@ -896,9 +897,10 @@ fn ingest_gemini(
             }
             seen.insert(path.to_string_lossy().to_string());
             ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde_json::Value>(&content).map_err(|e| e.to_string())?;
-                Ok(gemini::parse_gemini_session(&content, loc))
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                serde_json::from_str::<serde::de::IgnoredAny>(content)
+                    .map_err(|e| e.to_string())?;
+                Ok(gemini::parse_gemini_session(content, loc))
             })?;
         }
     }
@@ -952,9 +954,9 @@ fn ingest_grok(
                 .unwrap_or("")
                 .to_string();
             ingest_one(conn, source, &path, &fingerprint, report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                validate_jsonl(&content)?;
-                Ok(grok::parse_grok_updates(&content, loc, &model))
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                validate_jsonl(content)?;
+                Ok(grok::parse_grok_updates(content, loc, &model))
             })?;
         }
     }
@@ -976,9 +978,10 @@ fn ingest_qwen(
             }
             seen.insert(path.to_string_lossy().to_string());
             ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde_json::Value>(&content).map_err(|e| e.to_string())?;
-                Ok(qwen::parse_qwen_session(&content, loc))
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                serde_json::from_str::<serde::de::IgnoredAny>(content)
+                    .map_err(|e| e.to_string())?;
+                Ok(qwen::parse_qwen_session(content, loc))
             })?;
         }
     }
@@ -997,9 +1000,10 @@ fn ingest_factory(
         for path in walk_suffix(root, ".settings.json")? {
             seen.insert(path.to_string_lossy().to_string());
             ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = String::from_utf8(bytes.to_vec()).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde_json::Value>(&content).map_err(|e| e.to_string())?;
-                Ok(factory::parse_factory_settings(&content, loc))
+                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
+                serde_json::from_str::<serde::de::IgnoredAny>(content)
+                    .map_err(|e| e.to_string())?;
+                Ok(factory::parse_factory_settings(content, loc))
             })?;
         }
     }
