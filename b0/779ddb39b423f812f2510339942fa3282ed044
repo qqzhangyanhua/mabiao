@@ -1,0 +1,23 @@
+src/TrayQuotaApp.tsx
+  s_fb2c988663a308::t_2d1a82be3641d3 8,10,12,19
+  s_fb2c988663a308::t_eea94d7b243e17 92-100,104-110,113-128,131-150
+  s_fb2c988663a308::t_150468f94d8630 26,29-35
+  s_fb2c988663a308::t_91777bdff189d6 20
+  s_fb2c988663a308::t_86d5f32efe23e9 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b0779ddb39b423f812f2510339942fa3282ed044",
+  "prompts": {},
+  "sessions": {
+    "s_fb2c988663a308": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "65b50f58-48b6-4c96-97e4-56ec55c058a3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
