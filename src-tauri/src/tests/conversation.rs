@@ -225,6 +225,52 @@ fn codex_conversation_detail_reports_attachments_and_loads_images_on_demand() {
 }
 
 #[test]
+fn read_source_line_rejects_an_out_of_range_index() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.jsonl");
+    std::fs::write(&path, "first\nsecond\n").unwrap();
+
+    let error = crate::conversation::read_source_line(&path, 2).unwrap_err();
+    assert!(
+        error.contains("未找到第 3 行"),
+        "out-of-range must error instead of returning another line: {error}"
+    );
+    assert_eq!(
+        crate::conversation::read_source_line(&path, 0).unwrap(),
+        "first"
+    );
+    assert_eq!(
+        crate::conversation::read_source_line(&path, 1).unwrap(),
+        "second"
+    );
+}
+
+#[test]
+fn read_source_line_rejects_an_empty_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("empty.jsonl");
+    std::fs::write(&path, "").unwrap();
+
+    let error = crate::conversation::read_source_line(&path, 0).unwrap_err();
+    assert!(
+        error.contains("未找到第 1 行"),
+        "empty file must error: {error}"
+    );
+}
+
+#[test]
+fn read_source_line_rejects_a_missing_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("missing.jsonl");
+
+    let error = crate::conversation::read_source_line(&path, 0).unwrap_err();
+    assert!(
+        error.contains("读取原始文件失败"),
+        "missing file must use the existing Chinese error: {error}"
+    );
+}
+
+#[test]
 fn codex_conversation_attachment_loader_rejects_unrelated_source_siblings() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

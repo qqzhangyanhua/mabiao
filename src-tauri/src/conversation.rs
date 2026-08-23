@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::Cursor;
+use std::io::{BufRead, BufReader, Cursor};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -2448,9 +2448,35 @@ fn strip_message_bodies_from_details(events: &mut [ConversationEvent]) {
     }
 }
 
+/// 按行号流式读取源文件的一行。行号从 0 计；只保留当前行，不把整份文件读进内存。
+pub(crate) fn read_source_line(path: &Path, line_index: u32) -> Result<String, String> {
+    let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    let mut index = 0u32;
+    loop {
+        buffer.clear();
+        let bytes = reader
+            .read_until(b'\n', &mut buffer)
+            .map_err(|error| format!("读取原始文件失败：{error}"))?;
+        if bytes == 0 {
+            return Err(format!("原始文件中未找到第 {} 行", line_index + 1));
+        }
+        if index == line_index {
+            let line = std::str::from_utf8(&buffer)
+                .map_err(|error| format!("读取原始文件失败：{error}"))?;
+            let line = line.strip_suffix('\n').unwrap_or(line);
+            let line = line.strip_suffix('\r').unwrap_or(line);
+            return Ok(line.to_string());
+        }
+        index += 1;
+    }
+}
+
 fn read_source_payload(source: Source, path: &Path, sequence: u32) -> Result<Value, String> {
-    let content = fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
     if source == Source::Gemini {
+        let content =
+            fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
         let root: Value = serde_json::from_str(&content)
             .map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
         return root
@@ -2460,12 +2486,9 @@ fn read_source_payload(source: Source, path: &Path, sequence: u32) -> Result<Val
             .cloned()
             .ok_or_else(|| "原始文件中未找到附件所在事件".to_string());
     }
-    let raw = content
-        .lines()
-        .nth(sequence as usize)
-        .ok_or_else(|| "原始文件中未找到附件所在事件".to_string())?;
+    let raw = read_source_line(path, sequence)?;
     let value: Value =
-        serde_json::from_str(raw).map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
+        serde_json::from_str(&raw).map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
     Ok(value.get("payload").cloned().unwrap_or(value))
 }
 
