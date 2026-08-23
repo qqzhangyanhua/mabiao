@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { OfficialQuotaDto } from "../types";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
+  formatQuotaAmount,
   officialQuotaAgeLabel,
+  officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
   officialQuotaRefreshHint,
@@ -96,5 +98,56 @@ describe("OFFICIAL_QUOTA_FRESHNESS_STATUS", () => {
       stale: "已过期",
       unavailable: "暂无",
     });
+  });
+});
+
+describe("formatQuotaAmount", () => {
+  it("uses the currency symbol when it knows one", () => {
+    expect(formatQuotaAmount(19, "USD")).toBe("$19.00");
+    expect(formatQuotaAmount(50, "cny")).toBe("¥50.00");
+  });
+
+  it("falls back to a trailing code for currencies without a symbol", () => {
+    expect(formatQuotaAmount(19, "SGD")).toBe("19.00 SGD");
+  });
+
+  it("drops the money marker entirely when the currency is missing", () => {
+    expect(formatQuotaAmount(19, null)).toBe("19.00");
+  });
+
+  it("drops the cents once the number is large enough not to need them", () => {
+    expect(formatQuotaAmount(1234.56, "USD")).toBe("$1,235");
+  });
+});
+
+describe("officialQuotaAmountLabel", () => {
+  it("shows used against the limit when both are known", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: 50, currency: "USD" })).toBe(
+      "已用 $19.00 / 共 $50.00",
+    );
+  });
+
+  it("degrades to used-only when there is no limit", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: null, currency: "USD" })).toBe(
+      "已用 $19.00",
+    );
+  });
+
+  it("degrades to limit-only when only the cap came back", () => {
+    expect(officialQuotaAmountLabel({ used_amount: null, limit_amount: 50, currency: "USD" })).toBe(
+      "共 $50.00",
+    );
+  });
+
+  it("degrades to bare numbers when the currency is missing", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: 50, currency: null })).toBe(
+      "已用 19.00 / 共 50.00",
+    );
+  });
+
+  it("returns null when there is no money to show, so the row skips that line", () => {
+    expect(
+      officialQuotaAmountLabel({ used_amount: null, limit_amount: null, currency: "USD" }),
+    ).toBeNull();
   });
 });
