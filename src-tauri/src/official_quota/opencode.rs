@@ -102,6 +102,7 @@ pub fn parse_usage(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> {
             label: label.to_string(),
             used_percent: Some(percent),
             resets_at: node.get("resetsAt").and_then(parse_resets_at),
+            ..Default::default()
         });
     }
 

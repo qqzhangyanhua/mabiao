@@ -68,6 +68,7 @@ fn parse_slot(node: Option<&Value>, bucket: &str, slot: &str) -> Option<Official
         label,
         used_percent: percent,
         resets_at,
+        ..Default::default()
     })
 }
 

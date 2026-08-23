@@ -122,6 +122,7 @@ pub fn parse_usage(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> {
             label: label.to_string(),
             used_percent: Some(percent),
             resets_at: resets_at.clone(),
+            ..Default::default()
         });
     }
 

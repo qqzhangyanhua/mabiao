@@ -112,6 +112,7 @@ pub fn parse_usage(
             label: label_for(seconds, slot),
             used_percent: Some(percent),
             resets_at: node.and_then(|node| resets_at(node, now_secs)),
+            ..Default::default()
         });
     }
 

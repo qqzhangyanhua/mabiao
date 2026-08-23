@@ -226,7 +226,12 @@ pub enum OfficialQuotaFreshness {
     Unavailable,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// 「官方额度」里的一条窗口。
+///
+/// 派生 `Default` 并标记 `non_exhaustive`，要求所有构造点以 `..Default::default()`
+/// 收尾：新增口径字段时只需改这里，不必同时改散在各 provider 解析器里的二十多处字面量。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct OfficialQuotaWindow {
     pub kind: String,
     pub label: String,
