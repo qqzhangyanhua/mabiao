@@ -1,0 +1,70 @@
+src/types.ts
+  s_8a3dc604cac5e4::t_927fc848955616 147
+src-tauri/src/user_files.rs
+  s_8a3dc604cac5e4::t_d30783d3ddb249 147
+  s_8a3dc604cac5e4::t_0e2c45d833c76a 128,146
+  s_8a3dc604cac5e4::t_31b2c40c499817 129
+  s_8a3dc604cac5e4::t_9bf7bb6c36d464 148-149
+src-tauri/src/instructions/cursor.rs
+  s_8a3dc604cac5e4::t_627e518923a841 21
+src-tauri/src/domain.rs
+  s_8a3dc604cac5e4::t_eaeca649c03378 344
+src-tauri/src/tests/instructions.rs
+  s_8a3dc604cac5e4::t_5888364b4bf0cd 288-293,295-297,299-312,1316,1356-1421
+  s_8a3dc604cac5e4::t_f327711e4cb07e 1317-1355,1422-1423
+  s_8a3dc604cac5e4::t_a26af05627e7d5 294
+  s_8a3dc604cac5e4::t_fbc5cf587218cc 298
+docs/adr/0010-writing-user-owned-files.md
+  s_8a3dc604cac5e4::t_2aabbf61f61b70 28
+  s_8a3dc604cac5e4::t_fb3769cb179f13 29
+src/components/InstructionCheckup.tsx
+  s_8a3dc604cac5e4::t_c5007cdec371ce 16
+src/components/GlobalInstructionPanel.tsx
+  s_8a3dc604cac5e4::t_2e868ebc1ed065 323-332
+  s_8a3dc604cac5e4::t_207dda3c101eeb 7,149-170,185-187,193-211,222-296
+  s_8a3dc604cac5e4::t_a89b67b0671ec0 12-14,17-19
+  s_8a3dc604cac5e4::t_0d32d220659dae 15-16,46,172-184,188-192,212-217
+  s_8a3dc604cac5e4::t_e237a0748b80a8 297
+src-tauri/src/instructions/mod.rs
+  s_8a3dc604cac5e4::t_e9f97925d91334 31,46,117-123
+  s_8a3dc604cac5e4::t_6b8e1f04b82375 124-126
+src-tauri/src/instructions/claude.rs
+  s_8a3dc604cac5e4::t_408623465dff34 17-22,26-37
+src-tauri/src/instructions/conflict.rs
+  s_8a3dc604cac5e4::t_79c8d2ec5509aa 157,168-178,181-192
+src-tauri/src/instructions/cursor_agent.rs
+  s_8a3dc604cac5e4::t_ede8d3f02d26bf 29
+src-tauri/src/instructions/grok.rs
+  s_8a3dc604cac5e4::t_2545bd65a5f429 9,19-20,25
+src-tauri/src/instructions/file.rs
+  s_8a3dc604cac5e4::t_6339d3ce399282 37,69,86,113
+src/lib/instructionAccess.test.ts
+  s_8a3dc604cac5e4::t_d4508f23279ceb 2
+  s_8a3dc604cac5e4::t_846dd6d407b09a 3-5,8-11,75-78,80,82-83,89-97,102,104,126-127,136
+  s_8a3dc604cac5e4::t_d963d62fde5cf4 6-7,26,99-101,103,105-125,128-135,137
+  s_8a3dc604cac5e4::t_dd0c86b0328ecf 98
+src/styles.css
+  s_8a3dc604cac5e4::t_9e7b4a8a0b3541 5961,5965,5973,6002
+  s_8a3dc604cac5e4::t_205a6df4435106 3166-3167,5507-5555
+  s_8a3dc604cac5e4::t_b74efa52670ac5 5601-5602
+  s_8a3dc604cac5e4::t_0bdd87adfc2a3e 3164-3165,5556,5603-5605,5625-5629,5631-5632,5636,5641,5646,5651,5656,5735-5740,5766-5769,5784,5789,5794-5795,5799
+  s_8a3dc604cac5e4::t_7c73c7e2db8e8b 5557
+src/components/InstructionOverlap.tsx
+  s_8a3dc604cac5e4::t_a3c9782299346f 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3cafa35e7cff5e1646d765e8c2105f0fddbb5753",
+  "prompts": {},
+  "sessions": {
+    "s_8a3dc604cac5e4": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a02dc8-9bac-7421-817e-3e10d357f4f4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
