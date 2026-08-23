@@ -154,7 +154,7 @@ fn keywords(text: &str) -> BTreeSet<String> {
     let mut keys = BTreeSet::new();
     let mut current = String::new();
     for ch in text.chars() {
-        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.') {
+        if is_token_char(ch) {
             current.push(ch);
         } else {
             take_keyword(&mut keys, &current);
@@ -165,9 +165,31 @@ fn keywords(text: &str) -> BTreeSet<String> {
     keys
 }
 
+fn is_token_char(ch: char) -> bool {
+    ch.is_alphanumeric() || matches!(ch, '_' | '-' | '.')
+}
+
+fn is_cjk(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{3400}'..='\u{4DBF}' | '\u{4E00}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}'
+    )
+}
+
 fn take_keyword(keys: &mut BTreeSet<String>, raw: &str) {
     let trimmed = raw.trim_matches(|ch: char| matches!(ch, '.' | '-' | '_'));
-    if trimmed.len() < 4 || trimmed.chars().all(|ch| ch.is_ascii_digit() || ch == '.') {
+    if trimmed.is_empty() || trimmed.chars().all(|ch| ch.is_ascii_digit() || ch == '.') {
+        return;
+    }
+    let char_count = trimmed.chars().count();
+    if trimmed.chars().any(is_cjk) {
+        if char_count < 3 {
+            return;
+        }
+        keys.insert(trimmed.to_string());
+        return;
+    }
+    if char_count < 4 {
         return;
     }
     let key = trimmed.to_ascii_lowercase();

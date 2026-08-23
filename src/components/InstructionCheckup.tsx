@@ -1,5 +1,4 @@
 import type { InstructionCheckupFinding, InstructionCheckupSeverity } from "../types";
-import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 
 const SEVERITY_LABEL: Record<InstructionCheckupSeverity, string> = {
@@ -14,11 +13,7 @@ export function InstructionCheckup({ findings }: { findings: InstructionCheckupF
     <section className="instruction-checkup">
       <h3>体检</h3>
       {findings.length === 0 ? (
-        <EmptyState
-          compact
-          title="未发现静默失效"
-          hint="已检查空文件、未被加载、override 屏蔽、体积上限、Cursor 孤儿 memories 和 Claude 自动记忆。"
-        />
+        <p className="instruction-checkup-ok">未发现静默失效</p>
       ) : (
         <ul className="instruction-checkup-list">
           {findings.map((finding) => (

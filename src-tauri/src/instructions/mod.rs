@@ -28,7 +28,7 @@ pub fn scan(
     project_root: Option<&Path>,
     usage: &InstructionUsageSummary,
 ) -> GlobalInstructionDto {
-    let sources = vec![
+    let mut sources = vec![
         claude::scan(home),
         codex::scan(home),
         gemini::scan(home),
@@ -43,6 +43,7 @@ pub fn scan(
         cursor_agent::scan(),
         copilot::scan(home),
     ];
+    mark_editable(home, &mut sources);
     let mut findings = checkup::collect(&sources);
     if let Some(finding) = cursor_memories::detect(home) {
         findings.push(finding);
@@ -110,6 +111,16 @@ pub fn open_in_external_editor(abs_path: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err("无法在外部打开该全局指令".into())
+    }
+}
+
+fn mark_editable(home: &Path, sources: &mut [crate::domain::GlobalInstructionSourceRow]) {
+    for row in sources {
+        for file in &mut row.files {
+            file.editable = file.kind == crate::domain::InstructionEntryKind::File
+                && !file.abs_path.is_empty()
+                && crate::user_files::is_allowed(home, Path::new(&file.abs_path));
+        }
     }
 }
 

@@ -144,6 +144,7 @@ export type GlobalInstructionFile = {
   error: string | null;
   note: string | null;
   action: string | null;
+  editable: boolean;
 };
 
 export type GlobalInstructionSourceRow = {

@@ -3161,7 +3161,10 @@ tr.selected {
 .nav-btn:focus-visible,
 .settings-tab:focus-visible,
 .theme-choice-btn:focus-visible,
-.sidebar-collapse-btn:focus-visible {
+.sidebar-collapse-btn:focus-visible,
+.instruction-row-head:focus-visible,
+.instruction-memory-head:focus-visible,
+.instruction-idle-head:focus-visible {
   outline: 2px solid rgba(139, 108, 255, 0.55);
   outline-offset: 1px;
 }
@@ -5501,6 +5504,57 @@ td.row-actions {
   max-width: 100%;
 }
 
+.instruction-idle {
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-idle h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.instruction-idle > div .muted {
+  margin: 4px 0 0;
+}
+
+.instruction-idle-source {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+  overflow: hidden;
+}
+
+.instruction-idle-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.instruction-idle-source:hover,
+.instruction-idle-head:hover {
+  background: var(--overlay-2);
+}
+
+.instruction-idle-head .instruction-evidence {
+  background: var(--overlay-2);
+  color: var(--text-faint);
+}
+
+.instruction-idle-source .instruction-list {
+  padding: 0 8px 8px;
+}
+
 .instruction-list {
   list-style: none;
   margin: 0;
@@ -5544,6 +5598,11 @@ td.row-actions {
   cursor: pointer;
 }
 
+.instruction-row:hover,
+.instruction-memory-item:hover {
+  background: var(--overlay-2);
+}
+
 .instruction-row-title {
   display: flex;
   flex-wrap: wrap;
@@ -5563,40 +5622,38 @@ td.row-actions {
 }
 
 .instruction-status,
-.instruction-evidence {
+.instruction-evidence,
+.instruction-checkup-severity {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
   font-style: normal;
-  font-size: 12px;
-}
-
-.instruction-row.status-loaded .instruction-status {
-  color: var(--green-fg);
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .instruction-row.status-present_unloaded .instruction-status {
+  background: var(--tone-claude-bg);
   color: var(--orange-fg);
 }
 
 .instruction-row.status-locally_invisible .instruction-status {
+  background: var(--tone-pi-bg);
   color: var(--cyan-fg);
 }
 
 .instruction-row.status-not_created .instruction-status {
+  background: var(--overlay-2);
   color: var(--text-faint);
 }
 
-.instruction-evidence {
-  color: var(--muted);
-}
-
-.instruction-row.evidence-inferred {
-  opacity: 0.62;
-}
-
 .instruction-row.evidence-inferred .instruction-evidence {
+  background: var(--tone-claude-bg);
   color: var(--orange-fg);
 }
 
 .instruction-row.evidence-no_mechanism .instruction-evidence {
+  background: var(--overlay-2);
   color: var(--text-faint);
 }
 
@@ -5675,6 +5732,12 @@ td.row-actions {
   font-size: 14px;
 }
 
+.instruction-checkup-ok {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .instruction-checkup-list {
   list-style: none;
   margin: 0;
@@ -5700,6 +5763,10 @@ td.row-actions {
   border-color: var(--orange-fg);
 }
 
+.instruction-checkup-item.severity-medium {
+  border-color: var(--cyan-fg);
+}
+
 .instruction-checkup-head {
   display: flex;
   flex-wrap: wrap;
@@ -5713,24 +5780,23 @@ td.row-actions {
   font-size: 12px;
 }
 
-.instruction-checkup-severity {
-  font-style: normal;
-  font-size: 12px;
-}
-
 .instruction-checkup-item.severity-critical .instruction-checkup-severity {
+  background: rgba(251, 113, 133, 0.16);
   color: var(--red-fg);
 }
 
 .instruction-checkup-item.severity-high .instruction-checkup-severity {
+  background: var(--tone-claude-bg);
   color: var(--orange-fg);
 }
 
 .instruction-checkup-item.severity-medium .instruction-checkup-severity {
-  color: var(--orange-fg);
+  background: var(--tone-pi-bg);
+  color: var(--cyan-fg);
 }
 
 .instruction-checkup-item.severity-low .instruction-checkup-severity {
+  background: var(--overlay-2);
   color: var(--muted);
 }
 
@@ -5892,10 +5958,11 @@ td.row-actions {
 .instruction-memory-item {
   display: grid;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--overlay-1);
+  overflow: hidden;
 }
 
 .instruction-memory-head {
@@ -5903,7 +5970,7 @@ td.row-actions {
   gap: 6px;
   width: 100%;
   margin: 0;
-  padding: 0;
+  padding: 10px 12px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -5932,6 +5999,7 @@ td.row-actions {
 .instruction-memory-body {
   display: grid;
   gap: 8px;
+  padding: 0 12px 12px;
 }
 
 .instruction-memory-file {

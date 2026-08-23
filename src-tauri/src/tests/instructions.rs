@@ -286,6 +286,31 @@ fn scan_reports_keyword_overlap_between_global_and_project_rules() {
 }
 
 #[test]
+fn scan_reports_chinese_keyword_overlap() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".claude")).unwrap();
+    std::fs::write(
+        home.path().join(".claude/CLAUDE.md"),
+        "原则：向后兼容，不得破坏现有接口。\n",
+    )
+    .unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::write(project.path().join("AGENTS.md"), "铁律：向后兼容。\n").unwrap();
+
+    let dto = crate::instructions::scan(
+        home.path(),
+        Some(project.path()),
+        &crate::domain::InstructionUsageSummary::default(),
+    );
+
+    assert!(
+        dto.hints.iter().any(|hint| hint.keyword == "向后兼容"),
+        "{:?}",
+        dto.hints
+    );
+}
+
+#[test]
 fn scan_does_not_report_overlap_when_keywords_differ() {
     let home = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(home.path().join(".claude")).unwrap();
@@ -1286,6 +1311,114 @@ fn write_user_file_rejects_path_outside_allowlist() {
 
     assert!(error.contains("可写名单"));
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "third-party\n");
+}
+
+#[test]
+fn write_user_file_allows_grok_home_instruction() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let path = home.path().join(".grok/AGENTS.md");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "old\n").unwrap();
+    let expected = file_mtime(&path);
+
+    crate::user_files::write(
+        home.path(),
+        data.path(),
+        &path,
+        "new\n",
+        Some(expected.as_str()),
+    )
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "new\n");
+}
+
+#[test]
+fn write_user_file_rejects_grok_config() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let path = home.path().join(".grok/config.toml");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "keep\n").unwrap();
+
+    let error = crate::user_files::write(
+        home.path(),
+        data.path(),
+        &path,
+        "nope\n",
+        Some(file_mtime(&path).as_str()),
+    )
+    .unwrap_err();
+
+    assert!(error.contains("可写名单"));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "keep\n");
+}
+
+#[test]
+fn write_user_file_allows_grok_rules_markdown() {
+    let home = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let path = home.path().join(".grok/rules/style.md");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, "old\n").unwrap();
+    let expected = file_mtime(&path);
+
+    crate::user_files::write(
+        home.path(),
+        data.path(),
+        &path,
+        "new\n",
+        Some(expected.as_str()),
+    )
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "new\n");
+}
+
+#[test]
+fn scan_lists_grok_rules_markdown_and_marks_editable() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".grok/rules")).unwrap();
+    std::fs::write(home.path().join(".grok/AGENTS.md"), "grok-global\n").unwrap();
+    std::fs::write(home.path().join(".grok/rules/style.md"), "grok-rule\n").unwrap();
+    std::fs::write(home.path().join(".grok/rules/ignore.txt"), "skip\n").unwrap();
+
+    let dto = crate::instructions::scan(
+        home.path(),
+        None,
+        &crate::domain::InstructionUsageSummary::default(),
+    );
+    let grok = instruction_source(&dto, "grok");
+    let agents = file_named(grok, "~/.grok/AGENTS.md");
+    assert!(agents.editable);
+    assert_eq!(agents.content, "grok-global\n");
+    let rule = file_named(grok, "~/.grok/rules/style.md");
+    assert!(rule.editable);
+    assert_eq!(rule.content, "grok-rule\n");
+    assert!(grok
+        .files
+        .iter()
+        .all(|file| file.display_path != "~/.grok/rules/ignore.txt"));
+}
+
+#[test]
+fn scan_skips_empty_claude_rules_directory() {
+    let home = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(home.path().join(".claude/rules")).unwrap();
+    std::fs::write(home.path().join(".claude/CLAUDE.md"), "ok\n").unwrap();
+
+    let dto = crate::instructions::scan(
+        home.path(),
+        None,
+        &crate::domain::InstructionUsageSummary::default(),
+    );
+    let claude = instruction_source(&dto, "claude");
+    assert!(claude
+        .files
+        .iter()
+        .all(|file| file.display_path != "~/.claude/rules/"));
+    assert!(file_named(claude, "~/.claude/CLAUDE.md").editable);
 }
 
 #[test]

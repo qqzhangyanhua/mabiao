@@ -341,6 +341,7 @@ pub struct GlobalInstructionFile {
     pub error: Option<String>,
     pub note: Option<String>,
     pub action: Option<String>,
+    pub editable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
