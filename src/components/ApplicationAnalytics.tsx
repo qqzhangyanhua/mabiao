@@ -1,6 +1,6 @@
 import { memo, useMemo, type CSSProperties } from "react";
 import { Icon } from "../icons";
-import { applicationStackedTrendOption } from "../lib/chartTheme";
+import { applicationStackedTrendOption, modelPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
 import { formatCompact, formatTokens, projectLabel } from "../lib/format";
 import { applicationEfficiencyTable, applicationProjectMatrixTable } from "../lib/exportRows";
@@ -94,7 +94,25 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           <GrainSwitch value={grain} onChange={setGrain} />
         </div>
         {data.trend.length > 0 ? (
-          <ExportableChart option={option} style={{ height: 360 }} filename="应用趋势图" />
+          <>
+            <div className="application-trend-legend" role="list">
+              {data.by_application.map((application, index) => (
+                <span key={application.source} className="application-trend-legend-item" role="listitem">
+                  <span
+                    className="application-trend-swatch"
+                    style={{ background: modelPalette[index % modelPalette.length] }}
+                    aria-hidden
+                  />
+                  <SourceLabel
+                    source={application.source}
+                    fallback={application.application}
+                    size={16}
+                  />
+                </span>
+              ))}
+            </div>
+            <ExportableChart option={option} style={{ height: 360 }} filename="应用趋势图" />
+          </>
         ) : (
           <div className="analytics-empty">
             <EmptyState icon="trend" title="当前筛选条件下暂无趋势数据" />

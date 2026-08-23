@@ -3355,6 +3355,31 @@ td.row-actions {
   padding-bottom: 8px;
 }
 
+.application-trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 4px 0 10px;
+}
+
+.application-trend-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.application-trend-swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+}
+
 .efficiency-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
