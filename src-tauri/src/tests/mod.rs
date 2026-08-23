@@ -9,6 +9,7 @@ mod codex_quota;
 mod codex_usage;
 mod conversation;
 mod conversation_index;
+mod conversation_index_backfill;
 mod conversation_index_sources;
 mod copilot_quota;
 mod cursor_account;

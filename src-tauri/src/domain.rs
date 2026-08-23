@@ -885,6 +885,13 @@ pub struct ConversationDetailStateDto {
     pub file_available: bool,
 }
 
+/// 对话事件索引补建进度：已就绪会话数 / 应索引会话数。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationIndexProgressDto {
+    pub indexed: u32,
+    pub total: u32,
+}
+
 /// 工作时间线里的一根横条：一条会话按当天本地日历日裁剪后的区间。
 /// `total_tokens` 只统计该会话落在这天的记录，不是会话全量。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

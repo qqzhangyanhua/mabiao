@@ -105,7 +105,7 @@ fn qwen_tokenless_log_feeds_partial_detail_export_search_and_missing_file_state(
     assert_eq!(session.capabilities, ["messages", "events"]);
     assert_eq!(session.support_status, "experimental");
 
-    let detail = conversation::load_detail(&conn, home, "qwen", "qwen-session-1").unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "qwen", "qwen-session-1").unwrap();
     let messages = message_events(&detail);
     assert_eq!(messages.len(), 2);
     assert!(messages
@@ -229,7 +229,7 @@ fn copilot_events_feed_lifecycle_tools_code_changes_usage_and_missing_body_statu
     assert_eq!(session.capabilities, ["events", "usage"]);
     assert_eq!(session.support_status, "experimental");
 
-    let detail = conversation::load_detail(
+    let detail = conversation::load_parsed_detail(
         &conn,
         home,
         "copilot",

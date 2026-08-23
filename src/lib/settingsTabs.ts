@@ -2,7 +2,7 @@ import type { SettingsTab, SettingsTabId } from "./type";
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", label: "通用", anchors: ["settings-appearance"] },
-  { id: "sources", label: "数据源", anchors: ["settings-diagnostics"] },
+  { id: "sources", label: "数据源", anchors: ["settings-diagnostics", "settings-conversation-index"] },
   { id: "display", label: "展示", anchors: ["settings-overview"] },
   { id: "budget", label: "预算", anchors: ["settings-budget", "settings-official-quota"] },
   { id: "backup", label: "备份", anchors: ["settings-backup"] },

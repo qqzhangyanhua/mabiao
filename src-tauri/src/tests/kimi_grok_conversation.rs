@@ -112,7 +112,7 @@ fn kimi_wire_feeds_experimental_detail_and_tracks_trusted_sidecar_revision() {
     assert_eq!(session.support_status, "experimental");
     assert_eq!(session.capabilities, ["messages", "events", "usage"]);
 
-    let detail = conversation::load_detail(&conn, home, "kimi", "kimi-session-1").unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "kimi", "kimi-session-1").unwrap();
     assert_eq!(
         message_texts(&detail),
         vec![
@@ -221,7 +221,7 @@ fn grok_updates_merge_streams_and_track_summary_without_changing_usage_identity(
     assert_eq!(session.support_status, "experimental");
     assert_eq!(session.capabilities, ["messages", "events", "usage"]);
 
-    let detail = conversation::load_detail(&conn, home, "grok", "grok-session-1").unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "grok", "grok-session-1").unwrap();
     assert_eq!(
         message_texts(&detail),
         vec![

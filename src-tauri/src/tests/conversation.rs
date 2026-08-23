@@ -774,7 +774,8 @@ fn codex_conversation_detail_projects_semantic_events_and_preserves_unknown_even
     let conn = store::open_memory().unwrap();
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
-    let detail = crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
+    let detail =
+        crate::conversation::load_parsed_detail(&conn, home, "codex", "semantic-1").unwrap();
     let kinds = detail
         .events
         .iter()
@@ -1814,7 +1815,7 @@ fn rebuilding_source_reparses_unchanged_conversation_index() {
 }
 
 #[test]
-fn conversation_adapter_version_change_reparses_unchanged_index() {
+fn conversation_adapter_version_change_defers_reparse_to_backfill() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
     seed_codex_conversation(home);
@@ -1823,16 +1824,29 @@ fn conversation_adapter_version_change_reparses_unchanged_index() {
     conn.execute_batch(
         r#"
         UPDATE conversation_sessions
-        SET title = 'cached-title', adapter_version = 0
+        SET title = 'cached-title', adapter_version = 8
         WHERE source = 'codex' AND session_id = 'conv-1';
         UPDATE conversation_session_files
-        SET adapter_version = 0
+        SET adapter_version = 8
         WHERE source = 'codex' AND session_id = 'conv-1';
         "#,
     )
     .unwrap();
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
+    let page =
+        crate::conversation::sessions_page(&conn, &crate::domain::ConversationQuery::default())
+            .unwrap();
+    assert_eq!(page.rows[0].title, "cached-title");
+    assert_eq!(
+        crate::conversation::event_index_progress(&conn).unwrap(),
+        crate::domain::ConversationIndexProgressDto {
+            indexed: 0,
+            total: 1,
+        }
+    );
+
+    crate::conversation::backfill_event_index(&conn, home).unwrap();
     let page =
         crate::conversation::sessions_page(&conn, &crate::domain::ConversationQuery::default())
             .unwrap();

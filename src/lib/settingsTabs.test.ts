@@ -10,6 +10,7 @@ describe("tabFromHash", () => {
 
   it("keeps existing panel anchors on their grouped tab", () => {
     expect(tabFromHash("#settings-diagnostics")).toBe("sources");
+    expect(tabFromHash("#settings-conversation-index")).toBe("sources");
     expect(tabFromHash("settings-overview")).toBe("display");
     expect(tabFromHash("#settings-budget")).toBe("budget");
     expect(tabFromHash("#settings-official-quota")).toBe("budget");

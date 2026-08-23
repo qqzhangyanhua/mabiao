@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { AppearanceSettingsPanel } from "./AppearanceSettingsPanel";
 import { BackupPanel } from "./BackupPanel";
+import { ConversationIndexPanel } from "./ConversationIndexPanel";
 import { BudgetPanel } from "./BudgetPanel";
 import { CursorAccountSettingsPanel } from "./CursorAccountSettingsPanel";
 import { LiteLlmSnapshotPanel } from "./LiteLlmSnapshotPanel";
@@ -177,15 +178,18 @@ export function Settings({
           />
         ) : null}
         {tab === "sources" ? (
-          <SourceDiagnosticsPanel
-            diagnostics={diagnostics}
-            ingestReport={ingestReport}
-            rebuilding={rebuilding}
-            purging={purging}
-            operationBusy={operationBusy}
-            onRebuild={onRebuild}
-            onPurgeArchived={onPurgeArchived}
-          />
+          <>
+            <SourceDiagnosticsPanel
+              diagnostics={diagnostics}
+              ingestReport={ingestReport}
+              rebuilding={rebuilding}
+              purging={purging}
+              operationBusy={operationBusy}
+              onRebuild={onRebuild}
+              onPurgeArchived={onPurgeArchived}
+            />
+            <ConversationIndexPanel />
+          </>
         ) : null}
         {tab === "display" ? (
           <OverviewLayoutPanel

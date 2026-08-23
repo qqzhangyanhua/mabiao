@@ -84,7 +84,7 @@ fn dsh_compressed_session_feeds_semantic_detail_and_preserves_last_good_index() 
     assert_eq!(session.model, "deepseek-test");
     assert_eq!(session.support_status, "experimental");
 
-    let detail = conversation::load_detail(&conn, home, "dsh", "dsh-session-1").unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "dsh", "dsh-session-1").unwrap();
     assert_eq!(usage_rows(&conn, "dsh", "dsh-session-1").len(), 1);
     assert_eq!(
         message_texts(&detail),
@@ -147,7 +147,8 @@ fn droid_raw_sessions_link_cumulative_usage_and_degrade_sparse_fields() {
         .iter()
         .all(|row| row.support_status == "experimental"));
 
-    let detail = conversation::load_detail(&conn, home, "factory", "droid-session-1").unwrap();
+    let detail =
+        conversation::load_parsed_detail(&conn, home, "factory", "droid-session-1").unwrap();
     assert_eq!(detail.session.project, "/workspace/project");
     assert_eq!(detail.session.model, "claude-test");
     let usage = usage_rows(&conn, "factory", "droid-session-1");
@@ -169,7 +170,7 @@ fn droid_raw_sessions_link_cumulative_usage_and_degrade_sparse_fields() {
             && event.text.as_deref() == Some("tests passed")
     }));
 
-    let sparse = conversation::load_detail(&conn, home, "factory", "droid-sparse").unwrap();
+    let sparse = conversation::load_parsed_detail(&conn, home, "factory", "droid-sparse").unwrap();
     assert!(message_texts(&sparse).is_empty());
     assert!(sparse.session.model.is_empty());
     assert!(usage_rows(&conn, "factory", "droid-sparse").is_empty());

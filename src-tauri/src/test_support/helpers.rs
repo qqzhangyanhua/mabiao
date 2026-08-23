@@ -42,7 +42,7 @@ pub fn assert_conversation_index_matches_parse(
     source: &str,
     session_id: &str,
 ) {
-    let parsed = crate::conversation::load_detail(conn, home, source, session_id).unwrap();
+    let parsed = crate::conversation::load_parsed_detail(conn, home, source, session_id).unwrap();
     let indexed = crate::conversation::indexed_events(conn, source, session_id).unwrap();
     assert!(
         indexed.iter().all(|event| event.details.is_null()),

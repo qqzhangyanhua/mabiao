@@ -38,13 +38,14 @@ use tauri::Manager;
 use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, BudgetConfig, BudgetStatusDto, CodeVolumeSummary,
     ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
-    ConversationEventContentDto, ConversationExportFormat, ConversationPage, ConversationQuery,
-    ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
-    CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
-    FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot,
-    PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
-    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    ConversationEventContentDto, ConversationExportFormat, ConversationIndexProgressDto,
+    ConversationPage, ConversationQuery, ConversationUsagePage, CursorAccountEventPage,
+    CursorAccountEventQuery, CursorAccountUsageDto, CursorSessionDetailDto, CursorSessionPage,
+    CursorSessionQuery, CursorSessionSummaryDto, Filter, FilterOptions, GlobalInstructionDto,
+    IngestReport, NamedAmount, OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaHookDto,
+    OfficialQuotaProvider, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
+    SessionRow, Source, SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest,
+    WriteUserFileResult,
 };
 
 /// 只读连接池。
@@ -548,9 +549,22 @@ async fn get_conversation_detail(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
-        let prepared = conversation::prepare_detail(&conn, &source, &session_id)?;
+        let read = conversation::prepare_detail_read(&conn, &home, &source, &session_id)?;
         drop(conn);
-        conversation::load_prepared_detail(&home, prepared)
+        conversation::finish_prepared_detail(&home, read)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_conversation_index_progress(
+    app: tauri::AppHandle,
+) -> Result<ConversationIndexProgressDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        conversation::event_index_progress(&conn)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1095,6 +1109,37 @@ fn spawn_rollup_backfill(app: &tauri::AppHandle) {
     });
 }
 
+/// 升级后按会话渐进补建事件索引，最近结束的先做。
+///
+/// 不在 `setup` 里同步跑：整库重解析会让启动像卡死。补建期间未就绪的会话走整份解析回退。
+/// 每次只拿写锁处理一条，避免长时间挡住摄取。
+fn spawn_event_index_backfill(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let home = ingest::default_home();
+        let mut skipped = std::collections::BTreeSet::<(String, String)>::new();
+        loop {
+            let state = app.state::<AppState>();
+            let progressed = {
+                let Ok(conn) = state.lock_write() else {
+                    return;
+                };
+                match conversation::backfill_event_index_step_skipping(&conn, &home, &skipped) {
+                    Ok(progressed) => progressed,
+                    Err((key, error)) => {
+                        eprintln!("对话事件索引补建失败 {}/{}：{error}", key.0, key.1);
+                        skipped.insert(key);
+                        true
+                    }
+                }
+            };
+            if !progressed {
+                return;
+            }
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1128,6 +1173,7 @@ pub fn run() {
             });
             tray::setup(app.handle()).map_err(std::io::Error::other)?;
             spawn_rollup_backfill(app.handle());
+            spawn_event_index_backfill(app.handle());
             #[cfg(desktop)]
             {
                 use tauri_plugin_notification::NotificationExt;
@@ -1179,6 +1225,7 @@ pub fn run() {
             get_cursor_session_detail,
             get_conversation_sessions_page,
             get_conversation_detail,
+            get_conversation_index_progress,
             get_conversation_usage_records,
             get_conversation_detail_state,
             get_conversation_event_content,

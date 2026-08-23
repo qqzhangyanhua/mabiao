@@ -210,5 +210,14 @@ fn codex_event_index_reparses_unchanged_files_after_sequence_order_changes() {
     .unwrap();
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
+    let reversed = crate::conversation::indexed_events(&conn, "codex", "mixed-ts-1").unwrap();
+    assert!(
+        reversed.first().is_some_and(
+            |event| event.sequence == 0 && event.name.as_deref() == Some("future_event")
+        ),
+        "启动摄取不得因适配器版本过期整份重解析"
+    );
+
+    crate::conversation::backfill_event_index(&conn, home).unwrap();
     assert_index_matches_parse(&conn, home, "codex", "mixed-ts-1");
 }

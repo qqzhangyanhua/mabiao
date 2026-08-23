@@ -497,6 +497,11 @@ export type ConversationDetailStateDto = {
   file_available: boolean;
 };
 
+export type ConversationIndexProgressDto = {
+  indexed: number;
+  total: number;
+};
+
 export type CostSource = "native" | "user" | "snapshot" | "none";
 
 export type PriceOrigin = "user" | "snapshot";
