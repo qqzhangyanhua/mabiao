@@ -998,6 +998,7 @@ async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
         let (snapshot, _) = litellm::load_snapshot(&paths.snapshot_path);
         *state.snapshot.lock().map_err(|e| e.to_string())? = snapshot;
         let _ = tray::refresh(&app);
+        spawn_event_index_backfill(&app);
         Ok(true)
     })
     .await

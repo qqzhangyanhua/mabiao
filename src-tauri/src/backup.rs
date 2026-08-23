@@ -38,7 +38,7 @@ pub struct BackupManifest {
 }
 
 fn default_note() -> String {
-    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken；恢复会覆盖当前缓存与单价/预算配置。"
+    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken，也不含对话事件正文；恢复会覆盖当前缓存与单价/预算配置。"
         .to_string()
 }
 
@@ -64,10 +64,51 @@ pub fn backup_sqlite(conn: &Connection, dest: &Path) -> Result<(), String> {
         fs::remove_file(dest).map_err(|e| e.to_string())?;
     }
     let mut target = Connection::open(dest).map_err(|e| e.to_string())?;
-    let backup = Backup::new(conn, &mut target).map_err(|e| e.to_string())?;
-    backup
-        .run_to_completion(100, std::time::Duration::from_millis(0), None)
-        .map_err(|e| e.to_string())
+    {
+        let backup = Backup::new(conn, &mut target).map_err(|e| e.to_string())?;
+        backup
+            .run_to_completion(100, std::time::Duration::from_millis(0), None)
+            .map_err(|e| e.to_string())?;
+    }
+    strip_conversation_event_index(&target)
+}
+
+fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+        rusqlite::params![name],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn conversation_sessions_has_generation(conn: &Connection) -> Result<bool, String> {
+    let mut statement = conn
+        .prepare("PRAGMA table_info(conversation_sessions)")
+        .map_err(|e| e.to_string())?;
+    let names = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(names.iter().any(|name| name == "event_index_generation"))
+}
+
+/// 事件索引是派生缓存，且含完整对话正文。备份只留目录元数据，恢复后走回退路径再渐进补建。
+fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
+    if table_exists(conn, "conversation_events")? {
+        conn.execute("DROP TABLE conversation_events", [])
+            .map_err(|e| e.to_string())?;
+    }
+    if table_exists(conn, "conversation_sessions")? && conversation_sessions_has_generation(conn)? {
+        conn.execute(
+            "UPDATE conversation_sessions SET event_index_generation = NULL",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn backup_to(
@@ -138,6 +179,8 @@ pub fn load_manifest(src_dir: &Path) -> Result<BackupManifest, String> {
 }
 
 /// 只读校验，不改目标文件，也不要求释放 sqlite 连接。
+///
+/// 不要求 `conversation_events` 存在：既有备份（索引落地之前）和本次起排除事件表的备份都能恢复。
 pub fn validate_restore(src_dir: &Path) -> Result<BackupManifest, String> {
     let manifest = load_manifest(src_dir)?;
     if !src_dir.join(DB_NAME).exists() {

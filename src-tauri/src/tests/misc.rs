@@ -850,6 +850,134 @@ fn restore_rolls_back_live_files_when_a_later_replace_fails() {
     );
 }
 
+fn backup_paths(live: &std::path::Path) -> backup::AppDataPaths {
+    backup::AppDataPaths {
+        db_path: live.join("usage.sqlite"),
+        prices_path: live.join("prices.json"),
+        snapshot_path: live.join("litellm_prices.json"),
+        budget_path: live.join("budget.json"),
+        budget_notify_path: live.join("budget_notify_state.json"),
+        official_quota_path: live.join("official_quota.json"),
+        official_quota_notify_path: live.join("official_quota_notify_state.json"),
+    }
+}
+
+#[test]
+fn backup_omits_conversation_event_bodies_and_restore_reads_via_fallback() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("home");
+    let live = root.path().join("live");
+    let dest = root.path().join("backup");
+    std::fs::create_dir_all(&live).unwrap();
+    write_home_fixture(
+        &home,
+        ".codex/sessions/2026/08/rollout-conv-1.jsonl",
+        "codex-conversation.jsonl",
+    );
+    let paths = backup_paths(&live);
+    let conn = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    crate::conversation::refresh_codex(&conn, &home).unwrap();
+    let live_events = crate::conversation::indexed_events(&conn, "codex", "conv-1").unwrap();
+    assert!(!live_events.is_empty());
+    assert!(live_events
+        .iter()
+        .any(|event| event.text.as_deref() == Some("我先检查现有实现。")));
+
+    let manifest = backup::backup_to(&conn, &dest, &paths).unwrap();
+    assert!(manifest.note.contains("对话"));
+    drop(conn);
+
+    let backup_db = rusqlite::Connection::open(dest.join(backup::DB_NAME)).unwrap();
+    let has_events_table: bool = backup_db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversation_events')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!has_events_table, "备份产物不得包含事件索引表");
+    let generations: i64 = backup_db
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_sessions WHERE event_index_generation IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(generations, 0, "备份不得留下可被当成已索引的代次");
+    let raw = std::fs::read(dest.join(backup::DB_NAME)).unwrap();
+    let raw = String::from_utf8_lossy(&raw);
+    assert!(
+        !raw.contains("我先检查现有实现。"),
+        "VACUUM 后备份文件不得残留对话正文"
+    );
+
+    std::fs::remove_file(&paths.db_path).unwrap();
+    let _ = std::fs::remove_file(live.join("usage.sqlite-wal"));
+    let _ = std::fs::remove_file(live.join("usage.sqlite-shm"));
+    backup::restore_from(&dest, &paths).unwrap();
+
+    let restored = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    assert!(
+        crate::conversation::indexed_events(&restored, "codex", "conv-1")
+            .unwrap()
+            .is_empty()
+    );
+    let fallback = crate::conversation::load_detail(&restored, &home, "codex", "conv-1").unwrap();
+    assert!(
+        fallback
+            .events
+            .iter()
+            .any(|event| event.text.as_deref() == Some("我先检查现有实现。")),
+        "恢复后未索引会话必须经回退路径读到正确内容"
+    );
+    assert!(fallback
+        .events
+        .iter()
+        .any(|event| event.text.as_deref() == Some("已完成提交。")));
+
+    crate::conversation::backfill_event_index(&restored, &home).unwrap();
+    assert_conversation_index_matches_parse(&restored, &home, "codex", "conv-1");
+}
+
+#[test]
+fn restore_accepts_legacy_backup_without_conversation_events_table() {
+    let root = tempfile::tempdir().unwrap();
+    let live = root.path().join("live");
+    let dest = root.path().join("backup");
+    std::fs::create_dir_all(&live).unwrap();
+    std::fs::create_dir_all(&dest).unwrap();
+    let paths = backup_paths(&live);
+
+    let source = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    store::insert_records(
+        &source,
+        &[rec(
+            "2026-08-18T00:00:00.000Z",
+            Source::Claude,
+            "claude-sonnet-5",
+            "anthropic",
+            "/proj",
+            "s1",
+            42,
+        )],
+    )
+    .unwrap();
+    backup::backup_to(&source, &dest, &paths).unwrap();
+    drop(source);
+
+    let backup_db = rusqlite::Connection::open(dest.join(backup::DB_NAME)).unwrap();
+    backup_db
+        .execute_batch("DROP TABLE IF EXISTS conversation_events;")
+        .unwrap();
+    drop(backup_db);
+
+    backup::validate_restore(&dest).unwrap();
+    std::fs::remove_file(&paths.db_path).unwrap();
+    backup::restore_from(&dest, &paths).unwrap();
+    let restored = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    assert_eq!(store::load_all(&restored).unwrap()[0].total_tokens, 42);
+}
+
 #[test]
 fn should_check_budget_skips_missing_or_non_positive_limits() {
     assert!(!budget::should_check_budget(&BudgetConfig {
