@@ -105,8 +105,24 @@ describe("trayQuotaRowSummary", () => {
     expect(
       trayQuotaRowSummary({
         windows: [
-          { kind: "a", label: "总量", used_percent: 19, resets_at: null },
-          { kind: "b", label: "Auto", used_percent: 2, resets_at: null },
+          {
+            kind: "a",
+            label: "总量",
+            used_percent: 19,
+            resets_at: null,
+            used_amount: null,
+            limit_amount: null,
+            currency: null,
+          },
+          {
+            kind: "b",
+            label: "Auto",
+            used_percent: 2,
+            resets_at: null,
+            used_amount: null,
+            limit_amount: null,
+            currency: null,
+          },
         ],
         error: null,
       }),

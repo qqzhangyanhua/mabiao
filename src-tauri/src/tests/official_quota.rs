@@ -268,7 +268,7 @@ fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
         alerts_enabled: true,
         hidden_providers: vec!["claude".to_string()],
     };
-    let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
+    let dto = official_quota::load_dto(&conn, &config, &[], chrono::Utc::now());
     // 设置页/主窗口的官方额度请求都走 load_dto，隐藏账号的状态仍要能看到。
     assert!(dto.rows.iter().any(|row| row.provider == "claude"));
     assert_eq!(dto.hidden_providers, vec!["claude".to_string()]);
@@ -302,6 +302,7 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
     let dto = official_quota::load_dto(
         &conn,
         &crate::domain::OfficialQuotaConfig::default(),
+        &[],
         chrono::Utc::now(),
     );
     let shown: Vec<&str> = dto.rows.iter().map(|row| row.provider.as_str()).collect();

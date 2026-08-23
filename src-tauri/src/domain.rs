@@ -241,6 +241,18 @@ pub struct OfficialQuotaWindow {
     pub label: String,
     pub used_percent: Option<f64>,
     pub resets_at: Option<String>,
+    /// 金额口径。充值制的自定义提供商给的是钱不是百分比，两种口径要能并存：
+    /// 拿得到上限就同时有百分比和金额，拿不到上限就只有金额。
+    ///
+    /// 三个字段全是 `Option`，serde 对缺失的 `Option` 按 `None` 处理，
+    /// 因此 sqlite 里旧格式的窗口 JSON 不需要迁移（有测试盯着这条）。
+    #[serde(default)]
+    pub used_amount: Option<f64>,
+    #[serde(default)]
+    pub limit_amount: Option<f64>,
+    /// ISO 4217 代码，例如 `USD`。取不到时留空，界面只显示数字。
+    #[serde(default)]
+    pub currency: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

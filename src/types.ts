@@ -86,6 +86,11 @@ export type OfficialQuotaWindow = {
   label: string;
   used_percent: number | null;
   resets_at: string | null;
+  /** 金额口径。充值制的自定义提供商给的是钱不是百分比，两种口径可以并存。 */
+  used_amount: number | null;
+  limit_amount: number | null;
+  /** ISO 4217 代码，例如 USD。取不到时为 null，只显示数字。 */
+  currency: string | null;
 };
 
 export type OfficialQuotaRow = {

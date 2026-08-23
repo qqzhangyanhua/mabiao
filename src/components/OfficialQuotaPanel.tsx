@@ -6,6 +6,7 @@ import { formatClock, formatWindowClock } from "../lib/format";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   officialQuotaAgeLabel,
+  officialQuotaAmountLabel,
   officialQuotaFreshnessTitle,
   officialQuotaRefreshHint,
 } from "../lib/officialQuotaDisplay";
@@ -288,13 +289,19 @@ function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactRes
       <div className="official-quota-windows">
         {row.windows.map((window) => {
           const percent = window.used_percent;
+          // 金额与百分比可以并存：有上限时进度条旁边补一行钱，
+          // 只有余额时那一行就是这个窗口的全部内容。
+          const amount = officialQuotaAmountLabel(window);
           return (
             <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
               <span title={window.label}>{window.label}</span>
-              <strong>{percent == null ? "—" : `${percent.toFixed(0)}%`}</strong>
-              <div className="billing-bar" aria-hidden="true">
-                <i style={{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%` }} />
-              </div>
+              <strong>{percent == null ? (amount ?? "—") : `${percent.toFixed(0)}%`}</strong>
+              {/* 没有百分比就不画条：一根空条读起来是「用了 0%」，而事实是「不知道上限」。 */}
+              {percent == null ? null : (
+                <div className="billing-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+                </div>
+              )}
               <span
                 className="muted"
                 title={window.resets_at ? formatClock(window.resets_at) : undefined}
@@ -303,6 +310,9 @@ function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactRes
                   ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
                   : "重置时间未知"}
               </span>
+              {percent != null && amount ? (
+                <span className="muted official-quota-amount">{amount}</span>
+              ) : null}
             </div>
           );
         })}

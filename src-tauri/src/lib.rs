@@ -43,9 +43,9 @@ use crate::domain::{
     ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot,
-    PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
-    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    OfficialQuotaDto, OfficialQuotaHookDto, OverviewDto, PriceSnapshot, PriceSnapshotMeta,
+    PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic, WorkTimelineDto,
+    WriteUserFileRequest, WriteUserFileResult,
 };
 
 /// 只读连接池。
@@ -109,6 +109,9 @@ pub struct AppState {
     pub budget_notify_path: PathBuf,
     pub official_quota_path: PathBuf,
     pub official_quota_notify_path: PathBuf,
+    /// 自定义提供商的配置与密钥。配置可以进备份，密钥不进——备份目录是设计成
+    /// 给人整个拷走的。
+    pub custom_quota_paths: official_quota::custom::store::CustomQuotaPaths,
     pub conn: Mutex<Connection>,
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
@@ -832,7 +835,8 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
+    let custom = official_quota::custom::store::load_config(&state.custom_quota_paths.config);
+    let dto = official_quota::load_dto(&conn, &config, &custom.providers, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
         &dto,
@@ -917,7 +921,7 @@ async fn get_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, S
 #[tauri::command]
 async fn refresh_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let results = official_quota::fetch_all_providers();
+        let results = official_quota::fetch_all_targets(&load_custom_providers(&app));
         persist_official_quota_fetches(&app, results)
     })
     .await
@@ -930,19 +934,24 @@ async fn refresh_official_quota_provider(
     provider: String,
 ) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let parsed = official_quota::parse_provider(&provider)?;
-        persist_official_quota_fetches(
-            &app,
-            [(parsed, official_quota::fetch_provider_throttled(parsed))],
-        )
+        // 先试内置枚举，认不出再回落到自定义通道——`custom:` 那些标识
+        // 走的是后一条路，不该再撞上「未知的官方额度账号」。
+        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        let result = official_quota::fetch_target_throttled(&target);
+        persist_official_quota_fetches(&app, [(target, result)])
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-fn persist_official_quota_fetches(
+fn load_custom_providers(app: &tauri::AppHandle) -> Vec<official_quota::custom::ResolvedProvider> {
+    let state = app.state::<AppState>();
+    official_quota::custom::store::load_providers(&state.custom_quota_paths)
+}
+
+fn persist_official_quota_fetches<T: official_quota::QuotaTarget>(
     app: &tauri::AppHandle,
-    results: impl IntoIterator<Item = (OfficialQuotaProvider, official_quota::ProviderFetch)>,
+    results: impl IntoIterator<Item = (T, official_quota::ProviderFetch)>,
 ) -> Result<OfficialQuotaDto, String> {
     {
         let state = app.state::<AppState>();
@@ -975,6 +984,29 @@ fn save_official_quota_config(
     config: OfficialQuotaConfig,
 ) -> Result<(), String> {
     official_quota::save_config(&state.official_quota_path, &config)
+}
+
+#[tauri::command]
+fn list_custom_quota_providers(
+    state: tauri::State<AppState>,
+) -> official_quota::custom::panel::CustomQuotaPanelDto {
+    official_quota::custom::panel::list(&state.custom_quota_paths)
+}
+
+#[tauri::command]
+fn save_custom_quota_provider(
+    state: tauri::State<AppState>,
+    request: official_quota::custom::panel::SaveCustomQuotaProvider,
+) -> Result<official_quota::custom::panel::SavedCustomQuotaDto, String> {
+    official_quota::custom::panel::save(&state.custom_quota_paths, request)
+}
+
+#[tauri::command]
+fn delete_custom_quota_provider(
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<official_quota::custom::panel::CustomQuotaPanelDto, String> {
+    official_quota::custom::panel::delete(&state.custom_quota_paths, &id)
 }
 
 /// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token。返回 `false` 表示取消。
@@ -1186,6 +1218,7 @@ pub fn run() {
             let budget_notify_path = dir.join("budget_notify_state.json");
             let official_quota_path = dir.join(official_quota::CONFIG_NAME);
             let official_quota_notify_path = dir.join(official_quota::NOTIFY_NAME);
+            let custom_quota_paths = official_quota::custom::store::CustomQuotaPaths::in_dir(&dir);
             let db_path_str = db_path.to_string_lossy().to_string();
             let conn = store::open_db(&db_path_str).map_err(std::io::Error::other)?;
             // open_db 必须先跑：它建表建索引，只读连接开在空库上会查不到表。
@@ -1200,6 +1233,7 @@ pub fn run() {
                 budget_notify_path,
                 official_quota_path,
                 official_quota_notify_path,
+                custom_quota_paths,
                 conn: Mutex::new(conn),
                 read_pool,
                 snapshot: Mutex::new(snapshot),
@@ -1245,6 +1279,9 @@ pub fn run() {
             get_official_quota_hook,
             apply_official_quota_hook,
             save_official_quota_config,
+            list_custom_quota_providers,
+            save_custom_quota_provider,
+            delete_custom_quota_provider,
             get_price_snapshot,
             get_price_snapshot_url,
             refresh_price_snapshot,
