@@ -1,0 +1,19 @@
+src-tauri/src/tray.rs
+  s_a601c33afd11f9::t_75ceb73d329ce1 229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "aedc094b736bfafbff0f3468fff9bbe6a4f4b808",
+  "prompts": {},
+  "sessions": {
+    "s_a601c33afd11f9": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "ab2dd59e-7d80-4110-a176-020260440064",
+        "model": "claude-sonnet-4-5-20250929"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
