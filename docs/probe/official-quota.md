@@ -89,11 +89,18 @@ Cursor 订阅限额是多档并行，不能只取总量：
 
 ## Antigravity
 
-凭证读本机 Antigravity 的 `state.vscdb`（和 Cursor 同样落在 `dirs::config_dir()` 下，Win 是 `%APPDATA%\Antigravity\User\globalStorage`）的 `ItemTable`：
+登录态两条，**macOS 上 AGY / 2.7+ 优先读钥匙串**：
+
+- service=`gemini`、account=`antigravity`（zalando go-keyring）
+- 值是 `go-keyring-base64:` + JSON：`token.{access_token,refresh_token,expiry}`、`auth_method`
+- 走 `/usr/bin/security find-generic-password`（和 Droid 同一条已授权路径，通常不弹框），5 秒超时
+
+旧 VSCode 壳才读 `state.vscdb`（和 Cursor 同样落在 `dirs::config_dir()` 下，Win 是 `%APPDATA%\Antigravity\User\globalStorage`，旧包还有 `Antigravity IDE/`）的 `ItemTable`：
 
 - `antigravityAuthStatus`：JSON，`apiKey` 是 Google OAuth access token（`ya29.`），只活约 1 小时，**基本总是过期，不能直接用**。
 - `antigravityUnifiedStateSync.oauthToken`：嵌套 protobuf（外层 base64 → protobuf → 内层 base64 → protobuf），内层含 access token、`Bearer`、**refresh token（`1//` 开头）**。字段号不稳定，按形状找；内层 base64 的 padding 未必齐，要按无 padding 解。
-- 刷新要用 Antigravity 自己的 OAuth 客户端。**不内嵌到本仓库**——那是 Google 发给 Antigravity 的凭证，GitHub 的 secret scanning 也会拦。改成运行时从本机安装的 `out/main.js` 里提取（先顺 PATH 上的 `antigravity` 启动器反查安装根目录，再退回各平台默认位置），拿去 `https://oauth2.googleapis.com/token` 换 access token。`main.js` 里 id 和 secret 各有多个且配对关系看不出来，全组合都试，错配会快速返回 `invalid_client`。
+- 刷新要用 Antigravity 自己的 OAuth 客户端。**不内嵌到本仓库**——那是 Google 发给 Antigravity 的凭证，GitHub 的 secret scanning 也会拦。运行时从本机安装里扫：老版本 / `Antigravity IDE.app` 在 `out/main.js`；macOS 2.7+ 的 `Antigravity.app` 打成 asar，客户端在 `Contents/Resources/bin/language_server`。先顺 PATH 上的 `antigravity` / `antigravity-ide` 反查安装根目录，再退回各平台默认位置。id 和 secret 各有多个且配对关系看不出来，全组合都试，错配会快速返回 `invalid_client`。
+- 数据目录两边都要找：新版在 `Antigravity/`，旧 macOS 包在 `Antigravity IDE/`。
 - 先用 `antigravityAuthStatus.apiKey` 直接打，401 了才走上面的刷新，省一次往返。
 
 `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary`，body `{}`（有 project 就传 `{"project": pid}`）：

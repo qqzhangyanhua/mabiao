@@ -135,3 +135,89 @@ fn antigravity_oauth_clients_come_from_the_local_install() {
 
     assert!(antigravity::parse_oauth_clients("no credentials in here").is_empty());
 }
+
+#[test]
+fn antigravity_oauth_clients_can_be_scanned_from_binary_blob() {
+    let id_suffix = ".apps.googleusercontent.com";
+    let secret_prefix = "GOCSPX-";
+    let id = format!("111111111111-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa{id_suffix}");
+    let secret = format!("{secret_prefix}AAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    let mut blob = vec![0u8, 1, 2, 255];
+    blob.extend_from_slice(id.as_bytes());
+    blob.push(0);
+    blob.extend_from_slice(secret.as_bytes());
+    blob.extend_from_slice(&[0, 9, 10]);
+
+    let pairs = antigravity::parse_oauth_clients_bytes(&blob);
+    assert_eq!(pairs, vec![(id, secret)]);
+}
+
+#[test]
+fn antigravity_keyring_blob_reads_go_keyring_json() {
+    use base64::Engine;
+    let json = r#"{"token":{"access_token":"ya29.example","refresh_token":"1//example","token_type":"Bearer"},"auth_method":"consumer"}"#;
+    let encoded = format!(
+        "go-keyring-base64:{}",
+        base64::engine::general_purpose::STANDARD.encode(json.as_bytes())
+    );
+    let tokens = antigravity::parse_keyring_blob(&encoded).unwrap();
+    assert_eq!(tokens.access_token.as_deref(), Some("ya29.example"));
+    assert_eq!(tokens.refresh_token.as_deref(), Some("1//example"));
+    assert_eq!(
+        antigravity::parse_keyring_blob(json)
+            .unwrap()
+            .access_token
+            .as_deref(),
+        Some("ya29.example")
+    );
+    assert_eq!(antigravity::parse_keyring_blob("not-a-token"), None);
+}
+
+#[test]
+fn antigravity_looks_at_both_macos_client_data_dirs() {
+    assert_eq!(antigravity::APP_DIRS, ["Antigravity", "Antigravity IDE"]);
+}
+
+#[test]
+fn antigravity_macos_prefers_current_app_over_legacy_ide() {
+    let files = antigravity::oauth_source_files();
+    let server = std::path::PathBuf::from(
+        "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    );
+    let ide = std::path::PathBuf::from(
+        "/Applications/Antigravity IDE.app/Contents/Resources/app/out/main.js",
+    );
+    if server.is_file() && ide.is_file() {
+        let server_at = files.iter().position(|path| path == &server);
+        let ide_at = files.iter().position(|path| path == &ide);
+        assert!(
+            server_at.is_some() && ide_at.is_some() && server_at < ide_at,
+            "当前 Antigravity.app 的 language_server 应先于旧 IDE：{files:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "需要本机已登录 Antigravity，且会请求 Google"]
+fn antigravity_live_fetch_rate_limits() {
+    let (windows, _) = antigravity::fetch_rate_limits().expect("本机 Antigravity 额度拉取失败");
+    assert!(!windows.is_empty());
+}
+
+#[test]
+fn antigravity_local_install_yields_oauth_clients_when_present() {
+    let files = antigravity::oauth_source_files();
+    if files.is_empty() {
+        return;
+    }
+    let found = files.iter().find_map(|path| {
+        let bytes = std::fs::read(path).ok()?;
+        let clients = antigravity::parse_oauth_clients_bytes(&bytes);
+        (!clients.is_empty()).then_some(clients)
+    });
+    let clients = found
+        .unwrap_or_else(|| panic!("本机有 Antigravity 安装文件但扫不到 OAuth 客户端：{files:?}"));
+    assert!(clients.iter().all(|(id, secret)| {
+        id.ends_with(".apps.googleusercontent.com") && secret.starts_with("GOCSPX-")
+    }));
+}
