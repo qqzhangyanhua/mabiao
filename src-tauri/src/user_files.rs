@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -42,18 +43,51 @@ pub fn write_export(
     content: &[u8],
     expected_mtime: Option<&str>,
 ) -> Result<WriteUserFileResult, String> {
+    write_export_with(path, expected_mtime, |writer| {
+        writer
+            .write_all(content)
+            .map_err(|error| format!("写入临时文件失败：{error}"))
+    })
+}
+
+pub fn write_export_with(
+    path: &Path,
+    expected_mtime: Option<&str>,
+    write_contents: impl FnOnce(&mut dyn Write) -> Result<(), String>,
+) -> Result<WriteUserFileResult, String> {
     if !is_allowed_export(path) {
         return Err("导出路径不在可写名单中".into());
     }
     if expected_mtime.is_some() {
         return Err("导出目标已存在，请选择新文件名".into());
     }
-    atomic_create_new(path, content)?;
-    let meta = fs::metadata(path).map_err(|e| format!("写入后读取失败：{e}"))?;
-    Ok(WriteUserFileResult {
-        modified_at: mtime_rfc3339(&meta),
-        byte_size: meta.len(),
-    })
+    let tmp = temporary_path(path)?;
+    let write_result = (|| {
+        let mut file =
+            fs::File::create(&tmp).map_err(|error| format!("写入临时文件失败：{error}"))?;
+        write_contents(&mut file)?;
+        file.flush()
+            .map_err(|error| format!("写入临时文件失败：{error}"))
+    })();
+    if let Err(error) = write_result {
+        let _ = fs::remove_file(&tmp);
+        return Err(error);
+    }
+    let result = fs::hard_link(&tmp, path);
+    let _ = fs::remove_file(&tmp);
+    match result {
+        Ok(()) => {
+            let meta = fs::metadata(path).map_err(|e| format!("写入后读取失败：{e}"))?;
+            Ok(WriteUserFileResult {
+                modified_at: mtime_rfc3339(&meta),
+                byte_size: meta.len(),
+            })
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err("导出目标已存在，请选择新文件名".to_string())
+        }
+        Err(error) => Err(format!("创建导出文件失败：{error}")),
+    }
 }
 
 fn write_protected(
@@ -147,23 +181,6 @@ fn prune_backups(dir: &Path) -> Result<(), String> {
         let _ = fs::remove_file(stale);
     }
     Ok(())
-}
-
-fn atomic_create_new(path: &Path, content: &[u8]) -> Result<(), String> {
-    let tmp = temporary_path(path)?;
-    if let Err(error) = fs::write(&tmp, content) {
-        let _ = fs::remove_file(&tmp);
-        return Err(format!("写入临时文件失败：{error}"));
-    }
-    let result = fs::hard_link(&tmp, path);
-    let _ = fs::remove_file(&tmp);
-    match result {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            Err("导出目标已存在，请选择新文件名".to_string())
-        }
-        Err(error) => Err(format!("创建导出文件失败：{error}")),
-    }
 }
 
 fn atomic_write(path: &Path, content: &[u8]) -> Result<(), String> {

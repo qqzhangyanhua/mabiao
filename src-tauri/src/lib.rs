@@ -706,23 +706,33 @@ async fn export_conversation(
 ) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let home = ingest::default_home();
-        let export = {
+        let default_name = {
             let state = app.state::<AppState>();
             let conn = state.lock_read()?;
-            conversation::build_export(&conn, &home, &source, &session_id, format)?
+            conversation::export_default_name(&conn, &home, &source, &session_id, format)?
         };
         let (label, extensions): (&str, &[&str]) = match format {
             ConversationExportFormat::Markdown => ("Markdown", &["md"]),
             ConversationExportFormat::Json => ("Raw JSON", &["jsonl"]),
         };
         let path = rfd::FileDialog::new()
-            .set_file_name(&export.default_name)
+            .set_file_name(&default_name)
             .add_filter(label, extensions)
             .save_file();
         match path {
             Some(path) => {
                 let expected_mtime = user_files::observe_mtime(&path)?;
-                user_files::write_export(&path, &export.content, expected_mtime.as_deref())?;
+                let state = app.state::<AppState>();
+                let conn = state.lock_read()?;
+                conversation::write_conversation_export(
+                    &conn,
+                    &home,
+                    &source,
+                    &session_id,
+                    format,
+                    &path,
+                    expected_mtime.as_deref(),
+                )?;
                 Ok(true)
             }
             None => Ok(false),

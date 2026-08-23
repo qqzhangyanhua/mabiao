@@ -16,10 +16,10 @@ use crate::domain::{
     ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
     ConversationEventActor as EventActor, ConversationEventCapabilityStatus as EventStatus,
     ConversationEventContentDto, ConversationEventContentStatus as ContentStatus,
-    ConversationEventKind as EventKind, ConversationExportDto, ConversationExportFormat,
-    ConversationIndexProgressDto, ConversationMessage, ConversationPage, ConversationParsedDetail,
-    ConversationQuery, ConversationSessionRow, ConversationUsagePage, CursorSessionDetailDto,
-    CursorSessionRecord, PriceTable, Source, UsageRecord,
+    ConversationEventKind as EventKind, ConversationIndexProgressDto, ConversationMessage,
+    ConversationPage, ConversationParsedDetail, ConversationQuery, ConversationSessionRow,
+    ConversationUsagePage, CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source,
+    UsageRecord,
 };
 use crate::ingest;
 use crate::query;
@@ -31,6 +31,7 @@ mod droid;
 mod dsh;
 mod event_index;
 mod event_page;
+mod export;
 mod gemini;
 mod grok;
 mod incremental;
@@ -39,6 +40,11 @@ mod line_direct;
 mod opencode;
 mod pi;
 mod qwen;
+
+pub use export::build_export;
+pub(crate) use export::{export_default_name, write_conversation_export};
+#[cfg(test)]
+pub(crate) use export::parsed_export;
 
 const DEFAULT_PAGE_SIZE: u32 = 20;
 const MAX_PAGE_SIZE: u32 = 200;
@@ -253,6 +259,10 @@ fn conversation_adapter(source: Source) -> Result<&'static ConversationAdapter, 
         .iter()
         .find(|adapter| adapter.source == source)
         .ok_or_else(|| "该来源尚未支持对话详情".to_string())
+}
+
+pub(super) fn raw_export_extension(source: Source) -> Result<Option<&'static str>, String> {
+    Ok(conversation_adapter(source)?.raw_extension)
 }
 
 fn discover_extension(roots: &[PathBuf], extension: &str) -> Result<Vec<PathBuf>, String> {
@@ -1961,147 +1971,6 @@ fn resolve_attachment(
     candidate.attachment = attachment;
     ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
     Ok(candidate)
-}
-
-pub fn build_export(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    format: ConversationExportFormat,
-) -> Result<ConversationExportDto, String> {
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let base_name = safe_export_name(&parsed.session.title, &session.session_id);
-    match format {
-        ConversationExportFormat::Json if conversation_adapter(source)?.raw_extension.is_none() => {
-            Err("该来源不支持导出单一原始对话文件".to_string())
-        }
-        ConversationExportFormat::Json if paths.len() > 1 => {
-            Err("该会话包含多个原始文件，无法导出为单一原始 JSONL".to_string())
-        }
-        ConversationExportFormat::Json if source == Source::Qwen => Ok(ConversationExportDto {
-            default_name: format!("{base_name}.json"),
-            content: qwen::export_session_records(&paths[0], session_id)?,
-        }),
-        ConversationExportFormat::Json => Ok(ConversationExportDto {
-            default_name: format!(
-                "{base_name}.{}",
-                conversation_adapter(source)?
-                    .raw_extension
-                    .unwrap_or("jsonl")
-            ),
-            content: fs::read(&paths[0]).map_err(|error| format!("读取原始文件失败：{error}"))?,
-        }),
-        ConversationExportFormat::Markdown => Ok(ConversationExportDto {
-            default_name: format!("{base_name}.md"),
-            content: render_markdown_export(&parsed).into_bytes(),
-        }),
-    }
-}
-
-fn safe_export_name(title: &str, session_id: &str) -> String {
-    let source = if title.trim().is_empty() {
-        session_id
-    } else {
-        title.trim()
-    };
-    let name: String = source
-        .chars()
-        .map(|character| match character {
-            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
-            _ => character,
-        })
-        .take(100)
-        .collect();
-    if name.is_empty() {
-        "conversation".to_string()
-    } else {
-        name
-    }
-}
-
-fn render_markdown_export(parsed: &ParsedConversation) -> String {
-    let session = &parsed.session;
-    let mut markdown = format!(
-        "# {}\n\n- 来源：{}\n- 会话 ID：`{}`\n- 项目：{}\n- 模型：{}\n- 开始：{}\n- 结束：{}\n\n",
-        session.title,
-        session.source,
-        session.session_id,
-        explicit_value(&session.project),
-        explicit_value(&session.model),
-        explicit_value(&session.started_at),
-        explicit_value(&session.ended_at),
-    );
-    for event in &parsed.events {
-        markdown.push_str(&format!(
-            "---\n\n## {} · {}\n\n- 时间：{}\n",
-            event.sequence,
-            event.kind.as_str(),
-            event.occurred_at.as_deref().unwrap_or("时间缺失")
-        ));
-        if let Some(actor) = event.actor {
-            markdown.push_str(&format!("- 角色：{}\n", actor.as_str()));
-        }
-        if let Some(name) = &event.name {
-            markdown.push_str(&format!("- 名称：`{name}`\n"));
-        }
-        if let Some(text) = &event.text {
-            markdown.push('\n');
-            markdown.push_str(text);
-            markdown.push('\n');
-        }
-        if !event.attachments.is_empty() {
-            markdown.push_str("\n### 附件\n\n");
-            for attachment in &event.attachments {
-                let status = match attachment.status {
-                    AttachmentStatus::Available => "可用",
-                    AttachmentStatus::Missing => "附件缺失",
-                    AttachmentStatus::Embedded => "内嵌",
-                    AttachmentStatus::Unsupported => "不支持应用内加载",
-                };
-                let size = attachment
-                    .size_bytes
-                    .map(|size| format!("{size} bytes"))
-                    .unwrap_or_else(|| "大小未知".to_string());
-                markdown.push_str(&format!(
-                    "- **{}** · `{}` · {} · {} · {}\n",
-                    attachment.name, attachment.original_path, attachment.media_type, size, status
-                ));
-            }
-        }
-        if let Some(details) = export_details(&event.details) {
-            markdown.push_str("\n<details><summary>原始事件数据</summary>\n\n```json\n");
-            markdown.push_str(&details);
-            markdown.push_str("\n```\n\n</details>\n");
-        }
-    }
-    markdown
-}
-
-fn explicit_value(value: &str) -> &str {
-    if value.is_empty() {
-        "缺失"
-    } else {
-        value
-    }
-}
-
-fn export_details(details: &Value) -> Option<String> {
-    let mut details = details.clone();
-    if let Value::Object(object) = &mut details {
-        object.remove("content");
-        object.remove("message");
-        object.remove("output");
-        object.remove("result");
-        if object.is_empty() {
-            return None;
-        }
-    } else if details.is_null() {
-        return None;
-    }
-    serde_json::to_string_pretty(&details).ok()
 }
 
 fn parse_codex_file(

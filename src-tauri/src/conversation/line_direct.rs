@@ -13,7 +13,7 @@ use crate::domain::{
     ConversationEventContentStatus as ContentStatus, Source,
 };
 
-fn source_maps_line_to_events(source: Source) -> bool {
+pub(super) fn source_maps_line_to_events(source: Source) -> bool {
     matches!(source, Source::Codex | Source::Claude | Source::Pi)
 }
 

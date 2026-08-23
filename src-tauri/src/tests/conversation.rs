@@ -375,6 +375,94 @@ fn codex_conversation_exports_markdown_and_raw_json_from_the_current_source_file
 }
 
 #[test]
+fn streaming_markdown_export_matches_full_parse_for_indexed_and_unindexed_sessions() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_rich_codex_conversation(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    let prepared = crate::conversation::prepare_detail(&conn, "codex", "rich-1").unwrap();
+    assert!(crate::conversation::event_index_ready(&conn, home, &prepared).unwrap());
+
+    let streamed = crate::conversation::build_export(
+        &conn,
+        home,
+        "codex",
+        "rich-1",
+        ConversationExportFormat::Markdown,
+    )
+    .unwrap();
+    let parsed = crate::conversation::parsed_export(
+        &conn,
+        home,
+        "codex",
+        "rich-1",
+        ConversationExportFormat::Markdown,
+    )
+    .unwrap();
+    assert_eq!(streamed.default_name, parsed.default_name);
+    assert_eq!(streamed.content, parsed.content);
+    let streamed_text = String::from_utf8(streamed.content.clone()).unwrap();
+    assert!(streamed_text.contains("FULL-END"));
+    let export_path = home.join("streamed.md");
+    crate::conversation::write_conversation_export(
+        &conn,
+        home,
+        "codex",
+        "rich-1",
+        ConversationExportFormat::Markdown,
+        &export_path,
+        None,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(&export_path).unwrap(), parsed.content);
+
+    conn.execute(
+        "DELETE FROM conversation_events WHERE source = 'codex' AND session_id = 'rich-1'",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        r#"
+        UPDATE conversation_sessions
+        SET adapter_version = 0, event_index_generation = NULL
+        WHERE source = 'codex' AND session_id = 'rich-1'
+        "#,
+        [],
+    )
+    .unwrap();
+    let prepared = crate::conversation::prepare_detail(&conn, "codex", "rich-1").unwrap();
+    assert!(!crate::conversation::event_index_ready(&conn, home, &prepared).unwrap());
+    let fallback = crate::conversation::build_export(
+        &conn,
+        home,
+        "codex",
+        "rich-1",
+        ConversationExportFormat::Markdown,
+    )
+    .unwrap();
+    assert_eq!(fallback.content, parsed.content);
+}
+
+#[test]
+fn streaming_export_failure_does_not_leave_partial_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("partial.md");
+    let error = crate::user_files::write_export_with(&path, None, |writer| {
+        writer.write_all(b"# partial\n").unwrap();
+        Err("模拟中途失败".to_string())
+    })
+    .unwrap_err();
+    assert!(error.contains("模拟中途失败"));
+    assert!(!path.exists());
+    let leftovers: Vec<_> = std::fs::read_dir(temp.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert!(leftovers.is_empty(), "{leftovers:?}");
+}
+
+#[test]
 fn conversation_detail_prepared_context_loads_after_connection_is_dropped() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
