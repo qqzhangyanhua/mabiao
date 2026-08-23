@@ -178,10 +178,14 @@ pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
     refresh(app)
 }
 
+/// 联网拉一遍各家官方额度（受退避冷却约束，不会比主窗口的刷新更激进），
+/// 再落库刷新托盘标题/悬浮面板。取数放在锁外，避免持锁期间打网络。
 fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
+    let results = official_quota::fetch_all_providers();
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let _ = official_quota::sync_claude_capture(&conn);
+    official_quota::apply_fetch_results(&conn, results)?;
     let config = official_quota::load_config(&state.official_quota_path);
     let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(

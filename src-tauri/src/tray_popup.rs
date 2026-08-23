@@ -1,4 +1,5 @@
-//! 托盘左键弹出的无边框额度窗口：只展示，不放操作。
+//! 托盘左键弹出的无边框额度窗口：展示各账号官方额度，每行有个强制刷新小图标
+//! （跳过退避冷却，见 `refresh_official_quota_provider_force`），其它操作仍留在主窗口。
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};

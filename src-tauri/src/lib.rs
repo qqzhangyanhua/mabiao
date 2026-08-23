@@ -43,9 +43,10 @@ use crate::domain::{
     ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot,
-    PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
-    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaProvider,
+    OfficialQuotaRow, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
+    SessionRow, Source, SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest,
+    WriteUserFileResult,
 };
 
 /// 只读连接池。
@@ -931,10 +932,49 @@ async fn refresh_official_quota_provider(
 ) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let parsed = official_quota::parse_provider(&provider)?;
-        persist_official_quota_fetches(
-            &app,
-            [(parsed, official_quota::fetch_provider_throttled(parsed))],
-        )
+        match official_quota::fetch_provider_throttled(parsed) {
+            // 冷却期短路：不写库，避免把上一次真实失败原因换成这句「还要等 N 分
+            // 钟」——只在这次响应的快照里临时替换该行 error，够按钮即时反馈用。
+            official_quota::ThrottledFetch::Cooldown(message) => {
+                let mut dto = official_quota_snapshot(&app)?;
+                match dto
+                    .rows
+                    .iter_mut()
+                    .find(|row| row.provider == parsed.as_str())
+                {
+                    Some(row) => row.error = Some(message),
+                    None => dto.rows.push(OfficialQuotaRow {
+                        provider: parsed.as_str().to_string(),
+                        application: parsed.display_name().to_string(),
+                        windows: Vec::new(),
+                        freshness: OfficialQuotaFreshness::Unavailable,
+                        captured_at: None,
+                        error: Some(message),
+                    }),
+                }
+                Ok(dto)
+            }
+            official_quota::ThrottledFetch::Attempted(result) => {
+                persist_official_quota_fetches(&app, [(parsed, result)])
+            }
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 悬浮额度面板每行的强制刷新：跳过冷却检查，用户点了就是要现在就试一次
+/// （托盘弹窗那边空间小，不方便像主窗口那样先弹一句「还要等 N 分钟」再让人
+/// 决定要不要硬刷）。结果照样记入退避状态，连续失败仍会拉长下次自动重试。
+#[tauri::command]
+async fn refresh_official_quota_provider_force(
+    app: tauri::AppHandle,
+    provider: String,
+) -> Result<OfficialQuotaDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let parsed = official_quota::parse_provider(&provider)?;
+        let result = official_quota::fetch_provider_forced(parsed);
+        persist_official_quota_fetches(&app, [(parsed, result)])
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1248,6 +1288,7 @@ pub fn run() {
             get_official_quota,
             refresh_official_quota,
             refresh_official_quota_provider,
+            refresh_official_quota_provider_force,
             get_official_quota_hook,
             apply_official_quota_hook,
             save_official_quota_config,

@@ -211,11 +211,21 @@ function QuotaRow({
           <span className="official-quota-grip" title="拖动排序" aria-hidden="true" />
         ) : null}
         {arrangeable ? (
-          <button
-            type="button"
+          // 折叠开关本来整行是一个 <button>，但这一行现在还塞了刷新小图标——
+          // 两个 <button> 不能嵌套（浏览器会把外层标签提前截断，布局跟着乱）。
+          // 换成 role="button" 的 div 自己接管键盘可达性，刷新按钮再单独挡住点击冒泡。
+          <div
+            role="button"
+            tabIndex={0}
             className="official-quota-head official-quota-head-toggle"
             aria-expanded={open}
             onClick={onToggle}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onToggle();
+              }
+            }}
           >
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
             {open ? (
@@ -229,7 +239,7 @@ function QuotaRow({
               <em className="official-quota-summary">{trayQuotaRowSummary(row)}</em>
             )}
             <Icon name="chevron" size={12} className="official-quota-caret" />
-          </button>
+          </div>
         ) : (
           <div className="official-quota-head">
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
@@ -268,7 +278,11 @@ function QuotaRowTitle({
           variant="icon"
           className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
           disabled={disabled}
-          onClick={onRefresh}
+          onClick={(event) => {
+            // 折叠开关那个 role="button" 的 div 就包在外面，点刷新不拦截会连带把它也触发。
+            event.stopPropagation();
+            onRefresh();
+          }}
           title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
           aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
         >

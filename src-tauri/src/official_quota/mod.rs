@@ -275,14 +275,40 @@ where
     })
 }
 
+/// [`fetch_provider_throttled`] 的结果：冷却期短路和真正打了网络的失败要分开，
+/// 调用方不该把「还要等 N 分钟」这句提示当成新的失败原因落库——那会冲掉上一次
+/// 真实失败的诊断信息（HTTP 码 / 登录过期等），而且每点一次刷新剩余时间都会变，
+/// 存下去毫无意义。
+pub enum ThrottledFetch {
+    /// 仍在冷却，没有实际发请求；这句话只用于这次响应临时展示，不落库。
+    Cooldown(String),
+    /// 冷却已过，真正打了网络（不论成功失败）。
+    Attempted(ProviderFetch),
+}
+
 /// 单个 provider 的手动刷新。限流期间也拦——「多点几次」正是让限流恢复更慢的原因，
 /// 但要明确告诉用户还要等多久，而不是让按钮看起来没反应。
-pub fn fetch_provider_throttled(provider: OfficialQuotaProvider) -> ProviderFetch {
+pub fn fetch_provider_throttled(provider: OfficialQuotaProvider) -> ThrottledFetch {
     let now = Utc::now();
     let mut state = backoff::load_state(&backoff::state_path());
     if let Some(message) = backoff::cooldown_message(&state, provider, now) {
-        return Err(message);
+        return ThrottledFetch::Cooldown(message);
     }
+    let result = fetch_provider(provider);
+    record_backoff(
+        &mut state,
+        std::slice::from_ref(&(provider, result.clone())),
+        now,
+    );
+    ThrottledFetch::Attempted(result)
+}
+
+/// 悬浮面板上的「强制刷新」用：跳过冷却检查，即便还在冷却期也真打一次网络。
+/// 结果照样喂给 [`record_backoff`]——连续失败依然会拉长下次自动重试的等待，
+/// 只是这一次点击本身不被拦。用户手上明确知道要现在就试一次，就不代它纠结了。
+pub fn fetch_provider_forced(provider: OfficialQuotaProvider) -> ProviderFetch {
+    let now = Utc::now();
+    let mut state = backoff::load_state(&backoff::state_path());
     let result = fetch_provider(provider);
     record_backoff(
         &mut state,

@@ -24,7 +24,24 @@ export default function TrayQuotaApp() {
   const [error, setError] = useState<string | null>(null);
   const [arrangeTick, setArrangeTick] = useState(0);
   const [open, setOpen] = useState(() => readSectionOpen(TRAY_QUOTA_SECTION_ID, true));
+  const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+
+  // 面板空间小，不方便像主窗口那样先弹一句「还要等 N 分钟」再让用户决定要不要硬刷——
+  // 点了就是要现在就试一次，所以这里走跳过退避冷却的强制刷新。
+  async function refreshProvider(provider: string) {
+    setBusyProvider(provider);
+    try {
+      setQuota(
+        await invoke<OfficialQuotaDto>("refresh_official_quota_provider_force", { provider }),
+      );
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusyProvider(null);
+    }
+  }
 
   function toggleOpen() {
     setOpen((prev) => {
@@ -111,7 +128,9 @@ export default function TrayQuotaApp() {
           <div className="official-quota-heading">
             <h2>官方额度</h2>
             {open ? (
-              <span className="muted official-quota-refresh-hint">拖动排序 · 点标题折叠</span>
+              <span className="muted official-quota-refresh-hint">
+                拖动排序 · 点标题折叠 · 图标强制刷新
+              </span>
             ) : null}
           </div>
           <div className="collapsible-actions">
@@ -144,6 +163,8 @@ export default function TrayQuotaApp() {
               staleAfterMinutes={quota?.stale_after_minutes}
               compactReset
               arrangeable
+              busyProvider={busyProvider}
+              onRefresh={(provider) => void refreshProvider(provider)}
               onArrange={() => setArrangeTick((tick) => tick + 1)}
             />
           )
