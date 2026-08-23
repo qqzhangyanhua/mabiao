@@ -1,0 +1,45 @@
+docs/probe/official-quota.md
+  s_4ba7aa50f29b98::t_a77697f320556a 92-98
+  s_4ba7aa50f29b98::t_85ba705b88bcaa 102-103
+src-tauri/src/official_quota/antigravity.rs
+  s_4ba7aa50f29b98::t_4ca3a8dc222a0f 158-169
+  s_4ba7aa50f29b98::t_883a433349dd57 368-370,372-377,380,391-411,418-425,427,432-434,436,441,444-449,453,462,465,478,480-494,497,499-501
+  s_4ba7aa50f29b98::t_51018b2154a63a 430-431,435,442-443,450-452,461
+  s_4ba7aa50f29b98::t_1470bac6396b8a 13-14
+  s_4ba7aa50f29b98::t_6b45d608accd6c 466-471
+  s_4ba7aa50f29b98::t_dfdebb2b452227 32-38
+  s_4ba7aa50f29b98::t_4c6afae01a3089 437-440
+  s_4ba7aa50f29b98::t_0fc4826b9036ba 479
+  s_4ba7aa50f29b98::t_f36e7ad7b8f9b3 179,181-188
+  s_4ba7aa50f29b98::t_c01623e4f93b43 180
+  s_4ba7aa50f29b98::t_a9ee69a6079429 464,474
+  s_4ba7aa50f29b98::t_babbee681de728 454-458
+  s_4ba7aa50f29b98::t_97e592f605e692 30-31
+  s_4ba7aa50f29b98::t_1e465686c0292c 153-157,170-178,189-255,257-261
+  s_4ba7aa50f29b98::t_35c06eb4bd33a5 4-9
+  s_4ba7aa50f29b98::t_e0119f0ef334ac 463
+src-tauri/src/tests/antigravity_quota.rs
+  s_4ba7aa50f29b98::t_26d014a6c95194 138-155,177,179
+  s_4ba7aa50f29b98::t_45470edfa98640 218-219
+  s_4ba7aa50f29b98::t_e92f73c5bab6cd 156-176
+  s_4ba7aa50f29b98::t_4c6afae01a3089 178
+  s_4ba7aa50f29b98::t_5c5fed89832eb3 182-193,195-207
+  s_4ba7aa50f29b98::t_6cb830807e6b6c 180-181,208-217,220-223
+  s_4ba7aa50f29b98::t_e7d62a5b1bfe74 194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fc18b75641aa9e89e6d722fa27ff63ab114b3a08",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
