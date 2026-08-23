@@ -1,0 +1,73 @@
+src-tauri/src/adapters/mod.rs
+  s_85fadf1b9ff8f2::t_f5b38e19d5e522 50
+  s_85fadf1b9ff8f2::t_8d60d91ef10cc0 35-49,51-52
+  s_85fadf1b9ff8f2::t_ddd0c77e1da047 32-34
+  s_85fadf1b9ff8f2::t_a5289811a98a06 30-31
+src-tauri/src/lib.rs
+  s_85fadf1b9ff8f2::t_9220b0f356c682 1149-1152,1154,1177
+src-tauri/src/adapters/codex.rs
+  s_85fadf1b9ff8f2::t_d9d50437ed71a4 3-5
+  s_85fadf1b9ff8f2::t_195565d0123f35 60,69
+src-tauri/src/adapters/pi.rs
+  s_85fadf1b9ff8f2::t_f2b8fad8a9884c 2-4,7,13
+src-tauri/src/ingest.rs
+  s_85fadf1b9ff8f2::t_8c11f86a336d42 620-621,630-631,635-636,644-648,655,662,675-706,730
+  s_85fadf1b9ff8f2::t_e54660d4975453 3,12
+  s_85fadf1b9ff8f2::t_091868d6ac397a 614-619
+  s_85fadf1b9ff8f2::t_4a00b4745f126e 799-819,821-824
+  s_85fadf1b9ff8f2::t_0866aa0007d979 820
+src-tauri/src/adapters/claude.rs
+  s_85fadf1b9ff8f2::t_7f234f67181031 41
+  s_85fadf1b9ff8f2::t_39acc190818250 4-6,14-16,19
+src-tauri/src/conversation.rs
+  s_4ba7aa50f29b98::t_4c6afae01a3089 47
+src-tauri/src/tests/adapters.rs
+  s_85fadf1b9ff8f2::t_4d0eb1666ba26b 113
+  s_85fadf1b9ff8f2::t_a658c9dc459958 96
+  s_85fadf1b9ff8f2::t_4a02675fed5da1 37
+  s_85fadf1b9ff8f2::t_d7a86db9897b3d 54
+  s_85fadf1b9ff8f2::t_8831cf5cdc10cb 412
+  s_85fadf1b9ff8f2::t_28da8be2549a00 384
+  s_85fadf1b9ff8f2::t_48fb2e67e89ed5 83
+  s_85fadf1b9ff8f2::t_10189720778f81 149
+  s_85fadf1b9ff8f2::t_f7f7783ed2f3d7 6
+  s_85fadf1b9ff8f2::t_580279ac246b00 443
+src-tauri/src/adapters/cursor_agent.rs
+  s_85fadf1b9ff8f2::t_2db15d765a4245 34
+  s_85fadf1b9ff8f2::t_65cd5ba416374e 1,8-11,14
+src-tauri/src/tests/overview.rs
+  s_85fadf1b9ff8f2::t_6cb377493b5acb 26
+  s_85fadf1b9ff8f2::t_a8b69d80bf5dee 214
+  s_85fadf1b9ff8f2::t_f6ea538bbafc4e 6
+  s_85fadf1b9ff8f2::t_077c8468320c25 47
+src-tauri/src/test_support/helpers.rs
+  s_85fadf1b9ff8f2::t_f4ff971544b487 72-73,77-79
+  s_85fadf1b9ff8f2::t_091868d6ac397a 74-76
+src-tauri/src/adapters/copilot.rs
+  s_85fadf1b9ff8f2::t_4e6b912488d474 14,18
+  s_85fadf1b9ff8f2::t_9492aa0b866264 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b2c18e7b57201ab366e3fd06ef0744c8f4786ae8",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_85fadf1b9ff8f2": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "15bd76a6-bc9d-46ae-93dc-a77474d2ca62",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
