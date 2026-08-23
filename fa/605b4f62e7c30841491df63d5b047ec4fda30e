@@ -1,0 +1,23 @@
+src/components/ApplicationAnalytics.tsx
+  s_d48ba2828c605c::t_528e883581e416 3,97-115
+src/styles.css
+  s_d48ba2828c605c::t_cef2add003d6a3 3358-3382
+src/lib/chartTheme.ts
+  s_d48ba2828c605c::t_60bf01fc9b35fb 404-405
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fa605b4f62e7c30841491df63d5b047ec4fda30e",
+  "prompts": {},
+  "sessions": {
+    "s_d48ba2828c605c": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a02e6f-1073-7e30-880b-b3bc11b30200",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
