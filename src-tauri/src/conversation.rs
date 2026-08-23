@@ -42,9 +42,9 @@ mod pi;
 mod qwen;
 
 pub use export::build_export;
-pub(crate) use export::{export_default_name, write_conversation_export};
 #[cfg(test)]
 pub(crate) use export::parsed_export;
+pub(crate) use export::{export_default_name, write_conversation_export};
 
 const DEFAULT_PAGE_SIZE: u32 = 20;
 const MAX_PAGE_SIZE: u32 = 200;
