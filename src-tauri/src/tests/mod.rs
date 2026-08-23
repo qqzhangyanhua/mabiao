@@ -11,6 +11,7 @@ mod conversation;
 mod conversation_events_page;
 mod conversation_index;
 mod conversation_index_backfill;
+mod conversation_index_incremental;
 mod conversation_index_sources;
 mod copilot_quota;
 mod cursor_account;

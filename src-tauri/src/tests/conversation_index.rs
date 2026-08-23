@@ -159,7 +159,10 @@ fn codex_event_index_still_publishes_a_successful_session_when_another_fails() {
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
     let split_before = crate::conversation::indexed_events(&conn, "codex", "split-1").unwrap();
+    let semantic_before =
+        crate::conversation::indexed_events(&conn, "codex", "semantic-1").unwrap();
     assert!(!split_before.is_empty());
+    assert!(!semantic_before.is_empty());
 
     std::fs::write(&failing, "{not-json\n").unwrap();
     let mut rewritten = std::fs::read_to_string(&intact).unwrap();
@@ -176,7 +179,25 @@ fn codex_event_index_still_publishes_a_successful_session_when_another_fails() {
         split_before,
         "失败会话必须保留上一代"
     );
-    assert_index_matches_parse(&conn, home, "codex", "semantic-1");
+    let semantic_after = crate::conversation::indexed_events(&conn, "codex", "semantic-1").unwrap();
+    assert_eq!(
+        semantic_after[..semantic_before.len()]
+            .iter()
+            .map(|event| (event.event_id.clone(), event.sequence))
+            .collect::<Vec<_>>(),
+        semantic_before
+            .iter()
+            .map(|event| (event.event_id.clone(), event.sequence))
+            .collect::<Vec<_>>(),
+        "另一会话失败时，成功会话仍应增量追加且不得重排已有序号"
+    );
+    assert_eq!(
+        semantic_after
+            .last()
+            .and_then(|event| event.text.as_deref()),
+        Some("reindexed"),
+        "成功会话必须发布本次追加的新事件"
+    );
 }
 
 #[test]

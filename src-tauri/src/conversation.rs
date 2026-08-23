@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::{BufRead, BufReader, Cursor};
+use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -33,6 +33,7 @@ mod event_index;
 mod event_page;
 mod gemini;
 mod grok;
+mod incremental;
 mod kimi;
 mod opencode;
 mod pi;
@@ -80,6 +81,24 @@ struct CachedConversationFingerprint {
     source_file_size: i64,
     adapter_version: i64,
     source_revision: String,
+    indexed_byte_offset: i64,
+    indexed_line: i64,
+    has_live_generation: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FileIndexCursor {
+    pub byte_offset: i64,
+    pub line: i64,
+}
+
+struct SessionFileCursorWrite<'a> {
+    path: &'a Path,
+    cursor: FileIndexCursor,
+    max_sequence: Option<u32>,
+    mtime_ns: i64,
+    size: i64,
+    source_revision: &'a str,
 }
 
 pub(crate) struct ParsedConversation {
@@ -87,6 +106,7 @@ pub(crate) struct ParsedConversation {
     messages: Vec<ConversationMessage>,
     pub(crate) events: Vec<ConversationEvent>,
     is_top_level: bool,
+    index_cursor: Option<FileIndexCursor>,
 }
 
 struct ConversationIndexBatch {
@@ -480,6 +500,10 @@ pub(crate) fn finish_prepared_events(
     event_page::finish_prepared_events(home, read, anchor, limit)
 }
 
+pub(crate) use incremental::{
+    plan_conversation_file_index, ConversationFileFingerprint, ConversationFileIndexPlan,
+};
+
 pub fn refresh_codex(
     conn: &Connection,
     home: &Path,
@@ -501,6 +525,9 @@ pub(crate) fn refresh_source_in_roots(
     let mut grouped: BTreeMap<String, Vec<IndexedFile>> = BTreeMap::new();
     let mut unchanged_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     let mut event_generations: BTreeMap<String, i64> = BTreeMap::new();
+    let mut incremental_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+    let mut pending_incrementals: Vec<PendingIncremental> = Vec::new();
+    let mut file_cursors: BTreeMap<(String, String), FileIndexCursor> = BTreeMap::new();
     for path in conversation_source_paths(source, roots)? {
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
@@ -553,15 +580,92 @@ pub(crate) fn refresh_source_in_roots(
             }
             continue;
         }
+        let fingerprint = cached
+            .iter()
+            .find(|row| row.indexed_byte_offset > 0)
+            .or(cached.first())
+            .map(|row| ConversationFileFingerprint {
+                mtime_ns: row.source_file_mtime_ns,
+                size: row.source_file_size,
+                revision: row.source_revision.clone(),
+                indexed_byte_offset: row.indexed_byte_offset,
+                has_live_generation: row.has_live_generation,
+            });
+        if plan_conversation_file_index(
+            fingerprint.as_ref(),
+            mtime_ns,
+            size,
+            &source_revision,
+            source == Source::Codex,
+        ) == ConversationFileIndexPlan::Incremental
+        {
+            if let Some(row) = cached
+                .iter()
+                .find(|row| row.indexed_byte_offset > 0)
+                .or(cached.first())
+            {
+                match prepare_incremental_codex(conn, &path, row) {
+                    Ok(IncrementalPrepare::Ready(parsed)) => {
+                        incremental_paths
+                            .entry(row.session_id.clone())
+                            .or_default()
+                            .push(path.clone());
+                        pending_incrementals.push(PendingIncremental {
+                            path: path.clone(),
+                            session_id: row.session_id.clone(),
+                            parsed: *parsed,
+                            mtime_ns,
+                            size,
+                            source_revision: source_revision.clone(),
+                        });
+                        continue;
+                    }
+                    Ok(IncrementalPrepare::NeedFull) => {
+                        match parse_codex_file_mode(&path, true, false) {
+                            Ok(parsed) => {
+                                record_full_parse(
+                                    conn,
+                                    source,
+                                    parsed,
+                                    &mut event_generations,
+                                    &mut grouped,
+                                    &mut file_cursors,
+                                )?;
+                                continue;
+                            }
+                            Err(issue) => {
+                                blocking_issues.push(issue.clone());
+                                issues.push(issue);
+                                continue;
+                            }
+                        }
+                    }
+                    Err(message) => {
+                        let issue = ConversationIndexIssue {
+                            path: path.to_string_lossy().to_string(),
+                            message,
+                            event_type: None,
+                            line: None,
+                        };
+                        blocking_issues.push(issue.clone());
+                        issues.push(issue);
+                        continue;
+                    }
+                }
+            }
+        }
         match (adapter.index)(&path) {
             Ok(batch) => {
                 issues.extend(batch.diagnostics);
                 for parsed in batch.conversations {
-                    write_session_file_events(conn, source, &parsed, &mut event_generations)?;
-                    grouped
-                        .entry(parsed.session.session_id.clone())
-                        .or_default()
-                        .push(summarize_for_index(parsed));
+                    record_full_parse(
+                        conn,
+                        source,
+                        parsed,
+                        &mut event_generations,
+                        &mut grouped,
+                        &mut file_cursors,
+                    )?;
                 }
             }
             Err(issue) => {
@@ -589,6 +693,12 @@ pub(crate) fn refresh_source_in_roots(
                     .iter()
                     .map(|file| PathBuf::from(&file.session.source_file)),
             );
+    }
+    for (session_id, paths) in &incremental_paths {
+        scanned_paths_by_session
+            .entry(session_id.clone())
+            .or_default()
+            .extend(paths.iter().cloned());
     }
     for (session_id, failed_paths) in &failed_paths_by_session {
         scanned_paths_by_session
@@ -626,6 +736,12 @@ pub(crate) fn refresh_source_in_roots(
                             if parsed.session.session_id != session_id {
                                 continue;
                             }
+                            if let Some(cursor) = parsed.index_cursor {
+                                file_cursors.insert(
+                                    (session_id.clone(), parsed.session.source_file.clone()),
+                                    cursor,
+                                );
+                            }
                             write_session_file_events(
                                 conn,
                                 source,
@@ -650,9 +766,30 @@ pub(crate) fn refresh_source_in_roots(
         }
     }
 
+    for pending in pending_incrementals {
+        if blocked_session_ids.contains(&pending.session_id)
+            || grouped.contains_key(&pending.session_id)
+            || incomplete_session_ids.contains(&pending.session_id)
+        {
+            continue;
+        }
+        let path = pending.path.to_string_lossy().to_string();
+        if let Err(message) = apply_incremental_codex(conn, pending) {
+            let issue = ConversationIndexIssue {
+                path,
+                message,
+                event_type: None,
+                line: None,
+            };
+            blocking_issues.push(issue.clone());
+            issues.push(issue);
+        }
+    }
+
     let seen_session_ids = unchanged_paths
         .keys()
         .chain(grouped.keys())
+        .chain(incremental_paths.keys())
         .chain(incomplete_session_ids.iter())
         .cloned()
         .collect::<BTreeSet<_>>();
@@ -697,6 +834,13 @@ pub(crate) fn refresh_source_in_roots(
                 || event_index::has_live_generation(conn, source, &session_id)?;
             if publish {
                 event_index::finalize_session_events(conn, source, &session_id, generation)?;
+                persist_session_file_cursors(
+                    conn,
+                    source,
+                    &session_id,
+                    &source_files,
+                    &file_cursors,
+                )?;
             }
         }
     }
@@ -707,6 +851,250 @@ pub(crate) fn refresh_source_in_roots(
         sync_cursor_usage_only_sessions(conn)?;
     }
     Ok(issues)
+}
+
+enum IncrementalPrepare {
+    Ready(Box<ParsedConversation>),
+    NeedFull,
+}
+
+struct PendingIncremental {
+    path: PathBuf,
+    session_id: String,
+    parsed: ParsedConversation,
+    mtime_ns: i64,
+    size: i64,
+    source_revision: String,
+}
+
+fn record_full_parse(
+    conn: &Connection,
+    source: Source,
+    parsed: ParsedConversation,
+    event_generations: &mut BTreeMap<String, i64>,
+    grouped: &mut BTreeMap<String, Vec<IndexedFile>>,
+    file_cursors: &mut BTreeMap<(String, String), FileIndexCursor>,
+) -> Result<(), String> {
+    if let Some(cursor) = parsed.index_cursor {
+        file_cursors.insert(
+            (
+                parsed.session.session_id.clone(),
+                parsed.session.source_file.clone(),
+            ),
+            cursor,
+        );
+    }
+    write_session_file_events(conn, source, &parsed, event_generations)?;
+    grouped
+        .entry(parsed.session.session_id.clone())
+        .or_default()
+        .push(summarize_for_index(parsed));
+    Ok(())
+}
+
+fn prepare_incremental_codex(
+    conn: &Connection,
+    path: &Path,
+    cached: &CachedConversationFingerprint,
+) -> Result<IncrementalPrepare, String> {
+    let parsed = match parse_codex_suffix(
+        path,
+        cached.indexed_byte_offset as u64,
+        cached.indexed_line as u32,
+        &cached.session_id,
+    ) {
+        Ok(parsed) => parsed,
+        Err(_) => return Ok(IncrementalPrepare::NeedFull),
+    };
+    if parsed.session.session_id != cached.session_id {
+        return Ok(IncrementalPrepare::NeedFull);
+    }
+    if !event_index::has_live_generation(conn, Source::Codex, &cached.session_id)? {
+        return Ok(IncrementalPrepare::NeedFull);
+    }
+    if event_index::live_index_would_rewind(
+        conn,
+        Source::Codex,
+        &cached.session_id,
+        &parsed.events,
+    )? {
+        return Ok(IncrementalPrepare::NeedFull);
+    }
+    Ok(IncrementalPrepare::Ready(Box::new(parsed)))
+}
+
+fn apply_incremental_codex(conn: &Connection, pending: PendingIncremental) -> Result<(), String> {
+    let tx = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let result = apply_incremental_codex_in_tx(&tx, pending);
+    match result {
+        Ok(()) => tx.commit().map_err(|error| error.to_string()),
+        Err(error) => {
+            let _ = tx.rollback();
+            Err(error)
+        }
+    }
+}
+
+fn apply_incremental_codex_in_tx(
+    conn: &Connection,
+    pending: PendingIncremental,
+) -> Result<(), String> {
+    let PendingIncremental {
+        path,
+        session_id,
+        parsed,
+        mtime_ns,
+        size,
+        source_revision,
+    } = pending;
+    let max_sequence =
+        event_index::append_live_events(conn, Source::Codex, &session_id, &parsed.events)?;
+    let cursor = parsed.index_cursor.unwrap_or(FileIndexCursor {
+        byte_offset: size,
+        line: 0,
+    });
+    persist_file_cursor(
+        conn,
+        Source::Codex,
+        &session_id,
+        &SessionFileCursorWrite {
+            path: &path,
+            cursor,
+            max_sequence: Some(max_sequence),
+            mtime_ns,
+            size,
+            source_revision: &source_revision,
+        },
+    )?;
+    touch_session_after_append(conn, &session_id, &parsed, mtime_ns, size, &source_revision)
+}
+
+fn touch_session_after_append(
+    conn: &Connection,
+    session_id: &str,
+    parsed: &ParsedConversation,
+    mtime_ns: i64,
+    size: i64,
+    source_revision: &str,
+) -> Result<(), String> {
+    let ended_at = parsed.session.ended_at.as_str();
+    conn.execute(
+        r#"
+        UPDATE conversation_sessions
+        SET ended_at = CASE
+                WHEN ?3 != '' AND (ended_at = '' OR ended_at < ?3) THEN ?3
+                ELSE ended_at
+            END,
+            model = CASE WHEN ?4 != '' THEN ?4 ELSE model END,
+            source_file_mtime_ns = ?5,
+            source_file_size = ?6,
+            source_revision = ?7,
+            file_available = 1
+        WHERE source = ?1 AND session_id = ?2
+        "#,
+        params![
+            Source::Codex.as_str(),
+            session_id,
+            ended_at,
+            parsed.session.model,
+            mtime_ns,
+            size,
+            source_revision,
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn persist_session_file_cursors(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+    paths: &[PathBuf],
+    file_cursors: &BTreeMap<(String, String), FileIndexCursor>,
+) -> Result<(), String> {
+    let max_sequence = conn
+        .query_row(
+            r#"
+            SELECT MAX(sequence) FROM conversation_events
+            WHERE source = ?1 AND session_id = ?2
+              AND index_generation = (
+                  SELECT event_index_generation FROM conversation_sessions
+                  WHERE source = ?1 AND session_id = ?2
+              )
+            "#,
+            params![source.as_str(), session_id],
+            |row| row.get::<_, Option<u32>>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .flatten();
+    for path in paths {
+        let metadata =
+            fs::metadata(path).map_err(|error| format!("读取文件元数据失败：{error}"))?;
+        let revision = (conversation_adapter(source)?.revision)(path)?;
+        let cursor = file_cursors
+            .get(&(session_id.to_string(), path.to_string_lossy().to_string()))
+            .copied()
+            .unwrap_or(FileIndexCursor {
+                byte_offset: metadata.len() as i64,
+                line: 0,
+            });
+        persist_file_cursor(
+            conn,
+            source,
+            session_id,
+            &SessionFileCursorWrite {
+                path,
+                cursor,
+                max_sequence,
+                mtime_ns: modified_nanos(&metadata),
+                size: metadata.len() as i64,
+                source_revision: &revision,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+fn persist_file_cursor(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+    write: &SessionFileCursorWrite<'_>,
+) -> Result<(), String> {
+    conn.execute(
+        r#"
+        INSERT INTO conversation_session_files(
+            source, session_id, source_file, source_file_mtime_ns, source_file_size,
+            adapter_version, source_revision, indexed_byte_offset, indexed_line, max_sequence
+        ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        ON CONFLICT(source, session_id, source_file) DO UPDATE SET
+            source_file_mtime_ns = excluded.source_file_mtime_ns,
+            source_file_size = excluded.source_file_size,
+            adapter_version = excluded.adapter_version,
+            source_revision = excluded.source_revision,
+            indexed_byte_offset = excluded.indexed_byte_offset,
+            indexed_line = excluded.indexed_line,
+            max_sequence = excluded.max_sequence
+        "#,
+        params![
+            source.as_str(),
+            session_id,
+            write.path.to_string_lossy().to_string(),
+            write.mtime_ns,
+            write.size,
+            CONVERSATION_ADAPTER_VERSION,
+            write.source_revision,
+            write.cursor.byte_offset,
+            write.cursor.line,
+            write.max_sequence,
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn write_session_file_events(
@@ -1207,11 +1595,18 @@ fn reindex_session_events(
     let adapter = conversation_adapter(source)?;
     let mut event_generations = BTreeMap::new();
     let mut indexed_files = Vec::new();
+    let mut file_cursors = BTreeMap::new();
     for path in &paths {
         let batch = (adapter.index)(path).map_err(|issue| issue.message)?;
         for parsed in batch.conversations {
             if parsed.session.session_id != session_id {
                 continue;
+            }
+            if let Some(cursor) = parsed.index_cursor {
+                file_cursors.insert(
+                    (session_id.to_string(), parsed.session.source_file.clone()),
+                    cursor,
+                );
             }
             write_session_file_events(conn, source, &parsed, &mut event_generations)?;
             indexed_files.push(summarize_for_index(parsed));
@@ -1241,6 +1636,7 @@ fn reindex_session_events(
         &representative_revision,
     )?;
     update_session_files(conn, source, session_id, &source_files, true)?;
+    persist_session_file_cursors(conn, source, session_id, &source_files, &file_cursors)?;
     Ok(())
 }
 
@@ -1689,7 +2085,79 @@ fn parse_codex_file_mode(
         event_type: None,
         line: None,
     })?;
-    let mut session_id = String::new();
+    parse_codex_content(
+        path,
+        &content,
+        0,
+        0,
+        tolerate_incomplete_tail,
+        include_deferred_content,
+        None,
+    )
+}
+
+fn parse_codex_suffix(
+    path: &Path,
+    byte_offset: u64,
+    start_line: u32,
+    session_id: &str,
+) -> Result<ParsedConversation, ConversationIndexIssue> {
+    let content = read_file_suffix(path, byte_offset)?;
+    parse_codex_content(
+        path,
+        &content,
+        byte_offset,
+        start_line,
+        true,
+        false,
+        Some(session_id.to_string()),
+    )
+}
+
+fn read_file_suffix(path: &Path, byte_offset: u64) -> Result<String, ConversationIndexIssue> {
+    let mut file = fs::File::open(path).map_err(|error| ConversationIndexIssue {
+        path: path.to_string_lossy().to_string(),
+        message: format!("读取原始文件失败：{error}"),
+        event_type: None,
+        line: None,
+    })?;
+    file.seek(SeekFrom::Start(byte_offset))
+        .map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("读取原始文件失败：{error}"),
+            event_type: None,
+            line: None,
+        })?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("读取原始文件失败：{error}"),
+            event_type: None,
+            line: None,
+        })?;
+    Ok(content)
+}
+
+fn next_line_index(content: &str) -> u32 {
+    let newlines = content.bytes().filter(|&byte| byte == b'\n').count() as u32;
+    if content.is_empty() || content.ends_with('\n') {
+        newlines
+    } else {
+        newlines + 1
+    }
+}
+
+fn parse_codex_content(
+    path: &Path,
+    content: &str,
+    start_byte: u64,
+    start_line: u32,
+    tolerate_incomplete_tail: bool,
+    include_deferred_content: bool,
+    session_hint: Option<String>,
+) -> Result<ParsedConversation, ConversationIndexIssue> {
+    let mut session_id = session_hint.clone().unwrap_or_default();
     let mut title = String::new();
     let mut project = String::new();
     let mut model = String::new();
@@ -1701,8 +2169,10 @@ fn parse_codex_file_mode(
     let mut pending_delta = None;
     let last_line_index = content.lines().count().saturating_sub(1);
     let has_unterminated_tail = !content.ends_with('\n');
+    let mut skipped_incomplete = false;
 
     for (index, raw) in content.lines().enumerate() {
+        let line = start_line as usize + index;
         let raw = raw.trim();
         if raw.is_empty() {
             continue;
@@ -1715,6 +2185,7 @@ fn parse_codex_file_mode(
                     && index == last_line_index
                     && error.classify() == serde_json::error::Category::Eof =>
             {
+                skipped_incomplete = true;
                 break;
             }
             Err(error) => {
@@ -1722,7 +2193,7 @@ fn parse_codex_file_mode(
                     path: path.to_string_lossy().to_string(),
                     message: format!("JSON 无效：{error}"),
                     event_type: Some("json_line".to_string()),
-                    line: Some((index + 1) as u64),
+                    line: Some((line + 1) as u64),
                 });
             }
         };
@@ -1742,7 +2213,7 @@ fn parse_codex_file_mode(
                 project = first_text(payload, &["cwd"]);
                 title = first_text(payload, &["title", "name"]);
                 events.push(semantic_event(
-                    index,
+                    line,
                     EventKind::SystemStatus,
                     &timestamp,
                     None,
@@ -1760,7 +2231,7 @@ fn parse_codex_file_mode(
                 let next_model = first_text(payload, &["model"]);
                 if !next_model.is_empty() && next_model != model {
                     events.push(semantic_event(
-                        index,
+                        line,
                         EventKind::ModelChange,
                         &timestamp,
                         None,
@@ -1774,10 +2245,10 @@ fn parse_codex_file_mode(
             "response_item" => {
                 flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
                 if let Some(message) = response_message(payload, &timestamp) {
-                    events.push(message_event(index, &message, payload.clone()));
+                    events.push(message_event(line, &message, payload.clone()));
                     response_messages.push(message);
                 } else if let Some(event) =
-                    response_semantic_event(index, &timestamp, payload, include_deferred_content)
+                    response_semantic_event(line, &timestamp, payload, include_deferred_content)
                 {
                     events.push(event);
                 }
@@ -1787,7 +2258,7 @@ fn parse_codex_file_mode(
                 match event_kind {
                     "agent_message_delta" => append_message_delta(
                         &mut pending_delta,
-                        index,
+                        line,
                         &timestamp,
                         "assistant",
                         payload,
@@ -1796,11 +2267,11 @@ fn parse_codex_file_mode(
                     _ => {
                         flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
                         if let Some(message) = event_message(payload, &timestamp) {
-                            events.push(message_event(index, &message, payload.clone()));
+                            events.push(message_event(line, &message, payload.clone()));
                             event_messages.push(message);
                         } else {
                             events.push(event_msg_semantic_event(
-                                index, &timestamp, event_kind, payload,
+                                line, &timestamp, event_kind, payload,
                             ));
                         }
                     }
@@ -1808,7 +2279,7 @@ fn parse_codex_file_mode(
             }
             _ => {
                 flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                events.push(unadapted_event(index, &timestamp, kind, value.clone()));
+                events.push(unadapted_event(line, &timestamp, kind, value.clone()));
             }
         }
     }
@@ -1864,11 +2335,26 @@ fn parse_codex_file_mode(
         file_available: true,
         ..Default::default()
     };
+    let (consumed_bytes, consumed_lines) = if skipped_incomplete {
+        match content.rfind('\n') {
+            Some(pos) => (
+                (pos + 1) as i64,
+                i64::from(next_line_index(&content[..=pos])),
+            ),
+            None => (0, 0),
+        }
+    } else {
+        (content.len() as i64, i64::from(next_line_index(content)))
+    };
     Ok(ParsedConversation {
         session,
         messages,
         events,
         is_top_level: true,
+        index_cursor: Some(FileIndexCursor {
+            byte_offset: start_byte as i64 + consumed_bytes,
+            line: i64::from(start_line) + consumed_lines,
+        }),
     })
 }
 
@@ -2107,6 +2593,7 @@ fn finish_source_conversation(
         messages,
         events,
         is_top_level,
+        index_cursor: None,
     })
 }
 
@@ -2280,6 +2767,7 @@ fn merge_parsed_conversations(mut parsed_files: Vec<ParsedConversation>) -> Pars
         messages,
         events,
         is_top_level,
+        index_cursor: None,
     }
 }
 
@@ -3905,17 +4393,20 @@ fn load_cached_fingerprints(
         .prepare(
             r#"
         SELECT DISTINCT session_id, source_file_mtime_ns, source_file_size, adapter_version,
-                        source_revision
+                        source_revision, indexed_byte_offset, indexed_line, has_live_generation
         FROM (
             SELECT files.session_id, files.source_file_mtime_ns, files.source_file_size,
-                   files.adapter_version, files.source_revision
+                   files.adapter_version, files.source_revision,
+                   files.indexed_byte_offset, files.indexed_line,
+                   CASE WHEN sessions.event_index_generation IS NULL THEN 0 ELSE 1 END
+                     AS has_live_generation
             FROM conversation_session_files AS files
             JOIN conversation_sessions AS sessions
               ON sessions.source = files.source AND sessions.session_id = files.session_id
             WHERE files.source = ?1 AND files.source_file = ?2 AND sessions.file_available = 1
             UNION ALL
             SELECT session_id, source_file_mtime_ns, source_file_size, adapter_version,
-                   source_revision
+                   source_revision, 0, 0, 0
             FROM conversation_sessions
             WHERE source = ?1 AND source_file = ?2 AND file_available = 1
         )
@@ -3932,6 +4423,9 @@ fn load_cached_fingerprints(
                     source_file_size: row.get(2)?,
                     adapter_version: row.get(3)?,
                     source_revision: row.get(4)?,
+                    indexed_byte_offset: row.get(5)?,
+                    indexed_line: row.get(6)?,
+                    has_live_generation: row.get::<_, i64>(7)? != 0,
                 })
             },
         )

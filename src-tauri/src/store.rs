@@ -227,6 +227,9 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             source_file_size INTEGER NOT NULL DEFAULT 0,
             adapter_version INTEGER NOT NULL DEFAULT 0,
             source_revision TEXT NOT NULL DEFAULT '',
+            indexed_byte_offset INTEGER NOT NULL DEFAULT 0,
+            indexed_line INTEGER NOT NULL DEFAULT 0,
+            max_sequence INTEGER,
             PRIMARY KEY(source, session_id, source_file)
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_session_files_session
@@ -357,6 +360,24 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         "source_revision",
         "TEXT NOT NULL DEFAULT ''",
     )?;
+    ensure_column(
+        conn,
+        "conversation_session_files",
+        "indexed_byte_offset",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        conn,
+        "conversation_session_files",
+        "indexed_line",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        conn,
+        "conversation_session_files",
+        "max_sequence",
+        "INTEGER",
+    )?;
     migrate_conversation_session_files_key(conn)?;
     ensure_column(
         conn,
@@ -454,6 +475,9 @@ fn migrate_conversation_session_files_key(conn: &Connection) -> Result<(), Strin
             source_file_size INTEGER NOT NULL DEFAULT 0,
             adapter_version INTEGER NOT NULL DEFAULT 0,
             source_revision TEXT NOT NULL DEFAULT '',
+            indexed_byte_offset INTEGER NOT NULL DEFAULT 0,
+            indexed_line INTEGER NOT NULL DEFAULT 0,
+            max_sequence INTEGER,
             PRIMARY KEY(source, session_id, source_file)
         );
         INSERT OR IGNORE INTO conversation_session_files_v2(

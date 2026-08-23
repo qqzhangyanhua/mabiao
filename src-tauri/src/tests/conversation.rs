@@ -2017,7 +2017,7 @@ fn codex_conversation_parse_failure_preserves_metadata_and_reports_safe_location
     std::fs::write(
         &path,
         format!(
-            "{}\n{{\"secret\":\"{secret}\"",
+            "{}\n{{not-json \"secret\":\"{secret}\"}}\n",
             fixture("codex-conversation.jsonl").trim_end()
         ),
     )

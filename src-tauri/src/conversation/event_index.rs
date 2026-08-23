@@ -65,6 +65,130 @@ pub fn write_file_events(
     Ok(())
 }
 
+pub fn append_live_events(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+    events: &[ConversationEvent],
+) -> Result<u32, String> {
+    if live_index_would_rewind(conn, source, session_id, events)? {
+        return Err("新事件时间早于已有索引，需要整份重索引".to_string());
+    }
+    let Some(generation) = live_generation(conn, source.as_str(), session_id)? else {
+        return Err("会话还没有已发布的事件索引".to_string());
+    };
+    let mut next_sequence = max_sequence(conn, source.as_str(), session_id, generation)?
+        .map(|sequence| sequence + 1)
+        .unwrap_or(0);
+    let mut occurrences = identity_occurrences(conn, source.as_str(), session_id, generation)?;
+    let mut statement = conn
+        .prepare(
+            r#"
+            INSERT INTO conversation_events(
+                source, session_id, event_id, sequence, source_file, source_sequence, kind, actor,
+                name, occurred_at, occurred_at_sort, text, attachments_json, capability_status,
+                content_status, identity_hash, identity_occurrence, index_generation
+            ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
+            "#,
+        )
+        .map_err(|error| error.to_string())?;
+    for event in events {
+        let identity = identity_hash(event);
+        let occurrence = occurrences.entry(identity.clone()).or_insert(-1);
+        *occurrence += 1;
+        let attachments = serde_json::to_string(&event.attachments).map_err(|e| e.to_string())?;
+        statement
+            .execute(params![
+                source.as_str(),
+                session_id,
+                event.event_id,
+                next_sequence,
+                event.source_file,
+                event.source_sequence,
+                enum_token(event.kind)?,
+                event.actor.map(enum_token).transpose()?,
+                event.name,
+                event.occurred_at,
+                occurred_at_sort_key(&event.occurred_at),
+                event.text,
+                attachments,
+                enum_token(event.capability_status)?,
+                enum_token(event.content_status)?,
+                identity,
+                *occurrence,
+                generation,
+            ])
+            .map_err(|error| error.to_string())?;
+        next_sequence += 1;
+    }
+    Ok(next_sequence.saturating_sub(1))
+}
+
+fn max_sequence(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    generation: i64,
+) -> Result<Option<u32>, String> {
+    conn.query_row(
+        r#"
+        SELECT MAX(sequence) FROM conversation_events
+        WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+        "#,
+        params![source, session_id, generation],
+        |row| row.get::<_, Option<u32>>(0),
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn max_occurred_at(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    generation: i64,
+) -> Result<Option<String>, String> {
+    conn.query_row(
+        r#"
+        SELECT occurred_at FROM conversation_events
+        WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+          AND occurred_at IS NOT NULL
+        ORDER BY occurred_at_sort DESC
+        LIMIT 1
+        "#,
+        params![source, session_id, generation],
+        |row| row.get::<_, Option<String>>(0),
+    )
+    .optional()
+    .map(|value| value.flatten())
+    .map_err(|error| error.to_string())
+}
+
+fn identity_occurrences(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    generation: i64,
+) -> Result<BTreeMap<String, i64>, String> {
+    let mut statement = conn
+        .prepare(
+            r#"
+            SELECT identity_hash, MAX(identity_occurrence)
+            FROM conversation_events
+            WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+            GROUP BY identity_hash
+            "#,
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![source, session_id, generation], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(rows)
+}
+
 pub fn finalize_session_events(
     conn: &Connection,
     source: Source,
@@ -333,6 +457,22 @@ pub fn indexed_events_page(
             max_sequence,
         )?,
     })
+}
+
+pub fn live_index_would_rewind(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+    events: &[ConversationEvent],
+) -> Result<bool, String> {
+    let Some(generation) = live_generation(conn, source.as_str(), session_id)? else {
+        return Ok(false);
+    };
+    let max_occurred_at = max_occurred_at(conn, source.as_str(), session_id, generation)?;
+    Ok(super::incremental::new_events_precede_existing(
+        max_occurred_at.as_deref(),
+        events.iter().map(|event| event.occurred_at.clone()),
+    ))
 }
 
 fn live_generation(
