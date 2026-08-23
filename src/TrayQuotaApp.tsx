@@ -1,17 +1,24 @@
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { OfficialQuotaList } from "./components/OfficialQuotaPanel";
 import { useTheme } from "./hooks/useTheme";
 import { visibleOfficialQuotaRows } from "./lib/overviewLayout";
+import {
+  clampTrayQuotaWindowHeight,
+  TRAY_QUOTA_WIDTH,
+} from "./lib/trayQuotaLayout";
 import type { OfficialQuotaDto } from "./types";
 
 export default function TrayQuotaApp() {
   useTheme();
   const [quota, setQuota] = useState<OfficialQuotaDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [arrangeTick, setArrangeTick] = useState(0);
+  const panelRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     document.documentElement.classList.add("tray-popup");
@@ -54,13 +61,30 @@ export default function TrayQuotaApp() {
     };
   }, []);
 
-  const rows = quota ? visibleOfficialQuotaRows(quota.rows, quota.hidden_providers) : [];
+  const rows = useMemo(
+    () => (quota ? visibleOfficialQuotaRows(quota.rows, quota.hidden_providers) : []),
+    [quota],
+  );
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) {
+      return;
+    }
+    const height = clampTrayQuotaWindowHeight(panel.scrollHeight + 16);
+    void getCurrentWebviewWindow()
+      .setSize(new LogicalSize(TRAY_QUOTA_WIDTH, height))
+      .catch(() => undefined);
+  }, [rows, error, arrangeTick]);
 
   return (
     <div className="tray-quota-app">
-      <article className="panel official-quota-panel">
+      <article ref={panelRef} className="panel official-quota-panel">
         <div className="panel-head">
-          <h2>官方额度</h2>
+          <div className="official-quota-heading">
+            <h2>官方额度</h2>
+            <span className="muted official-quota-refresh-hint">拖动排序 · 点标题折叠</span>
+          </div>
         </div>
         {error ? (
           <EmptyState compact icon="clock" title="无法读取官方额度" hint={error} />
@@ -72,7 +96,13 @@ export default function TrayQuotaApp() {
             hint={quota ? "在主窗口「配置显示」里打开要看的账号" : "先显示上次缓存"}
           />
         ) : (
-          <OfficialQuotaList rows={rows} />
+          <OfficialQuotaList
+            rows={rows}
+            staleAfterMinutes={quota?.stale_after_minutes}
+            compactReset
+            arrangeable
+            onArrange={() => setArrangeTick((tick) => tick + 1)}
+          />
         )}
       </article>
     </div>

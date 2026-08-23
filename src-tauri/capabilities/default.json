@@ -3,5 +3,10 @@
   "identifier": "default",
   "description": "Default capability for the main window and tray quota popup",
   "windows": ["main", "tray-quota"],
-  "permissions": ["core:default", "notification:default", "core:window:allow-hide"]
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "core:window:allow-hide",
+    "core:window:allow-set-size"
+  ]
 }

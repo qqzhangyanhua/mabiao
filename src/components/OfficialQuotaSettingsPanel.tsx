@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { officialQuotaSettingsRefreshNote } from "../lib/officialQuotaDisplay";
 import type { OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
+import { QuotaFreshnessMark, useTickingNow } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
 
@@ -15,6 +17,7 @@ export function OfficialQuotaSettingsPanel({
 }) {
   const [hook, setHook] = useState<OfficialQuotaHookDto | null>(null);
   const [busy, setBusy] = useState<"idle" | "refresh" | "hook" | "alerts">("idle");
+  const nowMs = useTickingNow();
   const alertsEnabled = quota?.alerts_enabled ?? true;
 
   useEffect(() => {
@@ -72,6 +75,7 @@ export function OfficialQuotaSettingsPanel({
             Claude 通过 statusline 捕获本机官方百分比；Codex 问本机 app-server；Cursor 读取本机
             Cursor 客户端登录态打限额接口；Grok 读取本机 <code>~/.grok/auth.json</code> 打 CLI
             限额接口。已有 Claude statusLine 不会被覆盖。
+            {quota ? ` ${officialQuotaSettingsRefreshNote(quota.stale_after_minutes)}` : ""}
           </p>
         </div>
         <div className="row-actions">
@@ -86,17 +90,25 @@ export function OfficialQuotaSettingsPanel({
       {quota ? (
         <ul className="official-quota-status">
           {quota.rows.map((row) => (
-            <li key={row.provider}>
+            <li
+              key={row.provider}
+              className={
+                row.freshness === "official"
+                  ? "tone-ok"
+                  : row.freshness === "stale"
+                    ? "tone-warn"
+                    : "tone-idle"
+              }
+            >
               <strong>
                 <SourceLabel source={row.provider} fallback={row.application} size={14} />
               </strong>
-              <span>
-                {row.freshness === "official"
-                  ? "官方"
-                  : row.freshness === "stale"
-                    ? "已过期"
-                    : "暂无"}
-              </span>
+              <QuotaFreshnessMark
+                freshness={row.freshness}
+                capturedAt={row.captured_at}
+                staleAfterMinutes={quota.stale_after_minutes}
+                nowMs={nowMs}
+              />
               <em>
                 {row.error ??
                   (row.windows.length > 0 ? `${row.windows.length} 个窗口` : "等待捕获")}

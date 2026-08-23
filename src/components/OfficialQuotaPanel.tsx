@@ -1,18 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
-import { memo, useState } from "react";
+import { memo, useEffect, useState, type PointerEvent } from "react";
+import { useTrayQuotaArrange } from "../hooks/useTrayQuotaArrange";
 import { Icon } from "../icons";
-import { formatClock } from "../lib/format";
+import { formatClock, formatWindowClock } from "../lib/format";
+import {
+  OFFICIAL_QUOTA_FRESHNESS_STATUS,
+  officialQuotaAgeLabel,
+  officialQuotaFreshnessTitle,
+  officialQuotaRefreshHint,
+} from "../lib/officialQuotaDisplay";
+import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
 import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 import type { OfficialQuotaListProps } from "./type";
 import { Button } from "./ui/Button";
 
-const FRESHNESS_LABEL: Record<OfficialQuotaFreshness, string> = {
-  official: "官方",
-  stale: "已过期",
-  unavailable: "暂无",
-};
+const DEFAULT_STALE_AFTER_MINUTES = 10;
+const AGE_TICK_MS = 30_000;
 
 export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   data,
@@ -24,7 +29,20 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   onError: (error: unknown) => void;
 }) {
   const rows = data?.rows ?? [];
+  const staleAfterMinutes = data?.stale_after_minutes ?? DEFAULT_STALE_AFTER_MINUTES;
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (staleAfterMinutes <= 0) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      void invoke<OfficialQuotaDto>("refresh_official_quota")
+        .then(onQuota)
+        .catch(() => undefined);
+    }, staleAfterMinutes * 60_000);
+    return () => window.clearInterval(id);
+  }, [onQuota, staleAfterMinutes]);
 
   async function refreshProvider(provider: string) {
     setBusyProvider(provider);
@@ -40,24 +58,27 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   return (
     <article className="panel official-quota-panel">
       <div className="panel-head">
-        <h2>官方额度</h2>
-        <span className="muted">
-          账号级订阅限额，与上方本机估计窗不是同一口径
-          {data ? ` · ${data.stale_after_minutes} 分钟后标为过期` : ""}
-        </span>
+        <div className="official-quota-heading">
+          <h2>官方额度</h2>
+          <span className="muted">账号级订阅限额，与上方本机估计窗不是同一口径</span>
+          {data ? (
+            <span className="muted official-quota-refresh-hint">
+              {officialQuotaRefreshHint(staleAfterMinutes)}
+            </span>
+          ) : null}
+        </div>
       </div>
       {rows.length === 0 ? (
         <EmptyState
           compact
           icon="clock"
           title={data ? "所选账号均已隐藏" : "正在读取官方额度…"}
-          hint={
-            data ? "在「配置显示」里打开要看的账号" : "先显示上次缓存，再后台刷新"
-          }
+          hint={data ? "在「配置显示」里打开要看的账号" : "先显示上次缓存，再后台刷新"}
         />
       ) : (
         <OfficialQuotaList
           rows={rows}
+          staleAfterMinutes={staleAfterMinutes}
           busyProvider={busyProvider}
           onRefresh={(provider) => void refreshProvider(provider)}
         />
@@ -66,23 +87,167 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   );
 });
 
-export function OfficialQuotaList({ rows, busyProvider, onRefresh }: OfficialQuotaListProps) {
+export function OfficialQuotaList({
+  rows,
+  staleAfterMinutes = DEFAULT_STALE_AFTER_MINUTES,
+  compactReset = false,
+  arrangeable = false,
+  busyProvider,
+  onRefresh,
+  onArrange,
+}: OfficialQuotaListProps) {
+  const nowMs = useTickingNow();
+  const arrange = useTrayQuotaArrange(rows, arrangeable, onArrange);
   return (
-    <ul className="official-quota-list">
-      {rows.map((row) => (
+    <ul
+      className={
+        arrangeable
+          ? arrange.dragging
+            ? "official-quota-list is-arrangeable is-reordering"
+            : "official-quota-list is-arrangeable"
+          : "official-quota-list"
+      }
+    >
+      {arrange.visible.map((row) => (
         <QuotaRow
           key={row.provider}
           row={row}
+          staleAfterMinutes={staleAfterMinutes}
+          compactReset={compactReset}
+          nowMs={nowMs}
           busy={busyProvider === row.provider}
           disabled={busyProvider != null}
           onRefresh={onRefresh ? () => onRefresh(row.provider) : undefined}
+          arrangeable={arrangeable}
+          open={!arrangeable || !arrange.isCollapsed(row.provider)}
+          dragging={arrange.dragging === row.provider}
+          dropTarget={arrange.dropTarget === row.provider}
+          onToggle={() => arrange.toggle(row.provider)}
+          onPointerDown={(event) => arrange.beginDrag(row.provider, event.clientY)}
         />
       ))}
     </ul>
   );
 }
 
+export function QuotaFreshnessMark({
+  freshness,
+  capturedAt,
+  staleAfterMinutes,
+  nowMs,
+}: {
+  freshness: OfficialQuotaFreshness;
+  capturedAt: string | null;
+  staleAfterMinutes: number;
+  nowMs: number;
+}) {
+  const age = officialQuotaAgeLabel(capturedAt, nowMs);
+  return (
+    <em
+      className="official-quota-freshness"
+      title={officialQuotaFreshnessTitle(freshness, capturedAt, staleAfterMinutes)}
+    >
+      <span>{OFFICIAL_QUOTA_FRESHNESS_STATUS[freshness]}</span>
+      {age ? <span className="official-quota-age">{age}</span> : null}
+    </em>
+  );
+}
+
 function QuotaRow({
+  row,
+  staleAfterMinutes,
+  compactReset,
+  nowMs,
+  busy,
+  disabled,
+  onRefresh,
+  arrangeable,
+  open,
+  dragging,
+  dropTarget,
+  onToggle,
+  onPointerDown,
+}: {
+  row: OfficialQuotaRow;
+  staleAfterMinutes: number;
+  compactReset: boolean;
+  nowMs: number;
+  busy: boolean;
+  disabled: boolean;
+  onRefresh?: () => void;
+  arrangeable: boolean;
+  open: boolean;
+  dragging: boolean;
+  dropTarget: boolean;
+  onToggle: () => void;
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+}) {
+  const tone = row.freshness === "official" ? "ok" : row.freshness === "stale" ? "warn" : "idle";
+  const rowClass = [
+    "official-quota-row",
+    `tone-${tone}`,
+    open ? "is-open" : "is-collapsed",
+    dragging ? "is-dragging" : "",
+    dropTarget ? "is-drop-target" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <li className={rowClass} data-quota-provider={row.provider}>
+      <div
+        className="official-quota-toolbar"
+        onPointerDown={
+          arrangeable
+            ? (event) => {
+                if (event.button !== 0) {
+                  return;
+                }
+                onPointerDown(event);
+              }
+            : undefined
+        }
+      >
+        {arrangeable ? (
+          <span className="official-quota-grip" title="拖动排序" aria-hidden="true" />
+        ) : null}
+        {arrangeable ? (
+          <button
+            type="button"
+            className="official-quota-head official-quota-head-toggle"
+            aria-expanded={open}
+            onClick={onToggle}
+          >
+            <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
+            {open ? (
+              <QuotaFreshnessMark
+                freshness={row.freshness}
+                capturedAt={row.captured_at}
+                staleAfterMinutes={staleAfterMinutes}
+                nowMs={nowMs}
+              />
+            ) : (
+              <em className="official-quota-summary">{trayQuotaRowSummary(row)}</em>
+            )}
+            <Icon name="chevron" size={12} className="official-quota-caret" />
+          </button>
+        ) : (
+          <div className="official-quota-head">
+            <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
+            <QuotaFreshnessMark
+              freshness={row.freshness}
+              capturedAt={row.captured_at}
+              staleAfterMinutes={staleAfterMinutes}
+              nowMs={nowMs}
+            />
+          </div>
+        )}
+      </div>
+      {open ? <QuotaRowBody row={row} compactReset={compactReset} /> : null}
+    </li>
+  );
+}
+
+function QuotaRowTitle({
   row,
   busy,
   disabled,
@@ -93,51 +258,65 @@ function QuotaRow({
   disabled: boolean;
   onRefresh?: () => void;
 }) {
-  const tone = row.freshness === "official" ? "ok" : row.freshness === "stale" ? "warn" : "idle";
   return (
-    <li className={`official-quota-row tone-${tone}`}>
-      <div className="official-quota-head">
-        <div className="official-quota-title">
-          <strong>
-            <SourceLabel source={row.provider} fallback={row.application} />
-          </strong>
-          {onRefresh ? (
-            <Button
-              variant="icon"
-              className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
-              disabled={disabled}
-              onClick={onRefresh}
-              title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
-              aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
-            >
-              <Icon name="refresh" size={13} />
-            </Button>
-          ) : null}
-        </div>
-        <em>{FRESHNESS_LABEL[row.freshness]}</em>
-      </div>
-      {row.windows.length === 0 ? (
-        <span className="muted">{row.error ?? "尚未捕获官方额度"}</span>
-      ) : (
-        <div className="official-quota-windows">
-          {row.windows.map((window) => {
-            const percent = window.used_percent;
-            return (
-              <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
-                <span>{window.label}</span>
-                <strong>{percent == null ? "—" : `${percent.toFixed(0)}%`}</strong>
-                <div className="billing-bar" aria-hidden="true">
-                  <i style={{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%` }} />
-                </div>
-                <span className="muted">
-                  {window.resets_at ? `重置 ${formatClock(window.resets_at)}` : "重置时间未知"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {row.error && row.windows.length > 0 ? <span className="muted">{row.error}</span> : null}
-    </li>
+    <div className="official-quota-title">
+      <strong>
+        <SourceLabel source={row.provider} fallback={row.application} />
+      </strong>
+      {onRefresh ? (
+        <Button
+          variant="icon"
+          className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
+          disabled={disabled}
+          onClick={onRefresh}
+          title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
+          aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
+        >
+          <Icon name="refresh" size={13} />
+        </Button>
+      ) : null}
+    </div>
   );
+}
+
+function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactReset: boolean }) {
+  if (row.windows.length === 0) {
+    return <span className="muted">{row.error ?? "尚未捕获官方额度"}</span>;
+  }
+  return (
+    <>
+      <div className="official-quota-windows">
+        {row.windows.map((window) => {
+          const percent = window.used_percent;
+          return (
+            <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
+              <span title={window.label}>{window.label}</span>
+              <strong>{percent == null ? "—" : `${percent.toFixed(0)}%`}</strong>
+              <div className="billing-bar" aria-hidden="true">
+                <i style={{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%` }} />
+              </div>
+              <span
+                className="muted"
+                title={window.resets_at ? formatClock(window.resets_at) : undefined}
+              >
+                {window.resets_at
+                  ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
+                  : "重置时间未知"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {row.error ? <span className="muted">{row.error}</span> : null}
+    </>
+  );
+}
+
+export function useTickingNow(intervalMs = AGE_TICK_MS): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return nowMs;
 }

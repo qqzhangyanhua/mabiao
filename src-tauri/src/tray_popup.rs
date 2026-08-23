@@ -78,7 +78,8 @@ pub fn popup_logical_size(row_count: usize, window_count: usize) -> (f64, f64) {
     let body = if row_count == 0 {
         72.0
     } else {
-        row_count as f64 * 40.0 + window_count as f64 * 26.0 + 12.0
+        // 托盘额度行改成两行（标签+百分比 / 进度条+重置），单行 26px 会裁掉第二行。
+        row_count as f64 * 36.0 + window_count as f64 * 40.0 + 12.0
     };
     let height = (16.0 + 48.0 + body).clamp(MIN_HEIGHT, MAX_HEIGHT);
     (WIDTH, height)

@@ -64,8 +64,12 @@ export type ConversationOpenRequest = {
 
 export type OfficialQuotaListProps = {
   rows: OfficialQuotaRow[];
+  staleAfterMinutes?: number;
+  compactReset?: boolean;
+  arrangeable?: boolean;
   busyProvider?: string | null;
   onRefresh?: (provider: string) => void;
+  onArrange?: () => void;
 };
 
 export type ConversationDetailHeadProps = {

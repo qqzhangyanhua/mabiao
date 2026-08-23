@@ -125,12 +125,12 @@ export function shortId(id: string): string {
   return id.length > 12 ? `${id.slice(0, 8)}…` : id;
 }
 
-export function relativeTime(iso: string): string {
+export function relativeTime(iso: string, now = Date.now()): string {
   const t = Date.parse(iso);
   if (Number.isNaN(t)) {
     return iso;
   }
-  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+  const mins = Math.max(0, Math.floor((now - t) / 60000));
   if (mins < 1) {
     return "刚刚";
   }

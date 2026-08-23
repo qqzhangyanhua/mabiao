@@ -165,6 +165,13 @@ describe("relativeTime", () => {
   it("returns the input as-is for unparsable dates", () => {
     expect(relativeTime("not-a-date")).toBe("not-a-date");
   });
+
+  it("computes age against an explicit now", () => {
+    const now = Date.parse("2026-08-23T07:20:00.000Z");
+    expect(relativeTime("2026-08-23T07:20:20.000Z", now)).toBe("刚刚");
+    expect(relativeTime("2026-08-23T07:17:00.000Z", now)).toBe("3 分钟前");
+    expect(relativeTime("2026-08-23T05:20:00.000Z", now)).toBe("2 小时前");
+  });
 });
 
 describe("formatBytes", () => {
