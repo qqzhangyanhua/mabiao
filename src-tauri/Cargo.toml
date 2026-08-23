@@ -3,6 +3,7 @@ name = "mabiao"
 version = "0.1.1"
 description = "码表：本机 AI 用量统计"
 authors = ["zhangyanhua"]
+license = "MIT"
 edition = "2021"
 default-run = "mabiao"
 
