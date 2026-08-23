@@ -1,0 +1,54 @@
+src/types.ts
+  s_36e692fc444938::t_9a20ff11adea05 110
+src/TrayQuotaApp.tsx
+  s_36e692fc444938::t_b7f7860f82fbcc 11,155
+src/components/Overview.tsx
+  s_36e692fc444938::t_4d5f6f8aea34ea 11,152
+src-tauri/src/official_quota/detect.rs
+  s_36e692fc444938::t_f5de8fe6cdad06 18-19,21,23-25,41,43-45,47-48
+  s_36e692fc444938::t_bc97d10b2dca01 9-10,42,46
+src-tauri/src/tests/official_quota.rs
+  s_36e692fc444938::t_f4b8a82064bb06 308,311,317-331,337-350
+  s_36e692fc444938::t_6d225eadb9c219 332-336
+  s_36e692fc444938::t_1d144074b060da 351
+src/lib/officialQuotaDisplay.test.ts
+  s_36e692fc444938::t_d9ff47f545f5f6 2,6,10,60-90
+  s_3a495c199413a9::t_10f4d1bd24aadc 91
+src-tauri/src/domain.rs
+  s_36e692fc444938::t_e34ffd3f803323 276
+src-tauri/src/official_quota/mod.rs
+  s_36e692fc444938::t_a7b70b9f0ab586 92
+src/components/OfficialQuotaPanel.tsx
+  s_36e692fc444938::t_d9d57d5be23092 9,12,75
+  s_36e692fc444938::t_8dac99d9117c91 34,84
+  s_36e692fc444938::t_6ab3e5a5fd0db2 77-83,85
+src/lib/officialQuotaDisplay.ts
+  s_36e692fc444938::t_e2d441a3d2df39 1,3,50-71
+src/components/OfficialQuotaSettingsPanel.tsx
+  s_36e692fc444938::t_f5f3c441ec2951 25,124
+  s_36e692fc444938::t_8601e066994b8f 3-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "547d2cf282d797125895bc4a72cfeec65c0c3c92",
+  "prompts": {},
+  "sessions": {
+    "s_36e692fc444938": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a02f50-f997-75b1-9b42-eacd2d8c98be",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_3a495c199413a9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "dc1dcb1c-7fd3-4c0a-b03c-d502da9e666f",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
