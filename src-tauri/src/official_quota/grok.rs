@@ -23,19 +23,44 @@ const DEFAULT_GROK_CLI_VERSION: &str = "1.0.5";
 pub struct GrokSession {
     pub token: String,
     pub user_id: Option<String>,
+    /// 本地按 `expires_at` 判定是否已过期——过期了也保留会话，交给
+    /// `fetch_rate_limits` 先现刷再用，不再直接报错让用户手动 `grok login`。
+    pub expired: bool,
+    pub refresh: Option<RefreshCredentials>,
+}
+
+/// OIDC 静默刷新要用的三件套，均来自 `auth.json` 同一条目，不落盘、只在内存里现刷现用。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefreshCredentials {
+    pub refresh_token: String,
+    pub oidc_issuer: String,
+    pub client_id: String,
 }
 
 pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
     let session = load_session()?;
-    let user_id = resolve_user_id(&session)?;
-    let mut windows = match request_json(&session.token, Some(&user_id), BILLING_CREDITS_URL) {
+    let mut token = ensure_fresh_token(&session)?;
+    let mut user_id = resolve_user_id(&session, &token)?;
+    let mut credits_result = request_json(&token, Some(&user_id), BILLING_CREDITS_URL);
+    // access token 比本地记的 expires_at 更早失效（时钟偏差、服务端提前吊销）时，
+    // 现刷一次再重试一遍，不要直接把「已过期」甩给用户。
+    if let Err(error) = &credits_result {
+        if is_expired_error(error) {
+            if let Some(refresh) = &session.refresh {
+                token = refresh_access_token(refresh)?;
+                user_id = resolve_user_id(&session, &token)?;
+                credits_result = request_json(&token, Some(&user_id), BILLING_CREDITS_URL);
+            }
+        }
+    }
+    let mut windows = match credits_result {
         Ok(raw) => parse_credits(&raw)?,
         Err(error) if super::grok_grpc::should_fallback_to_grpc(&error) => {
-            super::grok_grpc::fetch_credits(&session.token, Some(&user_id), &grok_client_version())?
+            super::grok_grpc::fetch_credits(&token, Some(&user_id), &grok_client_version())?
         }
         Err(error) => return Err(error),
     };
-    if let Ok(monthly_raw) = request_json(&session.token, Some(&user_id), BILLING_MONTHLY_URL) {
+    if let Ok(monthly_raw) = request_json(&token, Some(&user_id), BILLING_MONTHLY_URL) {
         if let Ok(monthly) = parse_monthly(&monthly_raw) {
             merge_windows(&mut windows, monthly);
         }
@@ -44,6 +69,80 @@ pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String>
         return Err("Grok 限额响应里没有可用的已用百分比".to_string());
     }
     Ok((windows, Utc::now().to_rfc3339()))
+}
+
+/// 本地已知过期时提前现刷，省一次注定 401 的往返；没有刷新凭证才把过期错误原样交回。
+fn ensure_fresh_token(session: &GrokSession) -> Result<String, String> {
+    if !session.expired {
+        return Ok(session.token.clone());
+    }
+    let refresh = session
+        .refresh
+        .as_ref()
+        .ok_or_else(|| "Grok 登录已过期，请重新运行 grok login".to_string())?;
+    refresh_access_token(refresh)
+}
+
+fn is_expired_error(error: &str) -> bool {
+    error == "Grok 登录已过期，请重新运行 grok login"
+}
+
+/// 用 `auth.json` 里的 `refresh_token` 换一个新 access token；不写回 `auth.json`——
+/// 真正的 grok CLI 才是这个文件的所有者（见 ADR 0010），我们只借 token 用一次。
+fn refresh_access_token(refresh: &RefreshCredentials) -> Result<String, String> {
+    let token_endpoint = discover_token_endpoint(&refresh.oidc_issuer)?;
+    let response = crate::net::agent_with_timeout(TIMEOUT)
+        .post(&token_endpoint)
+        .set("Accept", "application/json")
+        .send_form(&[
+            ("grant_type", "refresh_token"),
+            ("client_id", refresh.client_id.as_str()),
+            ("refresh_token", refresh.refresh_token.as_str()),
+        ]);
+    match response {
+        Ok(ok) => {
+            let body = ok
+                .into_string()
+                .map_err(|e| format!("读取 Grok 刷新响应失败：{e}"))?;
+            parse_refreshed_access_token(&body)
+        }
+        Err(ureq::Error::Status(401 | 403, _)) => {
+            Err("Grok 登录已过期，请重新运行 grok login".to_string())
+        }
+        Err(ureq::Error::Status(code, response)) => {
+            let body = response.into_string().unwrap_or_default();
+            Err(format!(
+                "刷新 Grok 登录失败：{}",
+                status_detail(code, &body)
+            ))
+        }
+        Err(_) => Err("无法连接 Grok 登录服务，请检查网络后重试".to_string()),
+    }
+}
+
+/// OIDC 发现端点动态给出 token_endpoint，不硬编码——发行方轮换网关时能跟上。
+fn discover_token_endpoint(issuer: &str) -> Result<String, String> {
+    let url = format!(
+        "{}/.well-known/openid-configuration",
+        issuer.trim_end_matches('/')
+    );
+    match crate::net::agent_with_timeout(TIMEOUT).get(&url).call() {
+        Ok(response) => {
+            let raw = response
+                .into_string()
+                .map_err(|e| format!("读取 Grok 登录配置失败：{e}"))?;
+            let value = parse_object(&raw, "Grok 登录配置")?;
+            string_field(&value, "token_endpoint")
+                .ok_or_else(|| "Grok 登录配置里没有 token_endpoint".to_string())
+        }
+        Err(_) => Err("无法连接 Grok 登录服务，请检查网络后重试".to_string()),
+    }
+}
+
+pub fn parse_refreshed_access_token(raw: &str) -> Result<String, String> {
+    let value = parse_object(raw, "Grok 刷新响应")?;
+    string_field(&value, "access_token")
+        .ok_or_else(|| "Grok 刷新响应里没有 access_token".to_string())
 }
 
 /// 解析 `GET /v1/billing?format=credits`：周额度池 + Grok Build 分项 + 按需。
@@ -130,6 +229,11 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
     let mut preferred = None;
     let mut legacy = None;
     let mut other = None;
+    // 过期但带 refresh_token 的会话：找不到更新的可用会话时兜底，交给
+    // `fetch_rate_limits` 现刷，而不是直接要用户手动 `grok login`。
+    let mut preferred_refreshable = None;
+    let mut legacy_refreshable = None;
+    let mut other_refreshable = None;
 
     for (scope, node) in map {
         if !node.is_object() {
@@ -144,6 +248,24 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
         saw_any = true;
         if is_expired(node, now) {
             expired_only = true;
+            // API key 条目没有会话刷新的概念，仍旧原样跳过。
+            if !is_api_key_entry(scope, node) {
+                if let Some(refresh) = refresh_of(node) {
+                    let session = GrokSession {
+                        token,
+                        user_id: user_id_of(node),
+                        expired: true,
+                        refresh: Some(refresh),
+                    };
+                    if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
+                        preferred_refreshable.get_or_insert(session);
+                    } else if scope == LEGACY_SCOPE {
+                        legacy_refreshable.get_or_insert(session);
+                    } else {
+                        other_refreshable.get_or_insert(session);
+                    }
+                }
+            }
             continue;
         }
         if is_api_key_entry(scope, node) {
@@ -153,6 +275,8 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
         let session = GrokSession {
             token,
             user_id: user_id_of(node),
+            expired: false,
+            refresh: refresh_of(node),
         };
         if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
             preferred = Some(session);
@@ -168,6 +292,12 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
     if let Some(session) = preferred.or(legacy).or(other) {
         return Ok(session);
     }
+    if let Some(session) = preferred_refreshable
+        .or(legacy_refreshable)
+        .or(other_refreshable)
+    {
+        return Ok(session);
+    }
     if saw_any && saw_api_key_only && !expired_only {
         return Err(
             "Grok 官方额度需要 grok login 的会话登录，API key 无法查询订阅限额".to_string(),
@@ -177,6 +307,15 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
         return Err("Grok 登录已过期，请重新运行 grok login".to_string());
     }
     Err("Grok 登录凭证无效，请重新运行 grok login".to_string())
+}
+
+/// 从会话条目里取 OIDC 静默刷新三件套；缺任一项就当作不可自动刷新。
+fn refresh_of(node: &Value) -> Option<RefreshCredentials> {
+    Some(RefreshCredentials {
+        refresh_token: string_field(node, "refresh_token")?,
+        oidc_issuer: string_field(node, "oidc_issuer")?,
+        client_id: string_field(node, "oidc_client_id")?,
+    })
 }
 
 pub fn parse_user_id_response(raw: &str) -> Result<String, String> {
@@ -195,7 +334,7 @@ fn load_session() -> Result<GrokSession, String> {
     parse_auth_json(&raw, Utc::now())
 }
 
-fn resolve_user_id(session: &GrokSession) -> Result<String, String> {
+fn resolve_user_id(session: &GrokSession, token: &str) -> Result<String, String> {
     if let Some(user_id) = session
         .user_id
         .as_deref()
@@ -204,7 +343,7 @@ fn resolve_user_id(session: &GrokSession) -> Result<String, String> {
     {
         return Ok(user_id.to_string());
     }
-    let raw = request_json(&session.token, None, USER_URL)?;
+    let raw = request_json(token, None, USER_URL)?;
     parse_user_id_response(&raw)
 }
 

@@ -178,6 +178,86 @@ fn grok_auth_rejects_api_key_and_weblogin() {
 }
 
 #[test]
+fn grok_auth_keeps_expired_session_with_refresh_credentials() {
+    // 过期但带 refresh_token/oidc_issuer/oidc_client_id 的会话不该直接报错，
+    // 得留给 fetch_rate_limits 现刷——否则就要用户手动跑一次 grok CLI 才能续上。
+    let now = chrono::DateTime::parse_from_rfc3339("2026-08-23T09:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let raw = r#"{
+        "https://auth.x.ai::openid": {
+            "key": "stale-token",
+            "auth_mode": "oidc",
+            "expires_at": "2026-08-23T08:00:00+00:00",
+            "refresh_token": "refresh-abc",
+            "oidc_issuer": "https://auth.x.ai",
+            "oidc_client_id": "client-123"
+        }
+    }"#;
+    let session = official_quota::grok::parse_auth_json(raw, now).unwrap();
+    assert_eq!(session.token, "stale-token");
+    assert!(session.expired);
+    let refresh = session.refresh.expect("refresh credentials should be kept");
+    assert_eq!(refresh.refresh_token, "refresh-abc");
+    assert_eq!(refresh.oidc_issuer, "https://auth.x.ai");
+    assert_eq!(refresh.client_id, "client-123");
+}
+
+#[test]
+fn grok_auth_prefers_valid_session_over_expired_refreshable() {
+    let now = chrono::DateTime::parse_from_rfc3339("2026-08-23T09:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let raw = r#"{
+        "https://accounts.x.ai/sign-in": {
+            "key": "legacy-token",
+            "auth_mode": "oidc",
+            "expires_at": "2026-08-23T08:00:00+00:00",
+            "refresh_token": "refresh-abc",
+            "oidc_issuer": "https://auth.x.ai",
+            "oidc_client_id": "client-123"
+        },
+        "https://auth.x.ai::openid": {
+            "key": "fresh-token",
+            "auth_mode": "oidc",
+            "expires_at": "2026-08-23T10:00:00+00:00"
+        }
+    }"#;
+    let session = official_quota::grok::parse_auth_json(raw, now).unwrap();
+    assert_eq!(session.token, "fresh-token");
+    assert!(!session.expired);
+}
+
+#[test]
+fn grok_auth_still_reports_expired_without_refresh_token() {
+    // 没有 refresh_token 的过期会话（比如老版本 CLI 写的凭证）保持原来的报错行为。
+    let now = chrono::DateTime::parse_from_rfc3339("2026-08-23T09:00:00+00:00")
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let raw = r#"{
+        "https://auth.x.ai::openid": {
+            "key": "stale-token",
+            "auth_mode": "oidc",
+            "expires_at": "2026-08-23T08:00:00+00:00"
+        }
+    }"#;
+    let error = official_quota::grok::parse_auth_json(raw, now).unwrap_err();
+    assert!(error.contains("已过期"));
+}
+
+#[test]
+fn grok_parses_refreshed_access_token_response() {
+    assert_eq!(
+        official_quota::grok::parse_refreshed_access_token(
+            r#"{"access_token":"new-token","expires_in":3600}"#
+        )
+        .unwrap(),
+        "new-token"
+    );
+    assert!(official_quota::grok::parse_refreshed_access_token(r#"{"expires_in":3600}"#).is_err());
+}
+
+#[test]
 fn grok_auth_reads_user_id_from_session() {
     let now = chrono::DateTime::parse_from_rfc3339("2026-08-19T00:00:00+00:00")
         .unwrap()
