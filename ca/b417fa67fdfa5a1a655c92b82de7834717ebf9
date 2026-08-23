@@ -1,0 +1,46 @@
+src-tauri/src/tray.rs
+  s_527873e218ccc7::t_f5f264f89b86fa 196
+  s_527873e218ccc7::t_69a353573a8910 9,140,142-160
+src-tauri/src/store.rs
+  s_527873e218ccc7::t_ed47ee778fb5d9 52-57
+src-tauri/src/lib.rs
+  s_527873e218ccc7::t_0118db044076f4 114
+  s_527873e218ccc7::t_72a3ce3240ffa8 104-113,115-117
+  s_38eeba3b9b07d9::t_8ea0d9fd4e48fe 456,458
+  s_38eeba3b9b07d9::t_f46f3415b47572 17
+  s_527873e218ccc7::t_82079cea7ff037 212,457,1283-1286,1351-1358,1360-1362
+src-tauri/src/memory.rs
+  s_38eeba3b9b07d9::t_7be34364e5be9f 1-2,6,13,18-19,23-24,26,29,31-32
+  s_38eeba3b9b07d9::t_15d6adae17bc34 3-5,7-12,14-17,20-22,25,27-28,30
+src-tauri/src/tests/store.rs
+  s_527873e218ccc7::t_a4790cbb7d1e35 240-252
+  s_527873e218ccc7::t_c2e41018d6c906 239
+src-tauri/Cargo.toml
+  s_38eeba3b9b07d9::t_2ccc29dc210462 44
+src-tauri/Cargo.lock
+  s_38eeba3b9b07d9::t_d4218a6475067b 2074-2082,2149,2203-2211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "cab417fa67fdfa5a1a655c92b82de7834717ebf9",
+  "prompts": {},
+  "sessions": {
+    "s_38eeba3b9b07d9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b97473e0-7426-4a40-813a-38c657425786",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_527873e218ccc7": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a02f2d-4625-7b12-b623-6773abab231e",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
