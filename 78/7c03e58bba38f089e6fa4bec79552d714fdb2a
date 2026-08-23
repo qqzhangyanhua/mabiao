@@ -1,0 +1,26 @@
+src-tauri/src/official_quota/grok.rs
+  s_dc7fb1d64cc0c1::t_b6390373aef5d1 26-37,42-56,59,63,74-113,118-141,143-146,319
+  s_dc7fb1d64cc0c1::t_a145b5ce6b944e 232-236,251-268,278-279,299-300,312-318
+  s_dc7fb1d64cc0c1::t_4829b2b761c8d4 337,346
+  s_dc7fb1d64cc0c1::t_a59163ef0e10d0 114-117,295-298
+  s_dc7fb1d64cc0c1::t_305d01a7624d67 142
+  s_dc7fb1d64cc0c1::t_0915f4409c6f9b 147,320
+src-tauri/src/tests/grok_quota.rs
+  s_dc7fb1d64cc0c1::t_cc52df2c9317ab 180-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "787c03e58bba38f089e6fa4bec79552d714fdb2a",
+  "prompts": {},
+  "sessions": {
+    "s_dc7fb1d64cc0c1": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "4d1d9ee5-b5b6-453e-a547-210b5bcdf123",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
