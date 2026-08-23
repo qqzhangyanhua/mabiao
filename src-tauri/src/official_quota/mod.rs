@@ -89,7 +89,7 @@ pub fn load_dto(
     let undetected = OfficialQuotaProvider::ALL
         .into_iter()
         .filter(|provider| !rows.iter().any(|row| row.provider == provider.as_str()))
-        .map(|provider| provider.display_name().to_string())
+        .map(|provider| provider.as_str().to_string())
         .collect();
     OfficialQuotaDto {
         rows,

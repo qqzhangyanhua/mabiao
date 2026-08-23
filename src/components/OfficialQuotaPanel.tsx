@@ -6,8 +6,10 @@ import { formatClock, formatWindowClock } from "../lib/format";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   officialQuotaAgeLabel,
+  officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
   officialQuotaRefreshHint,
+  officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
 import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
@@ -29,6 +31,7 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   onError: (error: unknown) => void;
 }) {
   const rows = data?.rows ?? [];
+  const undetectedNote = officialQuotaUndetectedNote(data?.undetected ?? []);
   const staleAfterMinutes = data?.stale_after_minutes ?? DEFAULT_STALE_AFTER_MINUTES;
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
@@ -69,19 +72,17 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
         </div>
       </div>
       {rows.length === 0 ? (
-        <EmptyState
-          compact
-          icon="clock"
-          title={data ? "所选账号均已隐藏" : "正在读取官方额度…"}
-          hint={data ? "在「配置显示」里打开要看的账号" : "先显示上次缓存，再后台刷新"}
-        />
+        <EmptyState compact icon="clock" {...officialQuotaEmptyCopy(data)} />
       ) : (
-        <OfficialQuotaList
-          rows={rows}
-          staleAfterMinutes={staleAfterMinutes}
-          busyProvider={busyProvider}
-          onRefresh={(provider) => void refreshProvider(provider)}
-        />
+        <>
+          <OfficialQuotaList
+            rows={rows}
+            staleAfterMinutes={staleAfterMinutes}
+            busyProvider={busyProvider}
+            onRefresh={(provider) => void refreshProvider(provider)}
+          />
+          {undetectedNote ? <p className="panel-note">{undetectedNote}</p> : null}
+        </>
       )}
     </article>
   );

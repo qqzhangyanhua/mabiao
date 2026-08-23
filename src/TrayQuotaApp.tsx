@@ -8,6 +8,7 @@ import { OfficialQuotaList } from "./components/OfficialQuotaPanel";
 import { Button } from "./components/ui/Button";
 import { useTheme } from "./hooks/useTheme";
 import { Icon } from "./icons";
+import { officialQuotaEmptyCopy } from "./lib/officialQuotaDisplay";
 import { visibleOfficialQuotaRows } from "./lib/overviewLayout";
 import { readSectionOpen, writeSectionOpen } from "./lib/sectionCollapse";
 import {
@@ -151,12 +152,7 @@ export default function TrayQuotaApp() {
           error ? (
             <EmptyState compact icon="clock" title="无法读取官方额度" hint={error} />
           ) : rows.length === 0 ? (
-            <EmptyState
-              compact
-              icon="clock"
-              title={quota ? "所选账号均已隐藏" : "正在读取官方额度…"}
-              hint={quota ? "在主窗口「配置显示」里打开要看的账号" : "先显示上次缓存"}
-            />
+            <EmptyState compact icon="clock" {...officialQuotaEmptyCopy(quota)} />
           ) : (
             <OfficialQuotaList
               rows={rows}

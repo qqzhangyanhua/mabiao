@@ -6,6 +6,8 @@
 //! 判定要「宁可显示、不可误藏」：探针只在能确定读不到凭证时返回 false，
 //! 拿不准就返回 true，让真正的刷新去报准确的错。
 
+use std::path::Path;
+
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
     antigravity, capture_path, claude_usage, codex_usage, copilot, devin, droid, grok, opencode,
@@ -13,13 +15,14 @@ use crate::official_quota::{
 
 pub fn has_local_credentials(provider: OfficialQuotaProvider) -> bool {
     match provider {
-        // 官方登录态可用，或者装过 statusline hook 留下了捕获文件。
+        // 文件在就算有登录痕迹。token 过期、缺 scope 是刷新时报的错，
+        // 不能在这里当成「没装 Claude」把整行从列表里拿掉。
         OfficialQuotaProvider::Claude => {
-            claude_usage::load_access_token(&claude_usage::credentials_path()).is_ok()
-                || capture_path().exists()
+            claude_artifacts_present(&claude_usage::credentials_path(), &capture_path())
         }
-        // 纯 API key 的账号按量计费，没有额度可言，app-server 也给不出来。
-        OfficialQuotaProvider::Codex => codex_usage::load_auth(&codex_usage::auth_path()).is_ok(),
+        // auth.json 在就算 Codex 在用。纯 API key 没有订阅百分比，刷新会写清
+        // 楚原因；这里如果要求 tokens.access_token，列表里就永远看不到这一行。
+        OfficialQuotaProvider::Codex => codex_artifacts_present(&codex_usage::auth_path()),
         OfficialQuotaProvider::Cursor => crate::cursor_credentials::read_local_credential()
             .is_some_and(|credential| !credential.is_expired()),
         OfficialQuotaProvider::Grok => grok::auth_file_exists(),
@@ -34,4 +37,12 @@ pub fn has_local_credentials(provider: OfficialQuotaProvider) -> bool {
             .any(|path| path.exists()),
         OfficialQuotaProvider::Devin => devin::has_local_api_key(),
     }
+}
+
+pub(crate) fn claude_artifacts_present(credentials: &Path, capture: &Path) -> bool {
+    credentials.exists() || capture.exists()
+}
+
+pub(crate) fn codex_artifacts_present(auth: &Path) -> bool {
+    auth.exists()
 }
