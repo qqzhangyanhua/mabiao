@@ -63,7 +63,7 @@ const LARGE_CONTENT_THRESHOLD: usize = 4_096;
 const CONTENT_PREVIEW_CHARS: usize = 2_000;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 8;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -515,7 +515,7 @@ pub(crate) fn refresh_source_in_roots(
             Ok(batch) => {
                 issues.extend(batch.diagnostics);
                 for parsed in batch.conversations {
-                    write_codex_file_events(conn, source, &parsed, &mut event_generations)?;
+                    write_session_file_events(conn, source, &parsed, &mut event_generations)?;
                     grouped
                         .entry(parsed.session.session_id.clone())
                         .or_default()
@@ -584,7 +584,12 @@ pub(crate) fn refresh_source_in_roots(
                             if parsed.session.session_id != session_id {
                                 continue;
                             }
-                            write_codex_file_events(conn, source, &parsed, &mut event_generations)?;
+                            write_session_file_events(
+                                conn,
+                                source,
+                                &parsed,
+                                &mut event_generations,
+                            )?;
                             grouped
                                 .entry(session_id.clone())
                                 .or_default()
@@ -609,6 +614,14 @@ pub(crate) fn refresh_source_in_roots(
         .chain(incomplete_session_ids.iter())
         .cloned()
         .collect::<BTreeSet<_>>();
+    let associated_failed_paths = failed_paths_by_session
+        .values()
+        .flatten()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let has_unmapped_failures = blocking_issues
+        .iter()
+        .any(|issue| !associated_failed_paths.contains(&PathBuf::from(&issue.path)));
     for (session_id, indexed_files) in grouped {
         if blocked_session_ids.contains(&session_id) {
             continue;
@@ -638,7 +651,11 @@ pub(crate) fn refresh_source_in_roots(
             blocking_issues.is_empty(),
         )?;
         if let Some(&generation) = event_generations.get(&session_id) {
-            event_index::finalize_session_events(conn, source, &session_id, generation)?;
+            let publish = !has_unmapped_failures
+                || event_index::has_live_generation(conn, source, &session_id)?;
+            if publish {
+                event_index::finalize_session_events(conn, source, &session_id, generation)?;
+            }
         }
     }
     if blocking_issues.is_empty() {
@@ -650,15 +667,12 @@ pub(crate) fn refresh_source_in_roots(
     Ok(issues)
 }
 
-fn write_codex_file_events(
+fn write_session_file_events(
     conn: &Connection,
     source: Source,
     parsed: &ParsedConversation,
     generations: &mut BTreeMap<String, i64>,
 ) -> Result<(), String> {
-    if source != Source::Codex {
-        return Ok(());
-    }
     event_index::write_file_events(conn, source, parsed, generations)
 }
 
@@ -3482,6 +3496,7 @@ fn tombstone_missing_sessions(
             continue;
         }
         mark_session_unavailable(conn, source, &session_id)?;
+        event_index::clear_session_events(conn, source, &session_id)?;
     }
     Ok(())
 }

@@ -25,6 +25,43 @@ pub fn usage_rows(
         .rows
 }
 
+pub fn write_home_fixture(
+    home: &std::path::Path,
+    relative_path: &str,
+    fixture_name: &str,
+) -> std::path::PathBuf {
+    let path = home.join(relative_path);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, fixture(fixture_name)).unwrap();
+    path
+}
+
+pub fn assert_conversation_index_matches_parse(
+    conn: &rusqlite::Connection,
+    home: &std::path::Path,
+    source: &str,
+    session_id: &str,
+) {
+    let parsed = crate::conversation::load_detail(conn, home, source, session_id).unwrap();
+    let indexed = crate::conversation::indexed_events(conn, source, session_id).unwrap();
+    assert!(
+        indexed.iter().all(|event| event.details.is_null()),
+        "{source}/{session_id} 索引不得存 details"
+    );
+    assert_eq!(
+        indexed,
+        parsed
+            .events
+            .into_iter()
+            .map(|mut event| {
+                event.details = serde_json::Value::Null;
+                event
+            })
+            .collect::<Vec<_>>(),
+        "{source}/{session_id} 索引事件序列必须与整份解析逐字段一致（不含 details）"
+    );
+}
+
 pub fn fixture(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures")

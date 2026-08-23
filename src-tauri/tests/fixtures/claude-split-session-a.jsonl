@@ -1,0 +1,2 @@
+{"type":"user","sessionId":"claude-split-1","timestamp":"2026-09-01T10:00:02Z","cwd":"/workspace/split","message":{"role":"user","content":"shared"}}
+{"type":"assistant","sessionId":"claude-split-1","timestamp":"2026-09-01T10:00:04Z","message":{"role":"assistant","content":[{"type":"text","text":"late"}]}}

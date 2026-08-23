@@ -91,28 +91,42 @@ pub fn finalize_session_events(
         params![source.as_str(), session_id, generation],
     )
     .map_err(|error| error.to_string())?;
-    conn.execute(
-        r#"
-        UPDATE conversation_events
-        SET sequence = ranked.new_sequence
-        FROM (
-            SELECT rowid AS rid,
-                ROW_NUMBER() OVER (
-                    ORDER BY
-                        CASE WHEN occurred_at_sort IS NULL THEN 1 ELSE 0 END,
-                        occurred_at_sort,
-                        source_file,
-                        source_sequence,
-                        event_id
-                ) - 1 AS new_sequence
+    let mut order_statement = conn
+        .prepare(
+            r#"
+            SELECT rowid, occurred_at, source_file, source_sequence, event_id
             FROM conversation_events
             WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
-        ) AS ranked
-        WHERE conversation_events.rowid = ranked.rid
-        "#,
-        params![source.as_str(), session_id, generation],
-    )
-    .map_err(|error| error.to_string())?;
+            "#,
+        )
+        .map_err(|error| error.to_string())?;
+    let mut ordered = order_statement
+        .query_map(params![source.as_str(), session_id, generation], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, u32>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    ordered.sort_by(|left, right| {
+        super::compare_optional_timestamps(&left.1, &right.1)
+            .then_with(|| left.2.cmp(&right.2))
+            .then_with(|| left.3.cmp(&right.3))
+            .then_with(|| left.4.cmp(&right.4))
+    });
+    let mut update_sequence = conn
+        .prepare("UPDATE conversation_events SET sequence = ?1 WHERE rowid = ?2")
+        .map_err(|error| error.to_string())?;
+    for (sequence, (rowid, _, _, _, _)) in ordered.into_iter().enumerate() {
+        update_sequence
+            .execute(params![sequence as u32, rowid])
+            .map_err(|error| error.to_string())?;
+    }
     conn.execute(
         r#"
         UPDATE conversation_sessions
@@ -128,6 +142,49 @@ pub fn finalize_session_events(
         WHERE source = ?1 AND session_id = ?2 AND index_generation != ?3
         "#,
         params![source.as_str(), session_id, generation],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn has_live_generation(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+) -> Result<bool, String> {
+    let generation = conn
+        .query_row(
+            r#"
+            SELECT event_index_generation
+            FROM conversation_sessions
+            WHERE source = ?1 AND session_id = ?2
+            "#,
+            params![source.as_str(), session_id],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .flatten();
+    Ok(generation.is_some())
+}
+
+pub fn clear_session_events(
+    conn: &Connection,
+    source: Source,
+    session_id: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM conversation_events WHERE source = ?1 AND session_id = ?2",
+        params![source.as_str(), session_id],
+    )
+    .map_err(|error| error.to_string())?;
+    conn.execute(
+        r#"
+        UPDATE conversation_sessions
+        SET event_index_generation = NULL
+        WHERE source = ?1 AND session_id = ?2
+        "#,
+        params![source.as_str(), session_id],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
