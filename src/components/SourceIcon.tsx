@@ -66,7 +66,9 @@ const marks: Record<SourceIconId, SourceMark> = {
     ),
   },
   pi: {
-    viewBox: "0 0 800 800",
+    // Artwork sits on an 800 canvas with ~20% padding. Crop to the glyph so
+    // it fills the same 12px slot as the 24x24 marks (Codex, dsh, ...).
+    viewBox: "165.29 165.29 469.43 469.43",
     body: (
       <>
         <path
@@ -131,6 +133,7 @@ export function SourceIcon({ source, size = 16 }: SourceIconProps) {
         width={markSize}
         height={markSize}
         fill="currentColor"
+        preserveAspectRatio="xMidYMid meet"
         aria-hidden
       >
         {mark.body}
