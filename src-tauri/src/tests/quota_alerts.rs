@@ -11,6 +11,7 @@ fn quota_alerts_dedupe_by_reset_and_skip_stale() {
                 label: "5 小时".into(),
                 used_percent: Some(82.0),
                 resets_at: Some("2026-08-18T15:00:00+00:00".into()),
+                ..Default::default()
             }],
             freshness: crate::domain::OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),
@@ -48,6 +49,7 @@ fn quota_alerts_reset_when_resets_at_changes() {
                 label: "7 天".into(),
                 used_percent: Some(100.0),
                 resets_at: Some("2026-08-20T00:00:00+00:00".into()),
+                ..Default::default()
             }],
             freshness: crate::domain::OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),

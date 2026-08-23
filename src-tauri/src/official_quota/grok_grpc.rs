@@ -55,6 +55,7 @@ pub fn parse_credits_grpc(bytes: &[u8], now_secs: i64) -> Result<Vec<OfficialQuo
         label: "周额度".to_string(),
         used_percent: Some(percent),
         resets_at,
+        ..Default::default()
     }])
 }
 

@@ -92,6 +92,7 @@ pub fn parse_user_status(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> 
             label: "日额度".to_string(),
             used_percent: daily,
             resets_at: resets_at(plan, "dailyQuotaResetAtUnix"),
+            ..Default::default()
         });
     }
     if weekly.is_some() {
@@ -100,6 +101,7 @@ pub fn parse_user_status(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> 
             label: "周额度".to_string(),
             used_percent: weekly,
             resets_at: resets_at(plan, "weeklyQuotaResetAtUnix"),
+            ..Default::default()
         });
     }
 

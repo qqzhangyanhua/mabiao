@@ -24,6 +24,7 @@ fn official_quota_keeps_last_good_windows_on_fetch_failure() {
         label: "5 小时".into(),
         used_percent: Some(40.0),
         resets_at: Some("2026-08-18T12:00:00+00:00".into()),
+        ..Default::default()
     }];
     official_quota::apply_success(
         &conn,
@@ -72,18 +73,21 @@ fn tightest_window_picks_highest_cursor_dimension() {
                     label: "总量".into(),
                     used_percent: Some(94.0),
                     resets_at: None,
+                    ..Default::default()
                 },
                 crate::domain::OfficialQuotaWindow {
                     kind: "auto".into(),
                     label: "Auto".into(),
                     used_percent: Some(100.0),
                     resets_at: None,
+                    ..Default::default()
                 },
                 crate::domain::OfficialQuotaWindow {
                     kind: "api".into(),
                     label: "API".into(),
                     used_percent: Some(44.0),
                     resets_at: None,
+                    ..Default::default()
                 },
             ],
             freshness: crate::domain::OfficialQuotaFreshness::Official,
@@ -138,6 +142,7 @@ fn apply_fetch_results_isolates_provider_failures() {
                         label: "5 小时".into(),
                         used_percent: Some(10.0),
                         resets_at: None,
+                        ..Default::default()
                     }],
                     "2026-08-18T12:00:00+00:00".into(),
                 )),
@@ -254,6 +259,7 @@ fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
             label: "5 小时".into(),
             used_percent: Some(10.0),
             resets_at: None,
+            ..Default::default()
         }],
         "2026-08-18T12:00:00+00:00",
     )
@@ -280,6 +286,7 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
             label: "5 小时".into(),
             used_percent: Some(10.0),
             resets_at: None,
+            ..Default::default()
         }],
         "2026-08-18T12:00:00+00:00",
     )

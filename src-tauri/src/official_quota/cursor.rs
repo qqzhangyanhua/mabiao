@@ -62,6 +62,7 @@ pub fn parse_usage_summary(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String
                 label: "总量".to_string(),
                 used_percent: None,
                 resets_at,
+                ..Default::default()
             });
         } else {
             return Err("Cursor 限额响应里没有可用的已用百分比".to_string());
@@ -92,6 +93,7 @@ fn parse_on_demand(root: &Value, resets_at: Option<String>) -> Option<OfficialQu
         label: "按需".to_string(),
         used_percent: percent_from_used_limit(node).and_then(sanitize_percent),
         resets_at,
+        ..Default::default()
     })
 }
 
@@ -110,6 +112,7 @@ fn push_window(
         label: label.to_string(),
         used_percent: Some(percent),
         resets_at,
+        ..Default::default()
     });
 }
 

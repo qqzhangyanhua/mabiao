@@ -458,6 +458,7 @@ fn parse_on_demand(config: &Value, resets_at: Option<String>) -> Option<Official
         label: "按需".to_string(),
         used_percent: Some(percent),
         resets_at,
+        ..Default::default()
     })
 }
 
@@ -504,6 +505,7 @@ fn push_window(
         label: label.to_string(),
         used_percent: Some(percent),
         resets_at,
+        ..Default::default()
     });
 }
 

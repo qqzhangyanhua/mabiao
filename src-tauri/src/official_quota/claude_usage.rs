@@ -66,6 +66,7 @@ pub fn parse_usage(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> {
             label: label.to_string(),
             used_percent: Some(percent),
             resets_at: node.get("resets_at").and_then(parse_resets_at),
+            ..Default::default()
         });
     }
     windows.extend(scoped_weekly_windows(&value));
@@ -101,6 +102,7 @@ fn scoped_weekly_windows(value: &Value) -> Vec<OfficialQuotaWindow> {
                 label: format!("7 天 {model}"),
                 used_percent: Some(percent),
                 resets_at: entry.get("resets_at").and_then(parse_resets_at),
+                ..Default::default()
             })
         })
         .collect()

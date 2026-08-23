@@ -87,6 +87,7 @@ fn parse_window(node: Option<&Value>, kind: &str, label: &str) -> Option<Officia
         label: label.to_string(),
         used_percent: percent,
         resets_at,
+        ..Default::default()
     })
 }
 
