@@ -228,8 +228,12 @@ pub enum OfficialQuotaFreshness {
 
 /// 「官方额度」里的一条窗口。
 ///
-/// 派生 `Default` 并标记 `non_exhaustive`，要求所有构造点以 `..Default::default()`
-/// 收尾：新增口径字段时只需改这里，不必同时改散在各 provider 解析器里的二十多处字面量。
+/// 约定：所有构造点以 `..Default::default()` 收尾，这样 #81 新增金额口径字段时
+/// 改动收敛到这里，不必同时改散在各 provider 解析器里的二十多处字面量。
+///
+/// `non_exhaustive` 只是让 clippy 的 `needless_update` 接受「字段已列全仍带
+/// `..Default::default()`」这种写法，并对外声明本结构体会长字段。它**不**强制
+/// 上面那条约定——构造点全在本 crate 内，crate 内该属性无效力，约定靠 review 守。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct OfficialQuotaWindow {
