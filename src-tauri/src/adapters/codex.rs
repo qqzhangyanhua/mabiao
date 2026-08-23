@@ -1,6 +1,8 @@
 use serde_json::Value;
 
-use crate::adapters::{finish, has_billable_tokens, i64_field, parse_jsonl_values, text_field};
+use crate::adapters::{
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+};
 use crate::domain::{Source, UsageRecord};
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -55,7 +57,7 @@ impl CodexUsage {
     }
 }
 
-pub fn parse_codex_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
+pub fn parse_codex_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
     let mut session_id = String::new();
     let mut project = String::new();
     let mut provider = String::new();
@@ -64,7 +66,7 @@ pub fn parse_codex_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
     let mut total_high_water: Option<CodexUsage> = None;
     let mut records = Vec::new();
 
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         let kind = value.get("type").and_then(|v| v.as_str()).unwrap_or("");
         let payload = value.get("payload").cloned().unwrap_or(Value::Null);
         let timestamp = text_field(&value, &["timestamp"]);

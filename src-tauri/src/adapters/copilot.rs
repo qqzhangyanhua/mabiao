@@ -1,6 +1,8 @@
 use serde_json::Value;
 
-use crate::adapters::{finish, has_billable_tokens, i64_field, parse_jsonl_values, text_field};
+use crate::adapters::{
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+};
 use crate::domain::{Source, UsageRecord};
 
 /// 解析 GitHub Copilot CLI 落盘的 `~/.copilot/session-state/<session-id>/events.jsonl`。
@@ -9,11 +11,11 @@ use crate::domain::{Source, UsageRecord};
 /// 若同一文件里出现多次 `session.shutdown`（会话被多次续接退出），只取时间最晚的一次，
 /// 避免把同一份累计用量重复计入——与 Codex 适配器「取最后一次快照，不逐条累加」的策略一致。
 /// 详见 docs/probe/copilot.md。
-pub fn parse_copilot_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
+pub fn parse_copilot_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
     let mut session_id = String::new();
     let mut project = String::new();
     let mut last_shutdown: Option<Value> = None;
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         match value.get("type").and_then(|v| v.as_str()) {
             Some("session.start") => {
                 let data = value.get("data").unwrap_or(&Value::Null);

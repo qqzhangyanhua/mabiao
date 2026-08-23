@@ -1146,7 +1146,12 @@ fn spawn_rollup_backfill(app: &tauri::AppHandle) {
 ///
 /// 不在 `setup` 里同步跑：整库重解析会让启动像卡死。补建期间未就绪的会话走整份解析回退。
 /// 每次只拿写锁处理一条，避免长时间挡住摄取。
+///
+/// 每条会话之间故意 sleep 一下：这条路径和首屏的 `ingest_all` 都要整份读会话源文件，
+/// 若同时全速跑，遇到大文件（真实观测到 Codex 单个 rollout 日志有 114MB）会让两条路径
+/// 的临时内存峰值叠在一起。让一步不影响正确性——补建本身就是"渐进"的，晚一点做完没关系。
 fn spawn_event_index_backfill(app: &tauri::AppHandle) {
+    const STEP_DELAY: std::time::Duration = std::time::Duration::from_millis(30);
     let app = app.clone();
     std::thread::spawn(move || {
         let home = ingest::default_home();
@@ -1169,6 +1174,7 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
             if !progressed {
                 return;
             }
+            std::thread::sleep(STEP_DELAY);
         }
     });
 }

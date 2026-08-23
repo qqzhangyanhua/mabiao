@@ -3,7 +3,7 @@ use crate::test_support::*;
 #[test]
 fn codex_adapter_counts_last_token_usage_not_cumulative() {
     let records = codex::parse_codex_jsonl(
-        &fixture("codex.jsonl"),
+        &fixture_lines(&fixture("codex.jsonl")),
         "/Users/zhangyanhua/.codex/sessions/rollout.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -34,7 +34,7 @@ fn codex_adapter_counts_last_token_usage_not_cumulative() {
 #[test]
 fn codex_adapter_falls_back_to_total_token_usage_delta() {
     let records = codex::parse_codex_jsonl(
-        &fixture("codex-total-only.jsonl"),
+        &fixture_lines(&fixture("codex-total-only.jsonl")),
         "/Users/zhangyanhua/.codex/sessions/rollout.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -51,7 +51,7 @@ fn codex_adapter_falls_back_to_total_token_usage_delta() {
 #[test]
 fn claude_adapter_maps_usage_and_project_dir() {
     let records = claude::parse_claude_jsonl(
-        &fixture("claude.jsonl"),
+        &fixture_lines(&fixture("claude.jsonl")),
         "/Users/zhangyanhua/.claude/projects/-Users-zhangyanhua-AI-TradingAgents-CN/04868551-34c3-4588-b984-6ae9a5d95f8a.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -80,7 +80,7 @@ fn claude_adapter_maps_usage_and_project_dir() {
 #[test]
 fn claude_adapter_uses_structured_agent_id_for_child_usage() {
     let records = claude::parse_claude_jsonl(
-        &fixture("claude-subagent-conversation.jsonl"),
+        &fixture_lines(&fixture("claude-subagent-conversation.jsonl")),
         "/Users/example/.claude/projects/-workspace-app/session/subagents/agent-claude-child-1.jsonl",
     );
 
@@ -93,7 +93,7 @@ fn claude_adapter_uses_structured_agent_id_for_child_usage() {
 #[test]
 fn claude_adapter_dedups_message_id_and_skips_zero_usage() {
     let records = claude::parse_claude_jsonl(
-        &fixture("claude-dedup.jsonl"),
+        &fixture_lines(&fixture("claude-dedup.jsonl")),
         "/Users/zhangyanhua/.claude/projects/-Users-zhangyanhua-AI-cli/s-claude.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -110,7 +110,7 @@ fn claude_adapter_dedups_message_id_and_skips_zero_usage() {
 #[test]
 fn pi_adapter_uses_native_cost() {
     let records = pi::parse_pi_jsonl(
-        &fixture("pi.jsonl"),
+        &fixture_lines(&fixture("pi.jsonl")),
         "/Users/zhangyanhua/.pi/agent/sessions/--Users-zhangyanhua-workCode-ruoyi-ui-vue3--/s.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -146,7 +146,7 @@ fn pi_adapter_skips_zero_token_assistant_messages() {
     // fixture 里追加了一条 usage 四分项全 0 的 assistant 消息（a3），
     // 与其它 adapter（claude/codex/gemini/opencode）保持一致：不计入会话/费用统计。
     let records = pi::parse_pi_jsonl(
-        &fixture("pi.jsonl"),
+        &fixture_lines(&fixture("pi.jsonl")),
         "/Users/zhangyanhua/.pi/agent/sessions/--Users-zhangyanhua-workCode-ruoyi-ui-vue3--/s.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -381,7 +381,7 @@ fn factory_adapter_maps_session_token_usage() {
 #[test]
 fn cursor_agent_adapter_maps_result_usage_per_turn() {
     let records = cursor_agent::parse_cursor_agent_jsonl(
-        &fixture("cursor-agent-stream.jsonl"),
+        &fixture_lines(&fixture("cursor-agent-stream.jsonl")),
         "/Users/dev/.cursor-agent-usage/3ce011d4-33d1-41d0-a16c-f6dc206c47f1.jsonl",
     );
     assert_eq!(records.len(), 2);
@@ -409,7 +409,7 @@ fn cursor_agent_adapter_maps_result_usage_per_turn() {
 #[test]
 fn copilot_adapter_only_uses_the_last_shutdown_snapshot_per_session() {
     let records = copilot::parse_copilot_jsonl(
-        &fixture("copilot-events.jsonl"),
+        &fixture_lines(&fixture("copilot-events.jsonl")),
         "/Users/dev/.copilot/session-state/c0ffee11-2222-4333-8444-555566667777/events.jsonl",
     );
     // 文件里有两次 session.shutdown（会话续接两次）；只应采信最后一次的累计用量，
@@ -440,7 +440,7 @@ fn copilot_adapter_only_uses_the_last_shutdown_snapshot_per_session() {
 fn copilot_adapter_falls_back_to_parent_dir_name_when_session_id_is_missing() {
     let content = r#"{"type":"session.shutdown","timestamp":"2026-08-11T00:00:00.000Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":10,"outputTokens":5,"cacheReadTokens":0,"cacheWriteTokens":0}}}}}"#;
     let records = copilot::parse_copilot_jsonl(
-        content,
+        &fixture_lines(content),
         "/Users/dev/.copilot/session-state/no-start-event/events.jsonl",
     );
     assert_eq!(records.len(), 1);

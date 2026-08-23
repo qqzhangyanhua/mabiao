@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
 use crate::adapters::project::decode_dashed_dir;
-use crate::adapters::{finish, has_billable_tokens, i64_field, parse_jsonl_values, text_field};
+use crate::adapters::{
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+};
 use crate::domain::{Source, UsageRecord};
 
 struct ClaudeTurn {
@@ -9,10 +11,12 @@ struct ClaudeTurn {
     stop_reason: Option<String>,
 }
 
-pub fn parse_claude_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
+/// 下面两轮扫描都通过 `lines()` 重新拿一份新的行迭代器，配合磁盘流式读取场景，
+/// 不需要先把整份文件内容读进内存再扫两遍。
+pub fn parse_claude_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
     let mut project = String::new();
     let mut session_id = String::new();
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         if project.is_empty() {
             project = text_field(&value, &["cwd"]);
         }
@@ -34,7 +38,7 @@ pub fn parse_claude_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> 
     let mut order: Vec<String> = Vec::new();
     let mut anonymous = Vec::new();
 
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
             continue;
         }

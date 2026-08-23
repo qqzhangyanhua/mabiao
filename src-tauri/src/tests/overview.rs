@@ -3,7 +3,7 @@ use crate::test_support::*;
 #[test]
 fn overview_from_codex_fixture_uses_last_token_usage_totals() {
     let records = codex::parse_codex_jsonl(
-        &fixture("codex.jsonl"),
+        &fixture_lines(&fixture("codex.jsonl")),
         "/Users/zhangyanhua/.codex/sessions/rollout.jsonl",
     );
     let conn = store::open_memory().unwrap();
@@ -23,7 +23,7 @@ fn overview_from_codex_fixture_uses_last_token_usage_totals() {
 #[test]
 fn overview_from_claude_fixture_sums_per_record_token_dimensions() {
     let records = claude::parse_claude_jsonl(
-        &fixture("claude.jsonl"),
+        &fixture_lines(&fixture("claude.jsonl")),
         "/Users/zhangyanhua/.claude/projects/-Users-zhangyanhua-AI-TradingAgents-CN/04868551-34c3-4588-b984-6ae9a5d95f8a.jsonl",
     );
     let conn = store::open_memory().unwrap();
@@ -44,7 +44,7 @@ fn overview_from_claude_fixture_sums_per_record_token_dimensions() {
 #[test]
 fn overview_from_pi_fixture_uses_native_cost() {
     let records = pi::parse_pi_jsonl(
-        &fixture("pi.jsonl"),
+        &fixture_lines(&fixture("pi.jsonl")),
         "/Users/zhangyanhua/.pi/agent/sessions/--Users-zhangyanhua-workCode-ruoyi-ui-vue3--/s.jsonl",
     );
     let conn = store::open_memory().unwrap();
@@ -211,7 +211,7 @@ fn overview_from_qwen_fixture_contributes_no_tokens() {
 #[test]
 fn overview_from_copilot_fixture_uses_last_shutdown_snapshot() {
     let records = copilot::parse_copilot_jsonl(
-        &fixture("copilot-events.jsonl"),
+        &fixture_lines(&fixture("copilot-events.jsonl")),
         "/Users/dev/.copilot/session-state/c0ffee11-2222-4333-8444-555566667777/events.jsonl",
     );
     assert_eq!(records.len(), 2);

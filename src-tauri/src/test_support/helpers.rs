@@ -69,6 +69,14 @@ pub fn fixture(name: &str) -> String {
     std::fs::read_to_string(path).expect("fixture")
 }
 
+/// jsonl 适配器现在按 `LineFactory` 取行而不是整份 `&str`（见 `adapters::LineFactory`），
+/// 这里把内存里的 fixture 内容包成一个可以反复调用、每次都拿到新行迭代器的工厂闭包。
+pub fn fixture_lines<'a>(
+    content: &'a str,
+) -> impl Fn() -> Box<dyn Iterator<Item = String> + 'a> + 'a {
+    move || Box::new(content.lines().map(str::to_string))
+}
+
 pub fn rec(
     occurred_at: &str,
     source: crate::domain::Source,

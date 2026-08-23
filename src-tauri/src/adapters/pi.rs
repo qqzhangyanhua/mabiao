@@ -1,14 +1,16 @@
 use crate::adapters::project::decode_dashed_dir;
-use crate::adapters::{finish, has_billable_tokens, i64_field, parse_jsonl_values, text_field};
+use crate::adapters::{
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+};
 use crate::domain::{Source, UsageRecord};
 
-pub fn parse_pi_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
+pub fn parse_pi_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
     let mut session_id = String::new();
     let mut project = String::new();
     let mut provider = String::new();
     let mut records = Vec::new();
 
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         match value.get("type").and_then(|v| v.as_str()).unwrap_or("") {
             "session" => {
                 session_id = text_field(&value, &["id"]);
