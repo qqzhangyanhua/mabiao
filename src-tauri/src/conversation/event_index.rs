@@ -343,6 +343,26 @@ pub fn indexed_events(
     )
 }
 
+pub fn indexed_event(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    event_id: &str,
+) -> Result<Option<ConversationEvent>, String> {
+    let Some(generation) = live_generation(conn, source, session_id)? else {
+        return Ok(None);
+    };
+    conn.query_row(
+        &format!("{EVENT_SELECT} AND event_id = ?4"),
+        params![source, session_id, generation, event_id],
+        map_event_tuple,
+    )
+    .optional()
+    .map_err(|error| error.to_string())?
+    .map(event_from_tuple)
+    .transpose()
+}
+
 pub fn indexed_event_count(
     conn: &Connection,
     source: &str,

@@ -4,7 +4,20 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
-    let values = parse_jsonl_conversation_values(path)?;
+    parse_from_values(
+        path,
+        parse_jsonl_conversation_values(path)?,
+        include_deferred_content,
+        None,
+    )
+}
+
+pub(super) fn parse_from_values(
+    path: &Path,
+    values: Vec<(usize, Value)>,
+    include_deferred_content: bool,
+    session_hint: Option<&str>,
+) -> Result<ParsedConversation, String> {
     let mut session_id = String::new();
     let mut project = String::new();
     let mut model = String::new();
@@ -123,11 +136,15 @@ pub(super) fn parse(
         }
     }
     if session_id.is_empty() {
-        session_id = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or("")
-            .to_string();
+        session_id = session_hint
+            .map(str::to_string)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("")
+                    .to_string()
+            });
     }
     finish_source_conversation(
         Source::Pi,

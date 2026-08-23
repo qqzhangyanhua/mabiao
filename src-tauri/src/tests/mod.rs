@@ -13,6 +13,7 @@ mod conversation_index;
 mod conversation_index_backfill;
 mod conversation_index_incremental;
 mod conversation_index_sources;
+mod conversation_line_direct;
 mod copilot_quota;
 mod cursor_account;
 mod cursor_conversation;

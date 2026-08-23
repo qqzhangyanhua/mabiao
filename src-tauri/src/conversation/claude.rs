@@ -4,7 +4,22 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
-    let values = parse_jsonl_conversation_values(path)?;
+    parse_from_values(
+        path,
+        parse_jsonl_conversation_values(path)?,
+        include_deferred_content,
+        None,
+        false,
+    )
+}
+
+pub(super) fn parse_from_values(
+    path: &Path,
+    values: Vec<(usize, Value)>,
+    include_deferred_content: bool,
+    session_hint: Option<&str>,
+    line_direct: bool,
+) -> Result<ParsedConversation, String> {
     let mut parent_session_id = String::new();
     let mut agent_id = String::new();
     let mut project = String::new();
@@ -123,13 +138,17 @@ pub(super) fn parse(
             .to_string()
     };
     if session_id.is_empty() {
-        session_id = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .unwrap_or("")
-            .to_string();
+        session_id = session_hint
+            .map(str::to_string)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| {
+                path.file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("")
+                    .to_string()
+            });
     }
-    if !is_top_level {
+    if !is_top_level && !line_direct {
         let mut details = serde_json::Map::new();
         details.insert("parent_id".to_string(), Value::String(parent_session_id));
         events.push(semantic_event(

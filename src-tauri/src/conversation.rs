@@ -35,6 +35,7 @@ mod gemini;
 mod grok;
 mod incremental;
 mod kimi;
+mod line_direct;
 mod opencode;
 mod pi;
 mod qwen;
@@ -1829,6 +1830,32 @@ pub(crate) fn read_consistent_snapshot<T>(
     Err("原始文件在读取期间持续变化，请重试".to_string())
 }
 
+pub fn rebuild_events_from_line(
+    source: Source,
+    path: &Path,
+    session_id: &str,
+    source_sequence: u32,
+    include_deferred_content: bool,
+) -> Result<Vec<ConversationEvent>, String> {
+    line_direct::rebuild_events_from_line(
+        source,
+        path,
+        session_id,
+        source_sequence,
+        include_deferred_content,
+    )
+}
+
+pub fn parse_session_events(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    include_deferred_content: bool,
+) -> Result<Vec<ConversationEvent>, String> {
+    line_direct::parse_session_events(conn, home, source, session_id, include_deferred_content)
+}
+
 pub fn load_event_content(
     conn: &Connection,
     home: &Path,
@@ -1836,6 +1863,11 @@ pub fn load_event_content(
     session_id: &str,
     event_id: &str,
 ) -> Result<ConversationEventContentDto, String> {
+    if let Some(content) =
+        line_direct::try_load_event_content(conn, home, source, session_id, event_id)?
+    {
+        return Ok(content);
+    }
     let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
     let parsed = parse_conversation_files(source, &paths, session_id, true)?;
     ensure_matching_session(&parsed, &session)?;
@@ -1888,6 +1920,11 @@ fn resolve_attachment(
     session_id: &str,
     attachment_id: &str,
 ) -> Result<AttachmentCandidate, String> {
+    if let Some(candidate) =
+        line_direct::try_resolve_attachment(conn, home, source, session_id, attachment_id)?
+    {
+        return Ok(candidate);
+    }
     let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
     let parsed = parse_conversation_files(source, &paths, session_id, true)?;
     ensure_matching_session(&parsed, &session)?;
@@ -2148,7 +2185,7 @@ fn next_line_index(content: &str) -> u32 {
     }
 }
 
-fn parse_codex_content(
+pub(super) fn parse_codex_content(
     path: &Path,
     content: &str,
     start_byte: u64,
@@ -2645,7 +2682,7 @@ fn parse_conversation_file(
     (conversation_adapter(source)?.detail)(path, session_id, include_deferred_content)
 }
 
-fn parse_conversation_files(
+pub(super) fn parse_conversation_files(
     source: Source,
     paths: &[PathBuf],
     session_id: &str,
@@ -3313,7 +3350,7 @@ fn unadapted_event(
     event
 }
 
-struct AttachmentCandidate {
+pub(super) struct AttachmentCandidate {
     attachment: ConversationAttachment,
     source: String,
     resolved_path: Option<PathBuf>,
@@ -3366,7 +3403,11 @@ pub(crate) fn read_source_line(path: &Path, line_index: u32) -> Result<String, S
     }
 }
 
-fn read_source_payload(source: Source, path: &Path, sequence: u32) -> Result<Value, String> {
+pub(super) fn read_source_payload(
+    source: Source,
+    path: &Path,
+    sequence: u32,
+) -> Result<Value, String> {
     if source == Source::Gemini {
         let content =
             fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
@@ -3385,7 +3426,7 @@ fn read_source_payload(source: Source, path: &Path, sequence: u32) -> Result<Val
     Ok(value.get("payload").cloned().unwrap_or(value))
 }
 
-fn attachment_candidates(
+pub(super) fn attachment_candidates(
     sequence: u32,
     payload: &Value,
     project: &str,
@@ -3510,7 +3551,7 @@ fn infer_media_type(name: &str, kind: AttachmentKind) -> String {
     .to_string()
 }
 
-fn ensure_attachment_path_allowed(
+pub(super) fn ensure_attachment_path_allowed(
     candidate: &AttachmentCandidate,
     project: &str,
 ) -> Result<(), String> {
@@ -4284,7 +4325,7 @@ fn load_session_files(
     Ok(rows)
 }
 
-fn load_trusted_session_files(
+pub(super) fn load_trusted_session_files(
     conn: &Connection,
     home: &Path,
     source: &str,
@@ -4318,7 +4359,7 @@ fn load_trusted_session_files(
     Ok((source, session, paths))
 }
 
-fn ensure_matching_session(
+pub(super) fn ensure_matching_session(
     parsed: &ParsedConversation,
     session: &ConversationSessionRow,
 ) -> Result<(), String> {
