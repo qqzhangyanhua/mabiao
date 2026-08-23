@@ -867,11 +867,38 @@ pub struct ConversationAgentRelations {
     pub children: Vec<ConversationAgentLink>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ConversationEventAnchor {
+    First,
+    Last,
+    Before { sequence: u32 },
+    After { sequence: u32 },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConversationEventPage {
+    pub events: Vec<ConversationEvent>,
+    pub has_more_before: bool,
+    pub has_more_after: bool,
+}
+
+/// 整份解析结果，供测试与分页回退对照。不是 Tauri 详情 DTO。
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConversationParsedDetail {
+    pub revision: String,
+    pub session: ConversationSessionRow,
+    pub events: Vec<ConversationEvent>,
+    pub agent_relations: ConversationAgentRelations,
+    pub cursor_behavior: Option<CursorSessionDetailDto>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationDetailDto {
     pub revision: String,
     pub session: ConversationSessionRow,
-    pub events: Vec<ConversationEvent>,
+    pub event_count: u32,
+    pub usage_record_count: u32,
     pub agent_relations: ConversationAgentRelations,
     /// Cursor 本机行为聚合；非 Cursor 或对不上 `cursor_sessions` 时为空。
     #[serde(default, skip_serializing_if = "Option::is_none")]

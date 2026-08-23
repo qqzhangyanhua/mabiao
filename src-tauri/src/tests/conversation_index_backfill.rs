@@ -60,21 +60,45 @@ fn load_detail_falls_back_until_backfill_then_matches_the_index_path() {
     crate::conversation::refresh_codex(&conn, home).unwrap();
     mark_session_unready(&conn, "codex", "semantic-1");
 
-    let fallback = crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
+    let fallback = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "semantic-1",
+        crate::domain::ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
     assert!(
         fallback.events.iter().any(|event| !event.details.is_null()),
         "未就绪时应走整份解析，details 仍在"
     );
+    let fallback_detail =
+        crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
 
     crate::conversation::backfill_event_index(&conn, home).unwrap();
-    let indexed = crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
+    let indexed = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "semantic-1",
+        crate::domain::ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
     assert!(
         indexed.events.iter().all(|event| event.details.is_null()),
         "就绪后应走索引，details 不在库里"
     );
-    assert_eq!(indexed.revision, fallback.revision);
-    assert_eq!(indexed.session, fallback.session);
-    assert_eq!(indexed.agent_relations, fallback.agent_relations);
+    let indexed_detail =
+        crate::conversation::load_detail(&conn, home, "codex", "semantic-1").unwrap();
+    assert_eq!(indexed_detail.revision, fallback_detail.revision);
+    assert_eq!(indexed_detail.session, fallback_detail.session);
+    assert_eq!(
+        indexed_detail.agent_relations,
+        fallback_detail.agent_relations
+    );
+    assert_eq!(indexed_detail.event_count, fallback_detail.event_count);
     assert_eq!(indexed.events, strip_details(fallback.events));
 }
 
@@ -116,8 +140,24 @@ fn event_index_backfill_newest_first_then_resumes_without_redoing() {
     let older_index = crate::conversation::indexed_events(&conn, "codex", "conv-1").unwrap();
     assert!(!newer_index.is_empty(), "结束更晚的会话应先被补建");
     assert!(older_index.is_empty(), "更早的会话此时还没有索引");
-    let newer = crate::conversation::load_detail(&conn, home, "codex", "conv-2").unwrap();
-    let older = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
+    let newer = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "conv-2",
+        crate::domain::ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
+    let older = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "conv-1",
+        crate::domain::ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
     assert_eq!(newer.events, newer_index, "已补建会话的详情应走索引");
     assert_ne!(older.events, older_index, "未补建会话的详情应回退整份解析");
 

@@ -1,5 +1,5 @@
 pub fn message_events(
-    detail: &crate::domain::ConversationDetailDto,
+    detail: &crate::domain::ConversationParsedDetail,
 ) -> Vec<&crate::domain::ConversationEvent> {
     detail
         .events
@@ -8,7 +8,7 @@ pub fn message_events(
         .collect()
 }
 
-pub fn message_texts(detail: &crate::domain::ConversationDetailDto) -> Vec<String> {
+pub fn message_texts(detail: &crate::domain::ConversationParsedDetail) -> Vec<String> {
     message_events(detail)
         .into_iter()
         .filter_map(|event| event.text.clone())

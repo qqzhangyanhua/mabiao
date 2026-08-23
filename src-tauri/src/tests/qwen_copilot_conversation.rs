@@ -202,7 +202,8 @@ fn qwen_tokenless_log_feeds_partial_detail_export_search_and_missing_file_state(
         .find(|row| row.source == "qwen" && row.session_id == "qwen-session-1")
         .unwrap();
     assert!(!missing.file_available);
-    let error = conversation::load_detail(&conn, home, "qwen", "qwen-session-1").unwrap_err();
+    let error =
+        conversation::load_parsed_detail(&conn, home, "qwen", "qwen-session-1").unwrap_err();
     assert!(error.contains("原文件已删除"), "unexpected error: {error}");
 }
 
@@ -386,7 +387,7 @@ fn copilot_events_feed_lifecycle_tools_code_changes_usage_and_missing_body_statu
         })
         .unwrap();
     assert!(!missing.file_available);
-    let error = conversation::load_detail(
+    let error = conversation::load_parsed_detail(
         &conn,
         home,
         "copilot",

@@ -39,7 +39,6 @@ import type {
   ConversationAgentLink,
   ConversationDetailDto,
   ConversationDetailStateDto,
-  ConversationEventContentDto,
   ConversationFocus,
   ConversationPage,
   ConversationSessionRow,
@@ -178,8 +177,7 @@ export function Conversations({
     timeline.scrollTop = timeline.scrollHeight - anchor;
   }, []);
 
-  // 每份详情都带着整条会话的正文。导航栈上的会话和当前展开的子会话必须留着，
-  // 其余按最近使用淘汰，否则在子代理之间来回下钻会把每一层都攒在内存里。
+  // 导航栈上的会话元数据必须留着，其余按最近使用淘汰。
   const pruneDetails = useCallback((entries: Record<string, ConversationDetailDto>) => {
     const state = navigationRef.current;
     const childrenOf = (key: string): readonly ConversationCacheChild[] =>
@@ -233,8 +231,8 @@ export function Conversations({
       if (selectedKeyRef.current === key) {
         if (followUpdates) {
           const follow = nextConversationFollowState({
-            previousCount: detailsRef.current[key]?.events.length ?? 0,
-            nextCount: result.events.length,
+            previousCount: detailsRef.current[key]?.event_count ?? 0,
+            nextCount: result.event_count,
             wasAtBottom: wasAtBottomRef.current,
             unseenCount: unseenCountRef.current,
           });
@@ -703,16 +701,12 @@ export function Conversations({
   }
 
   function toggleChild(link: ConversationAgentLink) {
-    const isExpanded = currentFrame?.expanded_relationship_ids.includes(link.relationship_id);
     setNavigation((current) =>
       transitionConversationNavigation(current, {
         type: "toggle_child",
         relationship_id: link.relationship_id,
       }),
     );
-    if (!isExpanded && link.session && !details[conversationKey(link.session)]) {
-      fetchDetail(link.session);
-    }
   }
 
   function openChild(link: ConversationAgentLink) {
@@ -759,36 +753,6 @@ export function Conversations({
     }
   }
 
-  function updateEventContent(
-    source: string,
-    sessionId: string,
-    content: ConversationEventContentDto,
-  ) {
-    const key = conversationKey({ source, session_id: sessionId });
-    setDetails((current) => {
-      const currentDetail = current[key];
-      if (!currentDetail) return current;
-      const next = {
-        ...current,
-        [key]: {
-          ...currentDetail,
-          events: currentDetail.events.map((event) =>
-            event.event_id === content.event_id
-              ? {
-                  ...event,
-                  text: content.text,
-                  details: content.details,
-                  content_status: "complete" as const,
-                }
-              : event,
-          ),
-        },
-      };
-      detailsRef.current = next;
-      return next;
-    });
-  }
-
   if (selected) {
     const session = detail?.session ?? selected;
     return (
@@ -822,7 +786,7 @@ export function Conversations({
             {detail ? (
               <span className="muted">
                 {detailTab === "events"
-                  ? `${detail.events.length} 条事件`
+                  ? `${detail.event_count} 条事件`
                   : detailTab === "behavior"
                     ? "Cursor 行为聚合"
                     : usageTotal === null
@@ -897,17 +861,15 @@ export function Conversations({
                   </div>
                 ) : null}
                 <ConversationTimeline
-                  key={`${session.source}:${session.session_id}`}
-                  events={detail.events}
+                  key={`${session.source}:${session.session_id}:${detail.revision}`}
                   source={session.source}
                   sessionId={session.session_id}
+                  revision={detail.revision}
+                  eventCount={detail.event_count}
                   agentLinks={detail.agent_relations.children}
                   expandedRelationshipIds={currentFrame?.expanded_relationship_ids ?? []}
-                  childDetails={details}
-                  childLoading={detailLoadingByKey}
                   onToggleChild={toggleChild}
                   onOpenChild={openChild}
-                  onEventContentLoaded={updateEventContent}
                   timelineRef={timelineRef}
                   onScroll={handleTimelineScroll}
                   onCaptureScrollAnchor={captureTimelineAnchor}

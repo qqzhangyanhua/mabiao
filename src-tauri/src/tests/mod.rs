@@ -8,6 +8,7 @@ mod claude_usage;
 mod codex_quota;
 mod codex_usage;
 mod conversation;
+mod conversation_events_page;
 mod conversation_index;
 mod conversation_index_backfill;
 mod conversation_index_sources;

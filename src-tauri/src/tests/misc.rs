@@ -922,7 +922,15 @@ fn backup_omits_conversation_event_bodies_and_restore_reads_via_fallback() {
             .unwrap()
             .is_empty()
     );
-    let fallback = crate::conversation::load_detail(&restored, &home, "codex", "conv-1").unwrap();
+    let fallback = crate::conversation::load_events(
+        &restored,
+        &home,
+        "codex",
+        "conv-1",
+        crate::domain::ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
     assert!(
         fallback
             .events

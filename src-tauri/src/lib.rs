@@ -38,14 +38,14 @@ use tauri::Manager;
 use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, BudgetConfig, BudgetStatusDto, CodeVolumeSummary,
     ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
-    ConversationEventContentDto, ConversationExportFormat, ConversationIndexProgressDto,
-    ConversationPage, ConversationQuery, ConversationUsagePage, CursorAccountEventPage,
-    CursorAccountEventQuery, CursorAccountUsageDto, CursorSessionDetailDto, CursorSessionPage,
-    CursorSessionQuery, CursorSessionSummaryDto, Filter, FilterOptions, GlobalInstructionDto,
-    IngestReport, NamedAmount, OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaHookDto,
-    OfficialQuotaProvider, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
-    SessionRow, Source, SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest,
-    WriteUserFileResult,
+    ConversationEventAnchor, ConversationEventContentDto, ConversationEventPage,
+    ConversationExportFormat, ConversationIndexProgressDto, ConversationPage, ConversationQuery,
+    ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
+    CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
+    FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
+    OfficialQuotaDto, OfficialQuotaHookDto, OfficialQuotaProvider, OverviewDto, PriceSnapshot,
+    PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
+    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
 
 /// 只读连接池。
@@ -552,6 +552,28 @@ async fn get_conversation_detail(
         let read = conversation::prepare_detail_read(&conn, &home, &source, &session_id)?;
         drop(conn);
         conversation::finish_prepared_detail(&home, read)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_conversation_events(
+    app: tauri::AppHandle,
+    source: String,
+    session_id: String,
+    anchor: ConversationEventAnchor,
+    limit: Option<u32>,
+) -> Result<ConversationEventPage, String> {
+    let home = ingest::default_home();
+    let limit = limit.unwrap_or(200);
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let read =
+            conversation::prepare_events_read(&conn, &home, &source, &session_id, &anchor, limit)?;
+        drop(conn);
+        conversation::finish_prepared_events(&home, read, &anchor, limit)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1226,6 +1248,7 @@ pub fn run() {
             get_cursor_session_detail,
             get_conversation_sessions_page,
             get_conversation_detail,
+            get_conversation_events,
             get_conversation_index_progress,
             get_conversation_usage_records,
             get_conversation_detail_state,

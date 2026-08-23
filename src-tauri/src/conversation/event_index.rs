@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::conversation::event_identity;
-use crate::domain::{ConversationEvent, Source};
+use crate::domain::{ConversationEvent, ConversationEventAnchor, ConversationEventPage, Source};
 
 pub fn write_file_events(
     conn: &Connection,
@@ -190,93 +190,367 @@ pub fn clear_session_events(
     Ok(())
 }
 
+const EVENT_SELECT: &str = r#"
+    SELECT event_id, source_file, source_sequence, kind, actor, name, occurred_at, text,
+           attachments_json, capability_status, content_status, sequence
+    FROM conversation_events
+    WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+"#;
+
 pub fn indexed_events(
     conn: &Connection,
     source: &str,
     session_id: &str,
 ) -> Result<Vec<ConversationEvent>, String> {
-    let generation = conn
-        .query_row(
-            r#"
-            SELECT event_index_generation
-            FROM conversation_sessions
-            WHERE source = ?1 AND session_id = ?2
-            "#,
-            params![source, session_id],
-            |row| row.get::<_, Option<i64>>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some(Some(generation)) = generation else {
+    let Some(generation) = live_generation(conn, source, session_id)? else {
         return Ok(Vec::new());
     };
-    let mut statement = conn
-        .prepare(
-            r#"
-            SELECT event_id, source_file, source_sequence, kind, actor, name, occurred_at, text,
-                   attachments_json, capability_status, content_status, sequence
-            FROM conversation_events
-            WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
-            ORDER BY sequence
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map(params![source, session_id, generation], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, u32>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<String>>(5)?,
-                row.get::<_, Option<String>>(6)?,
-                row.get::<_, Option<String>>(7)?,
-                row.get::<_, String>(8)?,
-                row.get::<_, String>(9)?,
-                row.get::<_, String>(10)?,
-                row.get::<_, u32>(11)?,
-            ))
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    rows.into_iter()
-        .map(
-            |(
-                event_id,
-                source_file,
-                source_sequence,
-                kind,
-                actor,
-                name,
-                occurred_at,
-                text,
-                attachments_json,
-                capability_status,
-                content_status,
-                sequence,
-            )| {
-                let attachments =
-                    serde_json::from_str(&attachments_json).map_err(|e| e.to_string())?;
-                Ok(ConversationEvent {
-                    event_id,
-                    sequence,
-                    source_file,
-                    source_sequence,
-                    kind: parse_token(&kind)?,
-                    occurred_at,
-                    actor: actor.map(|value| parse_token(&value)).transpose()?,
-                    name,
-                    text,
-                    details: Value::Null,
-                    attachments,
-                    capability_status: parse_token(&capability_status)?,
-                    content_status: parse_token(&content_status)?,
-                })
+    query_events(
+        conn,
+        EventQuery {
+            source,
+            session_id,
+            generation,
+            extra_predicate: "1 = 1",
+            bound: None,
+            order_by: "sequence ASC",
+            limit: None,
+        },
+    )
+}
+
+pub fn indexed_event_count(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+) -> Result<u32, String> {
+    let Some(generation) = live_generation(conn, source, session_id)? else {
+        return Ok(0);
+    };
+    conn.query_row(
+        r#"
+        SELECT COUNT(*)
+        FROM conversation_events
+        WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+        "#,
+        params![source, session_id, generation],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|count| count as u32)
+    .map_err(|error| error.to_string())
+}
+
+pub fn indexed_events_page(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    anchor: &ConversationEventAnchor,
+    limit: u32,
+) -> Result<ConversationEventPage, String> {
+    let limit = limit.clamp(1, 200);
+    let Some(generation) = live_generation(conn, source, session_id)? else {
+        return Ok(empty_event_page());
+    };
+    let events = match anchor {
+        ConversationEventAnchor::First => query_events(
+            conn,
+            EventQuery {
+                source,
+                session_id,
+                generation,
+                extra_predicate: "1 = 1",
+                bound: None,
+                order_by: "sequence ASC",
+                limit: Some(limit),
             },
-        )
-        .collect()
+        )?,
+        ConversationEventAnchor::Last => {
+            let mut page = query_events(
+                conn,
+                EventQuery {
+                    source,
+                    session_id,
+                    generation,
+                    extra_predicate: "1 = 1",
+                    bound: None,
+                    order_by: "sequence DESC",
+                    limit: Some(limit),
+                },
+            )?;
+            page.reverse();
+            page
+        }
+        ConversationEventAnchor::Before { sequence } => {
+            let mut page = query_events(
+                conn,
+                EventQuery {
+                    source,
+                    session_id,
+                    generation,
+                    extra_predicate: "sequence < ?4",
+                    bound: Some(*sequence),
+                    order_by: "sequence DESC",
+                    limit: Some(limit),
+                },
+            )?;
+            page.reverse();
+            page
+        }
+        ConversationEventAnchor::After { sequence } => query_events(
+            conn,
+            EventQuery {
+                source,
+                session_id,
+                generation,
+                extra_predicate: "sequence > ?4",
+                bound: Some(*sequence),
+                order_by: "sequence ASC",
+                limit: Some(limit),
+            },
+        )?,
+    };
+    if events.is_empty() {
+        return empty_page_flags(conn, source, session_id, generation, anchor);
+    }
+    let min_sequence = events[0].sequence;
+    let max_sequence = events.last().expect("page is not empty").sequence;
+    Ok(ConversationEventPage {
+        events,
+        has_more_before: sequence_exists(
+            conn,
+            source,
+            session_id,
+            generation,
+            "sequence < ?4",
+            min_sequence,
+        )?,
+        has_more_after: sequence_exists(
+            conn,
+            source,
+            session_id,
+            generation,
+            "sequence > ?4",
+            max_sequence,
+        )?,
+    })
+}
+
+fn live_generation(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+) -> Result<Option<i64>, String> {
+    conn.query_row(
+        r#"
+        SELECT event_index_generation
+        FROM conversation_sessions
+        WHERE source = ?1 AND session_id = ?2
+        "#,
+        params![source, session_id],
+        |row| row.get::<_, Option<i64>>(0),
+    )
+    .optional()
+    .map(|generation| generation.flatten())
+    .map_err(|error| error.to_string())
+}
+
+struct EventQuery<'a> {
+    source: &'a str,
+    session_id: &'a str,
+    generation: i64,
+    extra_predicate: &'a str,
+    bound: Option<u32>,
+    order_by: &'a str,
+    limit: Option<u32>,
+}
+
+fn query_events(
+    conn: &Connection,
+    query: EventQuery<'_>,
+) -> Result<Vec<ConversationEvent>, String> {
+    let EventQuery {
+        source,
+        session_id,
+        generation,
+        extra_predicate,
+        bound,
+        order_by,
+        limit,
+    } = query;
+    let mut sql = format!("{EVENT_SELECT} AND ({extra_predicate}) ORDER BY {order_by}");
+    if limit.is_some() {
+        sql.push_str(if bound.is_some() {
+            " LIMIT ?5"
+        } else {
+            " LIMIT ?4"
+        });
+    }
+    let mut statement = conn.prepare(&sql).map_err(|error| error.to_string())?;
+    let rows = match (bound, limit) {
+        (Some(bound), Some(limit)) => statement
+            .query_map(
+                params![source, session_id, generation, bound, i64::from(limit)],
+                map_event_tuple,
+            )
+            .map_err(|error| error.to_string())?
+            .collect::<Result<Vec<_>, _>>(),
+        (None, Some(limit)) => statement
+            .query_map(
+                params![source, session_id, generation, i64::from(limit)],
+                map_event_tuple,
+            )
+            .map_err(|error| error.to_string())?
+            .collect::<Result<Vec<_>, _>>(),
+        (Some(bound), None) => statement
+            .query_map(
+                params![source, session_id, generation, bound],
+                map_event_tuple,
+            )
+            .map_err(|error| error.to_string())?
+            .collect::<Result<Vec<_>, _>>(),
+        (None, None) => statement
+            .query_map(params![source, session_id, generation], map_event_tuple)
+            .map_err(|error| error.to_string())?
+            .collect::<Result<Vec<_>, _>>(),
+    }
+    .map_err(|error| error.to_string())?;
+    rows.into_iter().map(event_from_tuple).collect()
+}
+
+type IndexedEventTuple = (
+    String,
+    String,
+    u32,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    String,
+    u32,
+);
+
+fn map_event_tuple(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexedEventTuple> {
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+        row.get(5)?,
+        row.get(6)?,
+        row.get(7)?,
+        row.get(8)?,
+        row.get(9)?,
+        row.get(10)?,
+        row.get(11)?,
+    ))
+}
+
+fn event_from_tuple(
+    (
+        event_id,
+        source_file,
+        source_sequence,
+        kind,
+        actor,
+        name,
+        occurred_at,
+        text,
+        attachments_json,
+        capability_status,
+        content_status,
+        sequence,
+    ): IndexedEventTuple,
+) -> Result<ConversationEvent, String> {
+    let attachments = serde_json::from_str(&attachments_json).map_err(|e| e.to_string())?;
+    Ok(ConversationEvent {
+        event_id,
+        sequence,
+        source_file,
+        source_sequence,
+        kind: parse_token(&kind)?,
+        occurred_at,
+        actor: actor.map(|value| parse_token(&value)).transpose()?,
+        name,
+        text,
+        details: Value::Null,
+        attachments,
+        capability_status: parse_token(&capability_status)?,
+        content_status: parse_token(&content_status)?,
+    })
+}
+
+fn sequence_exists(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    generation: i64,
+    predicate: &str,
+    sequence: u32,
+) -> Result<bool, String> {
+    conn.query_row(
+        &format!(
+            r#"
+            SELECT EXISTS(
+                SELECT 1 FROM conversation_events
+                WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3 AND {predicate}
+            )
+            "#
+        ),
+        params![source, session_id, generation, sequence],
+        |row| row.get::<_, bool>(0),
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn empty_page_flags(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+    generation: i64,
+    anchor: &ConversationEventAnchor,
+) -> Result<ConversationEventPage, String> {
+    let (has_more_before, has_more_after) = match anchor {
+        ConversationEventAnchor::First | ConversationEventAnchor::Last => (false, false),
+        ConversationEventAnchor::Before { sequence } => (
+            false,
+            sequence_exists(
+                conn,
+                source,
+                session_id,
+                generation,
+                "sequence >= ?4",
+                *sequence,
+            )?,
+        ),
+        ConversationEventAnchor::After { sequence } => (
+            sequence_exists(
+                conn,
+                source,
+                session_id,
+                generation,
+                "sequence <= ?4",
+                *sequence,
+            )?,
+            false,
+        ),
+    };
+    Ok(ConversationEventPage {
+        events: Vec::new(),
+        has_more_before,
+        has_more_after,
+    })
+}
+
+fn empty_event_page() -> ConversationEventPage {
+    ConversationEventPage {
+        events: Vec::new(),
+        has_more_before: false,
+        has_more_after: false,
+    }
 }
 
 fn next_generation(conn: &Connection, source: Source, session_id: &str) -> Result<i64, String> {

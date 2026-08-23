@@ -1,0 +1,94 @@
+import type {
+  ConversationAttachment,
+  ConversationEventActor,
+  ConversationEventCapabilityStatus,
+  ConversationEventKind,
+} from "../types";
+
+export const EVENT_LABELS: Record<ConversationEventKind, string> = {
+  message: "消息",
+  plan: "计划",
+  tool_call: "工具调用",
+  tool_result: "工具结果",
+  model_change: "模型切换",
+  error: "错误",
+  system_status: "系统状态",
+  unadapted: "尚未适配",
+};
+
+const ACTOR_LABELS: Record<ConversationEventActor, string> = {
+  user: "用户",
+  assistant: "助手",
+  tool: "工具",
+};
+
+const CAPABILITY_STATUS_LABELS: Record<ConversationEventCapabilityStatus, string> = {
+  complete: "完整",
+  missing_timestamp: "时间缺失",
+  unadapted: "尚未适配",
+  unadapted_missing_timestamp: "尚未适配、时间缺失",
+};
+
+export function actorLabel(actor: ConversationEventActor): string {
+  return ACTOR_LABELS[actor];
+}
+
+export function capabilityStatusLabel(status: ConversationEventCapabilityStatus): string {
+  return CAPABILITY_STATUS_LABELS[status];
+}
+
+export function hasEventDetails(details: unknown): boolean {
+  if (details == null) {
+    return false;
+  }
+  if (Array.isArray(details)) {
+    return details.length > 0;
+  }
+  if (typeof details === "object") {
+    return Object.keys(details).length > 0;
+  }
+  return true;
+}
+
+export function prettyDetails(details: unknown): string {
+  try {
+    return JSON.stringify(details, null, 2) ?? String(details);
+  } catch {
+    return String(details);
+  }
+}
+
+export function formatAttachmentBytes(bytes: number | null): string {
+  if (bytes === null) {
+    return "大小未知";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unit = units[0];
+  for (let index = 1; value >= 1024 && index < units.length; index += 1) {
+    value /= 1024;
+    unit = units[index];
+  }
+  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
+}
+
+export function attachmentStatusText(attachment: ConversationAttachment): string {
+  if (attachment.status === "missing") {
+    return "原附件已不存在";
+  }
+  if (attachment.status === "unsupported") {
+    return "无法在应用内加载";
+  }
+  return attachment.status === "embedded" ? "已嵌入" : "可用";
+}
+
+export function attachmentSignature(attachment: ConversationAttachment): string {
+  return `${attachment.kind}\u0000${attachment.status}\u0000${attachment.original_path}\u0000${attachment.size_bytes ?? ""}`;
+}
+
+export function attachmentRequestKey(attachment: ConversationAttachment): string {
+  return `${attachment.id}\u0000${attachmentSignature(attachment)}`;
+}

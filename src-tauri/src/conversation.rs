@@ -17,9 +17,9 @@ use crate::domain::{
     ConversationEventActor as EventActor, ConversationEventCapabilityStatus as EventStatus,
     ConversationEventContentDto, ConversationEventContentStatus as ContentStatus,
     ConversationEventKind as EventKind, ConversationExportDto, ConversationExportFormat,
-    ConversationIndexProgressDto, ConversationMessage, ConversationPage, ConversationQuery,
-    ConversationSessionRow, ConversationUsagePage, CursorSessionDetailDto, CursorSessionRecord,
-    PriceTable, Source, UsageRecord,
+    ConversationIndexProgressDto, ConversationMessage, ConversationPage, ConversationParsedDetail,
+    ConversationQuery, ConversationSessionRow, ConversationUsagePage, CursorSessionDetailDto,
+    CursorSessionRecord, PriceTable, Source, UsageRecord,
 };
 use crate::ingest;
 use crate::query;
@@ -30,6 +30,7 @@ mod cursor;
 mod droid;
 mod dsh;
 mod event_index;
+mod event_page;
 mod gemini;
 mod grok;
 mod kimi;
@@ -441,11 +442,42 @@ pub(crate) struct PreparedConversationDetail {
 pub(crate) enum PreparedDetailRead {
     Indexed {
         prepared: PreparedConversationDetail,
-        events: Vec<ConversationEvent>,
+        event_count: u32,
     },
     Parsed {
         prepared: PreparedConversationDetail,
     },
+}
+
+pub fn load_events(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    anchor: crate::domain::ConversationEventAnchor,
+    limit: u32,
+) -> Result<crate::domain::ConversationEventPage, String> {
+    event_page::load_events(conn, home, source, session_id, anchor, limit)
+}
+
+pub(crate) fn prepare_events_read(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    anchor: &crate::domain::ConversationEventAnchor,
+    limit: u32,
+) -> Result<event_page::PreparedEventsRead, String> {
+    event_page::prepare_events_read(conn, home, source, session_id, anchor, limit)
+}
+
+pub(crate) fn finish_prepared_events(
+    home: &Path,
+    read: event_page::PreparedEventsRead,
+    anchor: &crate::domain::ConversationEventAnchor,
+    limit: u32,
+) -> Result<crate::domain::ConversationEventPage, String> {
+    event_page::finish_prepared_events(home, read, anchor, limit)
 }
 
 pub fn refresh_codex(
@@ -878,8 +910,11 @@ pub(crate) fn prepare_detail_read(
 ) -> Result<PreparedDetailRead, String> {
     let prepared = prepare_detail(conn, source, session_id)?;
     if event_index_ready(conn, home, &prepared)? {
-        let events = indexed_events(conn, source, session_id)?;
-        return Ok(PreparedDetailRead::Indexed { prepared, events });
+        let event_count = event_index::indexed_event_count(conn, source, session_id)?;
+        return Ok(PreparedDetailRead::Indexed {
+            prepared,
+            event_count,
+        });
     }
     Ok(PreparedDetailRead::Parsed { prepared })
 }
@@ -889,9 +924,10 @@ pub(crate) fn finish_prepared_detail(
     read: PreparedDetailRead,
 ) -> Result<ConversationDetailDto, String> {
     match read {
-        PreparedDetailRead::Indexed { prepared, events } => {
-            assemble_indexed_detail(home, prepared, events)
-        }
+        PreparedDetailRead::Indexed {
+            prepared,
+            event_count,
+        } => assemble_indexed_detail(home, prepared, event_count),
         PreparedDetailRead::Parsed { prepared } => load_prepared_detail(home, prepared),
     }
 }
@@ -902,9 +938,9 @@ pub fn load_parsed_detail(
     home: &Path,
     source: &str,
     session_id: &str,
-) -> Result<ConversationDetailDto, String> {
+) -> Result<ConversationParsedDetail, String> {
     let prepared = prepare_detail(conn, source, session_id)?;
-    load_prepared_detail(home, prepared)
+    load_prepared_parsed(home, prepared)
 }
 
 pub(crate) fn prepare_detail(
@@ -938,6 +974,17 @@ pub(crate) fn load_prepared_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
 ) -> Result<ConversationDetailDto, String> {
+    let usage_record_count = prepared.usage_records.len() as u32;
+    Ok(parsed_detail_to_dto(
+        load_prepared_parsed(home, prepared)?,
+        usage_record_count,
+    ))
+}
+
+pub(crate) fn load_prepared_parsed(
+    home: &Path,
+    prepared: PreparedConversationDetail,
+) -> Result<ConversationParsedDetail, String> {
     let PreparedConversationDetail {
         source,
         mut session,
@@ -952,7 +999,7 @@ pub(crate) fn load_prepared_detail(
     {
         session.file_available = false;
         let events = cursor_missing_transcript_events(&session);
-        return Ok(ConversationDetailDto {
+        return Ok(ConversationParsedDetail {
             revision: cursor_metadata_revision(&usage_records, cursor_session_stats.as_ref()),
             session,
             events,
@@ -971,13 +1018,27 @@ pub(crate) fn load_prepared_detail(
     for (sequence, event) in events.iter_mut().enumerate() {
         event.sequence = sequence as u32;
     }
-    Ok(ConversationDetailDto {
+    Ok(ConversationParsedDetail {
         revision,
         session,
         events,
         agent_relations,
         cursor_behavior,
     })
+}
+
+fn parsed_detail_to_dto(
+    parsed: ConversationParsedDetail,
+    usage_record_count: u32,
+) -> ConversationDetailDto {
+    ConversationDetailDto {
+        revision: parsed.revision,
+        session: parsed.session,
+        event_count: parsed.events.len() as u32,
+        usage_record_count,
+        agent_relations: parsed.agent_relations,
+        cursor_behavior: parsed.cursor_behavior,
+    }
 }
 
 pub(crate) fn event_index_ready(
@@ -1012,14 +1073,14 @@ pub(crate) fn event_index_ready(
 pub(crate) fn assemble_indexed_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
-    events: Vec<ConversationEvent>,
+    event_count: u32,
 ) -> Result<ConversationDetailDto, String> {
     let PreparedConversationDetail {
         source,
         mut session,
+        usage_records,
         agent_relations,
         cursor_session_stats,
-        ..
     } = prepared;
     let cursor_behavior = cursor_behavior_dto(home, cursor_session_stats.as_ref());
     let paths = trusted_paths_for_session(home, source, &session)?;
@@ -1032,7 +1093,8 @@ pub(crate) fn assemble_indexed_detail(
     Ok(ConversationDetailDto {
         revision,
         session,
-        events,
+        event_count,
+        usage_record_count: usage_records.len() as u32,
         agent_relations,
         cursor_behavior,
     })

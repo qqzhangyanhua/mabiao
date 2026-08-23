@@ -173,7 +173,7 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
         .iter()
         .any(|row| row.session_id == "ses-no-usage"));
 
-    let detail = conversation::load_detail(&conn, home, "opencode", "ses-usage").unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "opencode", "ses-usage").unwrap();
     assert_eq!(detail.session.title, "Inspect OpenCode");
     assert_eq!(detail.session.project, "/workspace/opencode");
     assert_eq!(detail.session.model, "opencode-test-model");
@@ -229,7 +229,8 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
             .count(),
         2
     );
-    let no_usage = conversation::load_detail(&conn, home, "opencode", "ses-no-usage").unwrap();
+    let no_usage =
+        conversation::load_parsed_detail(&conn, home, "opencode", "ses-no-usage").unwrap();
     assert!(usage_rows(&conn, "opencode", "ses-no-usage").is_empty());
     assert_eq!(message_texts(&no_usage)[0], "This session has no usage");
     assert_eq!(std::fs::read(&db_path).unwrap(), database_before_reads);
@@ -266,7 +267,7 @@ fn opencode_database_feeds_catalog_detail_and_wal_refresh_without_writes() {
     assert!(state.changed);
     assert!(state.file_available);
     ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
-    let refreshed = conversation::load_detail(&conn, home, "opencode", "ses-usage").unwrap();
+    let refreshed = conversation::load_parsed_detail(&conn, home, "opencode", "ses-usage").unwrap();
     assert!(message_texts(&refreshed)
         .iter()
         .any(|text| text == "WAL follow-up"));
@@ -309,7 +310,7 @@ fn opencode_schema_degrades_optional_parts_and_preserves_last_good_sessions_on_f
     source_db.execute_batch("DROP TABLE part;").unwrap();
     let degraded_report =
         ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
-    let degraded = conversation::load_detail(&conn, home, "opencode", "ses-usage").unwrap();
+    let degraded = conversation::load_parsed_detail(&conn, home, "opencode", "ses-usage").unwrap();
     assert!(message_texts(&degraded).is_empty());
     assert!(degraded.events.is_empty());
     assert_eq!(degraded.session.capabilities, vec!["usage"]);

@@ -483,10 +483,23 @@ export type ConversationAgentRelations = {
   children: ConversationAgentLink[];
 };
 
+export type ConversationEventAnchor =
+  | { type: "first" }
+  | { type: "last" }
+  | { type: "before"; sequence: number }
+  | { type: "after"; sequence: number };
+
+export type ConversationEventPage = {
+  events: ConversationEvent[];
+  has_more_before: boolean;
+  has_more_after: boolean;
+};
+
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;
-  events: ConversationEvent[];
+  event_count: number;
+  usage_record_count: number;
   agent_relations: ConversationAgentRelations;
   cursor_behavior?: CursorSessionDetailDto | null;
 }
