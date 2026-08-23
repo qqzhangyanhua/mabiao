@@ -1,0 +1,67 @@
+src/lib/conversationWindow.test.ts
+  s_4ba7aa50f29b98::t_94638d410dfad3 130-211
+  s_4ba7aa50f29b98::t_8ebd2b0eadfe3e 3,6,11
+  s_4ba7aa50f29b98::t_81c79a0a516590 23-24,26
+src/components/Conversations.tsx
+  s_4ba7aa50f29b98::t_732885aef80219 44-47
+  s_4ba7aa50f29b98::t_7c581d21ebd101 660
+  s_4ba7aa50f29b98::t_9f120daaf0444c 216
+  s_4ba7aa50f29b98::t_c0cc4c3b10cbfa 623
+  s_4ba7aa50f29b98::t_96c6fc19a82cb9 856,863,867,869,876-877
+  s_4ba7aa50f29b98::t_1dd79045331f5e 455-463
+  s_4ba7aa50f29b98::t_d9c0846e9e1e1c 156
+  s_4ba7aa50f29b98::t_1afd43edbe58d1 201
+  s_4ba7aa50f29b98::t_e993cd8f0889e5 508,524-526,528-547
+  s_4ba7aa50f29b98::t_2a1645d01eeade 722
+  s_4ba7aa50f29b98::t_d3bbbdf716bfeb 11
+  s_4ba7aa50f29b98::t_e56d9aa02b047b 516,519
+  s_4ba7aa50f29b98::t_9e7fc40e0f61aa 600-601
+  s_4ba7aa50f29b98::t_bd3886ccda74fe 439-442
+  s_4ba7aa50f29b98::t_5c149e4061ecab 512,527
+  s_4ba7aa50f29b98::t_7a970eb3525bfe 146-147
+  s_4ba7aa50f29b98::t_13829cd58b37a8 464
+src/components/ConversationAgentBranch.tsx
+  s_4ba7aa50f29b98::t_a55400e6624a34 178
+  s_4ba7aa50f29b98::t_9ff7454ac0316b 186
+src/lib/conversationCache.test.ts
+  s_4ba7aa50f29b98::t_47b371f8164019 2
+src/components/ConversationTimeline.tsx
+  s_4ba7aa50f29b98::t_4f55553a9283da 175
+  s_4ba7aa50f29b98::t_d6503a4b74e353 125,130-132
+  s_4ba7aa50f29b98::t_29bc8dd89c6af8 2
+  s_4ba7aa50f29b98::t_3d7c2714dea50e 1,3-8,17-21,30,34,36,40-63,72,76,78,81-92,95,97-98,110-121,124,126-129,133-148,171-174,176-181,201,205-206,219,229-241
+  s_4ba7aa50f29b98::t_25fe44e16b9e6c 99
+  s_4ba7aa50f29b98::t_057ad8908384e3 123
+src/lib/conversationCache.ts
+  s_4ba7aa50f29b98::t_577e06509b345c 2
+src/lib/conversationWindow.ts
+  s_4ba7aa50f29b98::t_1e60ba59495d2f 4-5,11-13,31-32,43-44
+  s_4ba7aa50f29b98::t_6bb19ccbc24690 45,100-145
+  s_4ba7aa50f29b98::t_d52df5846d5c61 46
+src/styles.css
+  s_4ba7aa50f29b98::t_db5ded0a270c18 4037
+src/lib/useConversationEventPages.ts
+  s_4ba7aa50f29b98::t_33057b97a67e28 131
+  s_4ba7aa50f29b98::t_b7c8279aef4a0e 5,12,15,18-19,27,32,40,59,99-105,115-116,118-129,134-141,143-161,164,187,190-192
+  s_4ba7aa50f29b98::t_84cf61822b4a95 34
+  s_4ba7aa50f29b98::t_91195705e349b7 77-79
+  s_4ba7aa50f29b98::t_473932bdfe4b0b 9
+  s_4ba7aa50f29b98::t_e815d8d146eb2d 43-44,46,48,60,69,71,73-76,81-90,92-96,162-163,165
+  s_4ba7aa50f29b98::t_cfbe31f9a4ae39 97-98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "47ffd67765ceee5ba226db2d2555676be84769d9",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
