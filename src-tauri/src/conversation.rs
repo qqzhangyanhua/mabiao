@@ -1550,10 +1550,7 @@ pub(crate) fn backfill_event_index_step_skipping(
 pub fn backfill_event_index(conn: &Connection, home: &Path) -> Result<u32, String> {
     let mut completed = 0;
     let mut skipped = BTreeSet::new();
-    loop {
-        let Some((source, session_id)) = next_unready_session(conn, &skipped)? else {
-            break;
-        };
+    while let Some((source, session_id)) = next_unready_session(conn, &skipped)? {
         match reindex_session_events(conn, home, &source, &session_id) {
             Ok(()) => completed += 1,
             Err(_) => {
