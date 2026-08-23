@@ -9,7 +9,7 @@ use chrono::{DateTime, Duration, Local, LocalResult, NaiveDate, NaiveDateTime, T
 
 use crate::aggregate::assign_latest;
 use crate::billing_window::parse_occurred_at;
-use crate::domain::{UsageRecord, WorkSegment, WorkTimelineDto};
+use crate::domain::{UsageRecord, WorkSegment, WorkSessionSpan, WorkTimelineDto};
 
 /// 给 SQL 层用的宽口径日期边界（前一天 ~ 后一天），覆盖本地时区可能造成的 ±1 天偏移；
 /// 精确裁剪仍在 `build` 里按本地日历日判定，这里只是避免全表扫描的粗筛。
@@ -36,7 +36,10 @@ struct SessionAcc {
 /// 构建单日工作时间线。`records` 只需覆盖到各会话在 `day` 附近的记录（调用方可用
 /// `broad_date_bounds` 粗筛再查询）；会话区间基于传入记录里能看到的 occurred_at 范围，
 /// 不会去追溯该会话在此范围之外的历史，实践中足以覆盖跨午夜场景。
-pub fn build(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
+///
+/// `extra` 是没有消耗记录的会话区间（目前是 Cursor 本机会话）。同一
+/// `(source, session_id)` 与记录合并：时间取并集，token 仍只来自记录。
+pub fn build(records: &[UsageRecord], extra: &[WorkSessionSpan], day: &str) -> WorkTimelineDto {
     let Some(date) = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok() else {
         return WorkTimelineDto::empty(day);
     };
@@ -94,6 +97,10 @@ pub fn build(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
         }
     }
 
+    for span in extra {
+        merge_span(&mut sessions, span);
+    }
+
     // 裁剪到当天的区间（UTC 时刻），用于强度指标计算与片段输出。
     let mut clipped: Vec<(DateTime<Utc>, DateTime<Utc>)> = Vec::new();
     let mut segments: Vec<WorkSegment> = sessions
@@ -144,6 +151,47 @@ pub fn build(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
         parallel_intensity,
         segments,
     }
+}
+
+/// 把一条无消耗记录的会话区间并进累加器。起止时间取并集；项目/模型按时间较新者覆盖。
+fn merge_span(sessions: &mut BTreeMap<(String, String), SessionAcc>, span: &WorkSessionSpan) {
+    let Some(start) = parse_occurred_at(&span.started_at) else {
+        return;
+    };
+    let Some(parsed_end) = parse_occurred_at(&span.ended_at) else {
+        return;
+    };
+    let end = parsed_end.max(start);
+    let key = (span.source.clone(), span.session_id.clone());
+    let entry = sessions.entry(key.clone()).or_insert_with(|| SessionAcc {
+        source: key.0,
+        session_id: key.1,
+        project: String::new(),
+        project_at: None,
+        model: String::new(),
+        model_at: None,
+        start,
+        end,
+        day_tokens: 0,
+    });
+    if start < entry.start {
+        entry.start = start;
+    }
+    if end > entry.end {
+        entry.end = end;
+    }
+    assign_latest(
+        &mut entry.project,
+        &mut entry.project_at,
+        &span.project,
+        &span.ended_at,
+    );
+    assign_latest(
+        &mut entry.model,
+        &mut entry.model_at,
+        &span.model,
+        &span.ended_at,
+    );
 }
 
 /// 扫描线求峰值并行：把每段区间拆成 (start, +1) / (end, -1) 事件，按时刻排序后累加取最大值。

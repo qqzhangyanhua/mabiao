@@ -15,7 +15,7 @@ use crate::domain::{
     CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
     InstructionUsageSummary, NamedAmount, OverviewDto, PriceTable, ProjectApplicationRow,
     SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UsageRecord,
-    WorkTimelineDto,
+    WorkSessionSpan, WorkTimelineDto,
 };
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
@@ -1409,8 +1409,8 @@ pub fn session_turns(
 }
 
 /// 单日工作时间线：宽口径拉取 `day` 前后各一天的记录（覆盖本地时区可能造成的偏移），
-/// 精确的当天裁剪与聚合交给 `crate::work_timeline::build`——与内存路径 `aggregate::work_timeline`
-/// 共用同一份逻辑，由 `tests/parity.rs` 保证两条路径结果一致。
+/// 再并入重叠的 Cursor 本机会话区间。精确裁剪与聚合交给 `crate::work_timeline::build`，
+/// 与内存路径共用同一份逻辑，由 `tests/parity.rs` 保证两条路径结果一致。
 pub fn work_timeline(conn: &Connection, day: &str) -> Result<WorkTimelineDto, String> {
     let Some((from, to)) = crate::work_timeline::broad_date_bounds(day) else {
         return Ok(WorkTimelineDto::empty(day));
@@ -1428,7 +1428,80 @@ pub fn work_timeline(conn: &Connection, day: &str) -> Result<WorkTimelineDto, St
     let records = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    Ok(crate::work_timeline::build(&records, day))
+    let extra = work_session_spans(conn, &from, &to)?;
+    Ok(crate::work_timeline::build(&records, &extra, day))
+}
+
+/// 宽口径拉取与 `[from, to]` 日期串有交集的 Cursor 本机会话，转成时间线补充区间。
+/// `first_seen_at` / `last_seen_at` 缺一则无法画条，直接跳过。
+pub(crate) fn work_session_spans(
+    conn: &Connection,
+    from: &str,
+    to: &str,
+) -> Result<Vec<WorkSessionSpan>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT session_id, project, models_json, first_seen_at, last_seen_at
+            FROM cursor_sessions
+            WHERE first_seen_at IS NOT NULL AND first_seen_at != ''
+              AND last_seen_at IS NOT NULL AND last_seen_at != ''
+              AND substr(first_seen_at, 1, 10) <= ?2
+              AND substr(last_seen_at, 1, 10) >= ?1
+            "#,
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![from, to], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut by_session: BTreeMap<String, WorkSessionSpan> = BTreeMap::new();
+    for row in rows {
+        let (session_id, project, models_json, first_seen_at, last_seen_at) =
+            row.map_err(|e| e.to_string())?;
+        let span = WorkSessionSpan {
+            source: Source::CursorAgent.as_str().to_string(),
+            session_id: session_id.clone(),
+            project,
+            model: last_model_from_json(&models_json),
+            started_at: first_seen_at,
+            ended_at: last_seen_at,
+        };
+        match by_session.get_mut(&session_id) {
+            Some(existing) => {
+                if span.started_at < existing.started_at {
+                    existing.started_at = span.started_at;
+                }
+                if span.ended_at > existing.ended_at {
+                    existing.ended_at = span.ended_at;
+                    if !span.model.is_empty() {
+                        existing.model = span.model;
+                    }
+                }
+                if !span.project.is_empty() {
+                    existing.project = span.project;
+                }
+            }
+            None => {
+                by_session.insert(session_id, span);
+            }
+        }
+    }
+    Ok(by_session.into_values().collect())
+}
+
+fn last_model_from_json(raw: &str) -> String {
+    serde_json::from_str::<Vec<String>>(raw)
+        .ok()
+        .and_then(|models| models.into_iter().next_back())
+        .unwrap_or_default()
 }
 
 /// 取某列的全部不同值（升序），用递归 CTE 做 loose index scan。

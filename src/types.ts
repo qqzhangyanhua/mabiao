@@ -743,7 +743,7 @@ export type CursorAccountEventPage = {
 };
 
 /** 工作时间线里的一根横条：一条会话按当天本地日历日裁剪后的区间。
- * total_tokens 只统计该会话落在这天的记录，不是会话全量。 */
+ * total_tokens 只统计该会话落在这天的消耗记录；Cursor 本机会话无记录时为 0。 */
 export type WorkSegment = {
   session_id: string;
   source: string;

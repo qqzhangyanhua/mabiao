@@ -919,8 +919,21 @@ pub struct ConversationIndexProgressDto {
     pub total: u32,
 }
 
+/// 工作时间线的补充会话区间：有起止时间、没有（或不完整）消耗记录。
+/// 目前只来自 Cursor 本机会话；不进 `UsageRecord`，`total_tokens` 计 0。
+/// 同一 `(source, session_id)` 若已有消耗记录，与记录区间取并集。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkSessionSpan {
+    pub source: String,
+    pub session_id: String,
+    pub project: String,
+    pub model: String,
+    pub started_at: String,
+    pub ended_at: String,
+}
+
 /// 工作时间线里的一根横条：一条会话按当天本地日历日裁剪后的区间。
-/// `total_tokens` 只统计该会话落在这天的记录，不是会话全量。
+/// `total_tokens` 只统计该会话落在这天的消耗记录，不是会话全量；Cursor 本机会话无记录时为 0。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkSegment {
     pub session_id: String,
@@ -934,8 +947,11 @@ pub struct WorkSegment {
 
 /// 单日工作时间线：与当天区间有交集的会话铺开成 `segments`。独立于本机 token KPI 的既有口径，
 /// 不受顶栏范围筛选影响，只看 `day`（本地日历日 `YYYY-MM-DD`）这一天。
+/// 消耗记录按 `occurred_at` 聚成横条；Cursor 本机会话按 `first_seen_at` / `last_seen_at` 并入。
+/// 账号用量与代码量不进时间线。
 ///
 /// * `turn_count` — 当天落点消耗记录数（按每条记录 `occurred_at` 归当天，一条记录 ≈ 一次模型调用）。
+///   Cursor 本机会话不计入此项（轮次在会话维度，不能按日落点拆）。
 /// * `ai_exec_minutes` — 各会话裁剪到当天后的区间长度之和（分钟，浮点保留小数）。
 /// * `peak_parallel` — 当天任意时刻同时进行的会话数最大值（基于裁剪后区间扫描线）。
 /// * `parallel_intensity` — 累计执行时长 ÷ 会话区间并集时长；无重叠为 1.0x；空日为 `None`。

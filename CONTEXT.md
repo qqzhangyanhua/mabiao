@@ -29,8 +29,8 @@ _Avoid_: 用量、消耗（避免与 token 混淆）；不要把 hash 条数当�
 _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不要把它并进本机 token KPI 或 5 小时窗
 
 **Cursor 会话 (Cursor Session)**：
-从本机 `~/.cursor/projects/*/agent-transcripts` jsonl 解析的跨会话行为统计（会话数、轮次、工具调用、失败率、提问数、工具分类等）。`subagents/` 子代理并入父会话，不单独计数。Cursor IDE Agent 与 `cursor-agent` CLI 写同一套目录，无法从路径区分来源；hash 的 `source` 可标 composer/cli。独立仪表盘只展示聚合，不含对话正文，不进总览 token KPI。单条会话的正文、工具事件、用量、读写路径与 hash 文件走对话记录。
-_Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话
+从本机 `~/.cursor/projects/*/agent-transcripts` jsonl 解析的跨会话行为统计（会话数、轮次、工具调用、失败率、提问数、工具分类等）。`subagents/` 子代理并入父会话，不单独计数。Cursor IDE Agent 与 `cursor-agent` CLI 写同一套目录，无法从路径区分来源；hash 的 `source` 可标 composer/cli。独立仪表盘只展示聚合，不含对话正文，不进总览 token KPI。单条会话的正文、工具事件、用量、读写路径与 hash 文件走对话记录。工作时间线按 `first_seen_at` / `last_seen_at` 把本机会话铺成当天片段，不进消耗记录、不贡献本机 token KPI。
+_Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话；不要把账号用量或代码量画进工作时间线
 
 **对话记录 (Conversation Record)**：
 本机会话目录：索引元数据，详情按需读取原文件正文与语义事件。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
@@ -39,6 +39,10 @@ _Avoid_: 消耗记录、Cursor 会话仪表盘、把正文写进缓存
 **官方额度 (Official Quota)**：
 Claude / Codex / Cursor / Grok 的账号级订阅限额（已用百分比与重置时间）。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 用已有钥匙串打限额接口，Grok 读本机 `~/.grok/auth.json` 打 CLI 限额接口。
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条
+
+**工作时间线 (Work Timeline)**：
+单日会话区间铺开。消耗记录按 `occurred_at` 聚成横条；Cursor 本机会话按起止时间并入同一天，不把账号用量或代码量画上去。Token 与对话轮次仍只统计当天消耗记录。
+_Avoid_: 把它当成又一份 token KPI，或把 Cursor 会话伪造成消耗记录
 
 **全局指令 (Global Instruction)**：
 某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。

@@ -130,7 +130,7 @@ fn sql_queries_match_in_memory_aggregates() {
         assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
     }
 
-    // work_timeline：SQL 宽口径拉取 + build 与内存路径直接对全量 records 调 build 必须一致。
+    // work_timeline：SQL 宽口径拉取 + Cursor 会话区间，与内存路径对同一批 records/spans 调 build 必须一致。
     for day in [
         "2026-08-01",
         "2026-08-02",
@@ -139,7 +139,11 @@ fn sql_queries_match_in_memory_aggregates() {
         "2026-08-15",
     ] {
         let sql_wt = query::work_timeline(&conn, day).unwrap();
-        let mem_wt = aggregate::work_timeline(&records, day);
+        let extra = match crate::work_timeline::broad_date_bounds(day) {
+            Some((from, to)) => query::work_session_spans(&conn, &from, &to).unwrap(),
+            None => Vec::new(),
+        };
+        let mem_wt = aggregate::work_timeline_with_spans(&records, &extra, day);
         assert_eq!(sql_wt, mem_wt, "work_timeline day={day}");
         // 逐字段显式对照强度指标，避免 DTO 整体相等遮盖新字段回归。
         assert_eq!(sql_wt.turn_count, mem_wt.turn_count, "turn_count day={day}");

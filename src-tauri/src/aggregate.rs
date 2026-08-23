@@ -695,8 +695,17 @@ pub fn session_turns(
 }
 
 /// 单日工作时间线：不经 `Filter`，只看 `day`（本地日历日）这一天，独立于顶栏范围筛选。
+/// 内存路径默认不带 Cursor 本机会话区间；带区间的对照走 `work_timeline_with_spans`。
 pub fn work_timeline(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
-    crate::work_timeline::build(records, day)
+    crate::work_timeline::build(records, &[], day)
+}
+
+pub fn work_timeline_with_spans(
+    records: &[UsageRecord],
+    extra: &[crate::domain::WorkSessionSpan],
+    day: &str,
+) -> WorkTimelineDto {
+    crate::work_timeline::build(records, extra, day)
 }
 
 pub fn filter_options(records: &[UsageRecord]) -> FilterOptions {

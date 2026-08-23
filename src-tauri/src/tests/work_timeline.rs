@@ -1,5 +1,5 @@
-use crate::aggregate::work_timeline;
-use crate::domain::Source;
+use crate::aggregate::{work_timeline, work_timeline_with_spans};
+use crate::domain::{CursorSessionRecord, Source, WorkSessionSpan};
 use crate::test_support::{local_time_iso, rec};
 use chrono::NaiveDate;
 
@@ -467,4 +467,129 @@ fn cross_midnight_session_clips_interval_for_metrics() {
     // turn_count 只算落在今天的记录（1 条）。
     assert_eq!(dto.turn_count, 1);
     assert_eq!(dto.total_tokens, 30);
+}
+
+fn cursor_span(
+    session_id: &str,
+    project: &str,
+    model: &str,
+    start: &str,
+    end: &str,
+) -> WorkSessionSpan {
+    WorkSessionSpan {
+        source: Source::CursorAgent.as_str().to_string(),
+        session_id: session_id.to_string(),
+        project: project.to_string(),
+        model: model.to_string(),
+        started_at: start.to_string(),
+        ended_at: end.to_string(),
+    }
+}
+
+fn cursor_session_row(
+    source_file: &str,
+    session_id: &str,
+    project: &str,
+    models_json: &str,
+    first_seen_at: &str,
+    last_seen_at: &str,
+) -> CursorSessionRecord {
+    CursorSessionRecord {
+        session_id: session_id.to_string(),
+        project: project.to_string(),
+        turn_count: 4,
+        success_count: 3,
+        error_count: 1,
+        aborted_count: 0,
+        user_prompt_count: 2,
+        subagent_count: 0,
+        tool_calls_json: "{}".into(),
+        models_json: models_json.to_string(),
+        sources_json: "[]".into(),
+        extensions_json: "{}".into(),
+        first_seen_at: Some(first_seen_at.to_string()),
+        last_seen_at: Some(last_seen_at.to_string()),
+        files_touched: 1,
+        source_file: source_file.to_string(),
+    }
+}
+
+#[test]
+fn cursor_session_span_becomes_a_segment_without_tokens() {
+    let extra = [cursor_span(
+        "cur-1",
+        "/proj/cursor",
+        "grok-4.6",
+        &local_time_iso(day(), 9, 0, 0),
+        &local_time_iso(day(), 10, 0, 0),
+    )];
+    let dto = work_timeline_with_spans(&[], &extra, day_str());
+    assert_eq!(dto.segment_count, 1);
+    assert_eq!(dto.total_tokens, 0);
+    assert_eq!(dto.turn_count, 0);
+    assert_eq!(dto.ai_exec_minutes, 60.0);
+    let segment = &dto.segments[0];
+    assert_eq!(segment.session_id, "cur-1");
+    assert_eq!(segment.source, "cursor_agent");
+    assert_eq!(segment.project, "/proj/cursor");
+    assert_eq!(segment.model, "grok-4.6");
+    assert_eq!(segment.total_tokens, 0);
+}
+
+#[test]
+fn cursor_span_merges_with_usage_records_of_the_same_session() {
+    let records = vec![rec(
+        &local_time_iso(day(), 9, 30, 0),
+        Source::CursorAgent,
+        "composer",
+        "",
+        "/proj/a",
+        "cur-1",
+        80,
+    )];
+    let extra = [cursor_span(
+        "cur-1",
+        "/proj/cursor",
+        "grok-4.6",
+        &local_time_iso(day(), 9, 0, 0),
+        &local_time_iso(day(), 10, 0, 0),
+    )];
+    let dto = work_timeline_with_spans(&records, &extra, day_str());
+    assert_eq!(dto.segment_count, 1);
+    assert_eq!(dto.total_tokens, 80);
+    assert_eq!(dto.turn_count, 1);
+    assert_eq!(dto.ai_exec_minutes, 60.0);
+    let segment = &dto.segments[0];
+    assert_eq!(segment.session_id, "cur-1");
+    assert_eq!(segment.total_tokens, 80);
+    // 记录 09:30 比会话结束 10:00 早，模型/项目取较新的会话标签。
+    assert_eq!(segment.model, "grok-4.6");
+    assert_eq!(segment.project, "/proj/cursor");
+}
+
+#[test]
+fn query_work_timeline_includes_cursor_sessions() {
+    let conn = crate::store::open_memory().unwrap();
+    crate::store::upsert_cursor_session(
+        &conn,
+        &cursor_session_row(
+            "/tmp/cur-1.jsonl",
+            "cur-1",
+            "/proj/cursor",
+            r#"["composer","grok-4.6"]"#,
+            &local_time_iso(day(), 14, 0, 0),
+            &local_time_iso(day(), 15, 30, 0),
+        ),
+    )
+    .unwrap();
+    let dto = crate::query::work_timeline(&conn, day_str()).unwrap();
+    assert_eq!(dto.segment_count, 1);
+    assert_eq!(dto.total_tokens, 0);
+    assert_eq!(dto.turn_count, 0);
+    assert_eq!(dto.ai_exec_minutes, 90.0);
+    let segment = &dto.segments[0];
+    assert_eq!(segment.source, "cursor_agent");
+    assert_eq!(segment.session_id, "cur-1");
+    assert_eq!(segment.model, "grok-4.6");
+    assert_eq!(segment.project, "/proj/cursor");
 }
