@@ -29,6 +29,7 @@ mod copilot;
 mod cursor;
 mod droid;
 mod dsh;
+mod event_index;
 mod gemini;
 mod grok;
 mod kimi;
@@ -62,7 +63,7 @@ const LARGE_CONTENT_THRESHOLD: usize = 4_096;
 const CONTENT_PREVIEW_CHARS: usize = 2_000;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 7;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 8;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -80,10 +81,10 @@ struct CachedConversationFingerprint {
     source_revision: String,
 }
 
-struct ParsedConversation {
-    session: ConversationSessionRow,
+pub(crate) struct ParsedConversation {
+    pub(crate) session: ConversationSessionRow,
     messages: Vec<ConversationMessage>,
-    events: Vec<ConversationEvent>,
+    pub(crate) events: Vec<ConversationEvent>,
     is_top_level: bool,
 }
 
@@ -457,6 +458,7 @@ pub(crate) fn refresh_source_in_roots(
     // 而不是整个来源的全部事件。
     let mut grouped: BTreeMap<String, Vec<IndexedFile>> = BTreeMap::new();
     let mut unchanged_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
+    let mut event_generations: BTreeMap<String, i64> = BTreeMap::new();
     for path in conversation_source_paths(source, roots)? {
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
@@ -513,6 +515,7 @@ pub(crate) fn refresh_source_in_roots(
             Ok(batch) => {
                 issues.extend(batch.diagnostics);
                 for parsed in batch.conversations {
+                    write_codex_file_events(conn, source, &parsed, &mut event_generations)?;
                     grouped
                         .entry(parsed.session.session_id.clone())
                         .or_default()
@@ -577,13 +580,16 @@ pub(crate) fn refresh_source_in_roots(
                 match (adapter.index)(&path) {
                     Ok(batch) => {
                         issues.extend(batch.diagnostics);
-                        grouped.entry(session_id.clone()).or_default().extend(
-                            batch
-                                .conversations
-                                .into_iter()
-                                .filter(|parsed| parsed.session.session_id == session_id)
-                                .map(summarize_for_index),
-                        );
+                        for parsed in batch.conversations {
+                            if parsed.session.session_id != session_id {
+                                continue;
+                            }
+                            write_codex_file_events(conn, source, &parsed, &mut event_generations)?;
+                            grouped
+                                .entry(session_id.clone())
+                                .or_default()
+                                .push(summarize_for_index(parsed));
+                        }
                     }
                     Err(issue) => {
                         blocked_session_ids.insert(session_id.clone());
@@ -631,6 +637,9 @@ pub(crate) fn refresh_source_in_roots(
             &source_files,
             blocking_issues.is_empty(),
         )?;
+        if let Some(&generation) = event_generations.get(&session_id) {
+            event_index::finalize_session_events(conn, source, &session_id, generation)?;
+        }
     }
     if blocking_issues.is_empty() {
         tombstone_missing_sessions(conn, source, &seen_session_ids)?;
@@ -639,6 +648,18 @@ pub(crate) fn refresh_source_in_roots(
         sync_cursor_usage_only_sessions(conn)?;
     }
     Ok(issues)
+}
+
+fn write_codex_file_events(
+    conn: &Connection,
+    source: Source,
+    parsed: &ParsedConversation,
+    generations: &mut BTreeMap<String, i64>,
+) -> Result<(), String> {
+    if source != Source::Codex {
+        return Ok(());
+    }
+    event_index::write_file_events(conn, source, parsed, generations)
 }
 
 fn conversation_source_paths(source: Source, roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -694,6 +715,14 @@ pub fn sessions_page(
     query: &ConversationQuery,
 ) -> Result<ConversationPage, String> {
     sessions_page_with_prices(conn, query, &PriceTable::default())
+}
+
+pub fn indexed_events(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+) -> Result<Vec<ConversationEvent>, String> {
+    event_index::indexed_events(conn, source, session_id)
 }
 
 pub fn usage_records_page(
@@ -1932,7 +1961,7 @@ fn merge_indexed_files(
     (session, is_top_level, agent)
 }
 
-/// 目录索引真正要写库的只有会话行和父子关系；事件正文不入库，用户打开会话时现场重解析。
+/// 目录索引真正要写库的只有会话行和父子关系；事件正文另写入 `conversation_events`（ADR 0011）。
 ///
 /// 但父子关系必须等一个会话的全部文件合并、去重、排序之后才算得对，所以每解析完一个文件，
 /// 就把相关事件压成这个形状：保留合并所需的去重键与排序键，正文只留 `fold_agent_metadata`
@@ -2085,7 +2114,7 @@ fn event_id_for(source_file: &str, source_sequence: u32) -> String {
     )
 }
 
-fn event_identity(event: &ConversationEvent) -> String {
+pub(crate) fn event_identity(event: &ConversationEvent) -> String {
     let mut normalized = event.clone();
     normalized.event_id.clear();
     normalized.sequence = 0;

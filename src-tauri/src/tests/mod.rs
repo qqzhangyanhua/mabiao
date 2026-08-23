@@ -8,6 +8,7 @@ mod claude_usage;
 mod codex_quota;
 mod codex_usage;
 mod conversation;
+mod conversation_index;
 mod copilot_quota;
 mod cursor_account;
 mod cursor_conversation;

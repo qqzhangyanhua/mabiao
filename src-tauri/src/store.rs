@@ -209,8 +209,9 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             adapter_version INTEGER NOT NULL DEFAULT 0,
             source_revision TEXT NOT NULL DEFAULT '',
             is_top_level INTEGER NOT NULL DEFAULT 1,
-            -- Reconstructable relationship IDs only; conversation bodies remain in source files.
+            -- Reconstructable relationship IDs only; event bodies live in conversation_events (ADR 0011).
             agent_metadata_json TEXT NOT NULL DEFAULT '{}',
+            event_index_generation INTEGER,
             PRIMARY KEY(source, session_id)
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_sessions_ended
@@ -230,6 +231,29 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_session_files_session
             ON conversation_session_files(source, session_id);
+
+        CREATE TABLE IF NOT EXISTS conversation_events (
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            event_id TEXT NOT NULL,
+            sequence INTEGER,
+            source_file TEXT NOT NULL,
+            source_sequence INTEGER NOT NULL,
+            kind TEXT NOT NULL,
+            actor TEXT,
+            name TEXT,
+            occurred_at TEXT,
+            occurred_at_sort TEXT,
+            text TEXT,
+            attachments_json TEXT NOT NULL DEFAULT '[]',
+            capability_status TEXT NOT NULL,
+            content_status TEXT NOT NULL,
+            identity_hash TEXT NOT NULL,
+            identity_occurrence INTEGER NOT NULL,
+            index_generation INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_gen
+            ON conversation_events(source, session_id, index_generation, sequence);
 
         CREATE TABLE IF NOT EXISTS official_quota (
             provider TEXT PRIMARY KEY,
@@ -302,6 +326,12 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         "conversation_sessions",
         "agent_metadata_json",
         "TEXT NOT NULL DEFAULT '{}'",
+    )?;
+    ensure_column(
+        conn,
+        "conversation_sessions",
+        "event_index_generation",
+        "INTEGER",
     )?;
     ensure_column(
         conn,
