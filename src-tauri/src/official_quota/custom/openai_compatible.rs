@@ -17,34 +17,50 @@ use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
 
+use super::QuotaRequest;
+
 /// 官方接口对 `start_date`/`end_date` 的跨度上限是 100 天。
 const USAGE_LOOKBACK_DAYS: i64 = 99;
 
-pub fn urls(base: &str, today: NaiveDate) -> Vec<String> {
+pub fn urls(base: &str, today: NaiveDate) -> Vec<QuotaRequest> {
     let start = today - Duration::days(USAGE_LOOKBACK_DAYS);
     // 结束日期取明天：这两个接口的 end_date 是开区间，写今天会漏掉今天的消耗。
     let end = today + Duration::days(1);
     vec![
-        format!("{base}/v1/dashboard/billing/subscription"),
-        format!(
-            "{base}/v1/dashboard/billing/usage?start_date={}&end_date={}",
-            start.format("%Y-%m-%d"),
-            end.format("%Y-%m-%d")
-        ),
+        QuotaRequest {
+            url: format!("{base}/v1/dashboard/billing/subscription"),
+            // 上限接口是可选的：不少中转站只实现了用量那条，404 不该让整行取不到数，
+            // 降级成「只报已用金额」仍然有用。
+            required: false,
+        },
+        QuotaRequest {
+            url: format!(
+                "{base}/v1/dashboard/billing/usage?start_date={}&end_date={}",
+                start.format("%Y-%m-%d"),
+                end.format("%Y-%m-%d")
+            ),
+            // 已用是这个预设的立身之本，拿不到就没有任何可显示的东西。
+            required: true,
+        },
     ]
 }
 
-/// `bodies` 与 `urls` 一一对应：订阅在前、用量在后。
+/// `bodies` 与 `urls` 一一对应：订阅在前、用量在后。订阅那条可以是空串
+/// （接口不存在或没打通），此时只报金额、不给百分比。
 pub fn parse(bodies: &[&str]) -> Result<Vec<OfficialQuotaWindow>, String> {
-    let subscription = read_json(bodies.first().copied().unwrap_or_default(), "订阅接口")?;
     let usage = read_json(bodies.get(1).copied().unwrap_or_default(), "用量接口")?;
 
     let used = number(&usage, "total_usage").ok_or_else(|| {
         "用量接口里没有 total_usage，这个地址可能不是 OpenAI 兼容计费接口".to_string()
     })? / 100.0;
     // 上限拿不到就只报金额：充值制的站点常常只认已用，不给总额。
-    let limit = number(&subscription, "hard_limit_usd")
-        .or_else(|| number(&subscription, "system_hard_limit_usd"))
+    // 订阅接口整个缺席（空串 / 不是 JSON）也走这条，不算取数失败。
+    let limit = serde_json::from_str::<Value>(bodies.first().copied().unwrap_or_default())
+        .ok()
+        .and_then(|subscription| {
+            number(&subscription, "hard_limit_usd")
+                .or_else(|| number(&subscription, "system_hard_limit_usd"))
+        })
         .filter(|value| *value > 0.0);
 
     Ok(vec![OfficialQuotaWindow {

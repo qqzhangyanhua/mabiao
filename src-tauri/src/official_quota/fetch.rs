@@ -47,6 +47,7 @@ impl QuotaTarget for custom::ResolvedProvider {
 
 /// 只有标识、没有展示名时走这条——写缓存只需要标识。目前的用户是测试：
 /// 它们按标识直接铺一行额度缓存，不必先造一个完整的取数目标。
+#[cfg(test)]
 impl QuotaTarget for String {
     fn quota_id(&self) -> &str {
         self
@@ -274,7 +275,9 @@ fn record_backoff<'a>(
             }
             // 没打网就失败的（没配密钥、预设没实现）不进退避：退避是为了别把对方
             // 打挂，而这些压根没碰到对方。记下去只会用「稍后重试」盖住真正的原因。
-            Err(error) if custom::is_precheck_error(error) => {}
+            // 只对自定义那侧认——这套判据读的是自定义通道自己的错误文案，
+            // 内置 9 家的错误不该被同一句中文误伤。
+            Err(error) if custom::is_custom_id(id) && custom::is_precheck_error(error) => {}
             Err(error) => {
                 touched = true;
                 backoff::record_failure(state, id, error, now);

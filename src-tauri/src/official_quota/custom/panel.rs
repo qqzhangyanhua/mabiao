@@ -170,8 +170,10 @@ pub fn save(
     })
 }
 
-/// 删除配置与密钥。sqlite 里那条额度缓存留着不管：没有任何地方会再读它
-/// （`load_dto` 只认配置里列出的标识），而标识是随机生成的、不会被复用。
+/// 删除配置与密钥。sqlite 里那条额度缓存留着不管：`load_dto` 只认配置里列出的
+/// 标识，删掉之后没有任何地方会再读它。它只在标识被重新摇到时才会重见天日，
+/// 而 `new_provider_id` 只避开「当前配置里还在的」标识——概率是二十四位里撞一次，
+/// 代价是新条目短暂显示上一条的余额，直到第一次取数覆盖它。
 pub fn delete(paths: &CustomQuotaPaths, id: &str) -> Result<CustomQuotaPanelDto, String> {
     let mut config = store::load_config(&paths.config);
     let before = config.providers.len();
