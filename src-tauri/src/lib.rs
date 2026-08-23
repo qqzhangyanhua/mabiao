@@ -14,6 +14,7 @@ pub mod domain;
 pub mod ingest;
 pub mod instructions;
 pub mod litellm;
+pub mod memory;
 pub mod net;
 pub mod official_quota;
 pub mod paths;
@@ -100,6 +101,20 @@ impl ReadPool {
         }
         Ok(())
     }
+
+    fn shrink_memory(&self) {
+        for slot in &self.conns {
+            if let Ok(conn) = slot.lock() {
+                let _ = store::shrink_memory(&conn);
+            }
+        }
+    }
+}
+
+pub(crate) fn release_idle_memory(state: &AppState, write: &Connection) {
+    let _ = store::shrink_memory(write);
+    state.read_pool.shrink_memory();
+    memory::release_idle();
 }
 
 pub struct AppState {
@@ -194,6 +209,7 @@ async fn ingest(app: tauri::AppHandle) -> Result<IngestReport, String> {
             &state.budget_path,
             &state.budget_notify_path,
         );
+        release_idle_memory(&state, &conn);
         Ok(report)
     })
     .await
@@ -437,7 +453,9 @@ async fn rebuild_cache(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let conn = state.lock_write()?;
-        ingest::rebuild_cache(&conn, &ingest::default_home(), source)
+        let report = ingest::rebuild_cache(&conn, &ingest::default_home(), source)?;
+        release_idle_memory(&state, &conn);
+        Ok(report)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1262,8 +1280,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == tray_popup::LABEL {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -1328,13 +1348,18 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            let _ = &app;
-            let _ = &event;
-            #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = event {
-                tray::show_main(app);
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested { api, code, .. } => {
+                // None = 关最后一扇窗 / Cmd+Q 等用户交互。主窗口没了就留在托盘；
+                // 主窗口还在（典型是 Cmd+Q）则放行，让应用退出。
+                // 托盘菜单「退出」走 app.exit(0)，code 是 Some，不会进这里。
+                if code.is_none() && app.get_webview_window("main").is_none() {
+                    api.prevent_exit();
+                }
             }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => tray::show_main(app),
+            _ => {}
         });
 }
 

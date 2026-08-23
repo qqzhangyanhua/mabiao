@@ -49,6 +49,12 @@ fn configure_connection(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+/// 把 SQLite 页缓存和临时分配还给系统。mimalloc 管不到 libc malloc 上的这些页。
+pub fn shrink_memory(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch("PRAGMA shrink_memory")
+        .map_err(|e| e.to_string())
+}
+
 /// 32 MiB：够装下一轮增量摄取的全部脏页，又不至于让「重建全部」之后留下一个上百 MB 的 WAL。
 const WAL_SIZE_LIMIT_BYTES: i64 = 32 * 1024 * 1024;
 

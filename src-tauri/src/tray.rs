@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::domain::{Filter, OfficialQuotaDto, OverviewDto};
 use crate::{ingest, official_quota, query, tray_popup, AppState};
@@ -137,7 +137,27 @@ pub fn show_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        return;
     }
+    if let Err(error) = create_main_window(app) {
+        eprintln!("打开主窗口失败：{error}");
+    }
+}
+
+fn create_main_window(app: &AppHandle) -> Result<(), String> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .cloned()
+        .ok_or_else(|| "缺少 main 窗口配置".to_string())?;
+    WebviewWindowBuilder::from_config(app, &config)
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn refresh(app: &AppHandle) -> Result<(), String> {
@@ -173,6 +193,7 @@ pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
             &state.budget_path,
             &state.budget_notify_path,
         );
+        crate::release_idle_memory(&state, &conn);
     }
     let _ = sync_official_quota(app);
     refresh(app)
