@@ -226,7 +226,7 @@ fn apply_labels_now(app: &AppHandle, overview: &OverviewDto, quota: Option<&Offi
     let tightest = quota.and_then(official_quota::tightest_window);
     let title = format_title_with_quota(overview.cost, overview.unpriced, tightest.as_ref());
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        let _ = tray.set_title(Some(title.as_str()));
+        let _ = tray.set_title(None::<&str>);
         let _ = tray.set_tooltip(Some(format!("今日花费 {title}")));
     }
     if let Some(quota) = quota {
