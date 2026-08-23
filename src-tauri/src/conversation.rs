@@ -2326,16 +2326,30 @@ fn assign_event_provenance(events: &mut [ConversationEvent], source_file: &str) 
     }
 }
 
+/// 这 7 个来源（claude/pi/cursor/kimi/grok/droid/copilot）后续都要按 id/prompt 做
+/// 「只留最后一次」的去重或跨行聚合，天然需要整份 `Vec<(usize, Value)>` 常驻——这块内存
+/// 省不掉。但「先把整份文件读成一份 `String`，再逐行解析出第二份 `Value` 树」等于同时
+/// 攥着两份内容，其中原始文本那份纯属浪费：按行流式读盘，只让当前这一行的原始文本活着，
+/// 能把这一步的峰值内存打个对折（省掉的正是原始文件那一份）。
 fn parse_jsonl_conversation_values(path: &Path) -> Result<Vec<(usize, Value)>, String> {
-    let content = fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-    content
+    let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+    BufReader::new(file)
         .lines()
         .enumerate()
-        .filter(|(_, raw)| !raw.trim().is_empty())
-        .map(|(index, raw)| {
-            serde_json::from_str(raw.trim())
-                .map(|value| (index, value))
-                .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1))
+        .filter_map(|(index, line)| {
+            let raw = match line {
+                Ok(raw) => raw,
+                Err(error) => return Some(Err(format!("第 {} 行读取失败：{error}", index + 1))),
+            };
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            Some(
+                serde_json::from_str(trimmed)
+                    .map(|value| (index, value))
+                    .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1)),
+            )
         })
         .collect()
 }
@@ -3278,9 +3292,8 @@ pub(super) fn read_source_payload(
     sequence: u32,
 ) -> Result<Value, String> {
     if source == Source::Gemini {
-        let content =
-            fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-        let root: Value = serde_json::from_str(&content)
+        let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+        let root: Value = serde_json::from_reader(BufReader::new(file))
             .map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
         return root
             .get("messages")
