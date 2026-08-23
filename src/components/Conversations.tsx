@@ -8,13 +8,7 @@ import {
   type UIEvent,
 } from "react";
 import { Icon } from "../icons";
-import {
-  conversationKey,
-  pinnedConversationKeys,
-  pruneConversationDetails,
-  touchConversationOrder,
-  type ConversationCacheChild,
-} from "../lib/conversationCache";
+import { conversationKey } from "../lib/conversationCache";
 import {
   conversationJumpBehavior,
   conversationJumpScrollTop,
@@ -47,7 +41,10 @@ import type {
 import { ConversationCatalogRow } from "./ConversationCatalogRow";
 import { ConversationDetailHead } from "./ConversationDetailHead";
 import { ConversationJumpBar } from "./ConversationJumpBar";
-import { ConversationTimeline } from "./ConversationTimeline";
+import {
+  ConversationTimeline,
+  type ConversationTimelineHandle,
+} from "./ConversationTimeline";
 import { ConversationUsageTable } from "./ConversationUsageTable";
 import { CursorSessionDetail } from "./CursorSessionDetail";
 import { EmptyState } from "./EmptyState";
@@ -144,11 +141,10 @@ export function Conversations({
   const selectedKeyRef = useRef<string | null>(selectedKey);
   selectedKeyRef.current = selectedKey;
   const detailsRef = useRef<Record<string, ConversationDetailDto>>({});
-  const detailOrderRef = useRef<string[]>([]);
-  const navigationRef = useRef(navigation);
-  navigationRef.current = navigation;
   const observedDetailRevisions = useRef(new Map<string, string>());
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineApiRef = useRef<ConversationTimelineHandle | null>(null);
+  const windowEdgesRef = useRef({ hasMoreBefore: false, hasMoreAfter: false });
   const wasAtBottomRef = useRef(true);
   const pendingScrollRef = useRef(false);
   const savedTimelineScrollTopRef = useRef(0);
@@ -156,56 +152,12 @@ export function Conversations({
   const jumpingRef = useRef(false);
   const jumpTokenRef = useRef(0);
   const jumpTimerRef = useRef(0);
-  const revealAnchorRef = useRef<number | null>(null);
 
-  // 时间线展开更早事件时内容会从顶部长出来。记住「距离底部多远」，展开后按新的
-  // scrollHeight 还原，视口就不会跳。
+  // 用户主动去看更早的内容，就别再让新事件把视口拽回底部。
   const captureTimelineAnchor = useCallback(() => {
-    const timeline = timelineRef.current;
-    revealAnchorRef.current = timeline ? timeline.scrollHeight - timeline.scrollTop : null;
-    // 用户主动去看更早的内容，就别再让新事件把视口拽回底部。
     wasAtBottomRef.current = false;
     pendingScrollRef.current = false;
   }, []);
-  const restoreTimelineAnchor = useCallback(() => {
-    const anchor = revealAnchorRef.current;
-    revealAnchorRef.current = null;
-    const timeline = timelineRef.current;
-    if (anchor === null || !timeline) {
-      return;
-    }
-    timeline.scrollTop = timeline.scrollHeight - anchor;
-  }, []);
-
-  // 导航栈上的会话元数据必须留着，其余按最近使用淘汰。
-  const pruneDetails = useCallback((entries: Record<string, ConversationDetailDto>) => {
-    const state = navigationRef.current;
-    const childrenOf = (key: string): readonly ConversationCacheChild[] =>
-      entries[key]?.agent_relations.children.map((link) => ({
-        relationship_id: link.relationship_id,
-        key: link.session ? conversationKey(link.session) : null,
-      })) ?? [];
-    const pruned = pruneConversationDetails({
-      details: entries,
-      order: detailOrderRef.current,
-      pinned: pinnedConversationKeys({
-        rootKeys: state.frames.map((frame) => conversationKey(frame.session)),
-        expandedRelationshipIds: state.frames.flatMap((frame) => frame.expanded_relationship_ids),
-        childrenOf,
-      }),
-    });
-    detailOrderRef.current = pruned.order;
-    return pruned.details;
-  }, []);
-
-  useEffect(() => {
-    const pruned = pruneDetails(detailsRef.current);
-    if (Object.keys(pruned).length === Object.keys(detailsRef.current).length) {
-      return;
-    }
-    detailsRef.current = pruned;
-    setDetails(pruned);
-  }, [navigation, pruneDetails]);
 
   const getDetailRequestGate = useCallback((key: string) => {
     let gate = detailRequestGates.current.get(key);
@@ -246,8 +198,7 @@ export function Conversations({
           setUnseenCount(0);
         }
       }
-      detailOrderRef.current = touchConversationOrder(detailOrderRef.current, key);
-      detailsRef.current = pruneDetails({ ...detailsRef.current, [key]: result });
+      detailsRef.current = { ...detailsRef.current, [key]: result };
       setDetails(detailsRef.current);
       observedDetailRevisions.current.set(key, result.revision);
       setFileAvailableByKey((current) => ({ ...current, [key]: result.session.file_available }));
@@ -262,7 +213,7 @@ export function Conversations({
         return next;
       });
     },
-    [pruneDetails],
+    [],
   );
 
   const performDetailRequest = useCallback(
@@ -485,8 +436,10 @@ export function Conversations({
   ]);
 
   const syncTimelineEdge = useCallback((timeline: HTMLElement) => {
-    const nextAtTop = isNearConversationTop(timeline);
-    const nextAtBottom = isNearConversationBottom(timeline);
+    const nextAtTop =
+      isNearConversationTop(timeline) && !windowEdgesRef.current.hasMoreBefore;
+    const nextAtBottom =
+      isNearConversationBottom(timeline) && !windowEdgesRef.current.hasMoreAfter;
     setAtTop(nextAtTop);
     setAtBottom(nextAtBottom);
     if (!jumpingRef.current) {
@@ -498,6 +451,16 @@ export function Conversations({
       setUnseenCount(0);
     }
   }, []);
+
+  const handleWindowChange = useCallback(
+    (edges: { hasMoreBefore: boolean; hasMoreAfter: boolean }) => {
+      windowEdgesRef.current = edges;
+      if (timelineRef.current) {
+        syncTimelineEdge(timelineRef.current);
+      }
+    },
+    [syncTimelineEdge],
+  );
 
   useLayoutEffect(() => {
     if (!detail || detailTab !== "events") {
@@ -542,20 +505,46 @@ export function Conversations({
     syncTimelineEdge(event.currentTarget);
   }
 
-  function jumpTimeline(edge: ConversationJumpEdge) {
-    const timeline = timelineRef.current;
+  async function jumpTimeline(edge: ConversationJumpEdge) {
     const token = ++jumpTokenRef.current;
     window.clearTimeout(jumpTimerRef.current);
 
+    const hadUnseen = unseenCountRef.current > 0;
     if (edge === "top") {
       pendingScrollRef.current = false;
       wasAtBottomRef.current = false;
+      setAtBottom(false);
     } else {
       wasAtBottomRef.current = true;
+      setAtBottom(true);
       unseenCountRef.current = 0;
       setUnseenCount(0);
     }
 
+    const needsReload =
+      edge === "top"
+        ? windowEdgesRef.current.hasMoreBefore
+        : windowEdgesRef.current.hasMoreAfter || hadUnseen;
+    if (needsReload) {
+      jumpingRef.current = false;
+      if (edge === "top") {
+        await timelineApiRef.current?.jumpToStart();
+      } else {
+        await timelineApiRef.current?.jumpToEnd();
+      }
+      if (token !== jumpTokenRef.current) {
+        return;
+      }
+      if (timelineRef.current) {
+        syncTimelineEdge(timelineRef.current);
+      } else {
+        setAtTop(edge === "top");
+        setAtBottom(edge === "bottom");
+      }
+      return;
+    }
+
+    const timeline = timelineRef.current;
     if (!timeline) {
       jumpingRef.current = false;
       pendingScrollRef.current = edge === "bottom";
@@ -608,7 +597,8 @@ export function Conversations({
       const timeline = timelineRef.current;
       if (timeline) {
         savedTimelineScrollTopRef.current = timeline.scrollTop;
-        wasAtBottomRef.current = isNearConversationBottom(timeline);
+        wasAtBottomRef.current =
+          isNearConversationBottom(timeline) && !windowEdgesRef.current.hasMoreAfter;
       }
     }
     setDetailTab(nextTab);
@@ -630,6 +620,7 @@ export function Conversations({
       window.clearTimeout(jumpTimerRef.current);
       unseenCountRef.current = 0;
       setUnseenCount(0);
+      windowEdgesRef.current = { hasMoreBefore: false, hasMoreAfter: false };
       fetchDetail(session);
     },
     [fetchDetail],
@@ -665,8 +656,8 @@ export function Conversations({
     }
     detailRequestGates.current.clear();
     detailsRef.current = {};
-    detailOrderRef.current = [];
     setDetails({});
+    windowEdgesRef.current = { hasMoreBefore: false, hasMoreAfter: false };
     setDetailLoadingByKey({});
     setDetailErrorsByKey({});
     setFileAvailableByKey({});
@@ -728,6 +719,7 @@ export function Conversations({
     window.clearTimeout(jumpTimerRef.current);
     unseenCountRef.current = 0;
     setUnseenCount(0);
+    windowEdgesRef.current = { hasMoreBefore: false, hasMoreAfter: false };
     fetchDetail(link.session);
   }
 
@@ -861,26 +853,28 @@ export function Conversations({
                   </div>
                 ) : null}
                 <ConversationTimeline
-                  key={`${session.source}:${session.session_id}:${detail.revision}`}
+                  key={`${session.source}:${session.session_id}`}
                   source={session.source}
                   sessionId={session.session_id}
                   revision={detail.revision}
                   eventCount={detail.event_count}
                   agentLinks={detail.agent_relations.children}
                   expandedRelationshipIds={currentFrame?.expanded_relationship_ids ?? []}
+                  followLatest={atBottom}
                   onToggleChild={toggleChild}
                   onOpenChild={openChild}
                   timelineRef={timelineRef}
+                  timelineApiRef={timelineApiRef}
                   onScroll={handleTimelineScroll}
+                  onWindowChange={handleWindowChange}
                   onCaptureScrollAnchor={captureTimelineAnchor}
-                  onRestoreScrollAnchor={restoreTimelineAnchor}
                 />
                 <ConversationJumpBar
                   atTop={atTop}
                   atBottom={atBottom}
                   unseenCount={unseenCount}
-                  onJumpTop={() => jumpTimeline("top")}
-                  onJumpBottom={() => jumpTimeline("bottom")}
+                  onJumpTop={() => void jumpTimeline("top")}
+                  onJumpBottom={() => void jumpTimeline("bottom")}
                 />
               </div>
             )

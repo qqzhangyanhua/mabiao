@@ -1,4 +1,11 @@
-import { useLayoutEffect, useRef, type RefObject, type UIEvent } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  type RefObject,
+  type UIEvent,
+} from "react";
 import { useConversationEventPages } from "../lib/useConversationEventPages";
 import type { ConversationAgentLink } from "../types";
 import { ConversationAgentBranch } from "./ConversationAgentBranch";
@@ -6,6 +13,11 @@ import { ConversationEventItem } from "./ConversationEventItem";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
+
+export type ConversationTimelineHandle = {
+  jumpToStart: () => Promise<void>;
+  jumpToEnd: () => Promise<void>;
+};
 
 export type ConversationTimelineProps = {
   source: string;
@@ -15,13 +27,39 @@ export type ConversationTimelineProps = {
   agentLinks: ConversationAgentLink[];
   expandedRelationshipIds: string[];
   depth?: number;
+  followLatest?: boolean;
   onToggleChild: (link: ConversationAgentLink) => void;
   onOpenChild: (link: ConversationAgentLink) => void;
   timelineRef?: RefObject<HTMLDivElement | null>;
+  timelineApiRef?: RefObject<ConversationTimelineHandle | null>;
   onScroll?: (event: UIEvent<HTMLDivElement>) => void;
+  onWindowChange?: (edges: { hasMoreBefore: boolean; hasMoreAfter: boolean }) => void;
   onCaptureScrollAnchor?: () => void;
-  onRestoreScrollAnchor?: () => void;
 };
+
+type VisibleEventAnchor = { eventId: string; offset: number };
+
+function captureVisibleEventAnchor(node: HTMLElement): VisibleEventAnchor | null {
+  const groups = node.querySelectorAll<HTMLElement>("[data-event-id]");
+  for (const group of groups) {
+    const eventId = group.dataset.eventId;
+    if (!eventId) {
+      continue;
+    }
+    if (group.offsetTop + group.offsetHeight > node.scrollTop) {
+      return { eventId, offset: group.offsetTop - node.scrollTop };
+    }
+  }
+  return null;
+}
+
+function restoreVisibleEventAnchor(node: HTMLElement, anchor: VisibleEventAnchor) {
+  const target = node.querySelector(`[data-event-id="${CSS.escape(anchor.eventId)}"]`);
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  node.scrollTop = target.offsetTop - anchor.offset;
+}
 
 export function ConversationTimeline({
   source,
@@ -31,19 +69,34 @@ export function ConversationTimeline({
   agentLinks,
   expandedRelationshipIds,
   depth = 0,
+  followLatest = false,
   onToggleChild,
   onOpenChild,
   timelineRef,
+  timelineApiRef,
   onScroll,
+  onWindowChange,
   onCaptureScrollAnchor,
-  onRestoreScrollAnchor,
 }: ConversationTimelineProps) {
-  const { eventWindow, loading, loadingEarlier, error, loadEarlier, applyEventContent } =
-    useConversationEventPages({ source, sessionId, revision });
+  const {
+    eventWindow,
+    loading,
+    loadingEarlier,
+    loadingLater,
+    error,
+    loadEarlier,
+    loadLater,
+    jumpToFirst,
+    jumpToLast,
+    applyEventContent,
+  } = useConversationEventPages({ source, sessionId, revision, followLatest });
   const events = eventWindow.events;
   const firstSequence = events[0]?.sequence;
+  const lastSequence = events[events.length - 1]?.sequence;
   const nodeRef = useRef<HTMLDivElement | null>(null);
-  const revealAnchorRef = useRef<number | null>(null);
+  const visibleAnchorRef = useRef<VisibleEventAnchor | null>(null);
+  const pendingJumpRef = useRef<"top" | "bottom" | null>(null);
+  const fallbackApiRef = useRef<ConversationTimelineHandle | null>(null);
 
   const setTimelineNode = (node: HTMLDivElement | null) => {
     nodeRef.current = node;
@@ -54,13 +107,45 @@ export function ConversationTimeline({
 
   useLayoutEffect(() => {
     const node = nodeRef.current;
-    const anchor = revealAnchorRef.current;
-    revealAnchorRef.current = null;
-    if (anchor !== null && node) {
-      node.scrollTop = node.scrollHeight - anchor;
+    const jump = pendingJumpRef.current;
+    const visible = visibleAnchorRef.current;
+    pendingJumpRef.current = null;
+    visibleAnchorRef.current = null;
+    if (node) {
+      if (jump === "top") {
+        node.scrollTop = 0;
+      } else if (jump === "bottom") {
+        node.scrollTop = node.scrollHeight;
+      } else if (visible) {
+        restoreVisibleEventAnchor(node, visible);
+      }
     }
-    onRestoreScrollAnchor?.();
-  }, [firstSequence, onRestoreScrollAnchor]);
+  }, [firstSequence, lastSequence, events.length]);
+
+  useEffect(() => {
+    onWindowChange?.({
+      hasMoreBefore: eventWindow.hasMoreBefore,
+      hasMoreAfter: eventWindow.hasMoreAfter,
+    });
+  }, [eventWindow.hasMoreAfter, eventWindow.hasMoreBefore, onWindowChange]);
+
+  useImperativeHandle(timelineApiRef ?? fallbackApiRef, () => ({
+    async jumpToStart() {
+      const node = nodeRef.current;
+      if (!eventWindow.hasMoreBefore) {
+        if (node) {
+          node.scrollTop = 0;
+        }
+        return;
+      }
+      pendingJumpRef.current = "top";
+      await jumpToFirst();
+    },
+    async jumpToEnd() {
+      pendingJumpRef.current = "bottom";
+      await jumpToLast();
+    },
+  }));
 
   const eventIds = new Set(events.map((event) => event.event_id));
   const linksForEvent = (eventId: string) =>
@@ -83,6 +168,17 @@ export function ConversationTimeline({
     ));
   }
 
+  function revealAdjacent(direction: "earlier" | "later") {
+    const node = nodeRef.current;
+    visibleAnchorRef.current = node ? captureVisibleEventAnchor(node) : null;
+    if (direction === "earlier") {
+      onCaptureScrollAnchor?.();
+      void loadEarlier();
+    } else {
+      void loadLater();
+    }
+  }
+
   return (
     <div
       className="conversation-timeline"
@@ -102,19 +198,12 @@ export function ConversationTimeline({
         ) : (
           <>
             {eventWindow.hasMoreBefore ? (
-              <div className="conversation-timeline-earlier">
+              <div className="conversation-timeline-page-gate">
                 <span className="muted">上方还有更早事件</span>
                 <Button
                   size="sm"
-                  disabled={loadingEarlier}
-                  onClick={() => {
-                    const node = nodeRef.current;
-                    revealAnchorRef.current = node
-                      ? node.scrollHeight - node.scrollTop
-                      : null;
-                    onCaptureScrollAnchor?.();
-                    void loadEarlier();
-                  }}
+                  disabled={loadingEarlier || loadingLater}
+                  onClick={() => revealAdjacent("earlier")}
                 >
                   {loadingEarlier ? <Spinner size={12} /> : null}
                   加载更早
@@ -127,7 +216,7 @@ export function ConversationTimeline({
               </span>
             ) : null}
             {events.map((event) => (
-              <div className="conversation-event-group" key={event.event_id}>
+              <div className="conversation-event-group" data-event-id={event.event_id} key={event.event_id}>
                 <ConversationEventItem
                   event={event}
                   source={source}
@@ -137,6 +226,19 @@ export function ConversationTimeline({
                 {renderAgentLinks(linksForEvent(event.event_id))}
               </div>
             ))}
+            {eventWindow.hasMoreAfter ? (
+              <div className="conversation-timeline-page-gate">
+                <span className="muted">下方还有更新事件</span>
+                <Button
+                  size="sm"
+                  disabled={loadingEarlier || loadingLater}
+                  onClick={() => revealAdjacent("later")}
+                >
+                  {loadingLater ? <Spinner size={12} /> : null}
+                  加载更新
+                </Button>
+              </div>
+            ) : null}
             {renderAgentLinks(trailingLinks)}
           </>
         )}

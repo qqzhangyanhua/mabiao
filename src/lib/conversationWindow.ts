@@ -1,13 +1,16 @@
 /**
  * 会话时间线的已加载窗口。
  *
- * 打开时锚定最新一页，之后只向两端追加；已加载的页先留着。revision 变化时整窗丢弃，
- * 重新拉最新一页——游标是 sequence，源文件中段被改写后旧序号不再可靠。
+ * 打开时锚定最新一页，之后向两端按页取数。窗口有上限：向一端越过上限时丢掉远离视口
+ * 的另一端。revision 在跟随最新时整窗换成最新一页；离开底部读历史时保留当前窗口。
  */
 
 import type { ConversationEventAnchor } from "../types";
 
 export const CONVERSATION_EVENT_PAGE_SIZE = 200;
+export const CONVERSATION_EVENT_WINDOW_MAX_PAGES = 5;
+export const CONVERSATION_EVENT_WINDOW_LIMIT =
+  CONVERSATION_EVENT_PAGE_SIZE * CONVERSATION_EVENT_WINDOW_MAX_PAGES;
 
 export type { ConversationEventAnchor };
 
@@ -25,6 +28,8 @@ export type ConversationEventWindow<T extends { sequence: number }> = {
 
 export type ConversationEventPageMode = "replace" | "prepend" | "append";
 
+export type ConversationEventTrimKeep = "start" | "end";
+
 export function emptyConversationEventWindow<
   T extends { sequence: number },
 >(): ConversationEventWindow<T> {
@@ -33,6 +38,10 @@ export function emptyConversationEventWindow<
 
 export function latestPageAnchor(): ConversationEventAnchor {
   return { type: "last" };
+}
+
+export function firstPageAnchor(): ConversationEventAnchor {
+  return { type: "first" };
 }
 
 export function nextEarlierAnchor<T extends { sequence: number }>(
@@ -87,4 +96,50 @@ export function applyConversationEventPage<T extends { sequence: number }>(
     hasMoreBefore: current.hasMoreBefore,
     hasMoreAfter: page.has_more_after,
   };
+}
+
+export function trimConversationEventWindow<T extends { sequence: number }>(
+  current: ConversationEventWindow<T>,
+  {
+    keep,
+    limit = CONVERSATION_EVENT_WINDOW_LIMIT,
+  }: {
+    keep: ConversationEventTrimKeep;
+    limit?: number;
+  },
+): ConversationEventWindow<T> {
+  const cap = Math.max(0, limit);
+  if (current.events.length <= cap) {
+    return current;
+  }
+
+  if (keep === "start") {
+    return {
+      events: current.events.slice(0, cap),
+      hasMoreBefore: current.hasMoreBefore,
+      hasMoreAfter: true,
+    };
+  }
+
+  return {
+    events: current.events.slice(current.events.length - cap),
+    hasMoreBefore: true,
+    hasMoreAfter: current.hasMoreAfter,
+  };
+}
+
+export function advanceConversationEventWindow<T extends { sequence: number }>(
+  current: ConversationEventWindow<T>,
+  page: ConversationEventPageSlice<T>,
+  mode: ConversationEventPageMode,
+  limit = CONVERSATION_EVENT_WINDOW_LIMIT,
+): ConversationEventWindow<T> {
+  const merged = applyConversationEventPage(current, page, mode);
+  if (mode === "replace") {
+    return merged;
+  }
+  return trimConversationEventWindow(merged, {
+    keep: mode === "prepend" ? "start" : "end",
+    limit,
+  });
 }

@@ -2,16 +2,21 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ConversationEvent,
+  ConversationEventAnchor,
   ConversationEventContentDto,
   ConversationEventPage,
 } from "../types";
+import { conversationKey } from "./conversationCache";
 import { humanStatus } from "./format";
 import {
-  applyConversationEventPage,
+  advanceConversationEventWindow,
   CONVERSATION_EVENT_PAGE_SIZE,
   emptyConversationEventWindow,
+  firstPageAnchor,
   latestPageAnchor,
   nextEarlierAnchor,
+  nextLaterAnchor,
+  type ConversationEventPageMode,
   type ConversationEventWindow,
 } from "./conversationWindow";
 
@@ -19,22 +24,28 @@ export function useConversationEventPages({
   source,
   sessionId,
   revision,
+  followLatest = false,
 }: {
   source: string;
   sessionId: string;
   revision: string;
+  followLatest?: boolean;
 }) {
-  const identity = `${source}\u{1f}${sessionId}\u{1f}${revision}`;
+  const sessionKey = conversationKey({ source, session_id: sessionId });
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [eventWindow, setEventWindow] = useState<ConversationEventWindow<ConversationEvent>>(
     emptyConversationEventWindow,
   );
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [loadingLater, setLoadingLater] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const generation = useRef(0);
+  const seenRevision = useRef(revision);
+  const skippedRevision = useRef<string | null>(null);
 
-  useEffect(() => {
+  const replaceWithLatest = useCallback(() => {
     const request = ++generation.current;
+    const expectedSession = sessionKey;
     void invoke<ConversationEventPage>("get_conversation_events", {
       source,
       sessionId,
@@ -45,8 +56,8 @@ export function useConversationEventPages({
         if (generation.current !== request) {
           return;
         }
-        setEventWindow((current) => applyConversationEventPage(current, page, "replace"));
-        setLoadedFor(identity);
+        setEventWindow((current) => advanceConversationEventWindow(current, page, "replace"));
+        setLoadedFor(expectedSession);
         setError(null);
       })
       .catch((caught: unknown) => {
@@ -55,23 +66,43 @@ export function useConversationEventPages({
         }
         setEventWindow(emptyConversationEventWindow());
         setError(humanStatus(caught));
-        setLoadedFor(identity);
+        setLoadedFor(expectedSession);
       });
-  }, [identity, sessionId, source]);
+  }, [sessionId, sessionKey, source]);
+
+  useEffect(() => {
+    seenRevision.current = revision;
+    skippedRevision.current = null;
+    replaceWithLatest();
+    // 换会话才重新锚定最新一页；revision 是否跟随由下面的 effect 判定。
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- session identity only
+  }, [replaceWithLatest, sessionKey]);
+
+  useEffect(() => {
+    if (seenRevision.current !== revision) {
+      seenRevision.current = revision;
+      if (followLatest) {
+        skippedRevision.current = null;
+        replaceWithLatest();
+      } else {
+        skippedRevision.current = revision;
+      }
+      return;
+    }
+    if (followLatest && skippedRevision.current !== null) {
+      skippedRevision.current = null;
+      replaceWithLatest();
+    }
+  }, [followLatest, replaceWithLatest, revision]);
 
   const visibleWindow =
-    loadedFor === identity ? eventWindow : emptyConversationEventWindow<ConversationEvent>();
-  const loading = loadedFor !== identity;
-  const visibleError = loadedFor === identity ? error : null;
+    loadedFor === sessionKey ? eventWindow : emptyConversationEventWindow<ConversationEvent>();
+  const loading = loadedFor !== sessionKey;
+  const visibleError = loadedFor === sessionKey ? error : null;
 
-  const loadEarlier = useCallback(async () => {
-    const anchor = nextEarlierAnchor(visibleWindow);
-    if (!anchor || loadingEarlier) {
-      return false;
-    }
-    const request = generation.current;
-    setLoadingEarlier(true);
-    try {
+  const requestPage = useCallback(
+    async (anchor: ConversationEventAnchor, mode: ConversationEventPageMode) => {
+      const request = generation.current;
       const page = await invoke<ConversationEventPage>("get_conversation_events", {
         source,
         sessionId,
@@ -81,19 +112,57 @@ export function useConversationEventPages({
       if (generation.current !== request) {
         return false;
       }
-      setEventWindow((current) => applyConversationEventPage(current, page, "prepend"));
+      setEventWindow((current) => advanceConversationEventWindow(current, page, mode));
+      setError(null);
       return true;
+    },
+    [sessionId, source],
+  );
+
+  const loadEarlier = useCallback(async () => {
+    const anchor = nextEarlierAnchor(visibleWindow);
+    if (!anchor || loadingEarlier || loadingLater) {
+      return false;
+    }
+    setLoadingEarlier(true);
+    try {
+      return await requestPage(anchor, "prepend");
     } catch (caught) {
-      if (generation.current === request) {
-        setError(humanStatus(caught));
-      }
+      setError(humanStatus(caught));
       return false;
     } finally {
-      if (generation.current === request) {
-        setLoadingEarlier(false);
-      }
+      setLoadingEarlier(false);
     }
-  }, [loadingEarlier, sessionId, source, visibleWindow]);
+  }, [loadingEarlier, loadingLater, requestPage, visibleWindow]);
+
+  const loadLater = useCallback(async () => {
+    const anchor = nextLaterAnchor(visibleWindow);
+    if (!anchor || loadingEarlier || loadingLater) {
+      return false;
+    }
+    setLoadingLater(true);
+    try {
+      return await requestPage(anchor, "append");
+    } catch (caught) {
+      setError(humanStatus(caught));
+      return false;
+    } finally {
+      setLoadingLater(false);
+    }
+  }, [loadingEarlier, loadingLater, requestPage, visibleWindow]);
+
+  const jumpToFirst = useCallback(async () => {
+    if (!visibleWindow.hasMoreBefore) {
+      return false;
+    }
+    return requestPage(firstPageAnchor(), "replace");
+  }, [requestPage, visibleWindow.hasMoreBefore]);
+
+  const jumpToLast = useCallback(async () => {
+    seenRevision.current = revision;
+    skippedRevision.current = null;
+    return requestPage(latestPageAnchor(), "replace");
+  }, [requestPage, revision]);
 
   const applyEventContent = useCallback((content: ConversationEventContentDto) => {
     setEventWindow((current) => ({
@@ -115,8 +184,12 @@ export function useConversationEventPages({
     eventWindow: visibleWindow,
     loading,
     loadingEarlier,
+    loadingLater,
     error: visibleError,
     loadEarlier,
+    loadLater,
+    jumpToFirst,
+    jumpToLast,
     applyEventContent,
   };
 }

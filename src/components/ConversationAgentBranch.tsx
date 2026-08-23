@@ -175,7 +175,7 @@ function NestedConversationTimeline({
   }
   return (
     <ConversationTimeline
-      key={`${conversationKey(childDetail.session)}:${childDetail.revision}`}
+      key={conversationKey(childDetail.session)}
       source={childDetail.session.source}
       sessionId={childDetail.session.session_id}
       revision={childDetail.revision}
@@ -183,6 +183,7 @@ function NestedConversationTimeline({
       agentLinks={childDetail.agent_relations.children}
       expandedRelationshipIds={expandedRelationshipIds}
       depth={depth + 1}
+      followLatest
       onToggleChild={onToggleChild}
       onOpenChild={onOpenChild}
     />
