@@ -1,0 +1,33 @@
+src-tauri/src/backup.rs
+  s_4ba7aa50f29b98::t_5f51af63c0895a 67-84,86,88-93,95-99,101-102,104-111
+  s_4ba7aa50f29b98::t_39f77de3ee83e9 41
+  s_4ba7aa50f29b98::t_4b680ca5ddf708 85,87,94
+  s_4ba7aa50f29b98::t_a3accfbc245898 182-183
+  s_4ba7aa50f29b98::t_5d9bb64d1f97ad 103
+  s_4ba7aa50f29b98::t_d1e4b8009f0c9e 100
+docs/adr/0011-conversation-event-index.md
+  s_4ba7aa50f29b98::t_fa7eb7017294c1 14
+src-tauri/src/lib.rs
+  s_4ba7aa50f29b98::t_6873c661871294 1001
+src-tauri/src/tests/misc.rs
+  s_4ba7aa50f29b98::t_9ed9c23a0fe65d 853-890,897,899-924,926-932,937-980
+  s_4ba7aa50f29b98::t_5d9bb64d1f97ad 925
+  s_4ba7aa50f29b98::t_35307185227cdd 891-896,898
+  s_4ba7aa50f29b98::t_c6d847eb0a54f2 933-936
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "c94192a61d9992efcfbd290581074d1f8d50b845",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
