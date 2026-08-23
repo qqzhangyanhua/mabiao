@@ -1,0 +1,133 @@
+src-tauri/src/tests/conversation.rs
+  s_4ba7aa50f29b98::t_d0d4b3d8f65bbf 120,155,306,447,508,536,573,599,612,875,1002,1202-1203,1277,1279,1594,1776,2237,2267,2277,2310,2360
+  s_7f2028d93bcad2::t_b1186f29b381b9 560-561,628-629,675-676,713-714,750-751,902-903,1016-1017,1351-1352,2257-2258,2291-2292
+  s_4ba7aa50f29b98::t_bc592f8ddf54d0 388
+src/types.ts
+  s_4ba7aa50f29b98::t_4d08c658128443 486-497,501-502
+src/lib/conversationWindow.ts
+  s_4ba7aa50f29b98::t_479cce3cf9bf7b 10
+  s_4ba7aa50f29b98::t_bc8537091979f8 2,4-5,11,19-44,47-53,56-64,66-89
+  s_4ba7aa50f29b98::t_836697cd3952bc 65
+  s_4ba7aa50f29b98::t_855fbc811f973f 8,12-18
+src/lib/useKeyedAsyncLoad.ts
+  s_4ba7aa50f29b98::t_80dad705a4b591 1-57
+src-tauri/src/conversation.rs
+  s_4ba7aa50f29b98::t_8e3638dda1233c 445
+  s_4ba7aa50f29b98::t_24d3220ee2b139 913-917
+  s_4ba7aa50f29b98::t_66d1527c559681 927-930,941,943
+  s_4ba7aa50f29b98::t_7775ba1ed01af8 977-987,1002,1021,1030-1042
+  s_4ba7aa50f29b98::t_f3384d8a9f753c 20-22
+  s_4ba7aa50f29b98::t_c107bdd1970aea 452-481
+  s_4ba7aa50f29b98::t_9e72bc4a604f71 33
+  s_4ba7aa50f29b98::t_19d6d97c7ddb36 1076,1081,1096-1097
+  s_4ba7aa50f29b98::t_828129bad9f359 482,1043
+src/components/Conversations.tsx
+  s_4ba7aa50f29b98::t_c7e92fd02d2ef3 180
+  s_4ba7aa50f29b98::t_dd24148c4858a0 234-235
+  s_4ba7aa50f29b98::t_fda99902ef4581 789
+  s_4ba7aa50f29b98::t_df4fc65de19102 864,867-868
+src/components/ConversationAgentBranch.tsx
+  s_4ba7aa50f29b98::t_583f3fbe5a497a 76-83,87-128,166-188
+  s_4ba7aa50f29b98::t_0c0fd701364ecf 6-10
+  s_4ba7aa50f29b98::t_12d3b2c20f6512 129-165
+  s_4ba7aa50f29b98::t_f7a3780a4ab7f3 1-5,11-75,84-86,189-190
+src/components/ConversationTimeline.tsx
+  s_4ba7aa50f29b98::t_cc8dfb511ed9be 44,63
+  s_4ba7aa50f29b98::t_7d56cf8dd616d3 1,45-51,53,56-61,90,94-96,98-129,131-136,139-142
+  s_4ba7aa50f29b98::t_6ce5b4cfbfbd51 2-5,13-14,29-30,41-43,73-83,87-89,91-93,97,144
+src-tauri/src/test_support/helpers.rs
+  s_4ba7aa50f29b98::t_527d846bb38258 11
+  s_4ba7aa50f29b98::t_4eed994bbb3b5e 2
+src/lib/conversationWindow.test.ts
+  s_4ba7aa50f29b98::t_1b35495bda67cc 3-8,11-18,20-22,26-62,66-78,80-93,96-105,108-123
+src/components/ConversationEventItem.tsx
+  s_4ba7aa50f29b98::t_8d37ac787ccb9b 265
+  s_4ba7aa50f29b98::t_0ccfe30cda37e0 1-11,13-264,266-335
+  s_4ba7aa50f29b98::t_3e42845d198013 12
+src-tauri/src/tests/mod.rs
+  s_4ba7aa50f29b98::t_a667776fde8da7 11
+src-tauri/src/tests/conversation_events_page.rs
+  s_7f2028d93bcad2::t_b1186f29b381b9 51,85,93,157-161
+  s_4ba7aa50f29b98::t_e62847aecaae54 1-50,52-84,86-92,94-118,120-156,162-218,220-221,227-228,234,236-241,243-296
+  s_4ba7aa50f29b98::t_272498e26e3340 119
+  s_4ba7aa50f29b98::t_5f30b19535cf7a 219
+  s_4ba7aa50f29b98::t_1a4586070dff63 222-226,229-233,235,242
+src-tauri/src/tests/opencode_conversation.rs
+  s_4ba7aa50f29b98::t_d0d4b3d8f65bbf 176,270,313
+  s_7f2028d93bcad2::t_b1186f29b381b9 232-233
+src-tauri/src/tests/cursor_conversation.rs
+  s_7f2028d93bcad2::t_b1186f29b381b9 176-177,191-192,221-222
+  s_4ba7aa50f29b98::t_d0d4b3d8f65bbf 143,197
+src-tauri/src/tests/misc.rs
+  s_4ba7aa50f29b98::t_ddb942636c9e40 925-933
+src/lib/conversationCache.ts
+  s_4ba7aa50f29b98::t_179a3269776808 4-5
+src-tauri/src/lib.rs
+  s_4ba7aa50f29b98::t_3ab1fea9545911 561-581
+  s_4ba7aa50f29b98::t_db000654cc8ddf 1251
+  s_7f2028d93bcad2::t_b1186f29b381b9 41-48
+  s_7f2028d93bcad2::t_21c64988014be6 560
+src-tauri/src/conversation/event_page.rs
+  s_4ba7aa50f29b98::t_cbd1ac64f9a817 64
+  s_4ba7aa50f29b98::t_bcd4cd6915f8d2 14
+  s_4ba7aa50f29b98::t_de8f676c450976 52
+  s_4ba7aa50f29b98::t_8c5cc9b1adc734 1-13,15-51,53-63,65-108,112-130
+  s_7f2028d93bcad2::t_5708681f73a43c 109-111
+src-tauri/src/domain.rs
+  s_4ba7aa50f29b98::t_8fc3ea61344a3f 870-878,880-885,896-901
+  s_4ba7aa50f29b98::t_3dcc4678ceffc3 886-888,893-895
+  s_4ba7aa50f29b98::t_0a8f2cb2a8a9d5 902
+src-tauri/src/tests/qwen_copilot_conversation.rs
+  s_7f2028d93bcad2::t_b1186f29b381b9 205-206
+  s_4ba7aa50f29b98::t_d0d4b3d8f65bbf 390
+src/components/ConversationImageDialog.tsx
+  s_4ba7aa50f29b98::t_25c0e31f61da03 1-89
+src-tauri/src/conversation/event_index.rs
+  s_4ba7aa50f29b98::t_ee860de5e65726 257-264,270-278,286-294,301-309
+  s_4ba7aa50f29b98::t_17e5dc44d6718a 357-359,361,363,365-366,371-379
+  s_4ba7aa50f29b98::t_23d42bf5160564 390-404,409-414,417-483
+  s_4ba7aa50f29b98::t_13543ec87e58a6 193-199,205,208-209,219-253,255-256,266-269,279-285,295-300,310-356,360,362,364,388,484-553
+  s_4ba7aa50f29b98::t_0fa8419bf7bf77 254
+  s_7f2028d93bcad2::t_b1186f29b381b9 405-408
+  s_4ba7aa50f29b98::t_8d961fd7eb20a5 9
+  s_4ba7aa50f29b98::t_0606f24815ce9a 210-218
+  s_4ba7aa50f29b98::t_b6f62f5b005ba3 367-370
+  s_4ba7aa50f29b98::t_9ed818e83eed59 380-387,389,415-416
+src/lib/useConversationEventPages.ts
+  s_4ba7aa50f29b98::t_379c5d0ffc7257 3-7
+  s_4ba7aa50f29b98::t_59999ff5386c9f 64-65
+  s_4ba7aa50f29b98::t_e00a1ee5fb3cbf 118
+  s_4ba7aa50f29b98::t_4e3d93643d1b83 17,27-28,49-50,52,58,60-63,68,96,115
+  s_4ba7aa50f29b98::t_7920bfd95fc1d1 56
+  s_4ba7aa50f29b98::t_63e477d4b0919c 1-2,8-16,18-26,29-48,51,53-55,57,59,66-67,69-95,97-114,116-117,119-122
+src/lib/conversationEventDisplay.ts
+  s_4ba7aa50f29b98::t_a859a6c7983b07 1-60,62-94
+  s_4ba7aa50f29b98::t_8962e05f9b65fa 61
+src-tauri/src/tests/conversation_index_backfill.rs
+  s_4ba7aa50f29b98::t_df642970aa1494 143-160
+  s_4ba7aa50f29b98::t_f329ed4e454ee3 63-71,76-77,80-88,93-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e3033e4f42889300ae19d545a623f59e9cdd4fa2",
+  "prompts": {},
+  "sessions": {
+    "s_4ba7aa50f29b98": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b17d8316-ec63-4613-8468-b5f29348a67f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_7f2028d93bcad2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f88ace0c-d2f5-4ac6-a134-5becfd0a9adf",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
