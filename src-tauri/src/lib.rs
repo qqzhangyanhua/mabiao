@@ -835,8 +835,8 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_config(&state.custom_quota_paths.config);
-    let dto = official_quota::load_dto(&conn, &config, &custom.providers, chrono::Utc::now());
+    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
         &dto,
@@ -998,7 +998,12 @@ fn save_custom_quota_provider(
     state: tauri::State<AppState>,
     request: official_quota::custom::panel::SaveCustomQuotaProvider,
 ) -> Result<official_quota::custom::panel::SavedCustomQuotaDto, String> {
-    official_quota::custom::panel::save(&state.custom_quota_paths, request)
+    let saved = official_quota::custom::panel::save(&state.custom_quota_paths, request)?;
+    // 用户刚改过这一条（多半正是在轮换密钥或换域名来修上一轮的失败），
+    // 旧的退避不该再拦着它：否则保存后那次刷新只会回「刚取数失败，N 分钟后
+    // 自动重试」，把刚做完的修复盖掉，用户会以为改了没用。
+    official_quota::backoff::clear(&official_quota::backoff::state_path(), &saved.saved_id);
+    Ok(saved)
 }
 
 #[tauri::command]

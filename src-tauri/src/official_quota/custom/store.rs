@@ -96,6 +96,12 @@ pub fn load_credentials(path: &Path) -> CustomQuotaCredentials {
     load_json(path)
 }
 
+/// 合流用的配置列表。`load_dto` 只画行、不取数，因此只要配置，不碰凭证文件——
+/// 四个 DTO 装配点都走这条，省得各自去走一遍 `load_config(...).providers`。
+pub fn load_configs(paths: &CustomQuotaPaths) -> Vec<CustomQuotaProvider> {
+    load_config(&paths.config).providers
+}
+
 /// 取数用的合流入口：配置在、密钥缺，也要能表达出来。
 pub fn load_providers(paths: &CustomQuotaPaths) -> Vec<ResolvedProvider> {
     let credentials = load_credentials(&paths.credentials);

@@ -94,6 +94,18 @@ pub fn record_success(state: &mut BackoffState, id: &str) {
     state.entries.remove(id);
 }
 
+/// 忘掉这一条的冷却。用在「用户刚改过配置」之后：轮换密钥、换域名、改预设类型
+/// 都可能正是为了修好上一轮的失败，再拿旧的退避拦着，用户看到的会是
+/// 「刚取数失败，N 分钟后自动重试」——把他刚做完的修复盖掉。
+///
+/// 写不下去不算失败：最坏是这次还得等，下次保存再清。
+pub fn clear(path: &Path, id: &str) {
+    let mut state = load_state(path);
+    if state.entries.remove(id).is_some() {
+        let _ = save_state(path, &state);
+    }
+}
+
 /// 记一次失败并推后下次尝试。退避按连续失败次数翻倍，各自封顶。
 pub fn record_failure(state: &mut BackoffState, id: &str, error: &str, now: DateTime<Utc>) {
     let failures = state

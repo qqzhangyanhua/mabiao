@@ -52,7 +52,7 @@ fn run(refresh: bool) -> Result<String, String> {
     }
     let path = db_path.to_string_lossy().to_string();
     let custom_paths = official_quota::custom::store::CustomQuotaPaths::app_data();
-    let custom_config = official_quota::custom::store::load_config(&custom_paths.config);
+    let custom_config = official_quota::custom::store::load_configs(&custom_paths);
 
     if refresh {
         // 取数在写之前完成，写完立刻放锁，尽量少打扰正在运行的应用。
@@ -71,7 +71,7 @@ fn run(refresh: bool) -> Result<String, String> {
             alerts_enabled: config.alerts_enabled,
             hidden_providers: config.hidden_providers,
         },
-        &custom_config.providers,
+        &custom_config,
         chrono::Utc::now(),
     ))
 }

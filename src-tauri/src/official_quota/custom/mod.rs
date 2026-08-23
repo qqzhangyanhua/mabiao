@@ -128,12 +128,23 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
     Ok(format!("{scheme}{rest}"))
 }
 
+/// 一个要打的地址，以及它拿不到时算不算致命。
+///
+/// 分这个级别是因为「上限」和「已用」不是一回事：只实现了用量接口的中转站
+/// 照样该显示金额，不该因为上限接口 404 就整行取不到数。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuotaRequest {
+    pub url: String,
+    /// 为 false 时，这一条请求失败按「没有这个口径」处理，而不是让整次取数失败。
+    pub required: bool,
+}
+
 /// 取数时**真正会请求**的地址，按预设类型分派。未实现的类型在这里就拦下来。
 pub fn request_urls(
     preset: CustomQuotaPreset,
     base_url: &str,
     today: chrono::NaiveDate,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<QuotaRequest>, String> {
     let base = normalize_base_url(base_url)?;
     match preset {
         CustomQuotaPreset::OpenAiCompatible => Ok(openai_compatible::urls(&base, today)),
@@ -156,40 +167,46 @@ pub fn parse_quota(
 }
 
 pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
-    if let Some(blocked) = precheck(provider) {
-        return Err(blocked);
-    }
-    let secret = provider
-        .secret
-        .as_deref()
-        .ok_or_else(|| MISSING_SECRET.to_string())?;
-    let urls = request_urls(
+    let secret = ready(provider)?;
+    let requests = request_urls(
         provider.config.preset,
         &provider.config.base_url,
         Utc::now().date_naive(),
     )?;
-    let bodies = urls
+    // 可选接口拿不到就当没有这个口径：只实现了用量接口的中转站仍然显示金额。
+    // 必需的那条失败才让整次取数失败，错误照旧是人话。
+    let bodies = requests
         .iter()
-        .map(|url| request(url, secret))
+        .map(|entry| match request(&entry.url, secret) {
+            Ok(body) => Ok(body),
+            Err(error) if entry.required => Err(error),
+            Err(_) => Ok(String::new()),
+        })
         .collect::<Result<Vec<String>, String>>()?;
     let borrowed: Vec<&str> = bodies.iter().map(String::as_str).collect();
     let windows = parse_quota(provider.config.preset, &borrowed)?;
     Ok((windows, Utc::now().to_rfc3339()))
 }
 
-/// 不用打网就能判定的失败：密钥没配、预设还没实现。
+/// 不用打网就能判定的失败，顺带交出可用的密钥。
 ///
 /// 单独拎出来是给退避看的——退避存在的理由是「别把对方打挂」，而这两种
 /// 压根没碰到对方。记进退避的话，恢复备份后刚填完密钥、或刚存下一个未实现的
 /// 预设，再点刷新只会看到「刚取数失败，N 分钟后自动重试」，把真正的原因盖掉。
-pub fn precheck(provider: &ResolvedProvider) -> Option<String> {
-    if provider.secret.is_none() {
-        return Some(MISSING_SECRET.to_string());
-    }
+fn ready(provider: &ResolvedProvider) -> Result<&str, String> {
+    let secret = provider
+        .secret
+        .as_deref()
+        .ok_or_else(|| MISSING_SECRET.to_string())?;
     if !provider.config.preset.implemented() {
-        return Some(unsupported(provider.config.preset));
+        return Err(unsupported(provider.config.preset));
     }
-    None
+    Ok(secret)
+}
+
+/// `ready` 的判定结果，只要那句话。取数入口自己走 `ready`，因此两边不会各判一次。
+pub fn precheck(provider: &ResolvedProvider) -> Option<String> {
+    ready(provider).err()
 }
 
 /// 这条错误是不是「压根没打网」。`backoff::is_rate_limited` 也是按标记认的，
