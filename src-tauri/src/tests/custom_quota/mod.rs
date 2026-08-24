@@ -4,6 +4,7 @@
 //!
 //! 按接缝分文件，共用这里的 fixture 与构造器。
 
+mod backoff;
 mod backup;
 mod panel_commands;
 mod parsing;

@@ -1026,6 +1026,7 @@ fn overlay_cooldown_message(
             freshness: OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: Some(message),
+            todo: None,
         }),
     }
     Ok(dto)
