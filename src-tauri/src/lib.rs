@@ -1083,6 +1083,44 @@ fn delete_custom_quota_provider(
     official_quota::custom::panel::delete(&state.custom_quota_paths, &id)
 }
 
+/// base URL 输入框下方那行回显。纯计算、不打网，边打边问也不会有负担。
+#[tauri::command]
+fn preview_custom_quota_request(
+    preset: official_quota::custom::CustomQuotaPreset,
+    base_url: String,
+) -> official_quota::custom::panel::CustomQuotaRequestPreviewDto {
+    official_quota::custom::panel::preview_requests(
+        preset,
+        &base_url,
+        chrono::Utc::now().date_naive(),
+    )
+}
+
+/// 用表单里尚未保存的配置直接打一次，把解析出的额度交回去。
+///
+/// 走 `custom::fetch` 而不是 `fetch_target_throttled`：这是用户点出来的一次性验证，
+/// 既不该被上一轮失败留下的冷却拦住（点测试往往正是为了修好它），也不该把失败
+/// 记进退避——那条配置还没保存，退避里没有它的位置。同理不写额度缓存：
+/// 首页那一行归已保存的配置管。
+#[tauri::command]
+async fn test_custom_quota_provider(
+    app: tauri::AppHandle,
+    request: official_quota::custom::panel::TestCustomQuotaProvider,
+) -> Result<official_quota::custom::panel::CustomQuotaTestDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = app.state::<AppState>().custom_quota_paths.clone();
+        let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
+        let (windows, captured_at) =
+            official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
+        Ok(official_quota::custom::panel::CustomQuotaTestDto {
+            windows,
+            captured_at,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 /// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token。返回 `false` 表示取消。
 #[tauri::command]
 async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
@@ -1365,6 +1403,8 @@ pub fn run() {
             list_custom_quota_providers,
             save_custom_quota_provider,
             delete_custom_quota_provider,
+            preview_custom_quota_request,
+            test_custom_quota_provider,
             get_price_snapshot,
             get_price_snapshot_url,
             refresh_price_snapshot,

@@ -132,7 +132,10 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
 ///
 /// 分这个级别是因为「上限」和「已用」不是一回事：只实现了用量接口的中转站
 /// 照样该显示金额，不该因为上限接口 404 就整行取不到数。
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// 这个形状同时是设置页那行回显的载体：界面显示的就是这里的 `url`，
+/// 因此回显与取数不可能漂移。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QuotaRequest {
     pub url: String,
     /// 为 false 时，这一条请求失败按「没有这个口径」处理，而不是让整次取数失败。
@@ -166,13 +169,16 @@ pub fn parse_quota(
     }
 }
 
-pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
-    let secret = ready(provider)?;
-    let requests = request_urls(
-        provider.config.preset,
-        &provider.config.base_url,
-        Utc::now().date_naive(),
-    )?;
+/// 取数只需要三样：预设类型、地址、密钥。标识、名称、开关都不参与——
+/// 因此设置页「测试连接」能拿一份还没保存、还没有标识的草稿直接打，
+/// 不必先捏一条假的提供商出来。
+pub fn fetch_quota(
+    preset: CustomQuotaPreset,
+    base_url: &str,
+    secret: Option<&str>,
+) -> super::ProviderFetch {
+    let secret = ready(preset, secret)?;
+    let requests = request_urls(preset, base_url, Utc::now().date_naive())?;
     // 可选接口拿不到就当没有这个口径：只实现了用量接口的中转站仍然显示金额。
     // 必需的那条失败才让整次取数失败，错误照旧是人话。
     let bodies = requests
@@ -184,8 +190,16 @@ pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
         })
         .collect::<Result<Vec<String>, String>>()?;
     let borrowed: Vec<&str> = bodies.iter().map(String::as_str).collect();
-    let windows = parse_quota(provider.config.preset, &borrowed)?;
+    let windows = parse_quota(preset, &borrowed)?;
     Ok((windows, Utc::now().to_rfc3339()))
+}
+
+pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
+    fetch_quota(
+        provider.config.preset,
+        &provider.config.base_url,
+        provider.secret.as_deref(),
+    )
 }
 
 /// 不用打网就能判定的失败，顺带交出可用的密钥。
@@ -193,20 +207,17 @@ pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
 /// 单独拎出来是给退避看的——退避存在的理由是「别把对方打挂」，而这两种
 /// 压根没碰到对方。记进退避的话，恢复备份后刚填完密钥、或刚存下一个未实现的
 /// 预设，再点刷新只会看到「刚取数失败，N 分钟后自动重试」，把真正的原因盖掉。
-fn ready(provider: &ResolvedProvider) -> Result<&str, String> {
-    let secret = provider
-        .secret
-        .as_deref()
-        .ok_or_else(|| MISSING_SECRET.to_string())?;
-    if !provider.config.preset.implemented() {
-        return Err(unsupported(provider.config.preset));
+fn ready(preset: CustomQuotaPreset, secret: Option<&str>) -> Result<&str, String> {
+    let secret = secret.ok_or_else(|| MISSING_SECRET.to_string())?;
+    if !preset.implemented() {
+        return Err(unsupported(preset));
     }
     Ok(secret)
 }
 
 /// `ready` 的判定结果，只要那句话。取数入口自己走 `ready`，因此两边不会各判一次。
 pub fn precheck(provider: &ResolvedProvider) -> Option<String> {
-    ready(provider).err()
+    ready(provider.config.preset, provider.secret.as_deref()).err()
 }
 
 /// 这条错误是不是「压根没打网」。`backoff::is_rate_limited` 也是按标记认的，

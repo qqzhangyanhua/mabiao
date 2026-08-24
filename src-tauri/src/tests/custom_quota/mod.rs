@@ -6,6 +6,7 @@
 
 mod panel_commands;
 mod parsing;
+mod preview_and_test;
 mod rows;
 
 use crate::official_quota::custom::store::CustomQuotaProvider;
