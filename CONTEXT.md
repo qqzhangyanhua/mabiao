@@ -37,8 +37,12 @@ _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor
 _Avoid_: 消耗记录、Cursor 会话仪表盘、把正文写进缓存
 
 **官方额度 (Official Quota)**：
-Claude / Codex / Cursor / Grok 的账号级订阅限额（已用百分比与重置时间）。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 用已有钥匙串打限额接口，Grok 读本机 `~/.grok/auth.json` 打 CLI 限额接口。
+账号级订阅限额（已用百分比与重置时间）。成员由两部分构成：内置账号（Claude / Codex / Cursor / Grok 等）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 用已有钥匙串打限额接口，Grok 读本机 `~/.grok/auth.json` 打 CLI 限额接口。
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条
+
+**自定义提供商 (Custom Quota Provider)**：
+用户在设置页自行登记的、按内置预设类型取数的账号级额度来源（第三方 API 中转站、聚合服务）。属于「官方额度」维度，与消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量、代码量互不相干，不进本机 token KPI。标识随机生成、带 `custom:` 前缀，与内置账号永不冲突；名称是纯展示标签，改名不改标识，额度缓存与告警去重记录跟着标识走。配置与密钥分两份文件存，密钥不进备份。每条有启用开关：关掉就不取数、不占首页与托盘、不参与额度告警，名称 / 类型 / 地址 / 密钥都留着；自定义提供商不进首页「配置显示」。取数只走内置预设类型的解析器，只打计费/余额接口。见 `docs/adr/0012-custom-quota-providers.md`。
+_Avoid_: 中转站、渠道、来源 (Source)（后者特指有本地会话数据的 AI 工具）
 
 **工作时间线 (Work Timeline)**：
 单日会话区间铺开。消耗记录按 `occurred_at` 聚成横条；Cursor 本机会话按起止时间并入同一天，不把账号用量或代码量画上去。Token 与对话轮次仍只统计当天消耗记录。

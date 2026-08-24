@@ -44,11 +44,11 @@ use crate::domain::{
     ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaProvider,
-    OfficialQuotaRow, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
-    SessionRow, Source, SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest,
-    WriteUserFileResult,
+    OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
+    PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
+    SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
+use crate::official_quota::QuotaTarget;
 
 /// 只读连接池。
 ///
@@ -125,6 +125,9 @@ pub struct AppState {
     pub budget_notify_path: PathBuf,
     pub official_quota_path: PathBuf,
     pub official_quota_notify_path: PathBuf,
+    /// 自定义提供商的配置与密钥。配置可以进备份，密钥不进——备份目录是设计成
+    /// 给人整个拷走的。
+    pub custom_quota_paths: official_quota::custom::store::CustomQuotaPaths,
     pub conn: Mutex<Connection>,
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
@@ -851,7 +854,8 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
+    let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
         &dto,
@@ -936,7 +940,7 @@ async fn get_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, S
 #[tauri::command]
 async fn refresh_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let results = official_quota::fetch_all_providers();
+        let results = official_quota::fetch_all_targets(&load_custom_providers(&app));
         persist_official_quota_fetches(&app, results)
     })
     .await
@@ -949,31 +953,20 @@ async fn refresh_official_quota_provider(
     provider: String,
 ) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let parsed = official_quota::parse_provider(&provider)?;
-        match official_quota::fetch_provider_throttled(parsed) {
+        // 先试内置枚举，认不出再回落到自定义通道——`custom:` 那些标识
+        // 走的是后一条路，不该再撞上「未知的官方额度账号」。
+        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        match official_quota::fetch_target_throttled(&target) {
             // 冷却期短路：不写库，避免把上一次真实失败原因换成这句「还要等 N 分
             // 钟」——只在这次响应的快照里临时替换该行 error，够按钮即时反馈用。
-            official_quota::ThrottledFetch::Cooldown(message) => {
-                let mut dto = official_quota_snapshot(&app)?;
-                match dto
-                    .rows
-                    .iter_mut()
-                    .find(|row| row.provider == parsed.as_str())
-                {
-                    Some(row) => row.error = Some(message),
-                    None => dto.rows.push(OfficialQuotaRow {
-                        provider: parsed.as_str().to_string(),
-                        application: parsed.display_name().to_string(),
-                        windows: Vec::new(),
-                        freshness: OfficialQuotaFreshness::Unavailable,
-                        captured_at: None,
-                        error: Some(message),
-                    }),
-                }
-                Ok(dto)
-            }
+            official_quota::ThrottledFetch::Cooldown(message) => overlay_cooldown_message(
+                &app,
+                target.quota_id(),
+                target.quota_display_name(),
+                message,
+            ),
             official_quota::ThrottledFetch::Attempted(result) => {
-                persist_official_quota_fetches(&app, [(parsed, result)])
+                persist_official_quota_fetches(&app, [(target, result)])
             }
         }
     })
@@ -990,17 +983,22 @@ async fn refresh_official_quota_provider_force(
     provider: String,
 ) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let parsed = official_quota::parse_provider(&provider)?;
-        let result = official_quota::fetch_provider_forced(parsed);
-        persist_official_quota_fetches(&app, [(parsed, result)])
+        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        let result = official_quota::fetch_target_forced(&target);
+        persist_official_quota_fetches(&app, [(target, result)])
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-fn persist_official_quota_fetches(
+fn load_custom_providers(app: &tauri::AppHandle) -> Vec<official_quota::custom::ResolvedProvider> {
+    let state = app.state::<AppState>();
+    official_quota::custom::store::load_providers(&state.custom_quota_paths)
+}
+
+fn persist_official_quota_fetches<T: official_quota::QuotaTarget>(
     app: &tauri::AppHandle,
-    results: impl IntoIterator<Item = (OfficialQuotaProvider, official_quota::ProviderFetch)>,
+    results: impl IntoIterator<Item = (T, official_quota::ProviderFetch)>,
 ) -> Result<OfficialQuotaDto, String> {
     {
         let state = app.state::<AppState>();
@@ -1009,6 +1007,29 @@ fn persist_official_quota_fetches(
     }
     // snapshot 自己再取锁；这里必须先放下，std::sync::Mutex 不可重入。
     official_quota_snapshot(app)
+}
+
+/// 冷却提示只挂在这次返回的快照上，不落库。
+fn overlay_cooldown_message(
+    app: &tauri::AppHandle,
+    id: &str,
+    display_name: &str,
+    message: String,
+) -> Result<OfficialQuotaDto, String> {
+    let mut dto = official_quota_snapshot(app)?;
+    match dto.rows.iter_mut().find(|row| row.provider == id) {
+        Some(row) => row.error = Some(message),
+        None => dto.rows.push(OfficialQuotaRow {
+            provider: id.to_string(),
+            application: display_name.to_string(),
+            windows: Vec::new(),
+            freshness: OfficialQuotaFreshness::Unavailable,
+            captured_at: None,
+            error: Some(message),
+            todo: None,
+        }),
+    }
+    Ok(dto)
 }
 
 #[tauri::command]
@@ -1035,7 +1056,73 @@ fn save_official_quota_config(
     official_quota::save_config(&state.official_quota_path, &config)
 }
 
-/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token。返回 `false` 表示取消。
+#[tauri::command]
+fn list_custom_quota_providers(
+    state: tauri::State<AppState>,
+) -> official_quota::custom::panel::CustomQuotaPanelDto {
+    official_quota::custom::panel::list(&state.custom_quota_paths)
+}
+
+#[tauri::command]
+fn save_custom_quota_provider(
+    state: tauri::State<AppState>,
+    request: official_quota::custom::panel::SaveCustomQuotaProvider,
+) -> Result<official_quota::custom::panel::SavedCustomQuotaDto, String> {
+    let saved = official_quota::custom::panel::save(&state.custom_quota_paths, request)?;
+    // 用户刚改过这一条（多半正是在轮换密钥或换域名来修上一轮的失败），
+    // 旧的退避不该再拦着它：否则保存后那次刷新只会回「刚取数失败，N 分钟后
+    // 自动重试」，把刚做完的修复盖掉，用户会以为改了没用。
+    official_quota::backoff::clear(&official_quota::backoff::state_path(), &saved.saved_id);
+    Ok(saved)
+}
+
+#[tauri::command]
+fn delete_custom_quota_provider(
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<official_quota::custom::panel::CustomQuotaPanelDto, String> {
+    official_quota::custom::panel::delete(&state.custom_quota_paths, &id)
+}
+
+/// base URL 输入框下方那行回显。纯计算、不打网，边打边问也不会有负担。
+#[tauri::command]
+fn preview_custom_quota_request(
+    preset: official_quota::custom::CustomQuotaPreset,
+    base_url: String,
+) -> official_quota::custom::panel::CustomQuotaRequestPreviewDto {
+    official_quota::custom::panel::preview_requests(
+        preset,
+        &base_url,
+        chrono::Utc::now().date_naive(),
+    )
+}
+
+/// 用表单里尚未保存的配置直接打一次，把解析出的额度交回去。
+///
+/// 走 `custom::fetch` 而不是 `fetch_target_throttled`：这是用户点出来的一次性验证，
+/// 既不该被上一轮失败留下的冷却拦住（点测试往往正是为了修好它），也不该把失败
+/// 记进退避——那条配置还没保存，退避里没有它的位置。同理不写额度缓存：
+/// 首页那一行归已保存的配置管。
+#[tauri::command]
+async fn test_custom_quota_provider(
+    app: tauri::AppHandle,
+    request: official_quota::custom::panel::TestCustomQuotaProvider,
+) -> Result<official_quota::custom::panel::CustomQuotaTestDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = app.state::<AppState>().custom_quota_paths.clone();
+        let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
+        let (windows, captured_at) =
+            official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
+        Ok(official_quota::custom::panel::CustomQuotaTestDto {
+            windows,
+            captured_at,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token，也不含自定义提供商密钥。返回 `false` 表示取消。
 #[tauri::command]
 async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1056,7 +1143,7 @@ async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。返回 `false` 表示取消。
+/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。自定义提供商密钥不在备份里，本机已有的密钥文件不会被覆盖。返回 `false` 表示取消。
 #[tauri::command]
 async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1250,6 +1337,7 @@ pub fn run() {
             let budget_notify_path = dir.join("budget_notify_state.json");
             let official_quota_path = dir.join(official_quota::CONFIG_NAME);
             let official_quota_notify_path = dir.join(official_quota::NOTIFY_NAME);
+            let custom_quota_paths = official_quota::custom::store::CustomQuotaPaths::in_dir(&dir);
             let db_path_str = db_path.to_string_lossy().to_string();
             let conn = store::open_db(&db_path_str).map_err(std::io::Error::other)?;
             // open_db 必须先跑：它建表建索引，只读连接开在空库上会查不到表。
@@ -1264,6 +1352,7 @@ pub fn run() {
                 budget_notify_path,
                 official_quota_path,
                 official_quota_notify_path,
+                custom_quota_paths,
                 conn: Mutex::new(conn),
                 read_pool,
                 snapshot: Mutex::new(snapshot),
@@ -1312,6 +1401,11 @@ pub fn run() {
             get_official_quota_hook,
             apply_official_quota_hook,
             save_official_quota_config,
+            list_custom_quota_providers,
+            save_custom_quota_provider,
+            delete_custom_quota_provider,
+            preview_custom_quota_request,
+            test_custom_quota_provider,
             get_price_snapshot,
             get_price_snapshot_url,
             refresh_price_snapshot,
@@ -1349,13 +1443,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match event {
-            tauri::RunEvent::ExitRequested { api, code, .. } => {
+            tauri::RunEvent::ExitRequested { api, code, .. }
+                if code.is_none() && app.get_webview_window("main").is_none() =>
+            {
                 // None = 关最后一扇窗 / Cmd+Q 等用户交互。主窗口没了就留在托盘；
                 // 主窗口还在（典型是 Cmd+Q）则放行，让应用退出。
                 // 托盘菜单「退出」走 app.exit(0)，code 是 Some，不会进这里。
-                if code.is_none() && app.get_webview_window("main").is_none() {
-                    api.prevent_exit();
-                }
+                api.prevent_exit();
             }
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => tray::show_main(app),

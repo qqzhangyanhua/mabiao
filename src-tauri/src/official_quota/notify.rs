@@ -53,6 +53,10 @@ pub fn prepare_notifications(
     state: NotifyState,
     dto: &OfficialQuotaDto,
 ) -> (NotifyState, Vec<QuotaAlert>) {
+    // 总开关同时管住内置和自定义：用户不必在两个地方关提醒。
+    if !dto.alerts_enabled {
+        return (state, Vec::new());
+    }
     let mut next = state;
     let mut alerts = Vec::new();
     for row in &dto.rows {
@@ -63,8 +67,15 @@ pub fn prepare_notifications(
             let Some(percent) = window.used_percent else {
                 continue;
             };
-            let Some(resets_at) = &window.resets_at else {
-                continue;
+            // 自定义提供商常常给不出重置时间（OpenAI 兼容计费就是这样）。
+            // 有百分比仍然走 80%/100%；去重键里重置时间为空，充值后再涨到
+            // 同一档不会二次提醒——已知缺陷，见 #81 / #88。
+            // 内置账号仍然要求重置时间：Cursor Auto 那种长期 100% 的窗口
+            // 没有周期，放行会在升级后把一堆陈年满格一次弹完。
+            let resets_at = match window.resets_at.as_deref() {
+                Some(value) => value,
+                None if super::custom::is_custom_id(&row.provider) => "",
+                None => continue,
             };
             let crossed = thresholds_to_notify(
                 percent,

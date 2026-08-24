@@ -74,6 +74,7 @@ pub fn parse_limits(raw: &str, now: DateTime<Utc>) -> Result<Vec<OfficialQuotaWi
                 label: format!("{pool_label} {bucket_label}"),
                 used_percent: Some(percent),
                 resets_at: resets_at.map(|value| value.to_rfc3339()),
+                ..Default::default()
             });
         }
     }

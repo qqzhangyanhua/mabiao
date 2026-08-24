@@ -16,6 +16,7 @@ import { BackupPanel } from "./BackupPanel";
 import { ConversationIndexPanel } from "./ConversationIndexPanel";
 import { BudgetPanel } from "./BudgetPanel";
 import { CursorAccountSettingsPanel } from "./CursorAccountSettingsPanel";
+import { CustomQuotaProviderPanel } from "./CustomQuotaProviderPanel";
 import { LiteLlmSnapshotPanel } from "./LiteLlmSnapshotPanel";
 import { OfficialQuotaSettingsPanel } from "./OfficialQuotaSettingsPanel";
 import { OverviewLayoutPanel } from "./OverviewLayoutPanel";
@@ -207,6 +208,7 @@ export function Settings({
               onQuota={onOfficialQuota}
               onError={onQuotaError}
             />
+            <CustomQuotaProviderPanel onQuota={onOfficialQuota} />
           </>
         ) : null}
         {tab === "backup" ? <BackupPanel onRestored={onSnapshotRefreshed} /> : null}

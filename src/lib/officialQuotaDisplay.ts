@@ -1,4 +1,8 @@
-import type { OfficialQuotaDto, OfficialQuotaFreshness } from "../types";
+import type {
+  OfficialQuotaDto,
+  OfficialQuotaFreshness,
+  OfficialQuotaWindow,
+} from "../types";
 import { formatClock, relativeTime } from "./format";
 import { officialQuotaProviderLabel } from "./overviewLayout";
 
@@ -7,6 +11,53 @@ export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, str
   stale: "已过期",
   unavailable: "暂无",
 };
+
+/** 认得出符号的币种直接写符号，其余用代码后缀，缺币种就只给数字。 */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: "$",
+  CNY: "¥",
+  EUR: "€",
+  JPY: "¥",
+  GBP: "£",
+};
+
+export function formatQuotaAmount(value: number, currency: string | null): string {
+  // 小数位跟着量级走：$0.42 要看得见分，$1234 不需要。
+  const digits = Math.abs(value) < 100 ? 2 : 0;
+  const text = value.toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  if (!currency) {
+    return text;
+  }
+  const symbol = CURRENCY_SYMBOLS[currency.toUpperCase()];
+  return symbol ? `${symbol}${text}` : `${text} ${currency.toUpperCase()}`;
+}
+
+/**
+ * 进度条旁边那行金额：`已用 $19 / 共 $50`。
+ *
+ * 缺上限时降级成只报已用——充值制的站点常常只认已用，那一行仍然有用。
+ * 两个都没有返回 null，界面就不画这一行。
+ */
+export function officialQuotaAmountLabel(
+  window: Pick<OfficialQuotaWindow, "used_amount" | "limit_amount" | "currency">,
+): string | null {
+  const used = window.used_amount;
+  const limit = window.limit_amount;
+  const currency = window.currency;
+  if (used != null && limit != null) {
+    return `已用 ${formatQuotaAmount(used, currency)} / 共 ${formatQuotaAmount(limit, currency)}`;
+  }
+  if (used != null) {
+    return `已用 ${formatQuotaAmount(used, currency)}`;
+  }
+  if (limit != null) {
+    return `共 ${formatQuotaAmount(limit, currency)}`;
+  }
+  return null;
+}
 
 export function officialQuotaAgeLabel(
   capturedAt: string | null,
@@ -68,4 +119,18 @@ export function officialQuotaEmptyCopy(data: OfficialQuotaDto | null): {
     return { title: "暂无已登录的官方额度账号", hint: undetected };
   }
   return { title: "所选账号均已隐藏", hint: "在「配置显示」里打开要看的账号" };
+}
+
+/** 首页额度行底下那句：待办不是取数失败，两套样式靠 `kind` 分开。 */
+export function officialQuotaNotice(row: {
+  todo: string | null;
+  error: string | null;
+}): { kind: "todo" | "error"; text: string } | null {
+  if (row.todo) {
+    return { kind: "todo", text: row.todo };
+  }
+  if (row.error) {
+    return { kind: "error", text: row.error };
+  }
+  return null;
 }

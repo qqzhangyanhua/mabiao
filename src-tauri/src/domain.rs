@@ -226,12 +226,33 @@ pub enum OfficialQuotaFreshness {
     Unavailable,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// 「官方额度」里的一条窗口。
+///
+/// 约定：所有构造点以 `..Default::default()` 收尾，这样 #81 新增金额口径字段时
+/// 改动收敛到这里，不必同时改散在各 provider 解析器里的二十多处字面量。
+///
+/// `non_exhaustive` 只是让 clippy 的 `needless_update` 接受「字段已列全仍带
+/// `..Default::default()`」这种写法，并对外声明本结构体会长字段。它**不**强制
+/// 上面那条约定——构造点全在本 crate 内，crate 内该属性无效力，约定靠 review 守。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct OfficialQuotaWindow {
     pub kind: String,
     pub label: String,
     pub used_percent: Option<f64>,
     pub resets_at: Option<String>,
+    /// 金额口径。充值制的自定义提供商给的是钱不是百分比，两种口径要能并存：
+    /// 拿得到上限就同时有百分比和金额，拿不到上限就只有金额。
+    ///
+    /// 三个字段全是 `Option`，serde 对缺失的 `Option` 按 `None` 处理，
+    /// 因此 sqlite 里旧格式的窗口 JSON 不需要迁移（有测试盯着这条）。
+    #[serde(default)]
+    pub used_amount: Option<f64>,
+    #[serde(default)]
+    pub limit_amount: Option<f64>,
+    /// ISO 4217 代码，例如 `USD`。取不到时留空，界面只显示数字。
+    #[serde(default)]
+    pub currency: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -242,6 +263,9 @@ pub struct OfficialQuotaRow {
     pub freshness: OfficialQuotaFreshness,
     pub captured_at: Option<String>,
     pub error: Option<String>,
+    /// 待办提示，不是取数失败。恢复备份后缺密钥走这里。
+    #[serde(default)]
+    pub todo: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

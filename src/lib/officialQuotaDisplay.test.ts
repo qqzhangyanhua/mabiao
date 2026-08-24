@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { OfficialQuotaDto } from "../types";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
+  formatQuotaAmount,
   officialQuotaAgeLabel,
+  officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
@@ -96,5 +99,89 @@ describe("OFFICIAL_QUOTA_FRESHNESS_STATUS", () => {
       stale: "已过期",
       unavailable: "暂无",
     });
+  });
+});
+
+describe("formatQuotaAmount", () => {
+  it("uses the currency symbol when it knows one", () => {
+    expect(formatQuotaAmount(19, "USD")).toBe("$19.00");
+    expect(formatQuotaAmount(50, "cny")).toBe("¥50.00");
+  });
+
+  it("falls back to a trailing code for currencies without a symbol", () => {
+    expect(formatQuotaAmount(19, "SGD")).toBe("19.00 SGD");
+  });
+
+  it("drops the money marker entirely when the currency is missing", () => {
+    expect(formatQuotaAmount(19, null)).toBe("19.00");
+  });
+
+  it("drops the cents once the number is large enough not to need them", () => {
+    expect(formatQuotaAmount(1234.56, "USD")).toBe("$1,235");
+  });
+});
+
+describe("officialQuotaAmountLabel", () => {
+  it("shows used against the limit when both are known", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: 50, currency: "USD" })).toBe(
+      "已用 $19.00 / 共 $50.00",
+    );
+  });
+
+  it("degrades to used-only when there is no limit", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: null, currency: "USD" })).toBe(
+      "已用 $19.00",
+    );
+  });
+
+  it("degrades to limit-only when only the cap came back", () => {
+    expect(officialQuotaAmountLabel({ used_amount: null, limit_amount: 50, currency: "USD" })).toBe(
+      "共 $50.00",
+    );
+  });
+
+  it("degrades to bare numbers when the currency is missing", () => {
+    expect(officialQuotaAmountLabel({ used_amount: 19, limit_amount: 50, currency: null })).toBe(
+      "已用 19.00 / 共 50.00",
+    );
+  });
+
+  it("returns null when there is no money to show, so the row skips that line", () => {
+    expect(
+      officialQuotaAmountLabel({ used_amount: null, limit_amount: null, currency: "USD" }),
+    ).toBeNull();
+  });
+});
+
+describe("officialQuotaNotice", () => {
+  it("treats a missing secret as a todo, not a fetch error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: null,
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("keeps a real fetch failure as an error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: null,
+        error: "密钥无效或已失效，请在设置页更新密钥",
+      }),
+    ).toEqual({ kind: "error", text: "密钥无效或已失效，请在设置页更新密钥" });
+  });
+
+  it("prefers the todo when both are present", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: "网络不通，连不上这个地址",
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("returns null when there is nothing to say", () => {
+    expect(officialQuotaNotice({ todo: null, error: null })).toBeNull();
   });
 });

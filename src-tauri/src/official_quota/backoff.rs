@@ -13,8 +13,6 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::domain::OfficialQuotaProvider;
-
 pub const STATE_NAME: &str = "official_quota_backoff.json";
 /// 被限流时起步就等久一点，翻倍上限也更高——这是唯一「继续试会更糟」的失败。
 const RATE_LIMITED_BASE_MINUTES: i64 = 10;
@@ -60,12 +58,12 @@ pub fn save_state(path: &Path, state: &BackoffState) -> Result<(), String> {
 }
 
 /// 还要等多久才允许再试；不在冷却中返回 None。
-pub fn cooldown_remaining(
-    state: &BackoffState,
-    provider: OfficialQuotaProvider,
-    now: DateTime<Utc>,
-) -> Option<Duration> {
-    let entry = state.entries.get(provider.as_str())?;
+///
+/// 键是额度缓存用的那个标识：内置 9 家是 `claude` / `codex` …，自定义提供商是
+/// `custom:` 开头的随机串。映射键本来就是字符串，因此两边共用同一份状态文件，
+/// 格式不变、不需要迁移。
+pub fn cooldown_remaining(state: &BackoffState, id: &str, now: DateTime<Utc>) -> Option<Duration> {
+    let entry = state.entries.get(id)?;
     let retry_at = DateTime::parse_from_rfc3339(&entry.retry_at)
         .ok()?
         .with_timezone(&Utc);
@@ -80,32 +78,39 @@ pub fn cooldown_remaining(
 /// 冷却中时给用户的话：说清楚还要等多久，别让人对着不动的界面猜。
 pub fn cooldown_message(
     state: &BackoffState,
-    provider: OfficialQuotaProvider,
+    id: &str,
+    display_name: &str,
     now: DateTime<Utc>,
 ) -> Option<String> {
-    let remaining = cooldown_remaining(state, provider, now)?;
+    let remaining = cooldown_remaining(state, id, now)?;
     let minutes = (remaining.num_seconds() as f64 / 60.0).ceil() as i64;
     Some(format!(
-        "{} 刚取数失败，{} 分钟后自动重试；期间显示的是上次结果",
-        provider.display_name(),
+        "{display_name} 刚取数失败，{} 分钟后自动重试；期间显示的是上次结果",
         minutes.max(1)
     ))
 }
 
-pub fn record_success(state: &mut BackoffState, provider: OfficialQuotaProvider) {
-    state.entries.remove(provider.as_str());
+pub fn record_success(state: &mut BackoffState, id: &str) {
+    state.entries.remove(id);
+}
+
+/// 忘掉这一条的冷却。用在「用户刚改过配置」之后：轮换密钥、换域名、改预设类型
+/// 都可能正是为了修好上一轮的失败，再拿旧的退避拦着，用户看到的会是
+/// 「刚取数失败，N 分钟后自动重试」——把他刚做完的修复盖掉。
+///
+/// 写不下去不算失败：最坏是这次还得等，下次保存再清。
+pub fn clear(path: &Path, id: &str) {
+    let mut state = load_state(path);
+    if state.entries.remove(id).is_some() {
+        let _ = save_state(path, &state);
+    }
 }
 
 /// 记一次失败并推后下次尝试。退避按连续失败次数翻倍，各自封顶。
-pub fn record_failure(
-    state: &mut BackoffState,
-    provider: OfficialQuotaProvider,
-    error: &str,
-    now: DateTime<Utc>,
-) {
+pub fn record_failure(state: &mut BackoffState, id: &str, error: &str, now: DateTime<Utc>) {
     let failures = state
         .entries
-        .get(provider.as_str())
+        .get(id)
         .map_or(1, |entry| entry.failures.saturating_add(1));
     let (base, max) = if is_rate_limited(error) {
         (RATE_LIMITED_BASE_MINUTES, RATE_LIMITED_MAX_MINUTES)
@@ -116,7 +121,7 @@ pub fn record_failure(
         .saturating_mul(1i64 << failures.saturating_sub(1).min(6))
         .min(max);
     state.entries.insert(
-        provider.as_str().to_string(),
+        id.to_string(),
         Entry {
             failures,
             retry_at: (now + Duration::minutes(minutes)).to_rfc3339(),

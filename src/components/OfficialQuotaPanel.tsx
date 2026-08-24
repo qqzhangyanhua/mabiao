@@ -6,13 +6,20 @@ import { formatClock, formatWindowClock } from "../lib/format";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   officialQuotaAgeLabel,
+  officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
-import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
+import type {
+  OfficialQuotaDto,
+  OfficialQuotaFreshness,
+  OfficialQuotaRow,
+  OfficialQuotaWindow,
+} from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 import type { OfficialQuotaListProps } from "./type";
@@ -295,35 +302,80 @@ function QuotaRowTitle({
 }
 
 function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactReset: boolean }) {
+  const notice = officialQuotaNotice(row);
   if (row.windows.length === 0) {
-    return <span className="muted">{row.error ?? "尚未捕获官方额度"}</span>;
+    return <QuotaNotice notice={notice} fallback="尚未捕获官方额度" />;
   }
   return (
     <>
-      <div className="official-quota-windows">
-        {row.windows.map((window) => {
-          const percent = window.used_percent;
-          return (
-            <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
-              <span title={window.label}>{window.label}</span>
-              <strong>{percent == null ? "—" : `${percent.toFixed(0)}%`}</strong>
-              <div className="billing-bar" aria-hidden="true">
-                <i style={{ width: `${Math.min(100, Math.max(0, percent ?? 0))}%` }} />
-              </div>
-              <span
-                className="muted"
-                title={window.resets_at ? formatClock(window.resets_at) : undefined}
-              >
-                {window.resets_at
-                  ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
-                  : "重置时间未知"}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {row.error ? <span className="muted">{row.error}</span> : null}
+      <OfficialQuotaWindows windows={row.windows} compactReset={compactReset} />
+      {notice ? <QuotaNotice notice={notice} /> : null}
     </>
+  );
+}
+
+function QuotaNotice({
+  notice,
+  fallback,
+}: {
+  notice: ReturnType<typeof officialQuotaNotice>;
+  fallback?: string;
+}) {
+  if (!notice) {
+    return fallback ? <span className="muted">{fallback}</span> : null;
+  }
+  if (notice.kind === "todo") {
+    return <span className="official-quota-todo">{notice.text}</span>;
+  }
+  return <span className="muted">{notice.text}</span>;
+}
+
+/**
+ * 一组额度窗口的画法：有百分比就画进度条、只有金额就报金额。
+ *
+ * 首页、托盘与设置页「测试连接」的预览共用这一份。测试要让用户确认的是
+ * 「读到的数对不对」，那它就必须和之后每天看到的那一行长得一模一样——
+ * 另画一套的话，两边哪天分岔，测试确认的就不再是首页会显示的东西。
+ */
+export function OfficialQuotaWindows({
+  windows,
+  compactReset = false,
+}: {
+  windows: OfficialQuotaWindow[];
+  compactReset?: boolean;
+}) {
+  return (
+    <div className="official-quota-windows">
+      {windows.map((window) => {
+        const percent = window.used_percent;
+        // 金额与百分比可以并存：有上限时进度条旁边补一行钱，
+        // 只有余额时那一行就是这个窗口的全部内容。
+        const amount = officialQuotaAmountLabel(window);
+        return (
+          <div className="official-quota-window" key={window.kind}>
+            <span title={window.label}>{window.label}</span>
+            <strong>{percent == null ? (amount ?? "—") : `${percent.toFixed(0)}%`}</strong>
+            {/* 没有百分比就不画条：一根空条读起来是「用了 0%」，而事实是「不知道上限」。 */}
+            {percent == null ? null : (
+              <div className="billing-bar" aria-hidden="true">
+                <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+              </div>
+            )}
+            <span
+              className="muted"
+              title={window.resets_at ? formatClock(window.resets_at) : undefined}
+            >
+              {window.resets_at
+                ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
+                : "重置时间未知"}
+            </span>
+            {percent != null && amount ? (
+              <span className="muted official-quota-amount">{amount}</span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

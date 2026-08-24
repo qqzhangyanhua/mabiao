@@ -127,6 +127,7 @@ pub fn parse_quota_summary(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String
                 label: bucket_label(group_label, bucket),
                 used_percent: Some(percent),
                 resets_at: bucket.get("resetTime").and_then(parse_resets_at),
+                ..Default::default()
             });
         }
     }

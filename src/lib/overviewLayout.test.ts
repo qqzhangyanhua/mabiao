@@ -195,6 +195,41 @@ describe("visibility helpers", () => {
     ]);
   });
 
+  it("keeps custom providers in the tray list when every built-in account is hidden", () => {
+    // 托盘按 hidden_providers 瘦身，那份名单只来自「配置显示」。自定义提供商
+    // 不进那个面板，因此把内置账号全藏起来，它仍然要和内置并排出现。
+    const rows = [
+      { provider: "claude" },
+      { provider: "cursor" },
+      { provider: "custom:a3f9c1" },
+    ];
+    expect(
+      visibleOfficialQuotaRows(rows, [...OFFICIAL_QUOTA_PROVIDER_IDS]).map((row) => row.provider),
+    ).toEqual(["custom:a3f9c1"]);
+  });
+
+  it("does not let 配置显示 hide or list custom quota providers", () => {
+    // 自定义提供商的开关管的是「取不取数」，刻意不进「配置显示」。
+    // 即便 localStorage 里被人写进了 custom: 的 false，首页也不得按这份配置藏它。
+    expect(OFFICIAL_QUOTA_PROVIDER_IDS.some((id) => id.startsWith("custom:"))).toBe(false);
+    const leftover = parseOverviewLayout(
+      JSON.stringify({ officialProviders: { claude: false, "custom:a3f9c1": false } }),
+    );
+    expect(isOfficialProviderVisible(leftover, "custom:a3f9c1")).toBe(true);
+    expect(
+      filterOfficialQuotaRows(
+        [{ provider: "claude" }, { provider: "custom:a3f9c1" }],
+        leftover,
+      ).map((row) => row.provider),
+    ).toEqual(["custom:a3f9c1"]);
+    expect(summarizeOverviewLayout(leftover).hiddenOfficialProviders).toEqual(["claude"]);
+    const hiddenAll = setAllOfficialProvidersVisible(leftover, false);
+    expect(isOfficialProviderVisible(hiddenAll, "custom:a3f9c1")).toBe(true);
+    expect(summarizeOverviewLayout(hiddenAll).hiddenOfficialProviders).not.toContain(
+      "custom:a3f9c1",
+    );
+  });
+
   it("toggles modules and sources without mutating the original", () => {
     const original = defaultOverviewLayout();
     const hiddenHeatmap = setModuleVisible(original, "heatmap", false);

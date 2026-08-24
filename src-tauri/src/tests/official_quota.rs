@@ -24,6 +24,7 @@ fn official_quota_keeps_last_good_windows_on_fetch_failure() {
         label: "5 小时".into(),
         used_percent: Some(40.0),
         resets_at: Some("2026-08-18T12:00:00+00:00".into()),
+        ..Default::default()
     }];
     official_quota::apply_success(
         &conn,
@@ -72,23 +73,27 @@ fn tightest_window_picks_highest_cursor_dimension() {
                     label: "总量".into(),
                     used_percent: Some(94.0),
                     resets_at: None,
+                    ..Default::default()
                 },
                 crate::domain::OfficialQuotaWindow {
                     kind: "auto".into(),
                     label: "Auto".into(),
                     used_percent: Some(100.0),
                     resets_at: None,
+                    ..Default::default()
                 },
                 crate::domain::OfficialQuotaWindow {
                     kind: "api".into(),
                     label: "API".into(),
                     used_percent: Some(44.0),
                     resets_at: None,
+                    ..Default::default()
                 },
             ],
             freshness: crate::domain::OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),
             error: None,
+            todo: None,
         }],
         alerts_enabled: true,
         stale_after_minutes: 10,
@@ -138,6 +143,7 @@ fn apply_fetch_results_isolates_provider_failures() {
                         label: "5 小时".into(),
                         used_percent: Some(10.0),
                         resets_at: None,
+                        ..Default::default()
                     }],
                     "2026-08-18T12:00:00+00:00".into(),
                 )),
@@ -227,6 +233,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
         crate::domain::OfficialQuotaRow {
             provider: "devin".into(),
@@ -235,6 +242,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
     ];
     let hidden = vec!["devin".to_string()];
@@ -254,6 +262,7 @@ fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
             label: "5 小时".into(),
             used_percent: Some(10.0),
             resets_at: None,
+            ..Default::default()
         }],
         "2026-08-18T12:00:00+00:00",
     )
@@ -262,7 +271,7 @@ fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
         alerts_enabled: true,
         hidden_providers: vec!["claude".to_string()],
     };
-    let dto = official_quota::load_dto(&conn, &config, chrono::Utc::now());
+    let dto = official_quota::load_dto(&conn, &config, &[], chrono::Utc::now());
     // 设置页/主窗口的官方额度请求都走 load_dto，隐藏账号的状态仍要能看到。
     assert!(dto.rows.iter().any(|row| row.provider == "claude"));
     assert_eq!(dto.hidden_providers, vec!["claude".to_string()]);
@@ -280,6 +289,7 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
             label: "5 小时".into(),
             used_percent: Some(10.0),
             resets_at: None,
+            ..Default::default()
         }],
         "2026-08-18T12:00:00+00:00",
     )
@@ -295,6 +305,7 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
     let dto = official_quota::load_dto(
         &conn,
         &crate::domain::OfficialQuotaConfig::default(),
+        &[],
         chrono::Utc::now(),
     );
     let shown: Vec<&str> = dto.rows.iter().map(|row| row.provider.as_str()).collect();

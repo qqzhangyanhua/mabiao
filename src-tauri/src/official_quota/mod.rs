@@ -6,9 +6,11 @@ pub mod codex;
 pub mod codex_usage;
 pub mod copilot;
 pub mod cursor;
+pub mod custom;
 pub mod detect;
 pub mod devin;
 pub mod droid;
+pub mod fetch;
 pub mod grok;
 pub(crate) mod grok_grpc;
 pub mod hook;
@@ -27,6 +29,14 @@ use crate::domain::{
     OfficialQuotaRow, OfficialQuotaWindow,
 };
 use crate::store;
+
+// 取数调度住在 `fetch` 里，但调用方一直是按 `official_quota::…` 引用的，
+// 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
+pub use fetch::{
+    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_in_parallel,
+    fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled, parse_provider,
+    resolve_target, FetchTarget, ProviderFetch, QuotaTarget, ThrottledFetch,
+};
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
 pub const CONFIG_NAME: &str = "official_quota.json";
@@ -69,14 +79,19 @@ pub fn freshness(captured_at: &str, now: DateTime<Utc>) -> OfficialQuotaFreshnes
     }
 }
 
+/// 官方额度的唯一出口：首页、托盘、告警都从这里取数据。
+///
+/// 内置 9 家与自定义提供商在这里合流——放在这一点意味着下游全部零改动。
+/// 自定义行排在内置行之后，顺序按用户在设置页登记的顺序。
 pub fn load_dto(
     conn: &Connection,
     config: &OfficialQuotaConfig,
+    custom: &[custom::ResolvedProvider],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
     // 本机没凭证、也没历史缓存的 provider 不占一行——否则家数一多，
     // 界面上全是永远好不了的红字。曾经拉到过数据的仍然保留，避免临时登出就丢历史。
-    let rows: Vec<OfficialQuotaRow> = OfficialQuotaProvider::ALL
+    let mut rows: Vec<OfficialQuotaRow> = OfficialQuotaProvider::ALL
         .into_iter()
         .map(|provider| load_row(conn, provider, now))
         .filter(|row| {
@@ -91,6 +106,14 @@ pub fn load_dto(
         .filter(|provider| !rows.iter().any(|row| row.provider == provider.as_str()))
         .map(|provider| provider.as_str().to_string())
         .collect();
+    // 自定义行不套上面那条「没凭证就不占位」的规则：用户是自己动手登记的，
+    // 登记完却看不到那一行，只会以为保存没生效。停用的才不占行。
+    rows.extend(
+        custom
+            .iter()
+            .filter(|provider| provider.config.enabled)
+            .map(|provider| load_custom_row(conn, provider, now)),
+    );
     OfficialQuotaDto {
         rows,
         alerts_enabled: config.alerts_enabled,
@@ -121,7 +144,39 @@ fn load_row(
     provider: OfficialQuotaProvider,
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
-    match store::load_official_quota_row(conn, provider.as_str()) {
+    load_row_by_id(conn, provider.as_str(), provider.display_name(), now)
+}
+
+/// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。
+fn load_custom_row(
+    conn: &Connection,
+    provider: &custom::ResolvedProvider,
+    now: DateTime<Utc>,
+) -> OfficialQuotaRow {
+    let mut row = load_row_by_id(conn, &provider.config.id, &provider.config.name, now);
+    attach_missing_secret_todo(&mut row, provider.secret.is_none());
+    row
+}
+
+/// 缺密钥是待办，不是取数失败。sqlite 里可能残留一句同样的 error（上一轮
+/// 刷新写进去的），这里把它挪到 `todo`，避免首页画成红字。
+fn attach_missing_secret_todo(row: &mut OfficialQuotaRow, secret_missing: bool) {
+    let leftover_todo = row.error.as_deref() == Some(custom::MISSING_SECRET);
+    if leftover_todo {
+        row.error = None;
+    }
+    if secret_missing {
+        row.todo = Some(custom::MISSING_SECRET.to_string());
+    }
+}
+
+fn load_row_by_id(
+    conn: &Connection,
+    id: &str,
+    display_name: &str,
+    now: DateTime<Utc>,
+) -> OfficialQuotaRow {
+    match store::load_official_quota_row(conn, id) {
         Ok(Some((windows, captured_at, error))) => {
             let freshness = if windows.is_empty() && captured_at.is_empty() {
                 OfficialQuotaFreshness::Unavailable
@@ -129,8 +184,8 @@ fn load_row(
                 freshness(&captured_at, now)
             };
             OfficialQuotaRow {
-                provider: provider.as_str().to_string(),
-                application: provider.display_name().to_string(),
+                provider: id.to_string(),
+                application: display_name.to_string(),
                 windows,
                 freshness,
                 captured_at: if captured_at.is_empty() {
@@ -139,21 +194,23 @@ fn load_row(
                     Some(captured_at)
                 },
                 error,
+                todo: None,
             }
         }
-        Ok(None) => empty_row(provider, None),
-        Err(error) => empty_row(provider, Some(error)),
+        Ok(None) => empty_row(id, display_name, None),
+        Err(error) => empty_row(id, display_name, Some(error)),
     }
 }
 
-fn empty_row(provider: OfficialQuotaProvider, error: Option<String>) -> OfficialQuotaRow {
+fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuotaRow {
     OfficialQuotaRow {
-        provider: provider.as_str().to_string(),
-        application: provider.display_name().to_string(),
+        provider: id.to_string(),
+        application: display_name.to_string(),
         windows: Vec::new(),
         freshness: OfficialQuotaFreshness::Unavailable,
         captured_at: None,
         error,
+        todo: None,
     }
 }
 
@@ -172,195 +229,6 @@ pub fn apply_failure(
     error: &str,
 ) -> Result<(), String> {
     store::set_official_quota_error(conn, provider.as_str(), error)
-}
-
-pub fn parse_provider(value: &str) -> Result<OfficialQuotaProvider, String> {
-    OfficialQuotaProvider::parse(value).ok_or_else(|| format!("未知的官方额度账号：{value}"))
-}
-
-pub type ProviderFetch = Result<(Vec<OfficialQuotaWindow>, String), String>;
-
-/// 先问官方用量接口（零配置），读不到再回落到 statusline 捕获文件——后者是老路径，
-/// 装了 hook 的用户和走第三方代理的用户都还得靠它。两条都没有才报错，
-/// 错误信息取自动接口那条，因为那是多数人应该走的路。
-/// 先打 ChatGPT 的用量接口（不依赖 CLI 装没装），读不到再拉起 `codex app-server`。
-/// 两条都失败时报接口那条：多数人应该走的是它。
-fn fetch_codex() -> ProviderFetch {
-    match codex_usage::fetch_usage() {
-        Ok(result) => Ok(result),
-        Err(error) => codex::fetch_rate_limits().map_err(|app_server_error| {
-            if app_server_error.contains("未找到 Codex CLI") {
-                error
-            } else {
-                app_server_error
-            }
-        }),
-    }
-}
-
-fn fetch_claude() -> ProviderFetch {
-    match claude_usage::fetch_usage() {
-        Ok(result) => Ok(result),
-        Err(error) => claude::refresh_from_capture(&capture_path()).map_err(|capture_error| {
-            if capture_error.contains("尚未捕获") {
-                // 两条路都没有：多数是第三方代理用户，官方登录态是空的，
-                // 提示里把 statusline 这条兜底也说出来，否则只能看到一句读不懂的报错。
-                format!("{error}。若使用第三方代理，可在设置页写入 statusline hook 后重试")
-            } else {
-                capture_error
-            }
-        }),
-    }
-}
-
-pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
-    match provider {
-        OfficialQuotaProvider::Claude => fetch_claude(),
-        OfficialQuotaProvider::Codex => fetch_codex(),
-        OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary(),
-        OfficialQuotaProvider::Grok => grok::fetch_rate_limits(),
-        OfficialQuotaProvider::Droid => droid::fetch_rate_limits(),
-        OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits(),
-        OfficialQuotaProvider::OpenCode => opencode::fetch_usage(),
-        OfficialQuotaProvider::Copilot => copilot::fetch_usage(),
-        OfficialQuotaProvider::Devin => devin::fetch_usage(),
-    }
-}
-
-/// 先取数再交给调用方加锁写入，避免在持锁期间打网络。
-/// 各家并发取数：串行的话总耗时是求和，实测 5 家 7.2 秒，而单家超时上限是 12~20 秒，
-/// 网络一差就能拖到分钟级——而这整段跑在一个阻塞线程里，托盘定时刷新也走这条路。
-/// 并发之后总耗时变成取最大值。
-///
-/// 用作用域线程而不是引 async 运行时：每家之间没有共享状态，退避状态在开始前读、
-/// 结束后写，不进线程。结果按 `ALL` 的顺序 join，保证输出稳定。
-pub fn fetch_all_providers() -> Vec<(OfficialQuotaProvider, ProviderFetch)> {
-    let now = Utc::now();
-    let mut state = backoff::load_state(&backoff::state_path());
-    let targets: Vec<OfficialQuotaProvider> = OfficialQuotaProvider::ALL
-        .into_iter()
-        .filter(|provider| detect::has_local_credentials(*provider))
-        .filter(|provider| backoff::cooldown_remaining(&state, *provider, now).is_none())
-        .collect();
-
-    let results = fetch_in_parallel(targets, fetch_provider);
-    record_backoff(&mut state, &results, now);
-    results
-}
-
-/// 并发跑各家、按传入顺序返回。取数函数作为参数传入，这样调度本身可以脱网测试。
-pub fn fetch_in_parallel<F>(
-    targets: Vec<OfficialQuotaProvider>,
-    fetch: F,
-) -> Vec<(OfficialQuotaProvider, ProviderFetch)>
-where
-    F: Fn(OfficialQuotaProvider) -> ProviderFetch + Sync,
-{
-    std::thread::scope(|scope| {
-        let fetch = &fetch;
-        let handles: Vec<_> = targets
-            .into_iter()
-            .map(|provider| (provider, scope.spawn(move || fetch(provider))))
-            .collect();
-        handles
-            .into_iter()
-            .map(|(provider, handle)| {
-                // 某一家 panic 不该带走整次刷新，其余结果照常写入。
-                let result = handle.join().unwrap_or_else(|_| {
-                    Err(format!("{} 取数线程异常退出", provider.display_name()))
-                });
-                (provider, result)
-            })
-            .collect()
-    })
-}
-
-/// [`fetch_provider_throttled`] 的结果：冷却期短路和真正打了网络的失败要分开，
-/// 调用方不该把「还要等 N 分钟」这句提示当成新的失败原因落库——那会冲掉上一次
-/// 真实失败的诊断信息（HTTP 码 / 登录过期等），而且每点一次刷新剩余时间都会变，
-/// 存下去毫无意义。
-pub enum ThrottledFetch {
-    /// 仍在冷却，没有实际发请求；这句话只用于这次响应临时展示，不落库。
-    Cooldown(String),
-    /// 冷却已过，真正打了网络（不论成功失败）。
-    Attempted(ProviderFetch),
-}
-
-/// 单个 provider 的手动刷新。限流期间也拦——「多点几次」正是让限流恢复更慢的原因，
-/// 但要明确告诉用户还要等多久，而不是让按钮看起来没反应。
-pub fn fetch_provider_throttled(provider: OfficialQuotaProvider) -> ThrottledFetch {
-    let now = Utc::now();
-    let mut state = backoff::load_state(&backoff::state_path());
-    if let Some(message) = backoff::cooldown_message(&state, provider, now) {
-        return ThrottledFetch::Cooldown(message);
-    }
-    let result = fetch_provider(provider);
-    record_backoff(
-        &mut state,
-        std::slice::from_ref(&(provider, result.clone())),
-        now,
-    );
-    ThrottledFetch::Attempted(result)
-}
-
-/// 悬浮面板上的「强制刷新」用：跳过冷却检查，即便还在冷却期也真打一次网络。
-/// 结果照样喂给 [`record_backoff`]——连续失败依然会拉长下次自动重试的等待，
-/// 只是这一次点击本身不被拦。用户手上明确知道要现在就试一次，就不代它纠结了。
-pub fn fetch_provider_forced(provider: OfficialQuotaProvider) -> ProviderFetch {
-    let now = Utc::now();
-    let mut state = backoff::load_state(&backoff::state_path());
-    let result = fetch_provider(provider);
-    record_backoff(
-        &mut state,
-        std::slice::from_ref(&(provider, result.clone())),
-        now,
-    );
-    result
-}
-
-fn record_backoff(
-    state: &mut backoff::BackoffState,
-    results: &[(OfficialQuotaProvider, ProviderFetch)],
-    now: DateTime<Utc>,
-) {
-    if results.is_empty() {
-        return;
-    }
-    for (provider, result) in results {
-        match result {
-            Ok(_) => backoff::record_success(state, *provider),
-            Err(error) => backoff::record_failure(state, *provider, error, now),
-        }
-    }
-    // 状态写不下去不该让刷新失败，最多是下次少歇一会儿。
-    let _ = backoff::save_state(&backoff::state_path(), state);
-}
-
-/// 打开总览或手动刷新时尝试更新各路；取数在调用方锁外完成，写入彼此隔离。
-pub fn apply_fetch_results(
-    conn: &Connection,
-    results: impl IntoIterator<
-        Item = (
-            OfficialQuotaProvider,
-            Result<(Vec<OfficialQuotaWindow>, String), String>,
-        ),
-    >,
-) -> Result<(), String> {
-    for (provider, result) in results {
-        apply_result(conn, provider, result)?;
-    }
-    Ok(())
-}
-
-fn apply_result(
-    conn: &Connection,
-    provider: OfficialQuotaProvider,
-    result: Result<(Vec<OfficialQuotaWindow>, String), String>,
-) -> Result<(), String> {
-    match result {
-        Ok((windows, captured_at)) => apply_success(conn, provider, windows, &captured_at),
-        Err(error) => apply_failure(conn, provider, &error),
-    }
 }
 
 /// 捕获文件比缓存新时写入 sqlite，返回是否发生了更新。
@@ -396,9 +264,17 @@ pub struct TightestQuota {
     pub stale: bool,
 }
 
+/// 托盘标题上的「最紧一档」。
+///
+/// 自定义提供商被整体跳过。「最紧」的语义是「最快撞线、撞了会自己重置」；
+/// 中转站那种充值制余额是存量不是流量，不充值就永远不回落，一条长期 95% 的余额
+/// 会把标题钉死，把每天真正在动的 5 小时窗挤掉。
 pub fn tightest_window(dto: &OfficialQuotaDto) -> Option<TightestQuota> {
     let mut best: Option<TightestQuota> = None;
     for row in &dto.rows {
+        if custom::is_custom_id(&row.provider) {
+            continue;
+        }
         let stale = match row.freshness {
             OfficialQuotaFreshness::Official => false,
             OfficialQuotaFreshness::Stale => true,

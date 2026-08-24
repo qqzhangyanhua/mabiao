@@ -14,6 +14,7 @@ describe("tabFromHash", () => {
     expect(tabFromHash("settings-overview")).toBe("display");
     expect(tabFromHash("#settings-budget")).toBe("budget");
     expect(tabFromHash("#settings-official-quota")).toBe("budget");
+    expect(tabFromHash("#settings-custom-quota")).toBe("budget");
     expect(tabFromHash("#settings-backup")).toBe("backup");
     expect(tabFromHash("#settings-cursor-account")).toBe("cursor");
     expect(tabFromHash("#settings-litellm")).toBe("pricing");
