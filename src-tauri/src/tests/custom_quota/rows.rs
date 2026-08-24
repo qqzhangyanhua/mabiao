@@ -1,10 +1,14 @@
 //! DTO 合流：自定义行怎么进「官方额度」，以及缓存 / 告警 / 托盘的连带行为。
 
 use super::{resolved, unresolved, SUBSCRIPTION, USAGE};
-use crate::domain::{OfficialQuotaConfig, OfficialQuotaFreshness, OfficialQuotaProvider};
+use crate::domain::{
+    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow,
+    OfficialQuotaWindow,
+};
 use crate::official_quota::custom::{self, CustomQuotaPreset};
 use crate::official_quota::{self as quota, QuotaTarget};
 use crate::store as db;
+use crate::test_support::fixture;
 
 // -------------------------------------------------- DTO 合流
 
@@ -187,52 +191,125 @@ fn quota_windows_cached_before_the_amount_fields_still_deserialize() {
     assert_eq!(row.0[0].currency, None);
 }
 
-/// 「最紧一档」的语义是「最快撞线、撞了会自己重置」。充值制余额是存量不是流量，
-/// 不充值就永远不回落，会把托盘标题钉死。
+fn quota_dto(rows: Vec<OfficialQuotaRow>) -> OfficialQuotaDto {
+    OfficialQuotaDto {
+        rows,
+        alerts_enabled: true,
+        stale_after_minutes: 10,
+        undetected: Vec::new(),
+        hidden_providers: Vec::new(),
+    }
+}
+
+fn official_row(
+    provider: &str,
+    application: &str,
+    windows: Vec<OfficialQuotaWindow>,
+) -> OfficialQuotaRow {
+    OfficialQuotaRow {
+        provider: provider.into(),
+        application: application.into(),
+        windows,
+        freshness: OfficialQuotaFreshness::Official,
+        captured_at: Some("2026-08-24T12:00:00+00:00".into()),
+        error: None,
+        todo: None,
+    }
+}
+
+fn claude_5h(percent: f64) -> OfficialQuotaWindow {
+    OfficialQuotaWindow {
+        kind: "session_5h".into(),
+        label: "5 小时".into(),
+        used_percent: Some(percent),
+        resets_at: Some("2026-08-24T17:00:00+00:00".into()),
+        ..Default::default()
+    }
+}
+
+/// 「最紧」= 最快撞线、撞了会自己重置。充值制余额没有重置时间，仍跳过。
 #[test]
-fn tightest_window_skips_custom_providers() {
-    let conn = db::open_memory().unwrap();
-    let now = chrono::Utc::now();
-    quota::apply_fetch_results(
-        &conn,
-        [
-            (
-                OfficialQuotaProvider::Claude.as_str().to_string(),
-                Ok((
-                    vec![crate::domain::OfficialQuotaWindow {
-                        kind: "session_5h".into(),
-                        label: "5 小时".into(),
-                        used_percent: Some(42.0),
-                        ..Default::default()
-                    }],
-                    now.to_rfc3339(),
-                )),
-            ),
-            (
-                "custom:a3f9c1".to_string(),
-                Ok((
-                    custom::parse_quota(
-                        CustomQuotaPreset::OpenAiCompatible,
-                        &[r#"{"hard_limit_usd":50}"#, r#"{"total_usage":4750}"#],
-                    )
-                    .unwrap(),
-                    now.to_rfc3339(),
-                )),
-            ),
-        ],
+fn tightest_window_skips_custom_windows_without_a_reset_time() {
+    let custom = custom::parse_quota(
+        CustomQuotaPreset::OpenAiCompatible,
+        &[r#"{"hard_limit_usd":50}"#, r#"{"total_usage":4750}"#],
     )
     .unwrap();
+    assert_eq!(custom[0].used_percent, Some(95.0));
+    assert_eq!(custom[0].resets_at, None);
 
-    let dto = quota::load_dto(
-        &conn,
-        &OfficialQuotaConfig::default(),
-        &[resolved("custom:a3f9c1", "公司的中转")],
-        now,
-    );
+    let dto = quota_dto(vec![
+        official_row("claude", "Claude", vec![claude_5h(42.0)]),
+        official_row("custom:a3f9c1", "公司的中转", custom),
+    ]);
     let tightest = quota::tightest_window(&dto).unwrap();
-    // 95% 的余额没有抢走标题，每天真正在动的 5 小时窗还在。
     assert_eq!(tightest.provider, "Claude");
     assert_eq!(tightest.used_percent, 42.0);
+}
+
+/// 带重置时间的自定义窗口是流量型，能进标题。短标签走窗口类型，
+/// 预算窗叫「预算」而不是「总量」。
+#[test]
+fn tightest_window_includes_custom_windows_with_a_reset_time() {
+    let budget = custom::parse_quota(
+        CustomQuotaPreset::LiteLlmProxy,
+        &[&fixture("litellm-proxy-nested.json")],
+    )
+    .unwrap();
+    assert!(budget[0].resets_at.is_some());
+
+    let dto = quota_dto(vec![
+        official_row("claude", "Claude", vec![claude_5h(42.0)]),
+        official_row(
+            "cursor",
+            "Cursor",
+            vec![OfficialQuotaWindow {
+                kind: "auto".into(),
+                label: "Auto".into(),
+                used_percent: Some(40.0),
+                resets_at: None,
+                ..Default::default()
+            }],
+        ),
+        official_row("custom:lite1", "家里的网关", budget),
+    ]);
+    let tightest = quota::tightest_window(&dto).unwrap();
+    assert_eq!(tightest.provider, "家里的网关");
+    assert_eq!(tightest.label, "预算");
+    assert_eq!(tightest.used_percent, 45.0);
+    assert_eq!(
+        crate::tray::format_title_with_quota(Some(1.23), false, Some(&tightest)),
+        "$1.23 · 家里的网关 预算 45%"
+    );
+}
+
+/// 内置账号没有重置时间的窗口（Cursor Auto）仍参与竞争，
+/// 改判据不能把它们一并跳过。
+#[test]
+fn tightest_window_still_counts_builtin_windows_without_a_reset_time() {
+    let budget = custom::parse_quota(
+        CustomQuotaPreset::LiteLlmProxy,
+        &[&fixture("litellm-proxy-nested.json")],
+    )
+    .unwrap();
+    let dto = quota_dto(vec![
+        official_row(
+            "cursor",
+            "Cursor",
+            vec![OfficialQuotaWindow {
+                kind: "auto".into(),
+                label: "Auto".into(),
+                used_percent: Some(80.0),
+                resets_at: None,
+                ..Default::default()
+            }],
+        ),
+        official_row("custom:lite1", "家里的网关", budget),
+    ]);
+    let tightest = quota::tightest_window(&dto).unwrap();
+    assert_eq!(tightest.provider, "Cursor");
+    assert_eq!(tightest.label, "Auto");
+    assert_eq!(tightest.used_percent, 80.0);
 }
 
 /// 恢复备份后的形状：配置在、密钥没了。首页这一行是待办，不是取数失败。

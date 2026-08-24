@@ -21,8 +21,8 @@ use crate::domain::OfficialQuotaWindow;
 
 pub use store::{CustomQuotaConfig, CustomQuotaCredentials, CustomQuotaProvider, ResolvedProvider};
 
-/// 标识前缀。三个职责：与内置 9 家永不冲突、作为托盘「最紧一档」的跳过判据、
-/// 界面上一眼分辨自定义与内置。
+/// 标识前缀。两个职责：与内置 9 家永不冲突、界面上一眼分辨自定义与内置。
+/// 托盘「最紧一档」按窗口有无重置时间分流，见 `tightest_window`。
 pub const ID_PREFIX: &str = "custom:";
 const TIMEOUT: Duration = Duration::from_secs(15);
 pub const MISSING_SECRET: &str = "未配置密钥，请在设置页重新填写";

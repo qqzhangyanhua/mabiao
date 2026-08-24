@@ -266,21 +266,22 @@ pub struct TightestQuota {
 
 /// 托盘标题上的「最紧一档」。
 ///
-/// 自定义提供商被整体跳过。「最紧」的语义是「最快撞线、撞了会自己重置」；
-/// 中转站那种充值制余额是存量不是流量，不充值就永远不回落，一条长期 95% 的余额
-/// 会把标题钉死，把每天真正在动的 5 小时窗挤掉。
+/// 「最紧」的语义是「最快撞线、撞了会自己重置」。自定义提供商因此按窗口
+/// 有无重置时间分流：带重置时间的预算窗口能进标题；充值制余额那种永不回落
+/// 的存量仍跳过，免得一条长期 95% 的余额把每天真正在动的 5 小时窗挤掉。
+/// 内置账号不受这条过滤——没有重置时间的 Auto 窗也照常参与竞争。
 pub fn tightest_window(dto: &OfficialQuotaDto) -> Option<TightestQuota> {
     let mut best: Option<TightestQuota> = None;
     for row in &dto.rows {
-        if custom::is_custom_id(&row.provider) {
-            continue;
-        }
         let stale = match row.freshness {
             OfficialQuotaFreshness::Official => false,
             OfficialQuotaFreshness::Stale => true,
             OfficialQuotaFreshness::Unavailable => continue,
         };
         for window in &row.windows {
+            if custom::is_custom_id(&row.provider) && window.resets_at.is_none() {
+                continue;
+            }
             let Some(percent) = window.used_percent else {
                 continue;
             };
