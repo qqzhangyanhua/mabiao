@@ -208,6 +208,16 @@ fn manual_refresh_during_custom_cooldown_says_how_long_and_keeps_last_window() {
         )],
     )
     .unwrap();
+    // 上一轮已经把真实失败写进库。冷却短路不能把这句话冲掉——用户刷新只是
+    // 想知道还要等多久，不是想把「密钥无效」换成一句等待提示。
+    quota::apply_fetch_results(
+        &conn,
+        [(
+            "custom:a3f9c1".to_string(),
+            Err("密钥无效或已失效，请在设置页更新密钥".to_string()) as quota::ProviderFetch,
+        )],
+    )
+    .unwrap();
 
     let (_dir, path, _) = seeded_cooldown("custom:a3f9c1", "对方限流了，稍后会自动重试");
     let before = backoff::cooldown_remaining(&backoff::load_state(&path), "custom:a3f9c1", now());
@@ -239,7 +249,11 @@ fn manual_refresh_during_custom_cooldown_says_how_long_and_keeps_last_window() {
         .find(|row| row.provider == "custom:a3f9c1")
         .unwrap();
     assert_eq!(row.windows[0].used_percent, Some(38.0));
-    assert_eq!(row.error, None);
+    assert_eq!(
+        row.error.as_deref(),
+        Some("密钥无效或已失效，请在设置页更新密钥"),
+        "冷却提示只出现在这次响应里，不能落库盖掉上次真实错误"
+    );
 }
 
 /// 整体刷新把冷却中的自定义提供商整条跳过，避免对着已经限流的中转站再打一枪。

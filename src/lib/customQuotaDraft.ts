@@ -50,3 +50,25 @@ export function fetchInputsOf(draft: CustomQuotaDraft): string {
 export function submittedSecret(typed: string): string | null {
   return typed.trim() === "" ? null : typed;
 }
+
+/**
+ * 某个预设在密钥框旁必须写明的令牌种类。没有特别要交代的就返回 null。
+ *
+ * NewAPI / OneAPI 最高频的填错是把调模型的 `sk-` 当成了系统访问令牌；
+ * 解析器还没做也得先把这句话写出来，否则用户拿错钥匙存进去，等实现了
+ * 也只会看到「密钥无效」。
+ */
+export function credentialHint(preset: CustomQuotaPreset): string | null {
+  if (preset === "newapi") {
+    return "需要的是站点后台的系统访问令牌，不是调模型的 sk- 开头那个 key。";
+  }
+  return null;
+}
+
+/** 密钥框的占位符：编辑时一律「留空不改」；NewAPI 新建时不要提示 `sk-`。 */
+export function secretPlaceholder(preset: CustomQuotaPreset, editing: boolean): string {
+  if (editing) {
+    return "不填就沿用现在这把";
+  }
+  return preset === "newapi" ? "系统访问令牌" : "sk-…";
+}

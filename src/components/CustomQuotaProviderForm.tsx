@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import {
+  credentialHint,
   fetchInputsOf,
+  secretPlaceholder,
   submittedSecret,
   type CustomQuotaDraft,
   type CustomQuotaPreset,
@@ -126,6 +128,7 @@ export function CustomQuotaProviderForm({
 }) {
   const selected = presets.find((preset) => preset.value === draft.preset);
   const editing = draft.id != null;
+  const hint = credentialHint(draft.preset);
   const preview = useRequestPreview(draft.preset, draft.baseUrl);
   const [testing, setTesting] = useState(false);
   const [outcome, setOutcome] = useState<TestOutcome | null>(null);
@@ -191,10 +194,11 @@ export function CustomQuotaProviderForm({
         label={editing ? "密钥（留空则不改）" : "密钥"}
         type="password"
         autoComplete="off"
-        placeholder={editing ? "不填就沿用现在这把" : "sk-…"}
+        placeholder={secretPlaceholder(draft.preset, editing)}
         value={draft.secret}
         onChange={(event) => onChange({ ...draft, secret: event.target.value })}
       />
+      {hint ? <p className="panel-note tone-warn">{hint}</p> : null}
       {selected && !selected.supported ? (
         <p className="panel-note tone-warn">
           「{selected.label}」暂未支持，现在只实现了「OpenAI 兼容计费」。

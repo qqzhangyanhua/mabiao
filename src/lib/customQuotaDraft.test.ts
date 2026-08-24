@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   BLANK_CUSTOM_QUOTA_DRAFT,
+  credentialHint,
   fetchInputsOf,
+  secretPlaceholder,
   submittedSecret,
   type CustomQuotaDraft,
 } from "./customQuotaDraft";
@@ -50,6 +52,38 @@ describe("fetchInputsOf", () => {
     expect(fetchInputsOf(draft({ baseUrl: "https://relay.example.com/v1" }))).not.toBe(
       fetchInputsOf(draft()),
     );
+  });
+});
+
+describe("credentialHint", () => {
+  it("NewAPI / OneAPI 写明要用系统访问令牌，不是 sk- 模型 key", () => {
+    // 这是该类型最高频的填错：把调模型的 sk- 填进了系统令牌框。
+    expect(credentialHint("newapi")).toBe(
+      "需要的是站点后台的系统访问令牌，不是调模型的 sk- 开头那个 key。",
+    );
+  });
+
+  it("其它预设不提示令牌种类", () => {
+    expect(credentialHint("openai_compatible")).toBeNull();
+    expect(credentialHint("openrouter")).toBeNull();
+    expect(credentialHint("deepseek")).toBeNull();
+    expect(credentialHint("siliconflow")).toBeNull();
+    expect(credentialHint("moonshot")).toBeNull();
+  });
+});
+
+describe("secretPlaceholder", () => {
+  it("NewAPI 新建时不把 sk- 当成默认提示", () => {
+    expect(secretPlaceholder("newapi", false)).toBe("系统访问令牌");
+  });
+
+  it("编辑时一律提示留空不改", () => {
+    expect(secretPlaceholder("newapi", true)).toBe("不填就沿用现在这把");
+    expect(secretPlaceholder("openai_compatible", true)).toBe("不填就沿用现在这把");
+  });
+
+  it("OpenAI 兼容计费新建时仍提示 sk-", () => {
+    expect(secretPlaceholder("openai_compatible", false)).toBe("sk-…");
   });
 });
 
