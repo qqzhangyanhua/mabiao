@@ -349,6 +349,14 @@ button {
   padding: 4px 8px 18px;
 }
 
+.brand-logo {
+  display: block;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
 .brand-name {
   font-size: 16px;
   font-weight: 650;
