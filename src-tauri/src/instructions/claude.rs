@@ -14,24 +14,27 @@ pub fn scan(home: &Path) -> GlobalInstructionSourceRow {
         None,
     )];
 
-    if let Some(dir) = file::read_directory(
-        &claude_dir.join("rules"),
-        "~/.claude/rules/",
-        InstructionLoadStatus::Loaded,
-        InstructionEvidence::Verified,
-        None,
-    ) {
-        files.push(dir);
-    }
-
-    for (name, path) in file::list_files(&claude_dir.join("rules")) {
-        files.push(file::read_file(
-            &path,
-            &format!("~/.claude/rules/{name}"),
+    let rules_dir = claude_dir.join("rules");
+    let rule_files = file::list_files(&rules_dir);
+    if !rule_files.is_empty() {
+        if let Some(dir) = file::read_directory(
+            &rules_dir,
+            "~/.claude/rules/",
             InstructionLoadStatus::Loaded,
             InstructionEvidence::Verified,
             None,
-        ));
+        ) {
+            files.push(dir);
+        }
+        for (name, path) in rule_files {
+            files.push(file::read_file(
+                &path,
+                &format!("~/.claude/rules/{name}"),
+                InstructionLoadStatus::Loaded,
+                InstructionEvidence::Verified,
+                None,
+            ));
+        }
     }
 
     GlobalInstructionSourceRow {

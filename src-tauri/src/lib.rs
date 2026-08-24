@@ -14,6 +14,7 @@ pub mod domain;
 pub mod ingest;
 pub mod instructions;
 pub mod litellm;
+pub mod memory;
 pub mod net;
 pub mod official_quota;
 pub mod paths;
@@ -43,10 +44,11 @@ use crate::domain::{
     ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaHookDto, OverviewDto, PriceSnapshot, PriceSnapshotMeta,
-    PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic, WorkTimelineDto,
-    WriteUserFileRequest, WriteUserFileResult,
+    OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
+    PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
+    SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
+use crate::official_quota::QuotaTarget;
 
 /// 只读连接池。
 ///
@@ -99,6 +101,20 @@ impl ReadPool {
         }
         Ok(())
     }
+
+    fn shrink_memory(&self) {
+        for slot in &self.conns {
+            if let Ok(conn) = slot.lock() {
+                let _ = store::shrink_memory(&conn);
+            }
+        }
+    }
+}
+
+pub(crate) fn release_idle_memory(state: &AppState, write: &Connection) {
+    let _ = store::shrink_memory(write);
+    state.read_pool.shrink_memory();
+    memory::release_idle();
 }
 
 pub struct AppState {
@@ -196,6 +212,7 @@ async fn ingest(app: tauri::AppHandle) -> Result<IngestReport, String> {
             &state.budget_path,
             &state.budget_notify_path,
         );
+        release_idle_memory(&state, &conn);
         Ok(report)
     })
     .await
@@ -439,7 +456,9 @@ async fn rebuild_cache(
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let conn = state.lock_write()?;
-        ingest::rebuild_cache(&conn, &ingest::default_home(), source)
+        let report = ingest::rebuild_cache(&conn, &ingest::default_home(), source)?;
+        release_idle_memory(&state, &conn);
+        Ok(report)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -835,7 +854,7 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
@@ -937,7 +956,35 @@ async fn refresh_official_quota_provider(
         // 先试内置枚举，认不出再回落到自定义通道——`custom:` 那些标识
         // 走的是后一条路，不该再撞上「未知的官方额度账号」。
         let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
-        let result = official_quota::fetch_target_throttled(&target);
+        match official_quota::fetch_target_throttled(&target) {
+            // 冷却期短路：不写库，避免把上一次真实失败原因换成这句「还要等 N 分
+            // 钟」——只在这次响应的快照里临时替换该行 error，够按钮即时反馈用。
+            official_quota::ThrottledFetch::Cooldown(message) => overlay_cooldown_message(
+                &app,
+                target.quota_id(),
+                target.quota_display_name(),
+                message,
+            ),
+            official_quota::ThrottledFetch::Attempted(result) => {
+                persist_official_quota_fetches(&app, [(target, result)])
+            }
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 悬浮额度面板每行的强制刷新：跳过冷却检查，用户点了就是要现在就试一次
+/// （托盘弹窗那边空间小，不方便像主窗口那样先弹一句「还要等 N 分钟」再让人
+/// 决定要不要硬刷）。结果照样记入退避状态，连续失败仍会拉长下次自动重试。
+#[tauri::command]
+async fn refresh_official_quota_provider_force(
+    app: tauri::AppHandle,
+    provider: String,
+) -> Result<OfficialQuotaDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        let result = official_quota::fetch_target_forced(&target);
         persist_official_quota_fetches(&app, [(target, result)])
     })
     .await
@@ -960,6 +1007,29 @@ fn persist_official_quota_fetches<T: official_quota::QuotaTarget>(
     }
     // snapshot 自己再取锁；这里必须先放下，std::sync::Mutex 不可重入。
     official_quota_snapshot(app)
+}
+
+/// 冷却提示只挂在这次返回的快照上，不落库。
+fn overlay_cooldown_message(
+    app: &tauri::AppHandle,
+    id: &str,
+    display_name: &str,
+    message: String,
+) -> Result<OfficialQuotaDto, String> {
+    let mut dto = official_quota_snapshot(app)?;
+    match dto.rows.iter_mut().find(|row| row.provider == id) {
+        Some(row) => row.error = Some(message),
+        None => dto.rows.push(OfficialQuotaRow {
+            provider: id.to_string(),
+            application: display_name.to_string(),
+            windows: Vec::new(),
+            freshness: OfficialQuotaFreshness::Unavailable,
+            captured_at: None,
+            error: Some(message),
+            todo: None,
+        }),
+    }
+    Ok(dto)
 }
 
 #[tauri::command]
@@ -1014,7 +1084,45 @@ fn delete_custom_quota_provider(
     official_quota::custom::panel::delete(&state.custom_quota_paths, &id)
 }
 
-/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token。返回 `false` 表示取消。
+/// base URL 输入框下方那行回显。纯计算、不打网，边打边问也不会有负担。
+#[tauri::command]
+fn preview_custom_quota_request(
+    preset: official_quota::custom::CustomQuotaPreset,
+    base_url: String,
+) -> official_quota::custom::panel::CustomQuotaRequestPreviewDto {
+    official_quota::custom::panel::preview_requests(
+        preset,
+        &base_url,
+        chrono::Utc::now().date_naive(),
+    )
+}
+
+/// 用表单里尚未保存的配置直接打一次，把解析出的额度交回去。
+///
+/// 走 `custom::fetch` 而不是 `fetch_target_throttled`：这是用户点出来的一次性验证，
+/// 既不该被上一轮失败留下的冷却拦住（点测试往往正是为了修好它），也不该把失败
+/// 记进退避——那条配置还没保存，退避里没有它的位置。同理不写额度缓存：
+/// 首页那一行归已保存的配置管。
+#[tauri::command]
+async fn test_custom_quota_provider(
+    app: tauri::AppHandle,
+    request: official_quota::custom::panel::TestCustomQuotaProvider,
+) -> Result<official_quota::custom::panel::CustomQuotaTestDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let paths = app.state::<AppState>().custom_quota_paths.clone();
+        let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
+        let (windows, captured_at) =
+            official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
+        Ok(official_quota::custom::panel::CustomQuotaTestDto {
+            windows,
+            captured_at,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token，也不含自定义提供商密钥。返回 `false` 表示取消。
 #[tauri::command]
 async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1035,7 +1143,7 @@ async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。返回 `false` 表示取消。
+/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。自定义提供商密钥不在备份里，本机已有的密钥文件不会被覆盖。返回 `false` 表示取消。
 #[tauri::command]
 async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1183,7 +1291,12 @@ fn spawn_rollup_backfill(app: &tauri::AppHandle) {
 ///
 /// 不在 `setup` 里同步跑：整库重解析会让启动像卡死。补建期间未就绪的会话走整份解析回退。
 /// 每次只拿写锁处理一条，避免长时间挡住摄取。
+///
+/// 每条会话之间故意 sleep 一下：这条路径和首屏的 `ingest_all` 都要整份读会话源文件，
+/// 若同时全速跑，遇到大文件（真实观测到 Codex 单个 rollout 日志有 114MB）会让两条路径
+/// 的临时内存峰值叠在一起。让一步不影响正确性——补建本身就是"渐进"的，晚一点做完没关系。
 fn spawn_event_index_backfill(app: &tauri::AppHandle) {
+    const STEP_DELAY: std::time::Duration = std::time::Duration::from_millis(30);
     let app = app.clone();
     std::thread::spawn(move || {
         let home = ingest::default_home();
@@ -1206,6 +1319,7 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
             if !progressed {
                 return;
             }
+            std::thread::sleep(STEP_DELAY);
         }
     });
 }
@@ -1255,8 +1369,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if window.label() == tray_popup::LABEL {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -1281,12 +1397,15 @@ pub fn run() {
             get_official_quota,
             refresh_official_quota,
             refresh_official_quota_provider,
+            refresh_official_quota_provider_force,
             get_official_quota_hook,
             apply_official_quota_hook,
             save_official_quota_config,
             list_custom_quota_providers,
             save_custom_quota_provider,
             delete_custom_quota_provider,
+            preview_custom_quota_request,
+            test_custom_quota_provider,
             get_price_snapshot,
             get_price_snapshot_url,
             refresh_price_snapshot,
@@ -1323,13 +1442,18 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app, event| {
-            let _ = &app;
-            let _ = &event;
-            #[cfg(target_os = "macos")]
-            if let tauri::RunEvent::Reopen { .. } = event {
-                tray::show_main(app);
+        .run(|app, event| match event {
+            tauri::RunEvent::ExitRequested { api, code, .. }
+                if code.is_none() && app.get_webview_window("main").is_none() =>
+            {
+                // None = 关最后一扇窗 / Cmd+Q 等用户交互。主窗口没了就留在托盘；
+                // 主窗口还在（典型是 Cmd+Q）则放行，让应用退出。
+                // 托盘菜单「退出」走 app.exit(0)，code 是 Some，不会进这里。
+                api.prevent_exit();
             }
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => tray::show_main(app),
+            _ => {}
         });
 }
 

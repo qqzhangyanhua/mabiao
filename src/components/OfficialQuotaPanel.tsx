@@ -7,11 +7,19 @@ import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   officialQuotaAgeLabel,
   officialQuotaAmountLabel,
+  officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
+  officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
-import type { OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaRow } from "../types";
+import type {
+  OfficialQuotaDto,
+  OfficialQuotaFreshness,
+  OfficialQuotaRow,
+  OfficialQuotaWindow,
+} from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 import type { OfficialQuotaListProps } from "./type";
@@ -30,6 +38,7 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   onError: (error: unknown) => void;
 }) {
   const rows = data?.rows ?? [];
+  const undetectedNote = officialQuotaUndetectedNote(data?.undetected ?? []);
   const staleAfterMinutes = data?.stale_after_minutes ?? DEFAULT_STALE_AFTER_MINUTES;
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
@@ -70,19 +79,17 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
         </div>
       </div>
       {rows.length === 0 ? (
-        <EmptyState
-          compact
-          icon="clock"
-          title={data ? "所选账号均已隐藏" : "正在读取官方额度…"}
-          hint={data ? "在「配置显示」里打开要看的账号" : "先显示上次缓存，再后台刷新"}
-        />
+        <EmptyState compact icon="clock" {...officialQuotaEmptyCopy(data)} />
       ) : (
-        <OfficialQuotaList
-          rows={rows}
-          staleAfterMinutes={staleAfterMinutes}
-          busyProvider={busyProvider}
-          onRefresh={(provider) => void refreshProvider(provider)}
-        />
+        <>
+          <OfficialQuotaList
+            rows={rows}
+            staleAfterMinutes={staleAfterMinutes}
+            busyProvider={busyProvider}
+            onRefresh={(provider) => void refreshProvider(provider)}
+          />
+          {undetectedNote ? <p className="panel-note">{undetectedNote}</p> : null}
+        </>
       )}
     </article>
   );
@@ -212,11 +219,21 @@ function QuotaRow({
           <span className="official-quota-grip" title="拖动排序" aria-hidden="true" />
         ) : null}
         {arrangeable ? (
-          <button
-            type="button"
+          // 折叠开关本来整行是一个 <button>，但这一行现在还塞了刷新小图标——
+          // 两个 <button> 不能嵌套（浏览器会把外层标签提前截断，布局跟着乱）。
+          // 换成 role="button" 的 div 自己接管键盘可达性，刷新按钮再单独挡住点击冒泡。
+          <div
+            role="button"
+            tabIndex={0}
             className="official-quota-head official-quota-head-toggle"
             aria-expanded={open}
             onClick={onToggle}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onToggle();
+              }
+            }}
           >
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
             {open ? (
@@ -230,7 +247,7 @@ function QuotaRow({
               <em className="official-quota-summary">{trayQuotaRowSummary(row)}</em>
             )}
             <Icon name="chevron" size={12} className="official-quota-caret" />
-          </button>
+          </div>
         ) : (
           <div className="official-quota-head">
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
@@ -269,7 +286,11 @@ function QuotaRowTitle({
           variant="icon"
           className={busy ? "official-quota-refresh is-busy" : "official-quota-refresh"}
           disabled={disabled}
-          onClick={onRefresh}
+          onClick={(event) => {
+            // 折叠开关那个 role="button" 的 div 就包在外面，点刷新不拦截会连带把它也触发。
+            event.stopPropagation();
+            onRefresh();
+          }}
           title={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
           aria-label={busy ? `${row.application} 刷新中` : `刷新 ${row.application} 额度`}
         >
@@ -281,44 +302,80 @@ function QuotaRowTitle({
 }
 
 function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactReset: boolean }) {
+  const notice = officialQuotaNotice(row);
   if (row.windows.length === 0) {
-    return <span className="muted">{row.error ?? "尚未捕获官方额度"}</span>;
+    return <QuotaNotice notice={notice} fallback="尚未捕获官方额度" />;
   }
   return (
     <>
-      <div className="official-quota-windows">
-        {row.windows.map((window) => {
-          const percent = window.used_percent;
-          // 金额与百分比可以并存：有上限时进度条旁边补一行钱，
-          // 只有余额时那一行就是这个窗口的全部内容。
-          const amount = officialQuotaAmountLabel(window);
-          return (
-            <div className="official-quota-window" key={`${row.provider}-${window.kind}`}>
-              <span title={window.label}>{window.label}</span>
-              <strong>{percent == null ? (amount ?? "—") : `${percent.toFixed(0)}%`}</strong>
-              {/* 没有百分比就不画条：一根空条读起来是「用了 0%」，而事实是「不知道上限」。 */}
-              {percent == null ? null : (
-                <div className="billing-bar" aria-hidden="true">
-                  <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
-                </div>
-              )}
-              <span
-                className="muted"
-                title={window.resets_at ? formatClock(window.resets_at) : undefined}
-              >
-                {window.resets_at
-                  ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
-                  : "重置时间未知"}
-              </span>
-              {percent != null && amount ? (
-                <span className="muted official-quota-amount">{amount}</span>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-      {row.error ? <span className="muted">{row.error}</span> : null}
+      <OfficialQuotaWindows windows={row.windows} compactReset={compactReset} />
+      {notice ? <QuotaNotice notice={notice} /> : null}
     </>
+  );
+}
+
+function QuotaNotice({
+  notice,
+  fallback,
+}: {
+  notice: ReturnType<typeof officialQuotaNotice>;
+  fallback?: string;
+}) {
+  if (!notice) {
+    return fallback ? <span className="muted">{fallback}</span> : null;
+  }
+  if (notice.kind === "todo") {
+    return <span className="official-quota-todo">{notice.text}</span>;
+  }
+  return <span className="muted">{notice.text}</span>;
+}
+
+/**
+ * 一组额度窗口的画法：有百分比就画进度条、只有金额就报金额。
+ *
+ * 首页、托盘与设置页「测试连接」的预览共用这一份。测试要让用户确认的是
+ * 「读到的数对不对」，那它就必须和之后每天看到的那一行长得一模一样——
+ * 另画一套的话，两边哪天分岔，测试确认的就不再是首页会显示的东西。
+ */
+export function OfficialQuotaWindows({
+  windows,
+  compactReset = false,
+}: {
+  windows: OfficialQuotaWindow[];
+  compactReset?: boolean;
+}) {
+  return (
+    <div className="official-quota-windows">
+      {windows.map((window) => {
+        const percent = window.used_percent;
+        // 金额与百分比可以并存：有上限时进度条旁边补一行钱，
+        // 只有余额时那一行就是这个窗口的全部内容。
+        const amount = officialQuotaAmountLabel(window);
+        return (
+          <div className="official-quota-window" key={window.kind}>
+            <span title={window.label}>{window.label}</span>
+            <strong>{percent == null ? (amount ?? "—") : `${percent.toFixed(0)}%`}</strong>
+            {/* 没有百分比就不画条：一根空条读起来是「用了 0%」，而事实是「不知道上限」。 */}
+            {percent == null ? null : (
+              <div className="billing-bar" aria-hidden="true">
+                <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
+              </div>
+            )}
+            <span
+              className="muted"
+              title={window.resets_at ? formatClock(window.resets_at) : undefined}
+            >
+              {window.resets_at
+                ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
+                : "重置时间未知"}
+            </span>
+            {percent != null && amount ? (
+              <span className="muted official-quota-amount">{amount}</span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

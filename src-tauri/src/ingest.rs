@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -8,7 +9,7 @@ use rusqlite::Connection;
 use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
 use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 use crate::adapters::{
-    claude, codex, copilot, cursor_agent, dsh, factory, gemini, grok, kimi, pi, qwen,
+    claude, codex, copilot, cursor_agent, dsh, factory, gemini, grok, kimi, pi, qwen, LineFactory,
 };
 use crate::cursor_session;
 use crate::domain::{
@@ -610,18 +611,14 @@ fn ingest_source(
 ) -> Result<(), String> {
     let dirs = source_scan_dirs_with(overrides, home, source);
     match source {
-        Source::Codex => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |content, path| {
-                Ok(codex::parse_codex_jsonl(content, path))
-            })
-        }
-        Source::Claude => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |content, path| {
-                Ok(claude::parse_claude_jsonl(content, path))
-            })
-        }
-        Source::Pi => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |content, path| {
-            Ok(pi::parse_pi_jsonl(content, path))
+        Source::Codex => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
+            codex::parse_codex_jsonl(lines, path)
+        }),
+        Source::Claude => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
+            claude::parse_claude_jsonl(lines, path)
+        }),
+        Source::Pi => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
+            pi::parse_pi_jsonl(lines, path)
         }),
         Source::Kimi => ingest_kimi(conn, &dirs, report),
         Source::Dsh => ingest_dsh(conn, &dirs, report),
@@ -630,13 +627,13 @@ fn ingest_source(
         Source::Qwen => ingest_qwen(conn, &dirs, report),
         Source::Factory => ingest_factory(conn, &dirs, report),
         Source::CursorAgent => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |content, path| {
-                Ok(cursor_agent::parse_cursor_agent_jsonl(content, path))
+            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
+                cursor_agent::parse_cursor_agent_jsonl(lines, path)
             })
         }
         Source::Copilot => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |content, path| {
-                Ok(copilot::parse_copilot_jsonl(content, path))
+            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
+                copilot::parse_copilot_jsonl(lines, path)
             })
         }
         Source::Opencode => ingest_opencode(conn, &dirs, report),
@@ -644,24 +641,25 @@ fn ingest_source(
 }
 
 /// `roots` 里的每一项都是一个可以直接遍历的扫描目录（叶子目录，已经拼接好子路径）。
+///
+/// 走 `ingest_one_lines`：按行流式读取磁盘文件，不会先把整份文件内容读进内存。
+/// 会话 jsonl 单文件可以到上百 MB（真实观测到 114MB 的 Codex rollout 日志），
+/// 启动时全量摄取和对话事件索引两条路径又可能同时处理到同一份大文件，
+/// 流式读取能把这条路径的峰值内存从「文件大小」降到几十 KB 的行缓冲区。
 fn ingest_jsonl_tree(
     conn: &Connection,
     source: Source,
     roots: &[PathBuf],
     ext: &str,
     report: &mut IngestReport,
-    parse: impl Fn(&str, &str) -> Result<Vec<UsageRecord>, String>,
+    parse: impl Fn(&LineFactory<'_>, &str) -> Vec<UsageRecord>,
 ) -> Result<(), String> {
     set_detected(report, source, roots.iter().any(|root| root.exists()));
     let mut seen = BTreeSet::new();
     for root in roots {
         for path in walk_files(root, ext)? {
             seen.insert(path.to_string_lossy().to_string());
-            ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                validate_jsonl(content)?;
-                parse(content, loc)
-            })?;
+            ingest_one_lines(conn, source, &path, report, &parse)?;
         }
     }
     reconcile_source(conn, source, &seen, report)
@@ -674,6 +672,38 @@ fn ingest_one(
     fingerprint: &str,
     report: &mut IngestReport,
     parse: impl Fn(&[u8], &str) -> Result<Vec<UsageRecord>, String>,
+) -> Result<(), String> {
+    ingest_one_prepared(conn, source, path, fingerprint, report, |loc| {
+        let bytes = fs::read(path).map_err(|error| error.to_string())?;
+        parse(&bytes, loc)
+    })
+}
+
+/// jsonl 专用：整份文件从不进内存，逐行校验+解析在同一趟磁盘流式读取里完成。
+/// `fingerprint` 固定传空串——jsonl 来源的缓存键只看 `(mtime_ms, size)`。
+fn ingest_one_lines(
+    conn: &Connection,
+    source: Source,
+    path: &Path,
+    report: &mut IngestReport,
+    parse: impl Fn(&LineFactory<'_>, &str) -> Vec<UsageRecord>,
+) -> Result<(), String> {
+    ingest_one_prepared(conn, source, path, "", report, |loc| {
+        validate_jsonl_file(path)?;
+        let factory: &LineFactory<'_> = &|| open_jsonl_lines(path);
+        Ok(parse(factory, loc))
+    })
+}
+
+/// `ingest_one`/`ingest_one_lines` 共用的缓存检查 + 落库逻辑，二者只在
+/// 「如何把文件内容变成 `Vec<UsageRecord>`」这一步不同（整份读入 vs 流式读取）。
+fn ingest_one_prepared(
+    conn: &Connection,
+    source: Source,
+    path: &Path,
+    fingerprint: &str,
+    report: &mut IngestReport,
+    read_records: impl FnOnce(&str) -> Result<Vec<UsageRecord>, String>,
 ) -> Result<(), String> {
     increment(report, source, |source_report| {
         source_report.files_seen += 1
@@ -697,14 +727,7 @@ fn ingest_one(
         report.files_skipped += 1;
         return Ok(());
     }
-    let bytes = match fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            record_failure(report, source, &loc, &error.to_string());
-            return Ok(());
-        }
-    };
-    let records = match parse(&bytes, &loc) {
+    let records = match read_records(&loc) {
         Ok(records) => records,
         Err(error) => {
             record_failure(report, source, &loc, &error);
@@ -771,6 +794,32 @@ fn validate_jsonl(content: &str) -> Result<(), String> {
             .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1))?;
     }
     Ok(())
+}
+
+/// `validate_jsonl` 的磁盘流式版本：按行读取校验，不把整份文件读进内存。
+/// 供 `ingest_one_lines` 使用；只读一遍磁盘（内容随后交给适配器再读一遍，
+/// 这时文件通常已经在 OS page cache 里，重复读盘的代价远小于把整份文件留在内存里）。
+fn validate_jsonl_file(path: &Path) -> Result<(), String> {
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    for (index, line) in BufReader::new(file).lines().enumerate() {
+        let line = line.map_err(|error| format!("第 {} 行读取失败：{error}", index + 1))?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        serde_json::from_str::<serde::de::IgnoredAny>(line)
+            .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1))?;
+    }
+    Ok(())
+}
+
+/// 打开文件并按行流式产出内容；打开失败时返回空迭代器——`ingest_one_lines` 已经在
+/// `validate_jsonl_file` 里对同一个 `path` 做过一次可读性检查，这里理论上不会失败。
+fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> {
+    match fs::File::open(path) {
+        Ok(file) => Box::new(BufReader::new(file).lines().map_while(Result::ok)),
+        Err(_) => Box::new(std::iter::empty()),
+    }
 }
 
 /// `roots` 里的每一项都是一个 Kimi 工具根目录（下面挂 `sessions/` 和 `kimi.json`）。

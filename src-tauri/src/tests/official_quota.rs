@@ -93,6 +93,7 @@ fn tightest_window_picks_highest_cursor_dimension() {
             freshness: crate::domain::OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),
             error: None,
+            todo: None,
         }],
         alerts_enabled: true,
         stale_after_minutes: 10,
@@ -232,6 +233,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
         crate::domain::OfficialQuotaRow {
             provider: "devin".into(),
@@ -240,6 +242,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
     ];
     let hidden = vec!["devin".to_string()];
@@ -313,12 +316,47 @@ fn load_dto_keeps_cached_providers_but_drops_never_seen_ones() {
     );
     assert_eq!(shown.contains(&"copilot"), copilot_logged_in);
     assert_eq!(
-        dto.undetected.contains(&"Copilot".to_string()),
+        dto.undetected.contains(&"copilot".to_string()),
         !copilot_logged_in
     );
-    assert!(!dto.undetected.contains(&"Claude".to_string()));
+    assert!(!dto.undetected.contains(&"claude".to_string()));
     assert_eq!(
         dto.rows.len() + dto.undetected.len(),
         crate::domain::OfficialQuotaProvider::ALL.len()
     );
+}
+
+#[test]
+fn detect_counts_credential_files_without_a_live_token() {
+    let dir = tempfile::tempdir().unwrap();
+    let credentials = dir.path().join(".credentials.json");
+    let capture = dir.path().join("claude_statusline.json");
+    let auth = dir.path().join("auth.json");
+
+    assert!(!official_quota::detect::claude_artifacts_present(
+        &credentials,
+        &capture
+    ));
+    assert!(!official_quota::detect::codex_artifacts_present(&auth));
+
+    // token 过期、JSON 坏掉都不该在探测阶段当成「没登录」。
+    std::fs::write(
+        &credentials,
+        r#"{"claudeAiOauth":{"accessToken":"","expiresAt":1}}"#,
+    )
+    .unwrap();
+    assert!(official_quota::detect::claude_artifacts_present(
+        &credentials,
+        &capture
+    ));
+
+    std::fs::remove_file(&credentials).unwrap();
+    std::fs::write(&capture, "{}").unwrap();
+    assert!(official_quota::detect::claude_artifacts_present(
+        &credentials,
+        &capture
+    ));
+
+    std::fs::write(&auth, r#"{"OPENAI_API_KEY":"sk-test"}"#).unwrap();
+    assert!(official_quota::detect::codex_artifacts_present(&auth));
 }

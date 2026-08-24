@@ -41,7 +41,7 @@ export function InstructionOverlap({
         <EmptyState
           compact
           title="没有共现关键词"
-          hint="当前项目规则与已加载的全局指令没有相同关键词。"
+          hint="中文词按连续三字以上匹配，英文词至少四个字母。共现不等于已经冲突。"
         />
       ) : (
         <ul className="instruction-overlap-list">

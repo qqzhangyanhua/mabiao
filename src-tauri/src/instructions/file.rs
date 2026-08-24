@@ -34,6 +34,7 @@ pub fn read_file(
                 error,
                 note,
                 action: None,
+                editable: false,
             }
         }
         Err(_) => missing(
@@ -65,6 +66,7 @@ fn missing(
         error: None,
         note,
         action: None,
+        editable: false,
     }
 }
 
@@ -81,6 +83,7 @@ pub fn no_mechanism(note: &str) -> GlobalInstructionFile {
         error: None,
         note: Some(note.to_string()),
         action: None,
+        editable: false,
     }
 }
 
@@ -107,6 +110,7 @@ pub fn read_directory(
         error: None,
         note,
         action: None,
+        editable: false,
     })
 }
 

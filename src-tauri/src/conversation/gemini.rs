@@ -13,9 +13,11 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
-    let content = fs::read_to_string(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-    let root: Value =
-        serde_json::from_str(&content).map_err(|error| format!("JSON 无效：{error}"))?;
+    // 直接从文件流反序列化，不额外攥一份完整原始文本：单个 Gemini 会话文件会随对话
+    // 增长，避免「原始文本 + 解析后的 Value 树」同时常驻可以省下一半峰值内存。
+    let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+    let root: Value = serde_json::from_reader(BufReader::new(file))
+        .map_err(|error| format!("JSON 无效：{error}"))?;
     let mut session_id = first_text(&root, &["sessionId", "session_id", "id"]);
     if session_id.is_empty() {
         session_id = path

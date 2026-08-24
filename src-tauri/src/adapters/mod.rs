@@ -32,6 +32,29 @@ pub fn parse_jsonl_values(content: &str) -> impl Iterator<Item = serde_json::Val
     })
 }
 
+/// 按行来源（磁盘流式读取或内存字符串）取一次性的行迭代器，用于产出方
+/// 无需先把整份文件读进内存就能拿到 `LineFactory`。
+///
+/// 单个源文件可以到上百 MB（真实观测到 Codex 的 rollout 日志有 114MB），
+/// 摄取阶段没必要为了解析而把这么大一份内容常驻内存——尤其是启动时全量摄取
+/// 和对话事件索引两条路径可能同时处理同一份文件，峰值内存会翻倍。
+/// 多趟扫描的适配器直接多次调用 `lines()` 重新流式读取，磁盘/OS page cache
+/// 通常已经缓存了刚读过的文件，重复读取的代价远小于把整份文件留在内存里。
+pub type LineFactory<'a> = dyn Fn() -> Box<dyn Iterator<Item = String> + 'a> + 'a;
+
+/// 与 `parse_jsonl_values` 完全相同的惰性单行语义，只是输入换成任意行来源。
+pub fn parse_jsonl_value_lines<'a>(
+    lines: Box<dyn Iterator<Item = String> + 'a>,
+) -> impl Iterator<Item = serde_json::Value> + 'a {
+    lines.filter_map(|line| {
+        let line = line.trim();
+        if line.is_empty() {
+            return None;
+        }
+        serde_json::from_str(line).ok()
+    })
+}
+
 pub fn i64_field(value: &serde_json::Value, keys: &[&str]) -> i64 {
     for key in keys {
         if let Some(n) = value.get(key).and_then(|v| {

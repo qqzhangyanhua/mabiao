@@ -125,6 +125,8 @@ pub fn is_allowed(home: &Path, path: &Path) -> bool {
         [".codex", "AGENTS.md"] => true,
         [".codex", "AGENTS.override.md"] => true,
         [".gemini", "GEMINI.md"] => true,
+        [".grok", name] if is_grok_home_instruction(name) => true,
+        [".grok", "rules", name] if is_plain_name(name) && name.ends_with(".md") => true,
         _ => false,
     }
 }
@@ -139,6 +141,10 @@ fn is_allowed_export(path: &Path) -> bool {
 
 fn is_plain_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\\')
+}
+
+fn is_grok_home_instruction(name: &str) -> bool {
+    crate::instructions::grok::HOME_INSTRUCTION_NAMES.contains(&name)
 }
 
 fn backup_original(

@@ -4,8 +4,8 @@
 //! 密钥进去等于每次备份都在扩散凭证。因此配置文件（名称 / 类型 / 地址 / 开关）
 //! 可以进备份，凭证文件不进。
 //!
-//! 换机器恢复备份后，配置还在、密钥为空。这时该提供商取数会报「未配置密钥」，
-//! 是一个待办提示，不是坏掉了。
+//! 换机器恢复备份后，配置还在、密钥为空。首页该行显示「未配置密钥，请在设置页
+//! 重新填写」——这是待办提示，不是取数失败。缺密钥的提供商不发起网络请求。
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -96,8 +96,8 @@ pub fn load_credentials(path: &Path) -> CustomQuotaCredentials {
     load_json(path)
 }
 
-/// 合流用的配置列表。`load_dto` 只画行、不取数，因此只要配置，不碰凭证文件——
-/// 四个 DTO 装配点都走这条，省得各自去走一遍 `load_config(...).providers`。
+/// 只要配置、不碰凭证。设置页列表在掩码密钥之前会再读凭证文件，
+/// 首页合流走 `load_providers`，因为缺密钥要画成待办。
 pub fn load_configs(paths: &CustomQuotaPaths) -> Vec<CustomQuotaProvider> {
     load_config(&paths.config).providers
 }

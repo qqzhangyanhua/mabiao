@@ -1,12 +1,13 @@
 //! 设置页「自定义提供商」面板的命令契约。
 //!
-//! 三个动作：列出、保存（标识为空则新建）、删除。密钥在出口处一律换成掩码——
-//! 界面永远拿不到明文，截图和投屏就不可能把它带出去。
+//! 五个动作：列出、回显请求地址、测试连接、保存（标识为空则新建）、删除。
+//! 密钥在出口处一律换成掩码——界面永远拿不到明文，截图和投屏就不可能把它带出去。
 
 use serde::{Deserialize, Serialize};
 
 use super::store::{self, CustomQuotaPaths, CustomQuotaProvider};
-use super::CustomQuotaPreset;
+use super::{CustomQuotaPreset, QuotaRequest};
+use crate::domain::OfficialQuotaWindow;
 
 /// 列表里的一条：密钥只给掩码，不明文回显。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -52,14 +53,102 @@ pub struct SaveCustomQuotaProvider {
     pub name: String,
     pub preset: CustomQuotaPreset,
     pub base_url: String,
-    /// 留空 = 沿用现在的开关状态（新建时默认打开）。设置页目前没有这个开关，
-    /// 不留空就会在改名时把用户手动关掉的那条悄悄打开。
+    /// 留空 = 沿用现在的开关状态（新建时默认打开）。表单保存走这条，
+    /// 改名时不要把列表上关掉的那条悄悄打开；启停由设置页每条上的开关显式传入。
     #[serde(default)]
     pub enabled: Option<bool>,
     /// 留空 = 沿用已存的密钥。编辑名称或地址时不必把密钥重打一遍，
     /// 而界面本来就只有掩码、也重打不出来。
     #[serde(default)]
     pub secret: Option<String>,
+}
+
+/// base URL 输入框下方那行回显：**取数时真正会请求的**那几条地址。
+///
+/// 地址还不成形时给 `error`、`requests` 空着——边打边回显必然路过「还没打完」
+/// 的中间态，那时该给一句提示，而不是把半截地址当成能用的地址念出来。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CustomQuotaRequestPreviewDto {
+    pub requests: Vec<QuotaRequest>,
+    pub error: Option<String>,
+}
+
+/// 「测试连接」的请求：用表单里**尚未保存**的配置直接打一次。
+///
+/// 没有 `name` 字段——名称对取数没有任何影响，要求用户先起好名字才能测试
+/// 是白挡一道。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TestCustomQuotaProvider {
+    /// 编辑已存的那条时带上，用来在密钥留空时回落到已存的那把。
+    #[serde(default)]
+    pub id: Option<String>,
+    pub preset: CustomQuotaPreset,
+    pub base_url: String,
+    #[serde(default)]
+    pub secret: Option<String>,
+}
+
+/// 测试成功的结果：直接把解析出的额度窗口交回去，界面复用首页那套渲染。
+///
+/// 只回一句「成功」不足以让用户确认预设类型选对了——读到的数才是。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CustomQuotaTestDto {
+    pub windows: Vec<OfficialQuotaWindow>,
+    pub captured_at: String,
+}
+
+/// 回显走的就是取数用的 `request_urls`，因此界面上写的和真正请求的不可能漂移。
+/// 这是这行回显存在的唯一理由：两份实现哪天只改了一边，回显就开始骗人。
+pub fn preview_requests(
+    preset: CustomQuotaPreset,
+    base_url: &str,
+    today: chrono::NaiveDate,
+) -> CustomQuotaRequestPreviewDto {
+    match super::request_urls(preset, base_url, today) {
+        Ok(requests) => CustomQuotaRequestPreviewDto {
+            requests,
+            error: None,
+        },
+        Err(error) => CustomQuotaRequestPreviewDto {
+            requests: Vec::new(),
+            error: Some(error),
+        },
+    }
+}
+
+/// 表单草稿要用哪把密钥。**不写磁盘**：测试连接不是保存，失败了也不该在磁盘上
+/// 留下半条记录。
+///
+/// 填了就用填的，留空就回落到已存的那把：编辑时界面上只有掩码，用户重打不出来，
+/// 不回落的话「改完域名点一下测试」这个最常见的用法直接不成立。
+pub fn resolve_secret(
+    paths: &CustomQuotaPaths,
+    request: &TestCustomQuotaProvider,
+) -> Result<String, String> {
+    if let Some(typed) = typed_secret(&request.secret) {
+        return Ok(typed.to_string());
+    }
+    request
+        .id
+        .as_deref()
+        .and_then(|id| {
+            store::load_credentials(&paths.credentials)
+                .secrets
+                .remove(id)
+        })
+        .map(|secret| secret.trim().to_string())
+        .filter(|secret| !secret.is_empty())
+        // 空密钥不要拿去打网：对方回的 401 会被翻成「密钥无效」，
+        // 而事实是这里压根没有密钥，两回事。
+        .ok_or_else(|| "请填写密钥".to_string())
+}
+
+/// 用户这次**打进来的**密钥；留空（或只有空格）表示「沿用已存的那把」。
+fn typed_secret(secret: &Option<String>) -> Option<&str> {
+    secret
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
 }
 
 pub fn presets() -> Vec<CustomQuotaPresetDto> {
@@ -108,11 +197,7 @@ pub fn save(
     super::normalize_base_url(&base_url)?;
 
     let mut config = store::load_config(&paths.config);
-    let secret = request
-        .secret
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
+    let secret = typed_secret(&request.secret);
 
     let id = match request
         .id

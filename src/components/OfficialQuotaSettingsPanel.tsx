@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { officialQuotaSettingsRefreshNote } from "../lib/officialQuotaDisplay";
+import {
+  officialQuotaSettingsRefreshNote,
+  officialQuotaUndetectedNote,
+} from "../lib/officialQuotaDisplay";
 import type { OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
 import { QuotaFreshnessMark, useTickingNow } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
@@ -19,6 +22,7 @@ export function OfficialQuotaSettingsPanel({
   const [busy, setBusy] = useState<"idle" | "refresh" | "hook" | "alerts">("idle");
   const nowMs = useTickingNow();
   const alertsEnabled = quota?.alerts_enabled ?? true;
+  const undetectedNote = quota ? officialQuotaUndetectedNote(quota.undetected) : null;
 
   useEffect(() => {
     void invoke<OfficialQuotaHookDto>("get_official_quota_hook").then(setHook).catch(onError);
@@ -110,19 +114,15 @@ export function OfficialQuotaSettingsPanel({
                 nowMs={nowMs}
               />
               <em>
-                {row.error ??
+                {row.todo ??
+                  row.error ??
                   (row.windows.length > 0 ? `${row.windows.length} 个窗口` : "等待捕获")}
               </em>
             </li>
           ))}
         </ul>
       ) : null}
-      {quota && quota.undetected.length > 0 ? (
-        <p className="panel-note">
-          未检测到本机登录态、暂不显示：{quota.undetected.join("、")}
-          。登录对应客户端后会自动出现。
-        </p>
-      ) : null}
+      {undetectedNote ? <p className="panel-note">{undetectedNote}</p> : null}
       {hook ? (
         <div className="official-quota-hook">
           <p className="panel-note">

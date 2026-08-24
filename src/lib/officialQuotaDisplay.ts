@@ -1,5 +1,10 @@
-import type { OfficialQuotaFreshness, OfficialQuotaWindow } from "../types";
+import type {
+  OfficialQuotaDto,
+  OfficialQuotaFreshness,
+  OfficialQuotaWindow,
+} from "../types";
 import { formatClock, relativeTime } from "./format";
+import { officialQuotaProviderLabel } from "./overviewLayout";
 
 export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, string> = {
   official: "官方",
@@ -92,4 +97,40 @@ export function officialQuotaRefreshHint(staleAfterMinutes: number): string {
 
 export function officialQuotaSettingsRefreshNote(staleAfterMinutes: number): string {
   return `打开总览或点「刷新额度」时取数；总览打开期间每 ${staleAfterMinutes} 分钟自动再刷。超过 ${staleAfterMinutes} 分钟未更新标为过期，仍显示上次数字。`;
+}
+
+export function officialQuotaUndetectedNote(undetected: string[]): string | null {
+  if (undetected.length === 0) {
+    return null;
+  }
+  const names = undetected.map((id) => officialQuotaProviderLabel(id)).join("、");
+  return `未检测到本机登录态、暂不显示：${names}。登录对应客户端后会自动出现。`;
+}
+
+export function officialQuotaEmptyCopy(data: OfficialQuotaDto | null): {
+  title: string;
+  hint: string;
+} {
+  if (!data) {
+    return { title: "正在读取官方额度…", hint: "先显示上次缓存，再后台刷新" };
+  }
+  const undetected = officialQuotaUndetectedNote(data.undetected);
+  if (undetected) {
+    return { title: "暂无已登录的官方额度账号", hint: undetected };
+  }
+  return { title: "所选账号均已隐藏", hint: "在「配置显示」里打开要看的账号" };
+}
+
+/** 首页额度行底下那句：待办不是取数失败，两套样式靠 `kind` 分开。 */
+export function officialQuotaNotice(row: {
+  todo: string | null;
+  error: string | null;
+}): { kind: "todo" | "error"; text: string } | null {
+  if (row.todo) {
+    return { kind: "todo", text: row.todo };
+  }
+  if (row.error) {
+    return { kind: "error", text: row.error };
+  }
+  return null;
 }

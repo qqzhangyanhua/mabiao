@@ -1,14 +1,17 @@
-use crate::adapters::{finish, i64_field, parse_jsonl_values, text_field};
+use crate::adapters::{finish, i64_field, parse_jsonl_value_lines, text_field, LineFactory};
 use crate::domain::{Source, UsageRecord};
 
 /// 解析 cursor-agent 无头 stream-json 的落盘 jsonl（由 scripts/cursor-agent-usage.py 采集）。
 ///
 /// token 只出现在 `type=result` 事件的 `usage` 子对象里；model/cwd 来自开头的 `type=system` 事件。
 /// 每条 result 归一为一条 Usage Record。详见 docs/probe/cursor-agent.md。
-pub fn parse_cursor_agent_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
+///
+/// 下面两轮扫描都通过 `lines()` 重新拿一份新的行迭代器：这样调用方可以用磁盘流式读取
+/// 而不必先把整份文件内容读进内存再扫两遍。
+pub fn parse_cursor_agent_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
     let mut model = String::new();
     let mut project = String::new();
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         if value.get("type").and_then(|v| v.as_str()) == Some("system") {
             let candidate_model = text_field(&value, &["model"]);
             if !candidate_model.is_empty() {
@@ -28,7 +31,7 @@ pub fn parse_cursor_agent_jsonl(content: &str, source_file: &str) -> Vec<UsageRe
         .to_string();
 
     let mut records = Vec::new();
-    for value in parse_jsonl_values(content) {
+    for value in parse_jsonl_value_lines(lines()) {
         if value.get("type").and_then(|v| v.as_str()) != Some("result") {
             continue;
         }

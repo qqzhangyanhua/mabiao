@@ -4,11 +4,19 @@ import { formatBytes, formatClock, humanStatus } from "../lib/format";
 import type {
   GlobalInstructionDto,
   GlobalInstructionFile,
+  GlobalInstructionSourceRow,
   InstructionEvidence,
   InstructionLoadStatus,
 } from "../types";
 import { EmptyState } from "./EmptyState";
-import { canEditInstruction, canOpenInstruction, showsLoadStatus } from "../lib/instructionAccess";
+import {
+  canEditInstruction,
+  canOpenInstruction,
+  idleSourceLabel,
+  isIdleSource,
+  showsEvidenceBadge,
+  showsLoadBadge,
+} from "../lib/instructionAccess";
 import { InstructionCheckup } from "./InstructionCheckup";
 import { InstructionClaudeMemory } from "./InstructionClaudeMemory";
 import { InstructionEditor } from "./InstructionEditor";
@@ -35,6 +43,7 @@ export function GlobalInstructionPanel() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openPath, setOpenPath] = useState<string | null>(null);
+  const [openIdle, setOpenIdle] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const draftsRef = useRef(drafts);
@@ -137,40 +146,152 @@ export function GlobalInstructionPanel() {
         />
       ) : null}
       {data
-        ? data.sources.map((row) => (
-            <section className="instruction-source" key={row.source}>
-              <h3>
-                <SourceLabel source={row.source} fallback={row.application} />
-              </h3>
-              <ul className="instruction-list">
-                {row.files.map((file) => {
-                  const id = `${row.source}:${file.display_path}`;
-                  return (
-                    <InstructionRow
-                      key={id}
-                      file={file}
-                      draft={drafts[id] ?? file.content}
-                      open={openPath === id}
-                      onToggle={() => setOpenPath((current) => (current === id ? null : id))}
-                      onDraft={(value) => setDrafts((current) => ({ ...current, [id]: value }))}
-                      onSaved={() => {
-                        setDrafts((current) => {
-                          const next = { ...current };
-                          delete next[id];
-                          return next;
-                        });
-                        load(true);
-                      }}
-                      onCursorSettings={openCursorSettings}
-                      onOpenExternal={() => void openExternal(file.abs_path)}
-                    />
-                  );
-                })}
-              </ul>
-            </section>
-          ))
+        ? data.sources
+            .filter((row) => !isIdleSource(row))
+            .map((row) => (
+              <SourceFiles
+                key={row.source}
+                row={row}
+                drafts={drafts}
+                openPath={openPath}
+                onToggle={(id) => setOpenPath((current) => (current === id ? null : id))}
+                onDraft={(id, value) => setDrafts((current) => ({ ...current, [id]: value }))}
+                onSaved={(id) => {
+                  setDrafts((current) => {
+                    const next = { ...current };
+                    delete next[id];
+                    return next;
+                  });
+                  load(true);
+                }}
+                onCursorSettings={openCursorSettings}
+                onOpenExternal={(path) => void openExternal(path)}
+              />
+            ))
         : null}
+      {data && data.sources.some(isIdleSource) ? (
+        <section className="instruction-idle">
+          <div>
+            <h3>未创建 / 无机制</h3>
+            <p className="muted">没有已加载或被屏蔽的指令。展开后仍可查看路径或创建白名单内的文件。</p>
+          </div>
+          {data.sources.filter(isIdleSource).map((row) => {
+            const open = openIdle === row.source;
+            return (
+              <div className="instruction-idle-source" key={row.source}>
+                <button
+                  type="button"
+                  className="instruction-idle-head"
+                  onClick={() =>
+                    setOpenIdle((current) => (current === row.source ? null : row.source))
+                  }
+                >
+                  <SourceLabel source={row.source} fallback={row.application} />
+                  <em className="instruction-evidence">{idleSourceLabel(row)}</em>
+                </button>
+                {open ? (
+                  <FileList
+                    row={row}
+                    drafts={drafts}
+                    openPath={openPath}
+                    onToggle={(id) => setOpenPath((current) => (current === id ? null : id))}
+                    onDraft={(id, value) =>
+                      setDrafts((current) => ({ ...current, [id]: value }))
+                    }
+                    onSaved={(id) => {
+                      setDrafts((current) => {
+                        const next = { ...current };
+                        delete next[id];
+                        return next;
+                      });
+                      load(true);
+                    }}
+                    onCursorSettings={openCursorSettings}
+                    onOpenExternal={(path) => void openExternal(path)}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </section>
+      ) : null}
     </article>
+  );
+}
+
+function fileId(source: string, file: GlobalInstructionFile): string {
+  return `${source}:${file.display_path}`;
+}
+
+function SourceFiles({
+  row,
+  drafts,
+  openPath,
+  onToggle,
+  onDraft,
+  onSaved,
+  onCursorSettings,
+  onOpenExternal,
+}: FileListProps) {
+  return (
+    <section className="instruction-source">
+      <h3>
+        <SourceLabel source={row.source} fallback={row.application} />
+      </h3>
+      <FileList
+        row={row}
+        drafts={drafts}
+        openPath={openPath}
+        onToggle={onToggle}
+        onDraft={onDraft}
+        onSaved={onSaved}
+        onCursorSettings={onCursorSettings}
+        onOpenExternal={onOpenExternal}
+      />
+    </section>
+  );
+}
+
+type FileListProps = {
+  row: GlobalInstructionSourceRow;
+  drafts: Record<string, string>;
+  openPath: string | null;
+  onToggle: (id: string) => void;
+  onDraft: (id: string, value: string) => void;
+  onSaved: (id: string) => void;
+  onCursorSettings: () => void;
+  onOpenExternal: (path: string) => void;
+};
+
+function FileList({
+  row,
+  drafts,
+  openPath,
+  onToggle,
+  onDraft,
+  onSaved,
+  onCursorSettings,
+  onOpenExternal,
+}: FileListProps) {
+  return (
+    <ul className="instruction-list">
+      {row.files.map((file) => {
+        const id = fileId(row.source, file);
+        return (
+          <InstructionRow
+            key={id}
+            file={file}
+            draft={drafts[id] ?? file.content}
+            open={openPath === id}
+            onToggle={() => onToggle(id)}
+            onDraft={(value) => onDraft(id, value)}
+            onSaved={() => onSaved(id)}
+            onCursorSettings={onCursorSettings}
+            onOpenExternal={() => onOpenExternal(file.abs_path)}
+          />
+        );
+      })}
+    </ul>
   );
 }
 
@@ -199,12 +320,16 @@ function InstructionRow({
         <button type="button" className="instruction-row-head" onClick={onToggle}>
           <div className="instruction-row-title">
             <strong>{file.display_path}</strong>
-            <span className="instruction-badges">
-              {showsLoadStatus(file) ? (
-                <em className="instruction-status">{STATUS_LABEL[file.load_status]}</em>
-              ) : null}
-              <em className="instruction-evidence">{EVIDENCE_LABEL[file.evidence]}</em>
-            </span>
+            {showsLoadBadge(file) || showsEvidenceBadge(file) ? (
+              <span className="instruction-badges">
+                {showsLoadBadge(file) ? (
+                  <em className="instruction-status">{STATUS_LABEL[file.load_status]}</em>
+                ) : null}
+                {showsEvidenceBadge(file) ? (
+                  <em className="instruction-evidence">{EVIDENCE_LABEL[file.evidence]}</em>
+                ) : null}
+              </span>
+            ) : null}
           </div>
           <div className="instruction-row-meta">
             <span>{file.kind === "directory" ? "目录" : formatBytes(file.byte_size)}</span>

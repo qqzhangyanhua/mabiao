@@ -56,6 +56,30 @@ fn loading_pairs_each_provider_with_its_secret() {
     assert_eq!(loaded[0].secret.as_deref(), Some("sk-relay-123456"));
 }
 
+#[cfg(unix)]
+#[test]
+fn credential_file_permissions_are_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = tempfile::tempdir().unwrap();
+    let paths = store::CustomQuotaPaths::in_dir(dir.path());
+    let mut credentials = CustomQuotaCredentials::default();
+    credentials
+        .secrets
+        .insert("custom:a3f9c1".to_string(), "sk-relay-123456".to_string());
+    store::save_credentials(&paths.credentials, &credentials).unwrap();
+
+    let mode = std::fs::metadata(&paths.credentials)
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(
+        mode, 0o600,
+        "明文密钥文件必须是 0600，同机器其他用户不该读到"
+    );
+}
+
 #[test]
 fn loading_keeps_config_when_the_credential_file_is_missing() {
     // 换机器恢复备份后的形状：配置跟过来了，密钥没有（它刻意不进备份）。

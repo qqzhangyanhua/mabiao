@@ -1,6 +1,6 @@
 [package]
 name = "mabiao"
-version = "0.1.1"
+version = "0.1.2"
 description = "码表：本机 AI 用量统计"
 authors = ["zhangyanhua"]
 license = "MIT"
@@ -41,6 +41,7 @@ image = { version = "0.25", default-features = false, features = ["gif", "jpeg",
 tauri-plugin-notification = "2.3.3"
 ureq = { version = "2", default-features = false, features = ["json", "tls", "socks-proxy"] }
 aes-gcm = "0.10"
+mimalloc = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

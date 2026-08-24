@@ -1,14 +1,19 @@
-//! 自定义提供商：三个新接缝（加载 / 构造地址 / 解析响应）与 DTO 合流。
+//! 自定义提供商：加载 / 构造地址 / 解析响应、DTO 合流，以及托盘与告警。
 //!
 //! 全部走 fixture 字符串与 tempfile，不联网、不读真实用户目录。
 //!
-//! 按接缝分三个文件，共用这里的 fixture 与构造器。
+//! 按接缝分文件，共用这里的 fixture 与构造器。
 
+mod backoff;
+mod backup;
+mod enabled;
 mod panel_commands;
 mod parsing;
+mod preview_and_test;
 mod rows;
+mod tray_and_alerts;
 
-use crate::official_quota::custom::store::CustomQuotaProvider;
+use crate::official_quota::custom::store::{CustomQuotaProvider, ResolvedProvider};
 use crate::official_quota::custom::CustomQuotaPreset;
 
 const SUBSCRIPTION: &str = r#"{
@@ -27,6 +32,20 @@ fn provider(id: &str, name: &str) -> CustomQuotaProvider {
         preset: CustomQuotaPreset::OpenAiCompatible,
         base_url: "https://relay.example.com".to_string(),
         enabled: true,
+    }
+}
+
+fn resolved(id: &str, name: &str) -> ResolvedProvider {
+    ResolvedProvider {
+        config: provider(id, name),
+        secret: Some("sk-relay".to_string()),
+    }
+}
+
+fn unresolved(id: &str, name: &str) -> ResolvedProvider {
+    ResolvedProvider {
+        config: provider(id, name),
+        secret: None,
     }
 }
 

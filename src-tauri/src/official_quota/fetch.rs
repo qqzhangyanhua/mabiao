@@ -4,6 +4,8 @@
 //! `QuotaTarget`（标识 + 展示名）这一个形状。内置那侧的枚举与穷尽匹配一行不动，
 //! 只是多实现了这个 trait。
 
+use std::path::Path;
+
 use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
@@ -108,6 +110,18 @@ pub fn resolve_target(
     Ok(FetchTarget::Custom(Box::new(found.clone())))
 }
 
+/// 真正会打网的自定义目标：启用、且有密钥。
+///
+/// 缺密钥的在 `load_dto` 里画成待办，不走进取数线程——那条路连「失败」都算不上。
+pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<FetchTarget> {
+    custom
+        .iter()
+        .filter(|provider| provider.config.enabled && provider.secret.is_some())
+        .cloned()
+        .map(|provider| FetchTarget::Custom(Box::new(provider)))
+        .collect()
+}
+
 /// 先打 ChatGPT 的用量接口（不依赖 CLI 装没装），读不到再拉起 `codex app-server`。
 /// 两条都失败时报接口那条：多数人应该走的是它。
 fn fetch_codex() -> ProviderFetch {
@@ -168,22 +182,15 @@ pub fn fetch_target(target: &FetchTarget) -> ProviderFetch {
 /// 并发之后总耗时变成取最大值。
 pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarget, ProviderFetch)> {
     let now = Utc::now();
-    let mut state = backoff::load_state(&backoff::state_path());
+    let path = backoff::state_path();
+    let mut state = backoff::load_state(&path);
     let mut targets: Vec<FetchTarget> = OfficialQuotaProvider::ALL
         .into_iter()
         .filter(|provider| detect::has_local_credentials(*provider))
         .map(FetchTarget::Builtin)
         .collect();
-    // 停用的自定义提供商连接口都不请求——「关掉之后就不再消耗它的调用配额」
-    // 正是这个开关存在的理由。
-    targets.extend(
-        custom
-            .iter()
-            .filter(|provider| provider.config.enabled)
-            .cloned()
-            .map(|provider| FetchTarget::Custom(Box::new(provider))),
-    );
-    targets.retain(|target| backoff::cooldown_remaining(&state, target.quota_id(), now).is_none());
+    targets.extend(custom_targets_for_fetch(custom));
+    let targets = exclude_cooling(targets, &state, now);
 
     let results = fetch_in_parallel(targets, fetch_target);
     record_backoff(
@@ -192,6 +199,7 @@ pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarge
             .iter()
             .map(|(target, result)| (target.quota_id(), result)),
         now,
+        &path,
     );
     results
 }
@@ -225,26 +233,72 @@ where
     targets.into_iter().zip(results).collect()
 }
 
+/// [`fetch_target_throttled`] 的结果：冷却期短路和真正打了网络的失败要分开，
+/// 调用方不该把「还要等 N 分钟」这句提示当成新的失败原因落库——那会冲掉上一次
+/// 真实失败的诊断信息，而且每点一次刷新剩余时间都会变，存下去毫无意义。
+pub enum ThrottledFetch {
+    /// 仍在冷却，没有实际发请求；这句话只用于这次响应临时展示，不落库。
+    Cooldown(String),
+    /// 冷却已过，真正打了网络（不论成功失败）。
+    Attempted(ProviderFetch),
+}
+
+/// 冷却中的目标这一轮不打网。整体刷新走这里：不把「还要等多久」写进每一行，
+/// 上次结果原样留着。单条手动刷新走 `fetch_target_throttled`，要开口说话。
+pub(crate) fn exclude_cooling<T: QuotaTarget>(
+    targets: Vec<T>,
+    state: &backoff::BackoffState,
+    now: DateTime<Utc>,
+) -> Vec<T> {
+    targets
+        .into_iter()
+        .filter(|target| backoff::cooldown_remaining(state, target.quota_id(), now).is_none())
+        .collect()
+}
+
 /// 单个目标的手动刷新。限流期间也拦——「多点几次」正是让限流恢复更慢的原因，
 /// 但要明确告诉用户还要等多久，而不是让按钮看起来没反应。
-pub fn fetch_target_throttled(target: &FetchTarget) -> ProviderFetch {
-    let now = Utc::now();
-    let mut state = backoff::load_state(&backoff::state_path());
+pub fn fetch_target_throttled(target: &FetchTarget) -> ThrottledFetch {
+    fetch_target_throttled_at(target, &backoff::state_path(), Utc::now())
+}
+
+/// 与 `fetch_target_throttled` 相同，状态文件路径和「现在」由调用方注入。
+/// 单测用 tempfile，避免去读真实用户目录。
+pub(crate) fn fetch_target_throttled_at(
+    target: &FetchTarget,
+    path: &Path,
+    now: DateTime<Utc>,
+) -> ThrottledFetch {
+    let mut state = backoff::load_state(path);
     if let Some(message) =
         backoff::cooldown_message(&state, target.quota_id(), target.quota_display_name(), now)
     {
-        return Err(message);
+        return ThrottledFetch::Cooldown(message);
     }
     let result = fetch_target(target);
-    record_backoff(&mut state, [(target.quota_id(), &result)], now);
+    record_backoff(&mut state, [(target.quota_id(), &result)], now, path);
+    ThrottledFetch::Attempted(result)
+}
+
+/// 悬浮面板上的「强制刷新」用：跳过冷却检查，即便还在冷却期也真打一次网络。
+/// 结果照样喂给 [`record_backoff`]——连续失败依然会拉长下次自动重试的等待。
+pub fn fetch_target_forced(target: &FetchTarget) -> ProviderFetch {
+    let now = Utc::now();
+    let path = backoff::state_path();
+    let mut state = backoff::load_state(&path);
+    let result = fetch_target(target);
+    record_backoff(&mut state, [(target.quota_id(), &result)], now, &path);
     result
 }
 
 /// 取数结果 → 退避状态。只认标识与结果，因此内置与自定义共用同一段逻辑。
-fn record_backoff<'a>(
+///
+/// `path` 由调用方注入：生产走应用数据目录，单测走 tempfile。
+pub(crate) fn record_backoff<'a>(
     state: &mut backoff::BackoffState,
     results: impl IntoIterator<Item = (&'a str, &'a ProviderFetch)>,
     now: DateTime<Utc>,
+    path: &Path,
 ) {
     let mut touched = false;
     for (id, result) in results {
@@ -269,7 +323,7 @@ fn record_backoff<'a>(
         return;
     }
     // 状态写不下去不该让刷新失败，最多是下次少歇一会儿。
-    let _ = backoff::save_state(&backoff::state_path(), state);
+    let _ = backoff::save_state(path, state);
 }
 
 /// 打开总览或手动刷新时尝试更新各路；取数在调用方锁外完成，写入彼此隔离。

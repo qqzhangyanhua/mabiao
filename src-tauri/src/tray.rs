@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::domain::{Filter, OfficialQuotaDto, OverviewDto};
 use crate::{ingest, official_quota, query, tray_popup, AppState};
@@ -137,7 +137,27 @@ pub fn show_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+        return;
     }
+    if let Err(error) = create_main_window(app) {
+        eprintln!("打开主窗口失败：{error}");
+    }
+}
+
+fn create_main_window(app: &AppHandle) -> Result<(), String> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .cloned()
+        .ok_or_else(|| "缺少 main 窗口配置".to_string())?;
+    WebviewWindowBuilder::from_config(app, &config)
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 pub fn refresh(app: &AppHandle) -> Result<(), String> {
@@ -173,17 +193,24 @@ pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
             &state.budget_path,
             &state.budget_notify_path,
         );
+        crate::release_idle_memory(&state, &conn);
     }
     let _ = sync_official_quota(app);
     refresh(app)
 }
 
+/// 联网拉一遍各家官方额度（受退避冷却约束，不会比主窗口的刷新更激进），
+/// 再落库刷新托盘标题/悬浮面板。取数放在锁外，避免持锁期间打网络。
 fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
+    let results = official_quota::fetch_all_targets(
+        &official_quota::custom::store::load_providers(&state.custom_quota_paths),
+    );
     let conn = state.lock_write()?;
     let _ = official_quota::sync_claude_capture(&conn);
+    official_quota::apply_fetch_results(&conn, results)?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
@@ -218,7 +245,7 @@ pub fn load_quota_dto(app: &AppHandle) -> Result<OfficialQuotaDto, String> {
     let state = app.state::<AppState>();
     let conn = state.lock_read()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let mut dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     dto.rows = official_quota::visible_rows(dto.rows, &dto.hidden_providers);
     Ok(dto)

@@ -1,9 +1,9 @@
 //! DTO 合流：自定义行怎么进「官方额度」，以及缓存 / 告警 / 托盘的连带行为。
 
-use super::{provider, SUBSCRIPTION, USAGE};
+use super::{resolved, unresolved, SUBSCRIPTION, USAGE};
 use crate::domain::{OfficialQuotaConfig, OfficialQuotaFreshness, OfficialQuotaProvider};
 use crate::official_quota::custom::{self, CustomQuotaPreset};
-use crate::official_quota::{self as quota};
+use crate::official_quota::{self as quota, QuotaTarget};
 use crate::store as db;
 
 // -------------------------------------------------- DTO 合流
@@ -23,7 +23,7 @@ fn custom_rows_join_the_dto_after_the_builtin_ones() {
     let dto = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let row = dto
@@ -45,8 +45,8 @@ fn custom_rows_join_the_dto_after_the_builtin_ones() {
 #[test]
 fn disabled_custom_providers_take_no_row() {
     let conn = db::open_memory().unwrap();
-    let mut off = provider("custom:a3f9c1", "备用中转");
-    off.enabled = false;
+    let mut off = resolved("custom:a3f9c1", "备用中转");
+    off.config.enabled = false;
     let dto = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
@@ -56,7 +56,7 @@ fn disabled_custom_providers_take_no_row() {
     assert!(!dto.rows.iter().any(|row| row.provider == "custom:a3f9c1"));
 
     // 打开就占一行，即使还没取过数——用户自己登记的，看不到会以为没存上。
-    let on = provider("custom:a3f9c1", "备用中转");
+    let on = resolved("custom:a3f9c1", "备用中转");
     let dto = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
@@ -76,8 +76,8 @@ fn disabled_custom_providers_take_no_row() {
 fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     let conn = db::open_memory().unwrap();
     let now = chrono::Utc::now();
-    // 带重置时间的窗口——告警去重键要的就是它。本版实现的 OpenAI 兼容计费给不出
-    // 重置时间（见下一条测试），后续预设会给。
+    // 带重置时间的窗口——告警去重键要的就是它。OpenAI 兼容计费给不出重置时间
+    // 的那条路在 `tray_and_alerts` 里另测。
     let window = crate::domain::OfficialQuotaWindow {
         kind: "billing_cycle".into(),
         label: "总量".into(),
@@ -100,7 +100,7 @@ fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     let before = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let (state, alerts) =
@@ -112,7 +112,7 @@ fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     let after = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "老板的中转")],
+        &[resolved("custom:a3f9c1", "老板的中转")],
         now,
     );
     let row = after
@@ -125,37 +125,6 @@ fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     assert_eq!(row.windows[0].used_amount, Some(45.0));
     let (_, again) = quota::notify::prepare_notifications(state, &after);
     assert!(again.is_empty(), "改个名字不该重复告警");
-}
-
-/// 已知缺口，本票不修：告警去重键含重置时间，而 OpenAI 兼容计费的窗口没有
-/// 重置时间——现有 `prepare_notifications` 对这种窗口整条跳过，因此它不告警。
-/// 这条测试把现状钉住，等做余额阈值告警时一并处理（见 #81 Further Notes）。
-#[test]
-fn amount_windows_without_a_reset_time_do_not_alert_yet() {
-    let conn = db::open_memory().unwrap();
-    let now = chrono::Utc::now();
-    let windows = custom::parse_quota(
-        CustomQuotaPreset::OpenAiCompatible,
-        &[r#"{"hard_limit_usd":50}"#, r#"{"total_usage":4500}"#],
-    )
-    .unwrap();
-    assert_eq!(windows[0].used_percent, Some(90.0));
-    assert_eq!(windows[0].resets_at, None);
-    quota::apply_fetch_results(
-        &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
-    )
-    .unwrap();
-
-    let dto = quota::load_dto(
-        &conn,
-        &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
-        now,
-    );
-    let (_, alerts) =
-        quota::notify::prepare_notifications(quota::notify::NotifyState::default(), &dto);
-    assert!(alerts.is_empty());
 }
 
 #[test]
@@ -181,7 +150,7 @@ fn custom_failures_keep_the_last_good_window_and_only_swap_the_message() {
     let dto = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let row = dto
@@ -257,11 +226,106 @@ fn tightest_window_skips_custom_providers() {
     let dto = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let tightest = quota::tightest_window(&dto).unwrap();
     // 95% 的余额没有抢走标题，每天真正在动的 5 小时窗还在。
     assert_eq!(tightest.provider, "Claude");
     assert_eq!(tightest.used_percent, 42.0);
+}
+
+/// 恢复备份后的形状：配置在、密钥没了。首页这一行是待办，不是取数失败。
+#[test]
+fn missing_secret_is_a_todo_not_a_fetch_error() {
+    let conn = db::open_memory().unwrap();
+    let dto = quota::load_dto(
+        &conn,
+        &OfficialQuotaConfig::default(),
+        &[unresolved("custom:a3f9c1", "公司的中转")],
+        chrono::Utc::now(),
+    );
+    let row = dto
+        .rows
+        .iter()
+        .find(|row| row.provider == "custom:a3f9c1")
+        .unwrap();
+    assert_eq!(row.todo.as_deref(), Some("未配置密钥，请在设置页重新填写"));
+    assert_eq!(row.error, None, "缺密钥不该画成取数失败");
+}
+
+#[test]
+fn missing_secret_keeps_the_last_good_window_and_still_shows_the_todo() {
+    let conn = db::open_memory().unwrap();
+    let now = chrono::Utc::now();
+    let windows =
+        custom::parse_quota(CustomQuotaPreset::OpenAiCompatible, &[SUBSCRIPTION, USAGE]).unwrap();
+    quota::apply_fetch_results(
+        &conn,
+        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+    )
+    .unwrap();
+    // 旧缓存里可能把这句话写成了 error；待办要把它挪走，窗口留下。
+    quota::apply_fetch_results(
+        &conn,
+        [(
+            "custom:a3f9c1".to_string(),
+            Err("未配置密钥，请在设置页重新填写".to_string()) as quota::ProviderFetch,
+        )],
+    )
+    .unwrap();
+
+    let dto = quota::load_dto(
+        &conn,
+        &OfficialQuotaConfig::default(),
+        &[unresolved("custom:a3f9c1", "公司的中转")],
+        now,
+    );
+    let row = dto
+        .rows
+        .iter()
+        .find(|row| row.provider == "custom:a3f9c1")
+        .unwrap();
+    assert_eq!(row.windows[0].used_percent, Some(38.0));
+    assert_eq!(row.todo.as_deref(), Some("未配置密钥，请在设置页重新填写"));
+    assert_eq!(row.error, None);
+}
+
+#[test]
+fn providers_without_a_secret_are_not_fetched() {
+    let mut disabled = resolved("custom:off", "关掉的");
+    disabled.config.enabled = false;
+    let targets = quota::custom_targets_for_fetch(&[
+        unresolved("custom:a3f9c1", "公司的中转"),
+        resolved("custom:b7e204", "有密钥的"),
+        disabled,
+    ]);
+    let ids: Vec<&str> = targets.iter().map(|target| target.quota_id()).collect();
+    assert_eq!(ids, vec!["custom:b7e204"]);
+}
+
+#[test]
+fn filling_in_the_secret_clears_a_stale_missing_secret_message() {
+    let conn = db::open_memory().unwrap();
+    quota::apply_fetch_results(
+        &conn,
+        [(
+            "custom:a3f9c1".to_string(),
+            Err("未配置密钥，请在设置页重新填写".to_string()) as quota::ProviderFetch,
+        )],
+    )
+    .unwrap();
+    let dto = quota::load_dto(
+        &conn,
+        &OfficialQuotaConfig::default(),
+        &[resolved("custom:a3f9c1", "公司的中转")],
+        chrono::Utc::now(),
+    );
+    let row = dto
+        .rows
+        .iter()
+        .find(|row| row.provider == "custom:a3f9c1")
+        .unwrap();
+    assert_eq!(row.todo, None);
+    assert_eq!(row.error, None);
 }

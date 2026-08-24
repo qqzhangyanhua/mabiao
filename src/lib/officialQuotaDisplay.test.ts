@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
+import type { OfficialQuotaDto } from "../types";
 import {
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   formatQuotaAmount,
   officialQuotaAgeLabel,
   officialQuotaAmountLabel,
+  officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
   officialQuotaSettingsRefreshNote,
+  officialQuotaUndetectedNote,
 } from "./officialQuotaDisplay";
 
 const now = Date.parse("2026-08-23T07:20:00.000Z");
@@ -53,6 +57,38 @@ describe("officialQuotaSettingsRefreshNote", () => {
   it("says when the snapshot is taken and what stale means", () => {
     expect(officialQuotaSettingsRefreshNote(10)).toContain("每 10 分钟自动再刷");
     expect(officialQuotaSettingsRefreshNote(10)).toContain("仍显示上次数字");
+  });
+});
+
+describe("officialQuotaUndetectedNote", () => {
+  it("names missing accounts with the same labels as 配置显示", () => {
+    expect(officialQuotaUndetectedNote([])).toBeNull();
+    expect(officialQuotaUndetectedNote(["claude", "codex"])).toBe(
+      "未检测到本机登录态、暂不显示：Claude Code、Codex。登录对应客户端后会自动出现。",
+    );
+  });
+});
+
+describe("officialQuotaEmptyCopy", () => {
+  it("explains loading, undetected accounts, and all-hidden separately", () => {
+    expect(officialQuotaEmptyCopy(null).title).toBe("正在读取官方额度…");
+    const undetected = officialQuotaEmptyCopy({
+      rows: [],
+      alerts_enabled: true,
+      stale_after_minutes: 10,
+      undetected: ["claude"],
+      hidden_providers: [],
+    } satisfies OfficialQuotaDto);
+    expect(undetected.title).toBe("暂无已登录的官方额度账号");
+    expect(undetected.hint).toContain("Claude Code");
+    const hidden = officialQuotaEmptyCopy({
+      rows: [],
+      alerts_enabled: true,
+      stale_after_minutes: 10,
+      undetected: [],
+      hidden_providers: ["claude"],
+    } satisfies OfficialQuotaDto);
+    expect(hidden.title).toBe("所选账号均已隐藏");
   });
 });
 
@@ -114,5 +150,38 @@ describe("officialQuotaAmountLabel", () => {
     expect(
       officialQuotaAmountLabel({ used_amount: null, limit_amount: null, currency: "USD" }),
     ).toBeNull();
+  });
+});
+
+describe("officialQuotaNotice", () => {
+  it("treats a missing secret as a todo, not a fetch error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: null,
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("keeps a real fetch failure as an error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: null,
+        error: "密钥无效或已失效，请在设置页更新密钥",
+      }),
+    ).toEqual({ kind: "error", text: "密钥无效或已失效，请在设置页更新密钥" });
+  });
+
+  it("prefers the todo when both are present", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: "网络不通，连不上这个地址",
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("returns null when there is nothing to say", () => {
+    expect(officialQuotaNotice({ todo: null, error: null })).toBeNull();
   });
 });

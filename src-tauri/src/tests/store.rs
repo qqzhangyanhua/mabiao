@@ -237,6 +237,20 @@ fn open_db_enables_wal_and_normal_synchronous() {
 }
 
 #[test]
+fn shrink_memory_succeeds_on_memory_file_and_readonly_connections() {
+    let memory = store::open_memory().unwrap();
+    store::shrink_memory(&memory).unwrap();
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("usage.sqlite");
+    let path = path.to_str().unwrap();
+    let write = store::open_db(path).unwrap();
+    store::shrink_memory(&write).unwrap();
+    let read = store::open_readonly(path).unwrap();
+    store::shrink_memory(&read).unwrap();
+}
+
+#[test]
 fn readonly_query_does_not_block_on_open_write_transaction() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("usage.sqlite");

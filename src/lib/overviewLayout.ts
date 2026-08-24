@@ -180,6 +180,11 @@ export function filterQuotaItems<T extends { source: string }>(
 }
 
 export function isOfficialProviderVisible(layout: OverviewLayout, provider: string): boolean {
+  // 自定义提供商的开关管的是「取不取数」，刻意不进「配置显示」。
+  // localStorage 里即便被人写进了 custom: 的 false，首页也不得按这份配置藏它。
+  if (isCustomQuotaProviderId(provider)) {
+    return true;
+  }
   return layout.officialProviders[provider] !== false;
 }
 
@@ -204,6 +209,11 @@ export function visibleOfficialQuotaRows<T extends { provider: string }>(
 
 export function isOfficialQuotaProviderId(value: string): value is OfficialQuotaProviderId {
   return (OFFICIAL_QUOTA_PROVIDER_IDS as readonly string[]).includes(value);
+}
+
+/** 自定义提供商的标识。它们不进「配置显示」——那一栏只列内置账号。 */
+export function isCustomQuotaProviderId(provider: string): boolean {
+  return provider.startsWith("custom:");
 }
 
 export function setModuleVisible(
@@ -255,6 +265,9 @@ export function setOfficialProviderVisible(
   provider: string,
   visible: boolean,
 ): OverviewLayout {
+  if (isCustomQuotaProviderId(provider)) {
+    return layout;
+  }
   return {
     ...layout,
     officialProviders: { ...layout.officialProviders, [provider]: visible },
@@ -270,6 +283,9 @@ export function setAllOfficialProvidersVisible(
     officialProviders[id] = visible;
   }
   for (const provider of Object.keys(officialProviders)) {
+    if (isCustomQuotaProviderId(provider)) {
+      continue;
+    }
     officialProviders[provider] = visible;
   }
   return { ...layout, officialProviders };
@@ -361,7 +377,7 @@ export function summarizeOverviewLayout(
   const hiddenPresentSources = sourcePool.filter((source) => !isQuotaSourceVisible(layout, source));
   const officialPool = new Set<string>(OFFICIAL_QUOTA_PROVIDER_IDS);
   for (const provider of Object.keys(layout.officialProviders)) {
-    if (provider) {
+    if (provider && !isCustomQuotaProviderId(provider)) {
       officialPool.add(provider);
     }
   }

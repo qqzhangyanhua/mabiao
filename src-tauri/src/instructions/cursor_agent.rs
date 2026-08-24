@@ -26,6 +26,7 @@ pub fn scan() -> GlobalInstructionSourceRow {
                     .into(),
             ),
             action: None,
+            editable: false,
         }],
     }
 }

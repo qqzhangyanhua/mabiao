@@ -18,6 +18,7 @@ pub fn scan() -> GlobalInstructionSourceRow {
             error: None,
             note: Some("存在于 Cursor 账号服务端，本机磁盘看不到内容。".into()),
             action: Some("cursor_settings".into()),
+            editable: false,
         }],
     }
 }

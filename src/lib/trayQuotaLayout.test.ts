@@ -78,6 +78,14 @@ describe("order helpers", () => {
     ]);
   });
 
+  it("lets custom provider ids sit in the tray order next to built-in accounts", () => {
+    const rows = [{ provider: "claude" }, { provider: "custom:a3f9c1" }];
+    expect(sortQuotaRows(rows, ["custom:a3f9c1", "claude"]).map((row) => row.provider)).toEqual([
+      "custom:a3f9c1",
+      "claude",
+    ]);
+  });
+
   it("moves a provider in front of the drop target", () => {
     expect(moveTrayQuotaProvider(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
     expect(moveTrayQuotaProvider(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
@@ -133,6 +141,16 @@ describe("trayQuotaRowSummary", () => {
     expect(trayQuotaRowSummary({ windows: [], error: "Copilot 登录已失效，请在编辑器里重新登录" })).toBe(
       "Copilot 登录已失效，请在编…",
     );
+  });
+
+  it("prefers the missing-secret todo over an error when collapsed", () => {
+    expect(
+      trayQuotaRowSummary({
+        windows: [],
+        error: "网络不通，连不上这个地址",
+        todo: "未配置密钥，请在设置页重新填写",
+      }),
+    ).toBe("未配置密钥，请在设置页重新填写");
   });
 });
 

@@ -29,10 +29,9 @@ export type IconName =
   | "search"
   | "copy"
   | "inbox"
-  | "alertTriangle"
-  | "logo";
+  | "alertTriangle";
 
-const strokes: Record<Exclude<IconName, "logo">, ReactElement> = {
+const strokes: Record<IconName, ReactElement> = {
   overview: (
     <>
       <rect x="3" y="3" width="8" height="8" rx="1.5" />
@@ -218,41 +217,6 @@ export function Icon({
   size?: number;
   className?: string;
 }) {
-  if (name === "logo") {
-    return (
-      <svg width={size} height={size} viewBox="0 0 32 32" className={className} aria-hidden>
-        <defs>
-          <linearGradient id="logo-g" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#8b6cff" />
-            <stop offset="1" stopColor="#22d3ee" />
-          </linearGradient>
-          <linearGradient
-            id="logo-line"
-            x1="6"
-            y1="22"
-            x2="26"
-            y2="8"
-            gradientUnits="userSpaceOnUse"
-          >
-            <stop stopColor="#c4b5fd" />
-            <stop offset="1" stopColor="#67e8f9" />
-          </linearGradient>
-        </defs>
-        <path d="M16 3 28 10v12L16 29 4 22V10L16 3Z" fill="url(#logo-g)" />
-        <path d="M16 11 21 14v6l-5 3-5-3v-6l5-3Z" fill="#0b1020" opacity="0.35" />
-        <path d="M16 11 21 14l-5 3-5-3 5-3Z" fill="#fff" opacity="0.28" />
-        <path
-          d="M7.2 20.4 12.2 16.2 16.1 18.1 25 8.4"
-          fill="none"
-          stroke="url(#logo-line)"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
   return (
     <svg
       width={size}

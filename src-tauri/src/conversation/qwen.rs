@@ -37,10 +37,10 @@ pub(super) fn detail(
 }
 
 pub(super) fn export_session_records(path: &Path, session_id: &str) -> Result<Vec<u8>, String> {
-    let content =
-        fs::read_to_string(path).map_err(|error| format!("读取 Qwen logs.json 失败：{error}"))?;
-    let value: Value =
-        serde_json::from_str(&content).map_err(|error| format!("Qwen logs.json 无效：{error}"))?;
+    let file =
+        fs::File::open(path).map_err(|error| format!("读取 Qwen logs.json 失败：{error}"))?;
+    let value: Value = serde_json::from_reader(BufReader::new(file))
+        .map_err(|error| format!("Qwen logs.json 无效：{error}"))?;
     let records = value
         .as_array()
         .ok_or_else(|| "Qwen logs.json 顶层必须是数组".to_string())?;
@@ -65,10 +65,12 @@ fn parse_all(
     path: &Path,
     _include_deferred_content: bool,
 ) -> Result<(Vec<ParsedConversation>, Vec<ConversationIndexIssue>), String> {
-    let content =
-        fs::read_to_string(path).map_err(|error| format!("读取 Qwen logs.json 失败：{error}"))?;
-    let value: Value =
-        serde_json::from_str(&content).map_err(|error| format!("Qwen logs.json 无效：{error}"))?;
+    // logs.json 是单个 Qwen 会话目录下所有 session 累积写入的一份大数组，流式反序列化
+    // 避免同时攥着原始文本和解析后的 Value 树两份内存。
+    let file =
+        fs::File::open(path).map_err(|error| format!("读取 Qwen logs.json 失败：{error}"))?;
+    let value: Value = serde_json::from_reader(BufReader::new(file))
+        .map_err(|error| format!("Qwen logs.json 无效：{error}"))?;
     let records = value
         .as_array()
         .ok_or_else(|| "Qwen logs.json 顶层必须是数组".to_string())?;

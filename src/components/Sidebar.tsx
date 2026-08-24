@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../icons";
 import type { View } from "../types";
+import appIcon from "../../src-tauri/icons/icon.png";
 
 const SIDEBAR_COLLAPSED_KEY = "mabiao:sidebar-collapsed";
 
@@ -71,7 +72,7 @@ export function Sidebar({
   return (
     <aside className={collapsed ? "sidebar collapsed" : "sidebar"}>
       <div className="brand">
-        <Icon name="logo" size={34} />
+        <img src={appIcon} alt="" width={34} height={34} className="brand-logo" />
         <div className={collapsed ? "sr-only" : undefined}>
           <div className="brand-name">本机用量</div>
           <div className="brand-meta">

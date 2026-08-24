@@ -8,6 +8,7 @@ import {
   filterOfficialQuotaRows,
   filterQuotaItems,
   isModuleVisible,
+  isOfficialProviderVisible,
   visibleModuleCount,
   type OverviewLayout,
 } from "../lib/overviewLayout";
@@ -148,6 +149,7 @@ export const Overview = memo(function Overview({
     return {
       ...officialQuota,
       rows: filterOfficialQuotaRows(officialQuota.rows, layout),
+      undetected: officialQuota.undetected.filter((id) => isOfficialProviderVisible(layout, id)),
     };
   }, [officialQuota, layout]);
   const activeWindows = (visibleBilling?.current ?? []).filter((window) => window.is_active).length;

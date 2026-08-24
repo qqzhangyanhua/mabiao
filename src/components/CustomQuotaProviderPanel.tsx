@@ -1,23 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import {
+  BLANK_CUSTOM_QUOTA_DRAFT,
+  submittedSecret,
+  type CustomQuotaDraft,
+  type CustomQuotaPreset,
+} from "../lib/customQuotaDraft";
 import { humanStatus } from "../lib/format";
 import type { OfficialQuotaDto } from "../types";
+import { CustomQuotaProviderForm, type CustomQuotaPresetDto } from "./CustomQuotaProviderForm";
 import { Button } from "./ui/Button";
-import { Field } from "./ui/Field";
 
 /**
  * 自定义提供商的命令契约。只有这个面板用得到，因此就近放在这里——
  * 与 `CursorAccountSettingsPanel` 里的 `CursorCredentialStatus` 同一个办法；
  * `types.ts` 留给跨视图共享的 DTO。字段名保持 snake_case，与 Rust 对齐。
  */
-type CustomQuotaPreset =
-  | "openai_compatible"
-  | "newapi"
-  | "openrouter"
-  | "deepseek"
-  | "siliconflow"
-  | "moonshot";
-
 type CustomQuotaProviderDto = {
   /** 形如 `custom:a3f9c1`，随机生成，与内置 9 家永不冲突。改名不改它。 */
   id: string;
@@ -27,13 +25,6 @@ type CustomQuotaProviderDto = {
   enabled: boolean;
   /** 掩码串；没配密钥（多半是恢复备份后）为 null。永远拿不到明文。 */
   secret_mask: string | null;
-};
-
-type CustomQuotaPresetDto = {
-  value: CustomQuotaPreset;
-  label: string;
-  /** 本版是否已有解析器。为 false 时界面给「暂未支持」提示。 */
-  supported: boolean;
 };
 
 type CustomQuotaPanelDto = {
@@ -56,24 +47,7 @@ type SavedCustomQuotaDto = {
   panel: CustomQuotaPanelDto;
 };
 
-/** 表单草稿。密钥留空 = 沿用已存的那把（编辑时界面本来就只有掩码）。 */
-type Draft = {
-  id: string | null;
-  name: string;
-  preset: CustomQuotaPreset;
-  baseUrl: string;
-  secret: string;
-};
-
-const BLANK: Draft = {
-  id: null,
-  name: "",
-  preset: "openai_compatible",
-  baseUrl: "",
-  secret: "",
-};
-
-function draftFrom(provider: CustomQuotaProviderDto): Draft {
+function draftFrom(provider: CustomQuotaProviderDto): CustomQuotaDraft {
   return {
     id: provider.id,
     name: provider.name,
@@ -89,7 +63,7 @@ export function CustomQuotaProviderPanel({
   onQuota: (value: OfficialQuotaDto) => void;
 }) {
   const [panel, setPanel] = useState<CustomQuotaPanelDto | null>(null);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<CustomQuotaDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,15 +99,15 @@ export function CustomQuotaProviderPanel({
     }
   }
 
-  function save(current: Draft) {
+  function save(current: CustomQuotaDraft) {
     const request: SaveCustomQuotaProvider = {
       id: current.id,
       name: current.name,
       preset: current.preset,
       base_url: current.baseUrl,
-      // 本面板还没有启停开关，null 表示「别动现在的状态」。
+      // 表单不带开关：null 表示「别动现在的状态」。启停走列表上那颗开关。
       enabled: null,
-      secret: current.secret.trim() === "" ? null : current.secret,
+      secret: submittedSecret(current.secret),
     };
     let savedId: string | null = null;
     void run(
@@ -153,6 +127,29 @@ export function CustomQuotaProviderPanel({
     void run(() => invoke<CustomQuotaPanelDto>("delete_custom_quota_provider", { id }));
   }
 
+  /**
+   * 启停只翻这一位。密钥留空 = 不改。
+   * 关掉之后不要去取数——关掉就是不打它的接口；打开才立刻刷一次，好让首页马上出现那一行。
+   */
+  function toggleEnabled(provider: CustomQuotaProviderDto) {
+    const enabled = !provider.enabled;
+    const request: SaveCustomQuotaProvider = {
+      id: provider.id,
+      name: provider.name,
+      preset: provider.preset,
+      base_url: provider.base_url,
+      enabled,
+      secret: null,
+    };
+    void run(
+      async () => {
+        const saved = await invoke<SavedCustomQuotaDto>("save_custom_quota_provider", { request });
+        return saved.panel;
+      },
+      () => (enabled ? provider.id : null),
+    );
+  }
+
   return (
     <section className="panel" id="settings-custom-quota">
       <div className="panel-head">
@@ -160,6 +157,8 @@ export function CustomQuotaProviderPanel({
           <h2>自定义提供商</h2>
           <p className="panel-note">
             第三方中转站、聚合服务的余额。登记之后和内置账号并排出现在首页「官方额度」里。
+            关掉就不取数、不占首页与托盘、也不告警；名称、地址和密钥都留着，随时可以再打开。
+            自定义提供商不进首页「配置显示」——那里管的是「画不画」，这里管的是「取不取数」。
             密钥单独存一份不进备份的文件，界面上始终掩码显示。
           </p>
         </div>
@@ -167,7 +166,7 @@ export function CustomQuotaProviderPanel({
           <Button
             variant="accent"
             disabled={busy || draft != null}
-            onClick={() => setDraft({ ...BLANK })}
+            onClick={() => setDraft({ ...BLANK_CUSTOM_QUOTA_DRAFT })}
           >
             新增
           </Button>
@@ -182,13 +181,29 @@ export function CustomQuotaProviderPanel({
 
       <ul className="custom-quota-list">
         {panel?.providers.map((provider) => (
-          <li key={provider.id} className="custom-quota-item">
+          <li
+            key={provider.id}
+            className={provider.enabled ? "custom-quota-item" : "custom-quota-item is-off"}
+          >
             <div className="custom-quota-summary">
               <strong>{provider.name}</strong>
               <span className="muted">{presetLabel(panel.presets, provider.preset)}</span>
               <code>{provider.base_url}</code>
               <span className="muted">{provider.secret_mask ?? "未配置密钥，请重新填写"}</span>
               <div className="row-actions">
+                <button
+                  type="button"
+                  className={["custom-quota-switch", provider.enabled ? "is-on" : "is-off"].join(
+                    " ",
+                  )}
+                  role="switch"
+                  aria-checked={provider.enabled}
+                  aria-label={`启用「${provider.name}」`}
+                  disabled={busy || draft != null}
+                  onClick={() => toggleEnabled(provider)}
+                >
+                  {provider.enabled ? "已启用" : "已停用"}
+                </button>
                 <Button
                   disabled={busy || draft != null}
                   onClick={() => setDraft(draftFrom(provider))}
@@ -209,7 +224,7 @@ export function CustomQuotaProviderPanel({
       </ul>
 
       {draft && panel ? (
-        <CustomQuotaForm
+        <CustomQuotaProviderForm
           draft={draft}
           presets={panel.presets}
           busy={busy}
@@ -224,80 +239,4 @@ export function CustomQuotaProviderPanel({
 
 function presetLabel(presets: CustomQuotaPresetDto[], value: CustomQuotaPreset): string {
   return presets.find((preset) => preset.value === value)?.label ?? value;
-}
-
-function CustomQuotaForm({
-  draft,
-  presets,
-  busy,
-  onChange,
-  onCancel,
-  onSubmit,
-}: {
-  draft: Draft;
-  presets: CustomQuotaPresetDto[];
-  busy: boolean;
-  onChange: (draft: Draft) => void;
-  onCancel: () => void;
-  onSubmit: () => void;
-}) {
-  const selected = presets.find((preset) => preset.value === draft.preset);
-  const editing = draft.id != null;
-  return (
-    <div className="custom-quota-form">
-      <Field
-        label="名称"
-        placeholder="例如：公司的中转"
-        value={draft.name}
-        onChange={(event) => onChange({ ...draft, name: event.target.value })}
-      />
-      <label className="field">
-        <span className="field-label">预设类型</span>
-        <select
-          value={draft.preset}
-          onChange={(event) =>
-            onChange({ ...draft, preset: event.target.value as CustomQuotaPreset })
-          }
-        >
-          {presets.map((preset) => (
-            <option key={preset.value} value={preset.value}>
-              {preset.supported ? preset.label : `${preset.label}（暂未支持）`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Field
-        label="base URL"
-        placeholder="https://relay.example.com"
-        value={draft.baseUrl}
-        onChange={(event) => onChange({ ...draft, baseUrl: event.target.value })}
-      />
-      <Field
-        label={editing ? "密钥（留空则不改）" : "密钥"}
-        type="password"
-        autoComplete="off"
-        placeholder={editing ? "不填就沿用现在这把" : "sk-…"}
-        value={draft.secret}
-        onChange={(event) => onChange({ ...draft, secret: event.target.value })}
-      />
-      {selected && !selected.supported ? (
-        <p className="panel-note tone-warn">
-          「{selected.label}」暂未支持，现在只实现了「OpenAI 兼容计费」。
-          可以先存着，取数时会明确告诉你还没实现。
-        </p>
-      ) : (
-        <p className="panel-note">
-          base URL 填根地址即可，带 <code>/v1</code> 或结尾斜杠都认。
-        </p>
-      )}
-      <div className="row-actions">
-        <Button variant="accent" disabled={busy} onClick={onSubmit}>
-          {busy ? "保存中…" : "保存"}
-        </Button>
-        <Button disabled={busy} onClick={onCancel}>
-          取消
-        </Button>
-      </div>
-    </div>
-  );
 }
