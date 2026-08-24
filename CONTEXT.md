@@ -46,7 +46,11 @@ _Avoid_: 中转站、渠道、来源 (Source)（后者特指有本地会话数�
 
 **LiteLLM Proxy**：
 用户自建 LiteLLM Proxy 网关上那把 virtual key 的预算窗口，属于官方额度维度的自定义提供商预设。
-_Avoid_: 把它和「LiteLLM 价目快照」当成同一个东西。价目快照是社区维护的公开模型单价，作为费用推导的兜底层，两者语义无关
+_Avoid_: 把它和「LiteLLM 价目快照」当成同一个东西。价目快照属于费用维度，是社区维护的公开模型单价、作为费用推导的兜底层。两者语义无关。用户会在设置页的「预算」页和「价格」页各看到一个 LiteLLM。
+
+**LiteLLM 价目快照 (LiteLLM Price Snapshot)**：
+社区维护的公开模型单价，属于费用维度，作为来源自带费用、用户价目之后的费用推导兜底层。界面与代码里也常简称「LiteLLM 快照」。
+_Avoid_: 把它和「LiteLLM Proxy」当成同一个东西。LiteLLM Proxy 属于官方额度维度，是用户自建网关上那把 virtual key 的预算窗口。两者语义无关。
 
 **工作时间线 (Work Timeline)**：
 单日会话区间铺开。消耗记录按 `occurred_at` 聚成横条；Cursor 本机会话按起止时间并入同一天，不把账号用量或代码量画上去。Token 与对话轮次仍只统计当天消耗记录。
