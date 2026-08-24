@@ -210,7 +210,7 @@ fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
     let _ = official_quota::sync_claude_capture(&conn);
     official_quota::apply_fetch_results(&conn, results)?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
@@ -245,7 +245,7 @@ pub fn load_quota_dto(app: &AppHandle) -> Result<OfficialQuotaDto, String> {
     let state = app.state::<AppState>();
     let conn = state.lock_read()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let mut dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     dto.rows = official_quota::visible_rows(dto.rows, &dto.hidden_providers);
     Ok(dto)

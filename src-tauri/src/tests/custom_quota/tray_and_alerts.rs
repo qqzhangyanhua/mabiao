@@ -4,7 +4,7 @@
 //! （80% / 100% 告警）、`tightest_window`（标题最紧一档，断言在 `rows.rs`）。
 //! 喂 DTO / 配置，断言行的有无和告警的有无，不联网。
 
-use super::provider;
+use super::resolved;
 use crate::domain::{
     OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaProvider,
     OfficialQuotaRow, OfficialQuotaWindow,
@@ -48,6 +48,7 @@ fn custom_row(windows: Vec<OfficialQuotaWindow>) -> OfficialQuotaRow {
         freshness: OfficialQuotaFreshness::Official,
         captured_at: Some("2026-08-24T12:00:00+00:00".into()),
         error: None,
+        todo: None,
     }
 }
 
@@ -92,7 +93,7 @@ fn tray_keeps_enabled_custom_providers_when_every_builtin_account_is_hidden() {
             alerts_enabled: true,
             hidden_providers: hidden.clone(),
         },
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     // `load_dto` 本身不过滤：设置页还要看到被藏的内置账号。托盘才走 `visible_rows`。
@@ -106,8 +107,8 @@ fn tray_keeps_enabled_custom_providers_when_every_builtin_account_is_hidden() {
 #[test]
 fn tray_does_not_show_a_disabled_custom_provider() {
     let conn = db::open_memory().unwrap();
-    let mut off = provider("custom:a3f9c1", "备用中转");
-    off.enabled = false;
+    let mut off = resolved("custom:a3f9c1", "备用中转");
+    off.config.enabled = false;
     let snapshot = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
@@ -167,7 +168,7 @@ fn custom_percent_windows_without_a_reset_time_still_alert() {
     let snapshot = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let alerts = alerts_of(&snapshot);
@@ -219,6 +220,7 @@ fn builtin_percent_windows_without_a_reset_time_still_do_not_alert() {
             freshness: OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-24T12:00:00+00:00".into()),
             error: None,
+            todo: None,
         }],
         true,
     );
@@ -282,7 +284,7 @@ fn a_hot_custom_balance_alerts_but_does_not_steal_the_tray_title() {
     let snapshot = quota::load_dto(
         &conn,
         &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
+        &[resolved("custom:a3f9c1", "公司的中转")],
         now,
     );
     let alerts = alerts_of(&snapshot);

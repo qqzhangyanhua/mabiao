@@ -119,9 +119,11 @@ export function isTrayQuotaCollapsed(collapsed: string[], provider: string): boo
   return collapsed.includes(provider);
 }
 
-export function trayQuotaRowSummary(row: Pick<OfficialQuotaRow, "windows" | "error">): string {
+export function trayQuotaRowSummary(
+  row: Pick<OfficialQuotaRow, "windows" | "error"> & { todo?: string | null },
+): string {
   if (row.windows.length === 0) {
-    return shorten(row.error ?? "暂无");
+    return shorten(row.todo ?? row.error ?? "暂无");
   }
   let max: number | null = null;
   for (const window of row.windows) {

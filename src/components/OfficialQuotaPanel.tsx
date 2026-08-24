@@ -9,6 +9,7 @@ import {
   officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
@@ -301,15 +302,32 @@ function QuotaRowTitle({
 }
 
 function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactReset: boolean }) {
+  const notice = officialQuotaNotice(row);
   if (row.windows.length === 0) {
-    return <span className="muted">{row.error ?? "尚未捕获官方额度"}</span>;
+    return <QuotaNotice notice={notice} fallback="尚未捕获官方额度" />;
   }
   return (
     <>
       <OfficialQuotaWindows windows={row.windows} compactReset={compactReset} />
-      {row.error ? <span className="muted">{row.error}</span> : null}
+      {notice ? <QuotaNotice notice={notice} /> : null}
     </>
   );
+}
+
+function QuotaNotice({
+  notice,
+  fallback,
+}: {
+  notice: ReturnType<typeof officialQuotaNotice>;
+  fallback?: string;
+}) {
+  if (!notice) {
+    return fallback ? <span className="muted">{fallback}</span> : null;
+  }
+  if (notice.kind === "todo") {
+    return <span className="official-quota-todo">{notice.text}</span>;
+  }
+  return <span className="muted">{notice.text}</span>;
 }
 
 /**

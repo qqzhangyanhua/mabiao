@@ -114,7 +114,8 @@ export function OfficialQuotaSettingsPanel({
                 nowMs={nowMs}
               />
               <em>
-                {row.error ??
+                {row.todo ??
+                  row.error ??
                   (row.windows.length > 0 ? `${row.windows.length} 个窗口` : "等待捕获")}
               </em>
             </li>

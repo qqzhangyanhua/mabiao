@@ -263,6 +263,9 @@ pub struct OfficialQuotaRow {
     pub freshness: OfficialQuotaFreshness,
     pub captured_at: Option<String>,
     pub error: Option<String>,
+    /// 待办提示，不是取数失败。恢复备份后缺密钥走这里。
+    #[serde(default)]
+    pub todo: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

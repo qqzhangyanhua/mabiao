@@ -4,13 +4,14 @@
 //!
 //! 按接缝分文件，共用这里的 fixture 与构造器。
 
+mod backup;
 mod panel_commands;
 mod parsing;
 mod preview_and_test;
 mod rows;
 mod tray_and_alerts;
 
-use crate::official_quota::custom::store::CustomQuotaProvider;
+use crate::official_quota::custom::store::{CustomQuotaProvider, ResolvedProvider};
 use crate::official_quota::custom::CustomQuotaPreset;
 
 const SUBSCRIPTION: &str = r#"{
@@ -29,6 +30,20 @@ fn provider(id: &str, name: &str) -> CustomQuotaProvider {
         preset: CustomQuotaPreset::OpenAiCompatible,
         base_url: "https://relay.example.com".to_string(),
         enabled: true,
+    }
+}
+
+fn resolved(id: &str, name: &str) -> ResolvedProvider {
+    ResolvedProvider {
+        config: provider(id, name),
+        secret: Some("sk-relay".to_string()),
+    }
+}
+
+fn unresolved(id: &str, name: &str) -> ResolvedProvider {
+    ResolvedProvider {
+        config: provider(id, name),
+        secret: None,
     }
 }
 

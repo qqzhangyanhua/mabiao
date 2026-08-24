@@ -142,6 +142,16 @@ describe("trayQuotaRowSummary", () => {
       "Copilot 登录已失效，请在编…",
     );
   });
+
+  it("prefers the missing-secret todo over an error when collapsed", () => {
+    expect(
+      trayQuotaRowSummary({
+        windows: [],
+        error: "网络不通，连不上这个地址",
+        todo: "未配置密钥，请在设置页重新填写",
+      }),
+    ).toBe("未配置密钥，请在设置页重新填写");
+  });
 });
 
 describe("quotaProviderFromPoint", () => {

@@ -108,6 +108,18 @@ pub fn resolve_target(
     Ok(FetchTarget::Custom(Box::new(found.clone())))
 }
 
+/// 真正会打网的自定义目标：启用、且有密钥。
+///
+/// 缺密钥的在 `load_dto` 里画成待办，不走进取数线程——那条路连「失败」都算不上。
+pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<FetchTarget> {
+    custom
+        .iter()
+        .filter(|provider| provider.config.enabled && provider.secret.is_some())
+        .cloned()
+        .map(|provider| FetchTarget::Custom(Box::new(provider)))
+        .collect()
+}
+
 /// 先打 ChatGPT 的用量接口（不依赖 CLI 装没装），读不到再拉起 `codex app-server`。
 /// 两条都失败时报接口那条：多数人应该走的是它。
 fn fetch_codex() -> ProviderFetch {
@@ -174,15 +186,7 @@ pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarge
         .filter(|provider| detect::has_local_credentials(*provider))
         .map(FetchTarget::Builtin)
         .collect();
-    // 停用的自定义提供商连接口都不请求——「关掉之后就不再消耗它的调用配额」
-    // 正是这个开关存在的理由。
-    targets.extend(
-        custom
-            .iter()
-            .filter(|provider| provider.config.enabled)
-            .cloned()
-            .map(|provider| FetchTarget::Custom(Box::new(provider))),
-    );
+    targets.extend(custom_targets_for_fetch(custom));
     targets.retain(|target| backoff::cooldown_remaining(&state, target.quota_id(), now).is_none());
 
     let results = fetch_in_parallel(targets, fetch_target);

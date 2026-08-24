@@ -93,6 +93,7 @@ fn tightest_window_picks_highest_cursor_dimension() {
             freshness: crate::domain::OfficialQuotaFreshness::Official,
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),
             error: None,
+            todo: None,
         }],
         alerts_enabled: true,
         stale_after_minutes: 10,
@@ -232,6 +233,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
         crate::domain::OfficialQuotaRow {
             provider: "devin".into(),
@@ -240,6 +242,7 @@ fn visible_rows_drops_only_hidden_providers() {
             freshness: crate::domain::OfficialQuotaFreshness::Unavailable,
             captured_at: None,
             error: None,
+            todo: None,
         },
     ];
     let hidden = vec!["devin".to_string()];

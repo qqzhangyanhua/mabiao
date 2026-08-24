@@ -854,7 +854,7 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_configs(&state.custom_quota_paths);
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
     let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
     official_quota::notify::check_and_notify_with_config(
         app,
@@ -1121,7 +1121,7 @@ async fn test_custom_quota_provider(
     .map_err(|e| e.to_string())?
 }
 
-/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token。返回 `false` 表示取消。
+/// 备份 sqlite 与用户配置到用户选择的目录；不含 Cursor 钥匙串 token，也不含自定义提供商密钥。返回 `false` 表示取消。
 #[tauri::command]
 async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1142,7 +1142,7 @@ async fn backup_data(app: tauri::AppHandle) -> Result<bool, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。返回 `false` 表示取消。
+/// 从备份目录恢复 sqlite 与用户配置，覆盖当前缓存。自定义提供商密钥不在备份里，本机已有的密钥文件不会被覆盖。返回 `false` 表示取消。
 #[tauri::command]
 async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {

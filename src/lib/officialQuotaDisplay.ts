@@ -120,3 +120,17 @@ export function officialQuotaEmptyCopy(data: OfficialQuotaDto | null): {
   }
   return { title: "所选账号均已隐藏", hint: "在「配置显示」里打开要看的账号" };
 }
+
+/** 首页额度行底下那句：待办不是取数失败，两套样式靠 `kind` 分开。 */
+export function officialQuotaNotice(row: {
+  todo: string | null;
+  error: string | null;
+}): { kind: "todo" | "error"; text: string } | null {
+  if (row.todo) {
+    return { kind: "todo", text: row.todo };
+  }
+  if (row.error) {
+    return { kind: "error", text: row.error };
+  }
+  return null;
+}

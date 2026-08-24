@@ -100,6 +100,8 @@ export type OfficialQuotaRow = {
   freshness: OfficialQuotaFreshness;
   captured_at: string | null;
   error: string | null;
+  /** 待办提示，不是取数失败。恢复备份后缺密钥走这里。 */
+  todo: string | null;
 };
 
 export type OfficialQuotaConfig = {

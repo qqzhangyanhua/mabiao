@@ -33,9 +33,9 @@ use crate::store;
 // 取数调度住在 `fetch` 里，但调用方一直是按 `official_quota::…` 引用的，
 // 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
 pub use fetch::{
-    apply_fetch_results, fetch_all_targets, fetch_in_parallel, fetch_provider, fetch_target,
-    fetch_target_forced, fetch_target_throttled, parse_provider, resolve_target, FetchTarget,
-    ProviderFetch, QuotaTarget, ThrottledFetch,
+    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_in_parallel,
+    fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled, parse_provider,
+    resolve_target, FetchTarget, ProviderFetch, QuotaTarget, ThrottledFetch,
 };
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
@@ -86,7 +86,7 @@ pub fn freshness(captured_at: &str, now: DateTime<Utc>) -> OfficialQuotaFreshnes
 pub fn load_dto(
     conn: &Connection,
     config: &OfficialQuotaConfig,
-    custom: &[custom::CustomQuotaProvider],
+    custom: &[custom::ResolvedProvider],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
     // 本机没凭证、也没历史缓存的 provider 不占一行——否则家数一多，
@@ -111,7 +111,7 @@ pub fn load_dto(
     rows.extend(
         custom
             .iter()
-            .filter(|provider| provider.enabled)
+            .filter(|provider| provider.config.enabled)
             .map(|provider| load_custom_row(conn, provider, now)),
     );
     OfficialQuotaDto {
@@ -150,10 +150,24 @@ fn load_row(
 /// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。
 fn load_custom_row(
     conn: &Connection,
-    provider: &custom::CustomQuotaProvider,
+    provider: &custom::ResolvedProvider,
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
-    load_row_by_id(conn, &provider.id, &provider.name, now)
+    let mut row = load_row_by_id(conn, &provider.config.id, &provider.config.name, now);
+    attach_missing_secret_todo(&mut row, provider.secret.is_none());
+    row
+}
+
+/// 缺密钥是待办，不是取数失败。sqlite 里可能残留一句同样的 error（上一轮
+/// 刷新写进去的），这里把它挪到 `todo`，避免首页画成红字。
+fn attach_missing_secret_todo(row: &mut OfficialQuotaRow, secret_missing: bool) {
+    let leftover_todo = row.error.as_deref() == Some(custom::MISSING_SECRET);
+    if leftover_todo {
+        row.error = None;
+    }
+    if secret_missing {
+        row.todo = Some(custom::MISSING_SECRET.to_string());
+    }
 }
 
 fn load_row_by_id(
@@ -180,6 +194,7 @@ fn load_row_by_id(
                     Some(captured_at)
                 },
                 error,
+                todo: None,
             }
         }
         Ok(None) => empty_row(id, display_name, None),
@@ -195,6 +210,7 @@ fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuo
         freshness: OfficialQuotaFreshness::Unavailable,
         captured_at: None,
         error,
+        todo: None,
     }
 }
 

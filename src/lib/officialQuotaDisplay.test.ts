@@ -7,6 +7,7 @@ import {
   officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
+  officialQuotaNotice,
   officialQuotaRefreshHint,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
@@ -149,5 +150,38 @@ describe("officialQuotaAmountLabel", () => {
     expect(
       officialQuotaAmountLabel({ used_amount: null, limit_amount: null, currency: "USD" }),
     ).toBeNull();
+  });
+});
+
+describe("officialQuotaNotice", () => {
+  it("treats a missing secret as a todo, not a fetch error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: null,
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("keeps a real fetch failure as an error", () => {
+    expect(
+      officialQuotaNotice({
+        todo: null,
+        error: "密钥无效或已失效，请在设置页更新密钥",
+      }),
+    ).toEqual({ kind: "error", text: "密钥无效或已失效，请在设置页更新密钥" });
+  });
+
+  it("prefers the todo when both are present", () => {
+    expect(
+      officialQuotaNotice({
+        todo: "未配置密钥，请在设置页重新填写",
+        error: "网络不通，连不上这个地址",
+      }),
+    ).toEqual({ kind: "todo", text: "未配置密钥，请在设置页重新填写" });
+  });
+
+  it("returns null when there is nothing to say", () => {
+    expect(officialQuotaNotice({ todo: null, error: null })).toBeNull();
   });
 });

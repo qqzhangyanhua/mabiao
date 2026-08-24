@@ -3823,9 +3823,19 @@ td.row-actions {
   color: var(--red-fg);
 }
 
-.official-quota-row > .muted {
+.official-quota-row > .muted,
+.official-quota-todo {
   display: block;
   overflow-wrap: anywhere;
+}
+
+.official-quota-todo {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--overlay-2);
+  color: var(--text-soft);
+  font-size: 12px;
 }
 
 .official-quota-status {

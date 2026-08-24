@@ -24,7 +24,7 @@ pub use store::{CustomQuotaConfig, CustomQuotaCredentials, CustomQuotaProvider, 
 /// 界面上一眼分辨自定义与内置。
 pub const ID_PREFIX: &str = "custom:";
 const TIMEOUT: Duration = Duration::from_secs(15);
-const MISSING_SECRET: &str = "未配置密钥，请在设置页重新填写";
+pub const MISSING_SECRET: &str = "未配置密钥，请在设置页重新填写";
 /// 「暂未支持」错误的识别标记，`is_precheck_error` 靠它认。
 const UNSUPPORTED_MARK: &str = "暂未支持";
 
