@@ -65,6 +65,21 @@ export function credentialHint(preset: CustomQuotaPreset): string | null {
   return null;
 }
 
+/**
+ * 已实现预设的显示名，列成「甲」、「乙」。空列表与一档都不能冒出多余顿号。
+ *
+ * 设置页那句「暂未支持，现在只实现了…」和取数入口同一套拼法，新增档位时两边
+ * 都从 `supported` / `implemented()` 推导，不再拼死某一档的名字。
+ */
+export function implementedPresetLabels(
+  presets: ReadonlyArray<{ label: string; supported: boolean }>,
+): string {
+  return presets
+    .filter((preset) => preset.supported)
+    .map((preset) => `「${preset.label}」`)
+    .join("、");
+}
+
 /** 密钥框的占位符：编辑时一律「留空不改」；NewAPI 新建时不要提示 `sk-`。 */
 export function secretPlaceholder(preset: CustomQuotaPreset, editing: boolean): string {
   if (editing) {

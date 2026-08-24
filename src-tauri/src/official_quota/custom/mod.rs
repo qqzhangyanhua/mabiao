@@ -95,11 +95,29 @@ impl CustomQuotaPreset {
 }
 
 fn unsupported(preset: CustomQuotaPreset) -> String {
-    format!(
-        "「{}」{UNSUPPORTED_MARK}，当前只实现了「{}」",
-        preset.display_name(),
-        CustomQuotaPreset::OpenAiCompatible.display_name()
-    )
+    let names: Vec<&str> = CustomQuotaPreset::ALL
+        .into_iter()
+        .filter(|item| item.implemented())
+        .map(CustomQuotaPreset::display_name)
+        .collect();
+    let listed = quote_display_names(&names);
+    if listed.is_empty() {
+        format!("「{}」{UNSUPPORTED_MARK}", preset.display_name())
+    } else {
+        format!(
+            "「{}」{UNSUPPORTED_MARK}，当前只实现了{listed}",
+            preset.display_name()
+        )
+    }
+}
+
+/// 把显示名列成「甲」、「乙」。空列表与一档都不能冒出多余顿号或空书名号。
+pub(crate) fn quote_display_names(names: &[&str]) -> String {
+    names
+        .iter()
+        .map(|name| format!("「{name}」"))
+        .collect::<Vec<_>>()
+        .join("、")
 }
 
 /// base URL 归一化：剥掉结尾斜杠、剥掉结尾的 `/v1`。

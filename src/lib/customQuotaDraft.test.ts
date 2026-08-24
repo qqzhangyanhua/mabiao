@@ -3,6 +3,7 @@ import {
   BLANK_CUSTOM_QUOTA_DRAFT,
   credentialHint,
   fetchInputsOf,
+  implementedPresetLabels,
   secretPlaceholder,
   submittedSecret,
   type CustomQuotaDraft,
@@ -84,6 +85,36 @@ describe("secretPlaceholder", () => {
 
   it("OpenAI 兼容计费新建时仍提示 sk-", () => {
     expect(secretPlaceholder("openai_compatible", false)).toBe("sk-…");
+  });
+});
+
+describe("implementedPresetLabels", () => {
+  it("空列表、一档、多档都不冒出多余顿号或空书名号", () => {
+    expect(implementedPresetLabels([])).toBe("");
+    expect(implementedPresetLabels([{ label: "甲", supported: true }])).toBe("「甲」");
+    expect(
+      implementedPresetLabels([
+        { label: "甲", supported: true },
+        { label: "乙", supported: true },
+      ]),
+    ).toBe("「甲」、「乙」");
+    expect(
+      implementedPresetLabels([
+        { label: "甲", supported: true },
+        { label: "乙", supported: true },
+        { label: "丙", supported: true },
+      ]),
+    ).toBe("「甲」、「乙」、「丙」");
+  });
+
+  it("只列出已实现的档，顺序跟传入的列表走", () => {
+    expect(
+      implementedPresetLabels([
+        { label: "OpenAI 兼容计费", supported: true },
+        { label: "DeepSeek", supported: false },
+        { label: "OpenRouter", supported: false },
+      ]),
+    ).toBe("「OpenAI 兼容计费」");
   });
 });
 
