@@ -3757,6 +3757,34 @@ td.row-actions {
   margin-left: auto;
 }
 
+.custom-quota-item.is-off .custom-quota-summary {
+  opacity: 0.72;
+}
+
+.custom-quota-switch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.custom-quota-switch.is-on {
+  background: var(--tone-codex-bg);
+  border-color: transparent;
+  color: var(--purple-fg);
+}
+
+.custom-quota-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .custom-quota-form {
   display: grid;
   gap: 10px;

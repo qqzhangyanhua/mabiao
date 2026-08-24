@@ -6,6 +6,7 @@
 
 mod backoff;
 mod backup;
+mod enabled;
 mod panel_commands;
 mod parsing;
 mod preview_and_test;

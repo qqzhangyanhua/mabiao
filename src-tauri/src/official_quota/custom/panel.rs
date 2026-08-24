@@ -53,8 +53,8 @@ pub struct SaveCustomQuotaProvider {
     pub name: String,
     pub preset: CustomQuotaPreset,
     pub base_url: String,
-    /// 留空 = 沿用现在的开关状态（新建时默认打开）。设置页目前没有这个开关，
-    /// 不留空就会在改名时把用户手动关掉的那条悄悄打开。
+    /// 留空 = 沿用现在的开关状态（新建时默认打开）。表单保存走这条，
+    /// 改名时不要把列表上关掉的那条悄悄打开；启停由设置页每条上的开关显式传入。
     #[serde(default)]
     pub enabled: Option<bool>,
     /// 留空 = 沿用已存的密钥。编辑名称或地址时不必把密钥重打一遍，

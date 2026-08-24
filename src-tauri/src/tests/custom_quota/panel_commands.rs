@@ -47,8 +47,8 @@ fn disabled_custom_providers_refuse_a_manual_refresh_by_name() {
     assert!(error.contains("已停用"), "{error}");
 }
 
-/// 设置页现在没有启停开关，保存时不带 `enabled`。带上就会在改名时把用户
-/// 手动关掉的那条悄悄打开。
+/// 表单保存不带 `enabled`（改名、换地址）。带上就会在改名时把用户
+/// 手动关掉的那条悄悄打开；启停由列表上那颗开关显式传入。
 #[test]
 fn saving_without_the_enabled_flag_leaves_the_switch_alone() {
     let dir = tempfile::tempdir().unwrap();

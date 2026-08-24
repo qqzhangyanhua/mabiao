@@ -105,7 +105,7 @@ export function CustomQuotaProviderPanel({
       name: current.name,
       preset: current.preset,
       base_url: current.baseUrl,
-      // 本面板还没有启停开关，null 表示「别动现在的状态」。
+      // 表单不带开关：null 表示「别动现在的状态」。启停走列表上那颗开关。
       enabled: null,
       secret: submittedSecret(current.secret),
     };
@@ -127,6 +127,29 @@ export function CustomQuotaProviderPanel({
     void run(() => invoke<CustomQuotaPanelDto>("delete_custom_quota_provider", { id }));
   }
 
+  /**
+   * 启停只翻这一位。密钥留空 = 不改。
+   * 关掉之后不要去取数——关掉就是不打它的接口；打开才立刻刷一次，好让首页马上出现那一行。
+   */
+  function toggleEnabled(provider: CustomQuotaProviderDto) {
+    const enabled = !provider.enabled;
+    const request: SaveCustomQuotaProvider = {
+      id: provider.id,
+      name: provider.name,
+      preset: provider.preset,
+      base_url: provider.base_url,
+      enabled,
+      secret: null,
+    };
+    void run(
+      async () => {
+        const saved = await invoke<SavedCustomQuotaDto>("save_custom_quota_provider", { request });
+        return saved.panel;
+      },
+      () => (enabled ? provider.id : null),
+    );
+  }
+
   return (
     <section className="panel" id="settings-custom-quota">
       <div className="panel-head">
@@ -134,6 +157,8 @@ export function CustomQuotaProviderPanel({
           <h2>自定义提供商</h2>
           <p className="panel-note">
             第三方中转站、聚合服务的余额。登记之后和内置账号并排出现在首页「官方额度」里。
+            关掉就不取数、不占首页与托盘、也不告警；名称、地址和密钥都留着，随时可以再打开。
+            自定义提供商不进首页「配置显示」——那里管的是「画不画」，这里管的是「取不取数」。
             密钥单独存一份不进备份的文件，界面上始终掩码显示。
           </p>
         </div>
@@ -156,13 +181,29 @@ export function CustomQuotaProviderPanel({
 
       <ul className="custom-quota-list">
         {panel?.providers.map((provider) => (
-          <li key={provider.id} className="custom-quota-item">
+          <li
+            key={provider.id}
+            className={provider.enabled ? "custom-quota-item" : "custom-quota-item is-off"}
+          >
             <div className="custom-quota-summary">
               <strong>{provider.name}</strong>
               <span className="muted">{presetLabel(panel.presets, provider.preset)}</span>
               <code>{provider.base_url}</code>
               <span className="muted">{provider.secret_mask ?? "未配置密钥，请重新填写"}</span>
               <div className="row-actions">
+                <button
+                  type="button"
+                  className={["custom-quota-switch", provider.enabled ? "is-on" : "is-off"].join(
+                    " ",
+                  )}
+                  role="switch"
+                  aria-checked={provider.enabled}
+                  aria-label={`启用「${provider.name}」`}
+                  disabled={busy || draft != null}
+                  onClick={() => toggleEnabled(provider)}
+                >
+                  {provider.enabled ? "已启用" : "已停用"}
+                </button>
                 <Button
                   disabled={busy || draft != null}
                   onClick={() => setDraft(draftFrom(provider))}
