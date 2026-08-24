@@ -33,7 +33,7 @@ pub fn is_custom_id(id: &str) -> bool {
 }
 
 /// 预设类型。**一次性定义齐 6 种**，避免后续补齐解析器时再动枚举；
-/// 本版只实现「OpenAI 兼容计费」，其余走 `unsupported`，给明确的暂未支持提示。
+/// 本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」，其余走 `unsupported`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CustomQuotaPreset {
     #[serde(rename = "openai_compatible")]
@@ -74,7 +74,7 @@ impl CustomQuotaPreset {
     pub fn display_name(self) -> &'static str {
         match self {
             Self::OpenAiCompatible => "OpenAI 兼容计费",
-            Self::NewApi => "NewAPI / OneAPI 用户接口",
+            Self::NewApi => "NewAPI / OneAPI",
             Self::OpenRouter => "OpenRouter",
             Self::DeepSeek => "DeepSeek",
             Self::SiliconFlow => "硅基流动",
@@ -83,8 +83,11 @@ impl CustomQuotaPreset {
     }
 
     /// 本版是否已有解析器。界面据此把没实现的那几档标灰。
+    ///
+    /// NewAPI / OneAPI 是 OpenAI 兼容计费的别名：站点自身实现了同一套
+    /// `/v1/dashboard/billing/*`，不另开解析器。
     pub fn implemented(self) -> bool {
-        matches!(self, Self::OpenAiCompatible)
+        matches!(self, Self::OpenAiCompatible | Self::NewApi)
     }
 
     pub fn parse(value: &str) -> Option<Self> {
@@ -168,12 +171,14 @@ pub fn request_urls(
 ) -> Result<Vec<QuotaRequest>, String> {
     let base = normalize_base_url(base_url)?;
     match preset {
-        CustomQuotaPreset::OpenAiCompatible => Ok(openai_compatible::urls(&base, today)),
+        CustomQuotaPreset::OpenAiCompatible | CustomQuotaPreset::NewApi => {
+            Ok(openai_compatible::urls(&base, today))
+        }
         other => Err(unsupported(other)),
     }
 }
 
-/// 原始响应体 → 额度窗口。**按预设类型分派、只有一个入口**：后续补齐其余 5 种
+/// 原始响应体 → 额度窗口。**按预设类型分派、只有一个入口**：后续补齐未实现的
 /// 预设时接缝数不增长，新解析器直接复用同一个测试入口。
 ///
 /// `bodies` 与 `request_urls` 的返回一一对应。
@@ -182,7 +187,9 @@ pub fn parse_quota(
     bodies: &[&str],
 ) -> Result<Vec<OfficialQuotaWindow>, String> {
     match preset {
-        CustomQuotaPreset::OpenAiCompatible => openai_compatible::parse(bodies),
+        CustomQuotaPreset::OpenAiCompatible | CustomQuotaPreset::NewApi => {
+            openai_compatible::parse(bodies)
+        }
         other => Err(unsupported(other)),
     }
 }
@@ -247,8 +254,7 @@ pub fn is_precheck_error(error: &str) -> bool {
 /// 错误一律翻成人话：用户要判断的是「去充值 / 换密钥 / 等网络」，
 /// 一个裸的 HTTP 码回答不了这个问题。
 fn request(url: &str, secret: &str) -> Result<String, String> {
-    // 目前唯一实现的预设走 Bearer；后续 NewAPI 那档需要另一套头，
-    // 到时按预设分派，不要在这里堆 if。
+    // 认证走 Bearer。NewAPI / OneAPI 是 OpenAI 兼容计费的别名，不另开一套头。
     let request = crate::net::agent_with_timeout(TIMEOUT)
         .get(url)
         .set("Authorization", &format!("Bearer {secret}"))

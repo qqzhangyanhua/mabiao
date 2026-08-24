@@ -7,6 +7,7 @@
 mod backoff;
 mod backup;
 mod enabled;
+mod newapi;
 mod panel_commands;
 mod parsing;
 mod preview_and_test;

@@ -57,10 +57,10 @@ describe("fetchInputsOf", () => {
 });
 
 describe("credentialHint", () => {
-  it("NewAPI / OneAPI 写明要用系统访问令牌，不是 sk- 模型 key", () => {
-    // 这是该类型最高频的填错：把调模型的 sk- 填进了系统令牌框。
-    expect(credentialHint("newapi")).toBe(
-      "需要的是站点后台的系统访问令牌，不是调模型的 sk- 开头那个 key。",
+  it("NewAPI / OneAPI 提示填调模型的 sk- key，并交代点数不是美元", () => {
+    const hint = credentialHint("newapi");
+    expect(hint).toBe(
+      "填调模型的 sk- key。站点后台若未开启「以货币形式显示额度」，金额一栏读到的是额度点数而不是美元；百分比不受影响。",
     );
   });
 
@@ -74,8 +74,8 @@ describe("credentialHint", () => {
 });
 
 describe("secretPlaceholder", () => {
-  it("NewAPI 新建时不把 sk- 当成默认提示", () => {
-    expect(secretPlaceholder("newapi", false)).toBe("系统访问令牌");
+  it("NewAPI 新建时同样提示 sk-，不再写成系统访问令牌", () => {
+    expect(secretPlaceholder("newapi", false)).toBe("sk-…");
   });
 
   it("编辑时一律提示留空不改", () => {
