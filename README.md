@@ -1,13 +1,20 @@
 # 码表 (Mabiao)
 
-[English](README.en.md)
+[English](README.en.md) · [官网](https://mabiao.dev)
 
-本机桌面应用：扫描各 AI 编程 CLI 留在本地的会话数据，归一成「消耗记录」，展示 token 用量与可选费用。**默认只读、不上传本机消耗记录。**
+本机桌面应用：扫描各 AI 编程 CLI 留在本地的会话数据，归一成「消耗记录」，展示 token 用量、工作时间线与完整事件流。**默认只读、不上传本机消耗记录。**
 
 [![CI](https://github.com/qqzhangyanhua/mabiao/actions/workflows/ci.yml/badge.svg)](https://github.com/qqzhangyanhua/mabiao/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/qqzhangyanhua/mabiao)](https://github.com/qqzhangyanhua/mabiao/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> 还没有产品截图。欢迎从本机窗口导出总览 / 应用拆分 / 设置页，放到 `docs/screenshots/` 后开 PR。
+<p align="center">
+  <img src="docs/screenshots/app-preview.png" alt="码表总览：本机 Token、会话数与官方额度" width="920" />
+</p>
+
+| 工作时间线 | 对话记录 | 菜单栏额度 |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/timeline-preview.png" alt="按日铺开的工作时间线" /> | <img src="docs/screenshots/events-preview.png" alt="对话记录完整事件流" /> | <img src="docs/screenshots/tray-preview.png" alt="菜单栏官方额度" /> |
 
 ## 支持的来源
 
@@ -31,7 +38,10 @@
 ## 主要能力
 
 - **总览与拆分**：按时 / 日 / 周 / 月看趋势，按来源、模型、Provider、项目、会话拆分；可导出 CSV / JSON，图表可另存图片
-- **额度分开展示**：本机 5 小时 / 7 天估计窗（非官方配额）与 Claude / Codex / Cursor / Grok **官方额度**分开；菜单栏显示今日花费和最紧的官方百分比
+- **工作时间线**：按日把各来源会话铺成片段，看当天执行时长、对话轮次与并行强度
+- **对话记录**：按需读本机正文与事件流（提问 / 思考 / 工具 / 回复），可导出 Markdown / JSON
+- **额度分开展示**：本机 5 小时 / 7 天估计窗（非官方配额）与 **官方额度**分开；内置 Claude / Codex / Cursor / Grok / Droid / Copilot 等账号，设置里还可登记自定义提供商。菜单栏显示今日花费和最紧的官方百分比
+- **全局指令**：汇总各来源真正会加载的用户手写指令，与用量分区，不进 Token KPI
 - **Cursor 代码量**：编辑器 AI 行数独立统计，不并入 Token KPI
 - **本机缓存**：sqlite 可备份、恢复、按来源重建；源文件被清理后记录归档仍计入，不会静默消失
 - **预算通知**：可设月度预算（美元）；本机估算或官方额度过阈值时各弹一次系统通知
@@ -42,17 +52,18 @@
 - 聚合结果缓存在本机 sqlite，可在设置页备份、恢复或重建
 - Cursor 账号用量与部分官方额度需要你主动提供本机已有凭证；不会改写会话正文
 - Cursor 会话 token 写入 macOS 钥匙串（`keyring` 仅启用 `apple-native`）；Windows / Linux 打包后该入口可能不可用
+- 编辑全局指令会按白名单写入用户自己的指令文件，见 [`docs/adr/0010-writing-user-owned-files.md`](docs/adr/0010-writing-user-owned-files.md)
 
 ## 下载安装
 
-安装包由 GitHub Actions 打好后挂在 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。**当前 v0.1.0 / v0.1.1 仍是 draft**，公开页上看不到产物；正式 Publish 之前请从源码运行。
+安装包由 GitHub Actions 打好后挂在 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。当前公开版是 **[v0.1.2](https://github.com/qqzhangyanhua/mabiao/releases/tag/v0.1.2)**。
 
 | 平台 | 产物 |
 |------|------|
 | macOS Apple Silicon | `.dmg`（`aarch64-apple-darwin`） |
 | macOS Intel | `.dmg`（`x86_64-apple-darwin`） |
-| Linux x64 | `.deb` 或 AppImage |
-| Windows x64 | NSIS `.exe` |
+| Linux x64 | `.deb` / AppImage / `.rpm` |
+| Windows x64 | NSIS `.exe` / MSI |
 
 当前构建**未做代码签名**。macOS 首次打开若提示无法验证开发者，在访达中右键 → 打开，或：
 
