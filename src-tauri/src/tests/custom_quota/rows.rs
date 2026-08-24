@@ -76,8 +76,8 @@ fn disabled_custom_providers_take_no_row() {
 fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     let conn = db::open_memory().unwrap();
     let now = chrono::Utc::now();
-    // 带重置时间的窗口——告警去重键要的就是它。本版实现的 OpenAI 兼容计费给不出
-    // 重置时间（见下一条测试），后续预设会给。
+    // 带重置时间的窗口——告警去重键要的就是它。OpenAI 兼容计费给不出重置时间
+    // 的那条路在 `tray_and_alerts` 里另测。
     let window = crate::domain::OfficialQuotaWindow {
         kind: "billing_cycle".into(),
         label: "总量".into(),
@@ -125,37 +125,6 @@ fn renaming_keeps_the_cache_and_does_not_alert_twice() {
     assert_eq!(row.windows[0].used_amount, Some(45.0));
     let (_, again) = quota::notify::prepare_notifications(state, &after);
     assert!(again.is_empty(), "改个名字不该重复告警");
-}
-
-/// 已知缺口，本票不修：告警去重键含重置时间，而 OpenAI 兼容计费的窗口没有
-/// 重置时间——现有 `prepare_notifications` 对这种窗口整条跳过，因此它不告警。
-/// 这条测试把现状钉住，等做余额阈值告警时一并处理（见 #81 Further Notes）。
-#[test]
-fn amount_windows_without_a_reset_time_do_not_alert_yet() {
-    let conn = db::open_memory().unwrap();
-    let now = chrono::Utc::now();
-    let windows = custom::parse_quota(
-        CustomQuotaPreset::OpenAiCompatible,
-        &[r#"{"hard_limit_usd":50}"#, r#"{"total_usage":4500}"#],
-    )
-    .unwrap();
-    assert_eq!(windows[0].used_percent, Some(90.0));
-    assert_eq!(windows[0].resets_at, None);
-    quota::apply_fetch_results(
-        &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
-    )
-    .unwrap();
-
-    let dto = quota::load_dto(
-        &conn,
-        &OfficialQuotaConfig::default(),
-        &[provider("custom:a3f9c1", "公司的中转")],
-        now,
-    );
-    let (_, alerts) =
-        quota::notify::prepare_notifications(quota::notify::NotifyState::default(), &dto);
-    assert!(alerts.is_empty());
 }
 
 #[test]

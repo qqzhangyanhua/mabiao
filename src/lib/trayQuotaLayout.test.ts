@@ -78,6 +78,14 @@ describe("order helpers", () => {
     ]);
   });
 
+  it("lets custom provider ids sit in the tray order next to built-in accounts", () => {
+    const rows = [{ provider: "claude" }, { provider: "custom:a3f9c1" }];
+    expect(sortQuotaRows(rows, ["custom:a3f9c1", "claude"]).map((row) => row.provider)).toEqual([
+      "custom:a3f9c1",
+      "claude",
+    ]);
+  });
+
   it("moves a provider in front of the drop target", () => {
     expect(moveTrayQuotaProvider(["a", "b", "c"], "a", "c")).toEqual(["b", "c", "a"]);
     expect(moveTrayQuotaProvider(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);

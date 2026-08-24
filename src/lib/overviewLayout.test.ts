@@ -195,6 +195,19 @@ describe("visibility helpers", () => {
     ]);
   });
 
+  it("keeps custom providers in the tray list when every built-in account is hidden", () => {
+    // 托盘按 hidden_providers 瘦身，那份名单只来自「配置显示」。自定义提供商
+    // 不进那个面板，因此把内置账号全藏起来，它仍然要和内置并排出现。
+    const rows = [
+      { provider: "claude" },
+      { provider: "cursor" },
+      { provider: "custom:a3f9c1" },
+    ];
+    expect(
+      visibleOfficialQuotaRows(rows, [...OFFICIAL_QUOTA_PROVIDER_IDS]).map((row) => row.provider),
+    ).toEqual(["custom:a3f9c1"]);
+  });
+
   it("toggles modules and sources without mutating the original", () => {
     const original = defaultOverviewLayout();
     const hiddenHeatmap = setModuleVisible(original, "heatmap", false);
