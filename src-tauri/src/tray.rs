@@ -203,9 +203,9 @@ pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
 /// 再落库刷新托盘标题/悬浮面板。取数放在锁外，避免持锁期间打网络。
 fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let results = official_quota::fetch_all_targets(&official_quota::custom::store::load_providers(
-        &state.custom_quota_paths,
-    ));
+    let results = official_quota::fetch_all_targets(
+        &official_quota::custom::store::load_providers(&state.custom_quota_paths),
+    );
     let conn = state.lock_write()?;
     let _ = official_quota::sync_claude_capture(&conn);
     official_quota::apply_fetch_results(&conn, results)?;

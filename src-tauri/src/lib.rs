@@ -36,7 +36,6 @@ use rusqlite::Connection;
 use serde::Deserialize;
 use tauri::Manager;
 
-use crate::official_quota::QuotaTarget;
 use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, BudgetConfig, BudgetStatusDto, CodeVolumeSummary,
     ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
@@ -46,9 +45,10 @@ use crate::domain::{
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
     OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
-    PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source, SourceDiagnostic,
-    WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
+    SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
+use crate::official_quota::QuotaTarget;
 
 /// 只读连接池。
 ///
@@ -1443,13 +1443,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| match event {
-            tauri::RunEvent::ExitRequested { api, code, .. } => {
+            tauri::RunEvent::ExitRequested { api, code, .. }
+                if code.is_none() && app.get_webview_window("main").is_none() =>
+            {
                 // None = 关最后一扇窗 / Cmd+Q 等用户交互。主窗口没了就留在托盘；
                 // 主窗口还在（典型是 Cmd+Q）则放行，让应用退出。
                 // 托盘菜单「退出」走 app.exit(0)，code 是 Some，不会进这里。
-                if code.is_none() && app.get_webview_window("main").is_none() {
-                    api.prevent_exit();
-                }
+                api.prevent_exit();
             }
             #[cfg(target_os = "macos")]
             tauri::RunEvent::Reopen { .. } => tray::show_main(app),
