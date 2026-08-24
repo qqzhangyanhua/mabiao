@@ -254,3 +254,81 @@ fn cursor_catalog_surfaces_rows_when_conversation_clock_is_empty() {
     );
     assert!(cursor.iter().all(|row| !row.ended_at.is_empty()));
 }
+
+fn catalog_cursor_row<'a>(
+    page: &'a crate::domain::ConversationPage,
+    session_id: &str,
+) -> &'a crate::domain::ConversationSessionRow {
+    page.rows
+        .iter()
+        .find(|row| row.source == Source::CursorAgent.as_str() && row.session_id == session_id)
+        .unwrap_or_else(|| panic!("missing conversation row {session_id}"))
+}
+
+#[test]
+fn cursor_conversation_catalog_uses_hash_models_when_transcript_has_none() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_cursor_conversations(home);
+    seed_cursor_usage(home, "sess-parent", "2026-08-22T00:00:03Z");
+    seed_ai_code_hashes(
+        home,
+        &[
+            ("sess-parent", "grok-4.6", 1_784_511_794_686, "lib.rs"),
+            (
+                "sess-transcript-only",
+                "claude-4.6-sonnet",
+                1_784_511_794_700,
+                "app.ts",
+            ),
+            (
+                "sess-transcript-only",
+                "grok-4.6",
+                1_784_511_794_701,
+                "main.ts",
+            ),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+
+    let page = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    assert_eq!(
+        catalog_cursor_row(&page, "sess-parent").model,
+        "cursor-test-model",
+        "stream-json 用量上的模型优先于 hash enrich"
+    );
+    assert_eq!(
+        catalog_cursor_row(&page, "sess-transcript-only").model,
+        "claude-4.6-sonnet, grok-4.6"
+    );
+
+    let detail =
+        conversation::load_detail(&conn, home, "cursor_agent", "sess-transcript-only").unwrap();
+    assert_eq!(detail.session.model, "claude-4.6-sonnet, grok-4.6");
+
+    let searched = conversation::sessions_page(
+        &conn,
+        &ConversationQuery {
+            search: Some("claude-4.6-sonnet".into()),
+            ..ConversationQuery::default()
+        },
+    )
+    .unwrap();
+    assert!(searched
+        .rows
+        .iter()
+        .any(|row| row.session_id == "sess-transcript-only"));
+
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    let again = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    assert_eq!(
+        catalog_cursor_row(&again, "sess-parent").model,
+        "cursor-test-model"
+    );
+    assert_eq!(
+        catalog_cursor_row(&again, "sess-transcript-only").model,
+        "claude-4.6-sonnet, grok-4.6",
+        "重解析 transcript 后仍应回填 hash 模型"
+    );
+}
