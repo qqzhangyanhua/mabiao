@@ -311,6 +311,7 @@ fn short_label(kind: &str, label: &str) -> String {
         "weekly" => "7d".to_string(),
         "monthly" => "月".to_string(),
         "billing_cycle" => "总量".to_string(),
+        "budget_window" => "预算".to_string(),
         "auto" => "Auto".to_string(),
         "api" => "API".to_string(),
         "on_demand" => "按需".to_string(),

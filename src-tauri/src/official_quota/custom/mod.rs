@@ -7,6 +7,7 @@
 //! 边界见 `docs/adr/0012-custom-quota-providers.md`：只允许内置预设类型、
 //! 只打计费 / 余额接口、不进消耗记录、不进本机 token KPI、凭证不进备份。
 
+pub mod litellm_proxy;
 pub mod openai_compatible;
 pub mod panel;
 pub mod store;
@@ -32,8 +33,8 @@ pub fn is_custom_id(id: &str) -> bool {
     id.starts_with(ID_PREFIX)
 }
 
-/// 预设类型。**一次性定义齐 6 种**，避免后续补齐解析器时再动枚举；
-/// 本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」，其余走 `unsupported`。
+/// 预设类型。本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」，
+/// 以及「LiteLLM Proxy」；其余走 `unsupported`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CustomQuotaPreset {
     #[serde(rename = "openai_compatible")]
@@ -48,16 +49,19 @@ pub enum CustomQuotaPreset {
     SiliconFlow,
     #[serde(rename = "moonshot")]
     Moonshot,
+    #[serde(rename = "litellm_proxy")]
+    LiteLlmProxy,
 }
 
 impl CustomQuotaPreset {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::OpenAiCompatible,
         Self::NewApi,
         Self::OpenRouter,
         Self::DeepSeek,
         Self::SiliconFlow,
         Self::Moonshot,
+        Self::LiteLlmProxy,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -68,6 +72,7 @@ impl CustomQuotaPreset {
             Self::DeepSeek => "deepseek",
             Self::SiliconFlow => "siliconflow",
             Self::Moonshot => "moonshot",
+            Self::LiteLlmProxy => "litellm_proxy",
         }
     }
 
@@ -79,15 +84,19 @@ impl CustomQuotaPreset {
             Self::DeepSeek => "DeepSeek",
             Self::SiliconFlow => "硅基流动",
             Self::Moonshot => "Moonshot",
+            Self::LiteLlmProxy => "LiteLLM Proxy",
         }
     }
 
     /// 本版是否已有解析器。界面据此把没实现的那几档标灰。
     ///
     /// NewAPI / OneAPI 是 OpenAI 兼容计费的别名：站点自身实现了同一套
-    /// `/v1/dashboard/billing/*`，不另开解析器。
+    /// `/v1/dashboard/billing/*`，不另开解析器。LiteLLM Proxy 打 `/key/info`。
     pub fn implemented(self) -> bool {
-        matches!(self, Self::OpenAiCompatible | Self::NewApi)
+        matches!(
+            self,
+            Self::OpenAiCompatible | Self::NewApi | Self::LiteLlmProxy
+        )
     }
 
     pub fn parse(value: &str) -> Option<Self> {
@@ -174,6 +183,7 @@ pub fn request_urls(
         CustomQuotaPreset::OpenAiCompatible | CustomQuotaPreset::NewApi => {
             Ok(openai_compatible::urls(&base, today))
         }
+        CustomQuotaPreset::LiteLlmProxy => Ok(litellm_proxy::urls(&base)),
         other => Err(unsupported(other)),
     }
 }
@@ -190,6 +200,7 @@ pub fn parse_quota(
         CustomQuotaPreset::OpenAiCompatible | CustomQuotaPreset::NewApi => {
             openai_compatible::parse(bodies)
         }
+        CustomQuotaPreset::LiteLlmProxy => litellm_proxy::parse(bodies),
         other => Err(unsupported(other)),
     }
 }
@@ -254,7 +265,7 @@ pub fn is_precheck_error(error: &str) -> bool {
 /// 错误一律翻成人话：用户要判断的是「去充值 / 换密钥 / 等网络」，
 /// 一个裸的 HTTP 码回答不了这个问题。
 fn request(url: &str, secret: &str) -> Result<String, String> {
-    // 认证走 Bearer。NewAPI / OneAPI 是 OpenAI 兼容计费的别名，不另开一套头。
+    // 认证走 Bearer。NewAPI / OneAPI 是别名，LiteLLM Proxy 也是 Bearer，不另开一套头。
     let request = crate::net::agent_with_timeout(TIMEOUT)
         .get(url)
         .set("Authorization", &format!("Bearer {secret}"))

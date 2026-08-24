@@ -1,0 +1,7 @@
+{
+  "key": "sk-example",
+  "spend": 4.5,
+  "max_budget": 10.0,
+  "budget_duration": "30d",
+  "budget_reset_at": "2026-09-01T00:00:00Z"
+}

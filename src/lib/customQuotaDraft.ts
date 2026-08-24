@@ -7,7 +7,13 @@
 
 /** 预设类型的标识，与 Rust 的 `CustomQuotaPreset` 一一对应。 */
 export type CustomQuotaPreset =
-  "openai_compatible" | "newapi" | "openrouter" | "deepseek" | "siliconflow" | "moonshot";
+  | "openai_compatible"
+  | "newapi"
+  | "openrouter"
+  | "deepseek"
+  | "siliconflow"
+  | "moonshot"
+  | "litellm_proxy";
 
 /** 表单草稿。`id` 为 null 表示新建；密钥留空 = 沿用已存的那把。 */
 export type CustomQuotaDraft = {
@@ -61,6 +67,9 @@ export function submittedSecret(typed: string): string | null {
 export function credentialHint(preset: CustomQuotaPreset): string | null {
   if (preset === "newapi") {
     return "填调模型的 sk- key。站点后台若未开启「以货币形式显示额度」，金额一栏读到的是额度点数而不是美元；百分比不受影响。";
+  }
+  if (preset === "litellm_proxy") {
+    return "只需自己的 virtual key，不需要 master key。";
   }
   return null;
 }

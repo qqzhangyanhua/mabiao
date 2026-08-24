@@ -64,6 +64,10 @@ describe("credentialHint", () => {
     );
   });
 
+  it("LiteLLM Proxy 提示只需 virtual key，不需要 master key", () => {
+    expect(credentialHint("litellm_proxy")).toBe("只需自己的 virtual key，不需要 master key。");
+  });
+
   it("其它预设不提示令牌种类", () => {
     expect(credentialHint("openai_compatible")).toBeNull();
     expect(credentialHint("openrouter")).toBeNull();
@@ -85,6 +89,10 @@ describe("secretPlaceholder", () => {
 
   it("OpenAI 兼容计费新建时仍提示 sk-", () => {
     expect(secretPlaceholder("openai_compatible", false)).toBe("sk-…");
+  });
+
+  it("LiteLLM Proxy 新建时同样提示 sk-", () => {
+    expect(secretPlaceholder("litellm_proxy", false)).toBe("sk-…");
   });
 });
 
