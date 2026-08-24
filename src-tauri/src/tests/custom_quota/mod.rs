@@ -7,6 +7,8 @@
 mod backoff;
 mod backup;
 mod enabled;
+mod litellm_proxy;
+mod newapi;
 mod panel_commands;
 mod parsing;
 mod preview_and_test;

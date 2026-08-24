@@ -7,7 +7,13 @@
 
 /** 预设类型的标识，与 Rust 的 `CustomQuotaPreset` 一一对应。 */
 export type CustomQuotaPreset =
-  "openai_compatible" | "newapi" | "openrouter" | "deepseek" | "siliconflow" | "moonshot";
+  | "openai_compatible"
+  | "newapi"
+  | "openrouter"
+  | "deepseek"
+  | "siliconflow"
+  | "moonshot"
+  | "litellm_proxy";
 
 /** 表单草稿。`id` 为 null 表示新建；密钥留空 = 沿用已存的那把。 */
 export type CustomQuotaDraft = {
@@ -54,21 +60,39 @@ export function submittedSecret(typed: string): string | null {
 /**
  * 某个预设在密钥框旁必须写明的令牌种类。没有特别要交代的就返回 null。
  *
- * NewAPI / OneAPI 最高频的填错是把调模型的 `sk-` 当成了系统访问令牌；
- * 解析器还没做也得先把这句话写出来，否则用户拿错钥匙存进去，等实现了
- * 也只会看到「密钥无效」。
+ * NewAPI / OneAPI 走 OpenAI 兼容计费，钥匙是调模型的 `sk-` key。
+ * 再写「系统访问令牌」会把用户往错误的钥匙上引。点数说明是因为站点后台
+ * 若没开「以货币形式显示额度」，金额栏读到的是额度点数，百分比不受影响。
  */
 export function credentialHint(preset: CustomQuotaPreset): string | null {
   if (preset === "newapi") {
-    return "需要的是站点后台的系统访问令牌，不是调模型的 sk- 开头那个 key。";
+    return "填调模型的 sk- key。站点后台若未开启「以货币形式显示额度」，金额一栏读到的是额度点数而不是美元；百分比不受影响。";
+  }
+  if (preset === "litellm_proxy") {
+    return "只需自己的 virtual key，不需要 master key。";
   }
   return null;
 }
 
-/** 密钥框的占位符：编辑时一律「留空不改」；NewAPI 新建时不要提示 `sk-`。 */
-export function secretPlaceholder(preset: CustomQuotaPreset, editing: boolean): string {
+/**
+ * 已实现预设的显示名，列成「甲」、「乙」。空列表与一档都不能冒出多余顿号。
+ *
+ * 设置页那句「暂未支持，现在只实现了…」和取数入口同一套拼法，新增档位时两边
+ * 都从 `supported` / `implemented()` 推导，不再拼死某一档的名字。
+ */
+export function implementedPresetLabels(
+  presets: ReadonlyArray<{ label: string; supported: boolean }>,
+): string {
+  return presets
+    .filter((preset) => preset.supported)
+    .map((preset) => `「${preset.label}」`)
+    .join("、");
+}
+
+/** 密钥框的占位符：编辑时一律「留空不改」；新建一律提示 `sk-…`。 */
+export function secretPlaceholder(_preset: CustomQuotaPreset, editing: boolean): string {
   if (editing) {
     return "不填就沿用现在这把";
   }
-  return preset === "newapi" ? "系统访问令牌" : "sk-…";
+  return "sk-…";
 }

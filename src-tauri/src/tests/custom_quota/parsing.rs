@@ -174,20 +174,52 @@ fn base_url_rejects_shapes_that_can_never_work() {
     }
 }
 
+/// 「暂未支持」要列出所有已实现档的显示名。名单的拼法单独钉死：空列表、
+/// 一档、多档都不能冒出多余顿号或空书名号，后面加档时文案才不会跟着手改。
+#[test]
+fn quoting_implemented_names_stays_natural_for_zero_one_and_many() {
+    assert_eq!(custom::quote_display_names(&[]), "");
+    assert_eq!(custom::quote_display_names(&["甲"]), "「甲」");
+    assert_eq!(custom::quote_display_names(&["甲", "乙"]), "「甲」、「乙」");
+    assert_eq!(
+        custom::quote_display_names(&["甲", "乙", "丙"]),
+        "「甲」、「乙」、「丙」"
+    );
+}
+
 #[test]
 fn unimplemented_presets_say_so_instead_of_panicking() {
+    let implemented: Vec<_> = CustomQuotaPreset::ALL
+        .into_iter()
+        .filter(|preset| preset.implemented())
+        .collect();
+    // 空名单会让「当前只实现了」变成半截句子。
+    assert!(!implemented.is_empty());
+
     for preset in CustomQuotaPreset::ALL {
-        if preset == CustomQuotaPreset::OpenAiCompatible {
-            assert!(preset.implemented());
+        if preset.implemented() {
+            assert!(
+                custom::request_urls(preset, "https://relay.example.com", today()).is_ok(),
+                "{preset:?} 已实现，应该能构造请求地址"
+            );
             continue;
         }
-        assert!(!preset.implemented());
-        let urls = custom::request_urls(preset, "https://relay.example.com", today());
-        assert!(
-            urls.as_ref().unwrap_err().contains("暂未支持"),
-            "{preset:?}"
-        );
-        assert!(urls.unwrap_err().contains(preset.display_name()));
+        let error = custom::request_urls(preset, "https://relay.example.com", today()).unwrap_err();
+        assert!(error.contains("暂未支持"), "{preset:?}: {error}");
+        assert!(error.contains(preset.display_name()), "{preset:?}: {error}");
+        assert!(error.contains("当前只实现了"), "{preset:?}: {error}");
+        for done in &implemented {
+            assert!(
+                error.contains(&format!("「{}」", done.display_name())),
+                "{preset:?} 没列出已实现的「{}」: {error}",
+                done.display_name()
+            );
+        }
+        if implemented.len() == 1 {
+            // 只有一档时顿号是多余的。
+            assert!(!error.contains('、'), "{error}");
+        }
+        assert!(!error.contains("「」"), "{error}");
         assert!(custom::parse_quota(preset, &[SUBSCRIPTION, USAGE])
             .unwrap_err()
             .contains("暂未支持"));

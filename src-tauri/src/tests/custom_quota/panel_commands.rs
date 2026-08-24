@@ -123,9 +123,20 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
     assert_eq!(created.secret_mask.as_deref(), Some("••••••3456"));
     // 用户打的那串原样留着，不被应用悄悄改写。
     assert_eq!(created.base_url, "https://relay.example.com/v1");
-    // 六种预设全部露出来，没实现的标好。
-    assert_eq!(saved.panel.presets.len(), 6);
-    assert!(saved.panel.presets.iter().filter(|p| p.supported).count() == 1);
+    // 枚举里的预设全部露出来，已实现标记跟 implemented() 走，不手写总数。
+    assert_eq!(saved.panel.presets.len(), CustomQuotaPreset::ALL.len());
+    assert_eq!(
+        saved.panel.presets.iter().filter(|p| p.supported).count(),
+        CustomQuotaPreset::ALL
+            .into_iter()
+            .filter(|preset| preset.implemented())
+            .count()
+    );
+    for (dto, preset) in saved.panel.presets.iter().zip(CustomQuotaPreset::ALL) {
+        assert_eq!(dto.value, preset.as_str());
+        assert_eq!(dto.label, preset.display_name());
+        assert_eq!(dto.supported, preset.implemented());
+    }
 
     // 改名 + 换域名，密钥留空 = 不改。标识不动。
     let id = created.id.clone();

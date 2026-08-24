@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   credentialHint,
   fetchInputsOf,
+  implementedPresetLabels,
   secretPlaceholder,
   submittedSecret,
   type CustomQuotaDraft,
@@ -127,6 +128,7 @@ export function CustomQuotaProviderForm({
   onSubmit: () => void;
 }) {
   const selected = presets.find((preset) => preset.value === draft.preset);
+  const implementedLabels = implementedPresetLabels(presets);
   const editing = draft.id != null;
   const hint = credentialHint(draft.preset);
   const preview = useRequestPreview(draft.preset, draft.baseUrl);
@@ -201,7 +203,7 @@ export function CustomQuotaProviderForm({
       {hint ? <p className="panel-note tone-warn">{hint}</p> : null}
       {selected && !selected.supported ? (
         <p className="panel-note tone-warn">
-          「{selected.label}」暂未支持，现在只实现了「OpenAI 兼容计费」。
+          「{selected.label}」暂未支持{implementedLabels ? `，现在只实现了${implementedLabels}` : ""}。
           可以先存着，取数时会明确告诉你还没实现。
         </p>
       ) : (
