@@ -5039,6 +5039,25 @@ td.row-actions {
   z-index: 2;
 }
 
+.usage-call-table.conversation-usage-table th:nth-child(-n + 4),
+.usage-call-table.conversation-usage-table td:nth-child(-n + 4) {
+  text-align: left;
+  vertical-align: middle;
+}
+
+.usage-call-table .model-label,
+.usage-call-table .source-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.usage-call-table .vendor-ico,
+.usage-call-table .source-ico {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+
 .conversation-thread {
   width: min(900px, 100%);
   margin: 0 auto;

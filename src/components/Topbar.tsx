@@ -46,7 +46,8 @@ function chipLabel(chip: FilterChip): string {
     return applicationLabel(chip.value);
   }
   if (chip.kind === "provider") {
-    return `${chip.value}（${providerChannel(chip.value)}）`;
+    const name = chip.value || "（未标注）";
+    return `${name}（${providerChannel(chip.value)}）`;
   }
   return chip.value;
 }

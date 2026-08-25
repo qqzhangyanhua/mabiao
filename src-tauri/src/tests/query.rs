@@ -1067,3 +1067,63 @@ fn price_table_changes_take_effect_on_the_same_connection() {
     assert_eq!(restored.cost, Some(1.0));
     assert!(!restored.unpriced);
 }
+
+#[test]
+fn usage_calls_page_filters_and_paginates_newest_first() {
+    let mut records = seed_records();
+    records.push(rec(
+        "2026-08-02T12:00:00Z",
+        Source::Claude,
+        "claude-sonnet-5",
+        "anthropic",
+        "/proj/a",
+        "s2b",
+        40,
+    ));
+    records.push(rec(
+        "2026-08-03T09:00:00Z",
+        Source::Claude,
+        "claude-sonnet-5",
+        "",
+        "/proj/a",
+        "s-unlabeled",
+        10,
+    ));
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    let prices = PriceTable::default();
+
+    let by_provider = Filter {
+        providers: vec!["anthropic".into()],
+        ..Filter::default()
+    };
+    let first = query::usage_calls_page(&conn, &by_provider, &prices, 1, 1).unwrap();
+    assert_eq!(first.total, 2);
+    assert_eq!(first.rows.len(), 1);
+    assert_eq!(first.rows[0].session_id, "s2b");
+    assert_eq!(first.rows[0].provider, "anthropic");
+    assert_eq!(first.rows[0].total_tokens, 40);
+
+    let second = query::usage_calls_page(&conn, &by_provider, &prices, 2, 1).unwrap();
+    assert_eq!(second.total, 2);
+    assert_eq!(second.rows[0].session_id, "s2");
+
+    let past_end = query::usage_calls_page(&conn, &by_provider, &prices, 4, 1).unwrap();
+    assert_eq!(past_end.total, 2);
+    assert!(past_end.rows.is_empty());
+
+    let unlabeled = query::usage_calls_page(
+        &conn,
+        &Filter {
+            providers: vec!["".into()],
+            ..Filter::default()
+        },
+        &prices,
+        1,
+        20,
+    )
+    .unwrap();
+    assert_eq!(unlabeled.total, 1);
+    assert_eq!(unlabeled.rows[0].session_id, "s-unlabeled");
+    assert_eq!(unlabeled.rows[0].provider, "");
+}

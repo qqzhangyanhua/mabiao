@@ -8,7 +8,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
-import { clearDimensionFilters, withModelFilter } from "./lib/filterChips";
+import { clearDimensionFilters, withModelFilter, withProviderFilter } from "./lib/filterChips";
 import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
 import {
   LazyApplicationAnalytics,
@@ -169,7 +169,17 @@ export default function App() {
                     showProviderChannel={view === "provider"}
                     showVendorIcon={view === "model" || view === "provider"}
                     projectNames={view === "project"}
+                    showCallDetails={view === "provider"}
+                    filter={view === "provider" ? data.filter : undefined}
+                    revision={String(data.sessionsRevision)}
                     theme={theme}
+                    onProviderClick={
+                      view === "provider"
+                        ? (provider) => data.applyFilter(withProviderFilter(data.filter, provider))
+                        : undefined
+                    }
+                    onOpenConversation={(session) => data.openConversations(session)}
+                    onError={data.reportError}
                   />
                 ) : null}
                 {view === "cursor" ? (

@@ -2,8 +2,10 @@ import { memo, useCallback, useMemo } from "react";
 import type { IconName } from "../icons";
 import { breakdownBarOption } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
+import { rawProviderName } from "../lib/filterChips";
 import { formatCost, formatTokens, projectLabel, providerChannel } from "../lib/format";
-import type { NamedAmount } from "../types";
+import type { Filter, NamedAmount } from "../types";
+import { BreakdownCallTable } from "./BreakdownCallTable";
 import { EmptyState } from "./EmptyState";
 import { ExportableChart } from "./ExportableChart";
 import { ExportButton } from "./ExportButton";
@@ -23,7 +25,13 @@ export const Breakdown = memo(function Breakdown({
   showProviderChannel,
   showVendorIcon,
   projectNames,
+  showCallDetails,
+  filter,
+  revision,
   theme,
+  onProviderClick,
+  onOpenConversation,
+  onError,
 }: {
   title: string;
   icon: IconName;
@@ -31,7 +39,13 @@ export const Breakdown = memo(function Breakdown({
   showProviderChannel?: boolean;
   showVendorIcon?: boolean;
   projectNames?: boolean;
+  showCallDetails?: boolean;
+  filter?: Filter;
+  revision?: string;
   theme: ResolvedTheme;
+  onProviderClick?: (provider: string) => void;
+  onOpenConversation?: (session: { id: string; source: string }) => void;
+  onError?: (error: unknown) => void;
 }) {
   const label = useCallback(
     (row: NamedAmount): string => {
@@ -117,7 +131,12 @@ export const Breakdown = memo(function Breakdown({
       </div>
       <div className="panel">
         <div className="panel-head">
-          <h2>明细列表</h2>
+          <div>
+            <h2>明细列表</h2>
+            {onProviderClick ? (
+              <p className="panel-note">点击名称可只看该 Provider 的明细调用。</p>
+            ) : null}
+          </div>
           <ExportButton
             filename={title}
             headers={["名称", ...(showProviderChannel ? ["渠道"] : []), "占比", "Token", "费用"]}
@@ -142,40 +161,53 @@ export const Breakdown = memo(function Breakdown({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.name}>
-                  <td title={row.name}>
-                    {showVendorIcon ? (
-                      <ModelLabel
-                        name={row.name}
-                        fallback={projectNames ? projectLabel(row.name) : row.name}
-                      />
-                    ) : projectNames ? (
-                      projectLabel(row.name)
-                    ) : (
-                      row.name
-                    )}
-                  </td>
-                  {showProviderChannel ? (
-                    <td>
-                      <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
-                        {providerChannel(row.name)}
-                      </span>
+              {rows.map((row) => {
+                const displayName = projectNames ? projectLabel(row.name) : row.name;
+                const selected =
+                  showCallDetails &&
+                  filter != null &&
+                  filter.providers.includes(rawProviderName(row.name));
+                const nameCell = showVendorIcon ? (
+                  <ModelLabel name={row.name} fallback={displayName} />
+                ) : (
+                  displayName
+                );
+                return (
+                  <tr key={row.name} className={selected ? "selected" : undefined}>
+                    <td title={row.name}>
+                      {onProviderClick ? (
+                        <button
+                          type="button"
+                          className="rank-link"
+                          onClick={() => onProviderClick(rawProviderName(row.name))}
+                        >
+                          {nameCell}
+                        </button>
+                      ) : (
+                        nameCell
+                      )}
                     </td>
-                  ) : null}
-                  <td>
-                    <span className="cell-bar">
-                      <i style={{ width: `${row.share * 100}%` }} />
-                    </span>
-                    <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
-                  </td>
-                  <td>{formatTokens(row.total_tokens)}</td>
-                  <td>
-                    {formatCost(row.cost, row.unpriced)}
-                    {row.unpriced ? " · 单价未配置" : ""}
-                  </td>
-                </tr>
-              ))}
+                    {showProviderChannel ? (
+                      <td>
+                        <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
+                          {providerChannel(row.name)}
+                        </span>
+                      </td>
+                    ) : null}
+                    <td>
+                      <span className="cell-bar">
+                        <i style={{ width: `${row.share * 100}%` }} />
+                      </span>
+                      <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
+                    </td>
+                    <td>{formatTokens(row.total_tokens)}</td>
+                    <td>
+                      {formatCost(row.cost, row.unpriced)}
+                      {row.unpriced ? " · 单价未配置" : ""}
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={showProviderChannel ? 5 : 4} className="analytics-empty">
@@ -187,6 +219,14 @@ export const Breakdown = memo(function Breakdown({
           </table>
         </div>
       </div>
+      {showCallDetails && filter ? (
+        <BreakdownCallTable
+          filter={filter}
+          revision={revision ?? ""}
+          onOpenConversation={onOpenConversation}
+          onError={onError}
+        />
+      ) : null}
     </div>
   );
 });

@@ -587,6 +587,31 @@ pub struct NamedAmount {
     pub unpriced: bool,
 }
 
+/// Provider / 模型等聚合页下的单条消耗记录（一次调用）。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UsageCallRow {
+    pub occurred_at: String,
+    pub source: String,
+    pub model: String,
+    pub provider: String,
+    pub project: String,
+    pub session_id: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_creation_tokens: i64,
+    pub reasoning_tokens: i64,
+    pub total_tokens: i64,
+    pub cost: Option<f64>,
+    pub unpriced: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UsageCallPage {
+    pub rows: Vec<UsageCallRow>,
+    pub total: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EfficiencyMetrics {
     pub total_tokens: i64,

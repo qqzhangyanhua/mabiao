@@ -46,7 +46,7 @@ use crate::domain::{
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
     OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
     PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
-    SourceDiagnostic, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    SourceDiagnostic, UsageCallPage, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
 use crate::official_quota::QuotaTarget;
 
@@ -293,6 +293,29 @@ async fn get_breakdown(
         let conn = state.lock_read()?;
         let prices = state.effective_prices();
         query::breakdown(&conn, &query.filter, &prices, &query.dimension)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_usage_calls_page(
+    app: tauri::AppHandle,
+    filter: Filter,
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Result<UsageCallPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        query::usage_calls_page(
+            &conn,
+            &filter,
+            &prices,
+            page.unwrap_or(1),
+            page_size.unwrap_or(20),
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1383,6 +1406,7 @@ pub fn run() {
             get_trend,
             get_application_analytics,
             get_breakdown,
+            get_usage_calls_page,
             get_top_sessions,
             get_work_timeline,
             get_filter_options,

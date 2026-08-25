@@ -300,6 +300,28 @@ export type NamedAmount = {
   unpriced: boolean;
 };
 
+export type UsageCallRow = {
+  occurred_at: string;
+  source: string;
+  model: string;
+  provider: string;
+  project: string;
+  session_id: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  reasoning_tokens: number;
+  total_tokens: number;
+  cost: number | null;
+  unpriced: boolean;
+};
+
+export type UsageCallPage = {
+  rows: UsageCallRow[];
+  total: number;
+};
+
 export type EfficiencyMetrics = {
   total_tokens: number;
   session_count: number;

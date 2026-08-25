@@ -4,7 +4,9 @@ import {
   filterChips,
   hasDimensionFilters,
   removeFilterChip,
+  rawProviderName,
   withModelFilter,
+  withProviderFilter,
 } from "./filterChips";
 import type { Filter } from "../types";
 
@@ -36,6 +38,16 @@ describe("filterChips", () => {
   it("replaces the model dimension when merging a chart click", () => {
     expect(withModelFilter(filter, "claude-opus").models).toEqual(["claude-opus"]);
     expect(withModelFilter(filter, "claude-opus").sources).toEqual(["claude"]);
+  });
+
+  it("replaces the provider dimension when drilling into a breakdown row", () => {
+    expect(withProviderFilter(filter, "tongban").providers).toEqual(["tongban"]);
+    expect(withProviderFilter(filter, "tongban").models).toEqual(["gpt-5"]);
+  });
+
+  it("maps the unlabeled breakdown label back to an empty provider key", () => {
+    expect(rawProviderName("（未标注）")).toBe("");
+    expect(rawProviderName("tongban")).toBe("tongban");
   });
 
   it("removes a single chip", () => {

@@ -14,8 +14,8 @@ use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
     InstructionUsageSummary, NamedAmount, OverviewDto, PriceTable, ProjectApplicationRow,
-    SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UsageRecord,
-    WorkSessionSpan, WorkTimelineDto,
+    SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UsageCallPage,
+    UsageCallRow, UsageRecord, WorkSessionSpan, WorkTimelineDto,
 };
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
@@ -1406,6 +1406,70 @@ pub fn session_turns(
         .map_err(|e| e.to_string())?;
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())
+}
+
+const MAX_USAGE_CALL_PAGE_SIZE: u32 = 200;
+
+/// 按当前筛选分页列出单条消耗记录，供 Provider 等聚合页下钻「明细调用」。
+pub fn usage_calls_page(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+    page: u32,
+    page_size: u32,
+) -> Result<UsageCallPage, String> {
+    install_prices(conn, prices)?;
+    let page = page.max(1);
+    let page_size = page_size.clamp(1, MAX_USAGE_CALL_PAGE_SIZE);
+    let (clauses, params) = filter_clauses(filter);
+    let where_sql = where_sql(&clauses);
+    let total = conn
+        .query_row(
+            &format!("SELECT COUNT(*) FROM usage_records r {where_sql}"),
+            params_from_iter(params.iter()),
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|e| e.to_string())? as u32;
+    let offset = i64::from((page - 1) * page_size);
+    let mut list_params = params;
+    list_params.push(Value::Integer(i64::from(page_size)));
+    list_params.push(Value::Integer(offset));
+    let sql = format!(
+        "SELECT r.occurred_at, r.source, r.model, r.provider, r.project, r.session_id,
+            r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_creation_tokens,
+            r.reasoning_tokens, r.total_tokens,
+            {COST_EXPR},
+            {UNPRICED_EXPR}
+        FROM usage_records r
+        {PRICE_JOINS}
+        {where_sql}
+        ORDER BY r.occurred_at DESC, r.source ASC, r.session_id ASC
+        LIMIT ? OFFSET ?"
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(list_params.iter()), |row| {
+            Ok(UsageCallRow {
+                occurred_at: row.get(0)?,
+                source: row.get(1)?,
+                model: row.get(2)?,
+                provider: row.get(3)?,
+                project: row.get(4)?,
+                session_id: row.get(5)?,
+                input_tokens: row.get(6)?,
+                output_tokens: row.get(7)?,
+                cache_read_tokens: row.get(8)?,
+                cache_creation_tokens: row.get(9)?,
+                reasoning_tokens: row.get(10)?,
+                total_tokens: row.get(11)?,
+                cost: row.get(12)?,
+                unpriced: row.get::<_, i64>(13)? > 0,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(UsageCallPage { rows, total })
 }
 
 /// 单日工作时间线：宽口径拉取 `day` 前后各一天的记录（覆盖本地时区可能造成的偏移），

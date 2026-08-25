@@ -35,6 +35,15 @@ export function withModelFilter(filter: Filter, model: string): Filter {
   return { ...filter, models: [model] };
 }
 
+export function withProviderFilter(filter: Filter, provider: string): Filter {
+  return { ...filter, providers: [provider] };
+}
+
+/** 聚合行展示名「（未标注）」对应库里的空 provider。 */
+export function rawProviderName(name: string): string {
+  return name === "（未标注）" ? "" : name;
+}
+
 export function removeFilterChip(filter: Filter, chip: FilterChip): Filter {
   if (chip.kind === "project") {
     return { ...filter, projects: filter.projects.filter((item) => item !== chip.value) };
