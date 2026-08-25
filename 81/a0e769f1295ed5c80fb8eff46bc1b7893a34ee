@@ -1,0 +1,56 @@
+src/components/BreakdownCallTable.tsx
+  s_e4f846ca7c019e::t_9c4c1536955d67 62
+  s_e4f846ca7c019e::t_de8ea6d741a318 157
+  s_e4f846ca7c019e::t_d29c8f37fb6e91 1-61,63-81,83-156,158-171
+  s_e4f846ca7c019e::t_19cb4caf7cb813 82
+src-tauri/src/lib.rs
+  s_e4f846ca7c019e::t_f1be7402a563b7 1409
+  s_e4f846ca7c019e::t_950dbd09173346 49
+  s_e4f846ca7c019e::t_a76ca60ba99225 302-323
+  s_e4f846ca7c019e::t_671dd4593696be 301
+src/components/Topbar.tsx
+  s_e4f846ca7c019e::t_00a04edb540596 49-50
+src-tauri/src/domain.rs
+  s_e4f846ca7c019e::t_a1f6e5854888bc 590-614
+src/lib/filterChips.ts
+  s_e4f846ca7c019e::t_f96625e7a9ca09 38-46
+src/styles.css
+  s_e4f846ca7c019e::t_462092faa4c367 5042-5060
+src-tauri/src/query.rs
+  s_e4f846ca7c019e::t_e84def125d8ff1 1411-1474
+  s_e4f846ca7c019e::t_44771ff57d45ee 17-18
+src/types.ts
+  s_e4f846ca7c019e::t_4bab5f5719b725 303-324
+src-tauri/src/tests/query.rs
+  s_e4f846ca7c019e::t_408506b61c81b7 1070-1129
+src/App.tsx
+  s_e4f846ca7c019e::t_48c472633fd338 11
+  s_e4f846ca7c019e::t_fe1a89446b45eb 172-174,176-182
+src/components/Breakdown.tsx
+  s_e4f846ca7c019e::t_232e758ac8c898 5,7-8
+  s_e4f846ca7c019e::t_dda7dc45e542b2 134-139
+  s_e4f846ca7c019e::t_20a47804dbbbec 164-175
+  s_e4f846ca7c019e::t_be83b524a8202b 28-30,32-34,42-44,46-48
+  s_e4f846ca7c019e::t_61012bcbbf41b5 176-196,198-199,201,203-208
+  s_e4f846ca7c019e::t_3b3dd2e33088e4 209-210
+  s_e4f846ca7c019e::t_7a90462b2e2935 222-229
+src/lib/filterChips.test.ts
+  s_e4f846ca7c019e::t_2ffcf6a1f825cb 7,9
+  s_e4f846ca7c019e::t_9c2ccfb02253ce 43-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "81a0e769f1295ed5c80fb8eff46bc1b7893a34ee",
+  "prompts": {},
+  "sessions": {
+    "s_e4f846ca7c019e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8adb0c64-f5f4-45e4-a327-2fc7363bda65",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
