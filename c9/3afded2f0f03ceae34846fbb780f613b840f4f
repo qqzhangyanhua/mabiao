@@ -1,0 +1,35 @@
+src-tauri/src/official_quota/fetch.rs
+  s_47aca4e79d6da1::t_aa3f475a870ef9 19
+  s_47aca4e79d6da1::t_69e2e1659d12b0 203
+src-tauri/src/official_quota/droid.rs
+  s_47aca4e79d6da1::t_b9c096a9428554 35-36,48-49,58-98,103-104,106,121-125,135-142
+  s_47aca4e79d6da1::t_73be8113692dc9 1-4
+  s_47aca4e79d6da1::t_fbe9b86fffbe4c 126-134
+  s_47aca4e79d6da1::t_1b8db6e4d6ac53 99-102,105,107-120
+  s_47aca4e79d6da1::t_fae89653872836 29,32-34,42,46-47,50-57
+docs/probe/official-quota.md
+  s_47aca4e79d6da1::t_8e84757a74ee0c 136,140-146
+  s_47aca4e79d6da1::t_6a6fc227adf465 147
+src-tauri/src/tests/droid_quota.rs
+  s_47aca4e79d6da1::t_1afe7b8345b436 231-234
+  s_47aca4e79d6da1::t_a67e744d64e4e4 168-171
+  s_47aca4e79d6da1::t_844bfa5c0a2db8 128-167,172-174,176-177,180-181,187-191,194-201
+  s_47aca4e79d6da1::t_8025c293c7bead 175,178-179,182-186,192-193,202-228,230,235-236
+  s_47aca4e79d6da1::t_fbe9b86fffbe4c 229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "c93afded2f0f03ceae34846fbb780f613b840f4f",
+  "prompts": {},
+  "sessions": {
+    "s_47aca4e79d6da1": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "172419fd-23bb-4bd1-b8d6-1d06092c0875",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
