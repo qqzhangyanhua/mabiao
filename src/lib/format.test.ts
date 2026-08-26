@@ -4,8 +4,10 @@ import {
   applicationLabel,
   applicationSourceOptions,
   weeklyCountLabel,
+  callRangeWindow,
   customRangeFilter,
   deltaPct,
+  filterWithCallRange,
   formatBytes,
   formatClock,
   formatCompact,
@@ -269,11 +271,21 @@ describe("rangeFromPreset", () => {
   });
 
   it("computes a from/to window for numeric-day presets", () => {
-    const { from, to } = rangeFromPreset("7");
-    expect(from).not.toBeNull();
-    expect(to).not.toBeNull();
-    const spanMs = Date.parse(to!) - Date.parse(from!);
-    expect(Math.round(spanMs / (24 * 3600 * 1000))).toBe(7);
+    const seven = rangeFromPreset("7");
+    expect(seven.from).not.toBeNull();
+    expect(seven.to).not.toBeNull();
+    const sevenMs = Date.parse(seven.to!) - Date.parse(seven.from!);
+    expect(Math.round(sevenMs / (24 * 3600 * 1000))).toBe(7);
+
+    const three = rangeFromPreset("3");
+    expect(three.from).not.toBeNull();
+    expect(three.to).not.toBeNull();
+    const threeMs = Date.parse(three.to!) - Date.parse(three.from!);
+    expect(Math.round(threeMs / (24 * 3600 * 1000))).toBe(3);
+  });
+
+  it("returns an open range for a zero-day numeric preset", () => {
+    expect(rangeFromPreset("0")).toEqual({ from: null, to: null });
   });
 
   it("starts today at local midnight and month at the first of the month", () => {
@@ -301,6 +313,48 @@ describe("customRangeFilter", () => {
 
   it("returns nulls for unparsable input", () => {
     expect(customRangeFilter("not-a-date", "also-not")).toEqual({ from: null, to: null });
+  });
+});
+
+describe("callRangeWindow", () => {
+  it("uses rolling windows for 当天 / 近 3 天 / 近 7 天", () => {
+    const today = callRangeWindow("today", "", "");
+    const three = callRangeWindow("3", "", "");
+    expect(new Date(today.from!).getHours()).toBe(0);
+    expect(Math.round((Date.parse(three.to!) - Date.parse(three.from!)) / (24 * 3600 * 1000))).toBe(
+      3,
+    );
+  });
+
+  it("uses the custom date range when both ends are valid", () => {
+    const range = callRangeWindow("custom", "2026-08-01", "2026-08-02");
+    expect(range.from).not.toBeNull();
+    expect(range.to).not.toBeNull();
+    expect(Date.parse(range.to!)).toBeGreaterThan(Date.parse(range.from!));
+    expect(new Date(range.from!).getHours()).toBe(0);
+    expect(new Date(range.to!).getHours()).toBe(23);
+  });
+
+  it("falls back to 近 7 天 when the custom range is incomplete", () => {
+    const fallback = callRangeWindow("custom", "", "");
+    expect(
+      Math.round((Date.parse(fallback.to!) - Date.parse(fallback.from!)) / (24 * 3600 * 1000)),
+    ).toBe(7);
+  });
+});
+
+describe("filterWithCallRange", () => {
+  it("overrides only the time window and keeps other dimensions", () => {
+    const next = filterWithCallRange(
+      { ...emptyFilter, providers: ["tongban"], models: ["gpt-5"] },
+      "today",
+      "",
+      "",
+    );
+    expect(next.providers).toEqual(["tongban"]);
+    expect(next.models).toEqual(["gpt-5"]);
+    expect(next.from).not.toBeNull();
+    expect(next.to).not.toBeNull();
   });
 });
 

@@ -1,14 +1,38 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { formatClock, formatCost, formatTokens, projectLabel } from "../lib/format";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { toDateValue } from "../lib/calendar";
+import {
+  filterWithCallRange,
+  formatClock,
+  formatCost,
+  formatTokens,
+  projectLabel,
+  type CallRangePreset,
+} from "../lib/format";
 import type { Filter, UsageCallPage, UsageCallRow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { LoadingOverlay } from "./LoadingOverlay";
 import { Pagination } from "./Pagination";
 import { SourceLabel } from "./SourceIcon";
+import { DatePicker } from "./ui/DatePicker";
+import { Segmented } from "./ui/Segmented";
 import { ModelLabel } from "./VendorIcon";
 
 const PAGE_SIZE = 20;
+
+const CALL_RANGE_OPTIONS = [
+  { value: "today", label: "当天" },
+  { value: "3", label: "近 3 天" },
+  { value: "7", label: "近 7 天" },
+  { value: "custom", label: "区间" },
+] as const;
+
+function seedCustomRange(): { from: string; to: string } {
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(start.getDate() - 6);
+  return { from: toDateValue(start), to: toDateValue(today) };
+}
 
 export function BreakdownCallTable({
   filter,
@@ -22,10 +46,26 @@ export function BreakdownCallTable({
   onError?: (error: unknown) => void;
 }) {
   const [page, setPage] = useState(1);
+  const [rangePreset, setRangePreset] = useState<CallRangePreset>("7");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [data, setData] = useState<UsageCallPage>({ rows: [], total: 0 });
   const [loading, setLoading] = useState(true);
   const generationRef = useRef(0);
-  const filterKey = JSON.stringify(filter);
+  const callFilter = useMemo(
+    () => filterWithCallRange(filter, rangePreset, customFrom, customTo),
+    [filter, rangePreset, customFrom, customTo],
+  );
+  const filterKey = JSON.stringify(callFilter);
+
+  function selectRange(next: CallRangePreset) {
+    if (next === "custom" && (!customFrom || !customTo)) {
+      const seeded = seedCustomRange();
+      setCustomFrom(seeded.from);
+      setCustomTo(seeded.to);
+    }
+    setRangePreset(next);
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 筛选或缓存刷新时回到第一页
@@ -37,7 +77,7 @@ export function BreakdownCallTable({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 标准的“发起请求前先置 loading”写法
     setLoading(true);
     invoke<UsageCallPage>("get_usage_calls_page", {
-      filter,
+      filter: callFilter,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -59,7 +99,7 @@ export function BreakdownCallTable({
     return () => {
       generationRef.current += 1;
     };
-  }, [filterKey, page, revision, onError, filter]);
+  }, [filterKey, page, revision, onError, callFilter]);
 
   const pageCount = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 
@@ -69,10 +109,35 @@ export function BreakdownCallTable({
         <div>
           <h2>明细调用</h2>
           <p className="panel-note">
-            跟随当前筛选列出单条消耗记录。有会话 ID 的行可点开对应会话。
+            日期只作用于明细调用，不影响上方聚合。有会话 ID 的行可点开对应会话。
           </p>
         </div>
         <span className="muted">共 {formatTokens(data.total)} 条</span>
+      </div>
+      <div className="usage-call-range">
+        <Segmented
+          value={rangePreset}
+          options={CALL_RANGE_OPTIONS}
+          ariaLabel="明细调用日期"
+          onChange={selectRange}
+        />
+        {rangePreset === "custom" ? (
+          <div className="custom-range">
+            <DatePicker
+              ariaLabel="开始日期"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={setCustomFrom}
+            />
+            <span>至</span>
+            <DatePicker
+              ariaLabel="结束日期"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={setCustomTo}
+            />
+          </div>
+        ) : null}
       </div>
       <Pagination page={page} pageCount={pageCount} totalCount={data.total} onPageChange={setPage} />
       <LoadingOverlay

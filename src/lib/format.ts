@@ -229,12 +229,16 @@ export function providerChannel(name: string): string {
   return official.includes(name) ? "官方" : "中转";
 }
 
+export type CallRangePreset = "today" | "3" | "7" | "custom";
+
 export function rangeFromPreset(preset: string): { from: string | null; to: string | null } {
-  if (preset === "7" || preset === "30") {
+  if (/^\d+$/.test(preset)) {
     const days = Number(preset);
-    const to = new Date();
-    const from = new Date(to.getTime() - days * 24 * 3600 * 1000);
-    return { from: from.toISOString(), to: to.toISOString() };
+    if (days > 0) {
+      const to = new Date();
+      const from = new Date(to.getTime() - days * 24 * 3600 * 1000);
+      return { from: from.toISOString(), to: to.toISOString() };
+    }
   }
   if (preset === "today") {
     const now = new Date();
@@ -262,8 +266,34 @@ export function customRangeFilter(
   return { from: fromDate.toISOString(), to: toDate.toISOString() };
 }
 
+export function callRangeWindow(
+  preset: CallRangePreset,
+  customFrom: string,
+  customTo: string,
+): { from: string | null; to: string | null } {
+  if (preset !== "custom") {
+    return rangeFromPreset(preset);
+  }
+  if (!customFrom || !customTo) {
+    return rangeFromPreset("7");
+  }
+  const range = customRangeFilter(customFrom, customTo);
+  return range.from && range.to ? range : rangeFromPreset("7");
+}
+
+export function filterWithCallRange(
+  filter: Filter,
+  preset: CallRangePreset,
+  customFrom: string,
+  customTo: string,
+): Filter {
+  const range = callRangeWindow(preset, customFrom, customTo);
+  return { ...filter, from: range.from, to: range.to };
+}
+
 export function previousFilter(filter: Filter, preset: string): Filter | null {
   if (
+    preset !== "3" &&
     preset !== "7" &&
     preset !== "30" &&
     preset !== "custom" &&

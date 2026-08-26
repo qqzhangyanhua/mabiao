@@ -5194,6 +5194,14 @@ td.row-actions {
   height: 14px;
 }
 
+.usage-call-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+
 .conversation-thread {
   width: min(900px, 100%);
   margin: 0 auto;
