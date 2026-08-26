@@ -1,0 +1,45 @@
+src/lib/format.test.ts
+  s_e4f846ca7c019e::t_740060db907bc1 274-288
+  s_e4f846ca7c019e::t_d0b890a4203773 331-335
+  s_e4f846ca7c019e::t_f4a0e708e918f7 7,10
+  s_e4f846ca7c019e::t_34730492c417d5 319-330,336-339,343-359
+  s_e4f846ca7c019e::t_fe2387ce356d9e 340-342
+  s_e4f846ca7c019e::t_0090d145b1e30c 360
+src/components/BreakdownCallTable.tsx
+  s_e4f846ca7c019e::t_d3117dafaf53f0 2-11,17-18,23-35
+  s_e4f846ca7c019e::t_c0608f072f4172 102
+  s_e4f846ca7c019e::t_6c7a7a145b88e6 80
+  s_e4f846ca7c019e::t_80816070ddb971 49-51,55-68
+  s_e4f846ca7c019e::t_38321c9b113b5d 112,117-140
+  s_e4f846ca7c019e::t_65e279a175be98 36
+  s_e4f846ca7c019e::t_595d8ebe35051b 141
+src/lib/format.ts
+  s_e4f846ca7c019e::t_8e53f2fb03e9cf 232-233,235,237-241
+  s_e4f846ca7c019e::t_d2858d8353c5c3 269-293,296
+src/styles.css
+  s_693bbccd0264da::t_931e1ce24162ac 5197-5204
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b34edff914e5d8c997cad8f51cc3acbda1705af7",
+  "prompts": {},
+  "sessions": {
+    "s_693bbccd0264da": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a03ed6-8c20-7d31-8c7a-94c50446b4cd",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_e4f846ca7c019e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8adb0c64-f5f4-45e4-a327-2fc7363bda65",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
