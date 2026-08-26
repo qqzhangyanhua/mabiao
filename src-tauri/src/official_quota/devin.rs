@@ -16,7 +16,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::sanitize_percent;
+use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
 use crate::vscode_state;
 
 /// 装了哪个客户端就从哪个目录读，两个都可能存在。
@@ -29,10 +29,21 @@ const COMPAT_VERSION: &str = "1.108.2";
 const TIMEOUT: Duration = Duration::from_secs(15);
 const NOT_SIGNED_IN: &str = "尚未登录 Devin / Windsurf，请先打开客户端并登录";
 
-pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let api_key = load_api_key()?;
     let raw = request_user_status(&api_key)?;
-    Ok((parse_user_status(&raw)?, Utc::now().to_rfc3339()))
+    Ok(
+        QuotaSnapshot::new(parse_user_status(&raw)?, Utc::now().to_rfc3339())
+            .with_plan(parse_plan(&raw)),
+    )
+}
+
+pub fn parse_plan(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    value
+        .pointer("/userStatus/planStatus/planInfo/planName")
+        .and_then(Value::as_str)
+        .and_then(display_plan_label)
 }
 
 fn load_api_key() -> Result<String, String> {

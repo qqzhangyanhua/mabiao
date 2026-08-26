@@ -23,6 +23,75 @@ const LIVE_SHAPE: &str = r#"{
     ]
 }"#;
 
+/// 真机抓包：Google AI Pro 账号，`currentTier` 仍停在 `free-tier`（Code Assist 自己
+/// 的 GCP 项目档位），实际生效的 Pro 订阅在 `paidTier`。字段做了脱敏（去掉邮箱/项目名），
+/// 结构原样保留。
+const LIVE_PRO_ACCOUNT_CODE_ASSIST: &str = r#"{
+    "currentTier": {
+        "id": "free-tier",
+        "name": "Antigravity",
+        "upgradeSubscriptionUri": "https://codeassist.google.com/upgrade?referrer=cli",
+        "upgradeSubscriptionType": "GDP_HELIUM"
+    },
+    "allowedTiers": [
+        { "id": "free-tier", "name": "Antigravity", "isDefault": true },
+        { "id": "standard-tier", "name": "Antigravity", "usesGcpTos": true }
+    ],
+    "cloudaicompanionProject": "redacted-project",
+    "gcpManaged": false,
+    "paidTier": {
+        "id": "g1-pro-tier",
+        "name": "Google AI Pro",
+        "description": "Google AI Pro",
+        "upgradeSubscriptionUri": "https://accounts.google.com/AccountChooser?continue=https://antigravity.google/g1-upgrade",
+        "upgradeSubscriptionText": "You can upgrade to a Google AI Ultra plan to receive higher rate limits.",
+        "availableCredits": [
+            { "creditType": "GOOGLE_ONE_AI", "minimumCreditAmountForUsage": "50" }
+        ]
+    }
+}"#;
+
+#[test]
+fn antigravity_code_assist_reads_current_tier_name() {
+    // 真机：free-tier / standard-tier 的 name 都是产品名 "Antigravity"，档次只在 id。
+    // Google AI Pro 账号：currentTier 停在 free-tier（Code Assist 自己的 GCP 项目档
+    // 位，跟消费者订阅无关），paidTier 才是真正生效的订阅档，必须优先取它。
+    assert_eq!(
+        antigravity::parse_code_assist_tier(LIVE_PRO_ACCOUNT_CODE_ASSIST).as_deref(),
+        Some("Pro")
+    );
+    assert_eq!(
+        antigravity::parse_code_assist_tier(
+            r#"{"currentTier":{"id":"standard-tier","name":"Antigravity"}}"#
+        )
+        .as_deref(),
+        Some("Standard")
+    );
+    assert_eq!(
+        antigravity::parse_code_assist_tier(r#"{"currentTier":{"id":"g1-pro-tier"}}"#).as_deref(),
+        Some("Pro")
+    );
+    assert_eq!(
+        antigravity::parse_code_assist_tier(r#"{"paidTier":{"id":"standard-tier"}}"#).as_deref(),
+        Some("Standard")
+    );
+    // 没有 paidTier 才真的是免费账号，落回 currentTier。
+    assert_eq!(
+        antigravity::parse_code_assist_tier(r#"{"response":{"currentTier":{"id":"free-tier"}}}"#)
+            .as_deref(),
+        Some("Free")
+    );
+    assert_eq!(
+        antigravity::parse_code_assist_tier(r#"{"plan_tier":"Pro"}"#).as_deref(),
+        Some("Pro")
+    );
+    assert_eq!(
+        antigravity::parse_code_assist_tier(r#"{"planType":"enterprise"}"#).as_deref(),
+        Some("Enterprise")
+    );
+    assert!(antigravity::parse_code_assist_tier(r#"{"ok":true}"#).is_none());
+}
+
 #[test]
 fn antigravity_quota_converts_remaining_fraction_to_used_percent() {
     let windows = antigravity::parse_quota_summary(LIVE_SHAPE).unwrap();
@@ -200,8 +269,24 @@ fn antigravity_macos_prefers_current_app_over_legacy_ide() {
 #[test]
 #[ignore = "需要本机已登录 Antigravity，且会请求 Google"]
 fn antigravity_live_fetch_rate_limits() {
-    let (windows, _) = antigravity::fetch_rate_limits().expect("本机 Antigravity 额度拉取失败");
-    assert!(!windows.is_empty());
+    let snapshot = antigravity::fetch_rate_limits().expect("本机 Antigravity 额度拉取失败");
+    assert!(!snapshot.windows.is_empty());
+    if let Some(plan) = &snapshot.plan {
+        assert_ne!(plan, "Antigravity", "档次不该是产品名");
+    }
+}
+
+/// 诊断用：打印 `loadCodeAssist` 原始 JSON，核对 Pro/Ultra 账号的套餐档位到底放在哪个字段。
+/// 只有 tier 元数据，没有 token，贴出来排查是安全的。
+#[test]
+#[ignore = "需要本机已登录 Antigravity，且会请求 Google；用于核对套餐档位字段"]
+fn antigravity_debug_dump_plan_fields() {
+    let raw = antigravity::debug_fetch_code_assist_raw().expect("拉取 loadCodeAssist 原始响应失败");
+    println!("loadCodeAssist raw = {raw}");
+    println!(
+        "parsed plan = {:?}",
+        antigravity::parse_code_assist_tier(&raw)
+    );
 }
 
 #[test]

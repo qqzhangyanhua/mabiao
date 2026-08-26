@@ -16,7 +16,7 @@ use super::{
 use crate::domain::{OfficialQuotaProvider, OfficialQuotaWindow};
 use crate::store;
 
-/// 一次成功取数的结果。`plan` 只有 Cursor / Grok 会填；其余账号留空。
+/// 一次成功取数的结果。`plan` 能拿到就填：Cursor / Grok / Antigravity / Codex / Copilot / Devin。
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuotaSnapshot {
     pub windows: Vec<OfficialQuotaWindow>,
@@ -155,7 +155,7 @@ pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<Fetc
 /// 两条都失败时报接口那条：多数人应该走的是它。
 fn fetch_codex() -> ProviderFetch {
     match codex_usage::fetch_usage() {
-        Ok(result) => Ok(result.into()),
+        Ok(result) => Ok(result),
         Err(error) => {
             codex::fetch_rate_limits()
                 .map(QuotaSnapshot::from)
@@ -201,10 +201,10 @@ pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
         OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary(),
         OfficialQuotaProvider::Grok => grok::fetch_rate_limits(),
         OfficialQuotaProvider::Droid => snapshot(droid::fetch_rate_limits()),
-        OfficialQuotaProvider::Antigravity => snapshot(antigravity::fetch_rate_limits()),
+        OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits(),
         OfficialQuotaProvider::OpenCode => snapshot(opencode::fetch_usage()),
-        OfficialQuotaProvider::Copilot => snapshot(copilot::fetch_usage()),
-        OfficialQuotaProvider::Devin => snapshot(devin::fetch_usage()),
+        OfficialQuotaProvider::Copilot => copilot::fetch_usage(),
+        OfficialQuotaProvider::Devin => devin::fetch_usage(),
     }
 }
 

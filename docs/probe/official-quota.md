@@ -51,7 +51,7 @@ Claude Code 2.1.80+ 在 statusline 命令的 stdin JSON 里提供：
 - `limit_window_seconds` 决定窗口种类——**不能按 primary/secondary 的位置认**，Codex 会把临时只剩一条的周限额挪进 primary 槽。18000 → 5 小时，604800 → 7 天，其它按小时数命名。
 - `reset_at`（epoch 秒）或 `reset_after_seconds`（相对量，要按当前时间换算）
 
-`plan_type`、`rate_limit_reset_credits` 当前不采。
+`plan_type`（`plus` / `team` / `enterprise` 等）→ 行级套餐展示名。`rate_limit_reset_credits` 当前不采。
 
 ## Codex app-server
 
@@ -112,6 +112,10 @@ Cursor 订阅限额是多档并行，不能只取总量：
 - 桶的 `displayName` 是「Weekly Limit Remaining」这种剩余口径，直接展示会和已用读反，所以按 `window` 自己起名，group 的 `displayName` 做前缀。
 - 端点按 prod → daily → sandbox 兜底；401/403 不换环境直接结束。
 
+`POST /v1internal:loadCodeAssist`（同一套 UA 和凭证，失败不影响额度窗口）。body 的 `metadata.ideType` 必须是协议枚举（`IDE_UNSPECIFIED`），不能写 `ANTIGRAVITY`。`currentTier.name` 是产品品牌（免费档和 Standard 都叫 `Antigravity`），档次在 `currentTier.id`：`free-tier` / `standard-tier` / `g1-pro-tier`。
+
+**`currentTier` 是 Code Assist 自己的 GCP 项目档位，跟 Google AI 消费者订阅是两套体系**——真机验证过 Google AI Pro 账号的 `currentTier` 仍然是 `free-tier`。实际生效的 Google AI 订阅档（Pro/Ultra）在 `paidTier`：其 `availableCredits` 挂着真实的 `GOOGLE_ONE_AI` 额度，`upgradeSubscriptionText` 说的是「往上升到 Ultra」而不是「开通这一档」，因此取套餐要**优先读 `paidTier`，没有才落回 `currentTier`**。
+
 `v1internal:fetchAvailableModels` 也能拿到每个模型的 `quotaInfo.{remainingFraction, resetTime}`，是同一个 5h 桶的数字，当前不采。
 
 ## Droid (Factory)
@@ -129,6 +133,7 @@ Cursor 订阅限额是多档并行，不能只取总量：
 - `limits.core.{fiveHour,weekly,monthly}` → 窗口 `core_*`，标签「Core …」（Droid Core 池）
 - 每档 `usedPercent`（0–100）、`windowEnd`（ISO，→ `resets_at`）、`secondsRemaining`
 - 另有 `extraUsageBalanceCents` / `overagePreference` / `usesTokenRateLimitsBilling`，当前不采
+- **没有套餐名字段**。社区有人用旧的 `POST /api/organization/subscription/usage` 按 token 额度反推 Pro/Max，口径已过时，本应用不采。
 
 `windowEnd` 已过去的档位跳过——对齐 droid 自己的显示逻辑（过期窗说明该桶不在计费窗内，不等于 0%）。全部过期时报结构异常，保留上次正确缓存。
 
@@ -157,6 +162,7 @@ EU 区是 `https://api.eu.factory.ai`，当前不自动识别。
 - `percent_remaining`，或 `remaining` / `entitlement`，取反才是已用
 - **`unlimited: true`、`entitlement: -1`、`remaining: -1` 是无限额度**，`entitlement: 0` 是组织按量计费席位的零额度占位——四种都要丢掉，不能显示成 0% 或 100%
 - 重置时间 `quota_reset_date` / `limited_user_reset_date` 是**纯日期**（`2026-09-01`），通用的 `parse_resets_at` 认不了，要按 UTC 零点补一层
+- `copilot_plan`（`individual` / `business` / `enterprise`）→ 行级套餐展示名
 
 组织账单 `orgs/{org}/settings/billing/usage/summary` 当前不采。
 
@@ -182,7 +188,7 @@ Connect-Protocol-Version: 1
 - `dailyQuotaResetAtUnix` / `weeklyQuotaResetAtUnix` —— epoch 秒
 - **数字可能被包成字符串**（`"100"`），两种都要认
 - `planInfo.hideDailyQuota` 为 true 时藏掉日额度，但**周额度也没有时不能一起藏**——那日额度就是唯一有意义的一条
-- `planInfo.planName` / `teamsTier`、`overageBalanceMicros` 当前不采
+- `planInfo.planName` → 行级套餐展示名（`Free` 等）；`teamsTier`、`overageBalanceMicros` 当前不采
 
 服务端地址可被客户端配置覆盖（`windsurf_auth.apiServerUrl`，存在加密的 `secret://` 条目里），当前只用默认值。
 

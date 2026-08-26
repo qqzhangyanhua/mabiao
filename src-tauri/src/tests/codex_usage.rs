@@ -11,6 +11,15 @@ const LIVE_SHAPE: &str = r#"{
 }"#;
 
 #[test]
+fn codex_usage_reads_plan_type() {
+    assert_eq!(
+        codex_usage::parse_plan_type(LIVE_SHAPE).as_deref(),
+        Some("Plus")
+    );
+    assert!(codex_usage::parse_plan_type(r#"{"rate_limit":{}}"#).is_none());
+}
+
+#[test]
 fn codex_usage_reads_both_windows_by_duration() {
     let windows = codex_usage::parse_usage(LIVE_SHAPE, &[], 1_787_000_000).unwrap();
     assert_eq!(windows.len(), 2);

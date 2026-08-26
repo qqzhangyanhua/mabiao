@@ -15,6 +15,12 @@ const LIVE_SHAPE: &str = r#"{
 }"#;
 
 #[test]
+fn devin_quota_reads_plan_name() {
+    assert_eq!(devin::parse_plan(LIVE_SHAPE).as_deref(), Some("Free"));
+    assert!(devin::parse_plan(r#"{"userStatus":{"planStatus":{}}}"#).is_none());
+}
+
+#[test]
 fn devin_quota_inverts_remaining_and_reads_stringified_numbers() {
     let windows = devin::parse_user_status(LIVE_SHAPE).unwrap();
     let kinds: Vec<&str> = windows.iter().map(|w| w.kind.as_str()).collect();

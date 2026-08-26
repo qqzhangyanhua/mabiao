@@ -11,6 +11,18 @@ const LIVE_SHAPE: &str = r#"{
 }"#;
 
 #[test]
+fn copilot_quota_reads_plan() {
+    assert_eq!(
+        copilot::parse_plan(LIVE_SHAPE).as_deref(),
+        Some("Individual")
+    );
+    assert_eq!(
+        copilot::parse_plan(r#"{"copilot_plan":"business"}"#).as_deref(),
+        Some("Business")
+    );
+}
+
+#[test]
 fn copilot_quota_inverts_remaining_into_used_percent() {
     let windows = copilot::parse_usage(LIVE_SHAPE).unwrap();
     let kinds: Vec<&str> = windows.iter().map(|w| w.kind.as_str()).collect();

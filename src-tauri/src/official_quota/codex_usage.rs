@@ -16,7 +16,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::sanitize_percent;
+use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
 
 const USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 const TIMEOUT: Duration = Duration::from_secs(12);
@@ -28,11 +28,19 @@ const PERCENT_HEADERS: [(&str, &str); 2] = [
     ("secondary_window", "x-codex-secondary-used-percent"),
 ];
 
-pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let auth = load_auth(&auth_path())?;
     let (raw, header_percents) = request_usage(&auth)?;
     let windows = parse_usage(&raw, &header_percents, Utc::now().timestamp())?;
-    Ok((windows, Utc::now().to_rfc3339()))
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(parse_plan_type(&raw)))
+}
+
+pub fn parse_plan_type(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    value
+        .get("plan_type")
+        .and_then(Value::as_str)
+        .and_then(display_plan_label)
 }
 
 pub fn auth_path() -> PathBuf {

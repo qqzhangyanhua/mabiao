@@ -339,13 +339,18 @@ pub fn display_plan_label(raw: &str) -> Option<String> {
         .collect::<String>()
         .to_ascii_lowercase();
     let label = match key.as_str() {
-        "hobby" | "free" => "Free",
-        "pro" => "Pro",
+        "hobby" | "free" | "free_tier" | "freetier" => "Free",
+        "pro" | "google_ai_pro" | "gemini_pro" | "g1_pro_tier" => "Pro",
+        "plus" => "Plus",
         "pro_plus" | "proplus" | "pro+" => "Pro+",
-        "ultra" => "Ultra",
+        "ultra" | "g1_ultra_tier" | "google_ai_ultra" => "Ultra",
+        "max" => "Max",
         "business" => "Business",
         "enterprise" => "Enterprise",
         "team" => "Team",
+        "individual" => "Individual",
+        "standard" | "standard_tier" => "Standard",
+        "legacy_tier" => "Legacy",
         "supergrok" | "grokpro" => "SuperGrok",
         "supergrok_heavy" | "supergrokpro" | "supergrok_pro" => "SuperGrok Heavy",
         "supergrok_lite" | "supergroklite" => "SuperGrok Lite",

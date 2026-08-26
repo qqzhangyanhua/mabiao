@@ -24,7 +24,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
 use crate::vscode_state;
 
 /// 新版客户端目录叫 `Antigravity`，旧 macOS 包叫 `Antigravity IDE`，两边都可能有登录态。
@@ -47,6 +47,8 @@ const SUMMARY_URLS: [&str; 3] = [
     "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
     "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
 ];
+/// Gemini CLI / Antigravity 都认这组枚举；`ideType: ANTIGRAVITY` 不在协议里，会空响应。
+const CODE_ASSIST_BODY: &str = r#"{"metadata":{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}}"#;
 const TIMEOUT: Duration = Duration::from_secs(15);
 const NOT_SIGNED_IN: &str = "尚未登录 Antigravity，请先打开 Antigravity 客户端并登录 Google 账号";
 
@@ -62,27 +64,94 @@ enum SummaryError {
     Other(String),
 }
 
-pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
+    let (raw, token) = fetch_summary()?;
+    let windows = parse_quota_summary(&raw)?;
+    let plan = parse_code_assist_tier(&raw).or_else(|| fetch_plan(&token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+fn fetch_summary() -> Result<(String, String), String> {
     let tokens = load_local_tokens()?;
-    let raw = match tokens.access_token.as_deref().map(request_summary) {
-        // 存的 token 还没过期，省一次刷新。
-        Some(Ok(raw)) => raw,
-        Some(Err(SummaryError::Other(error))) => return Err(error),
-        // 没有 token，或者已经过期：现刷一个。
-        _ => {
-            let refresh_token = tokens
-                .refresh_token
-                .ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-            let access_token = refresh_access_token(&refresh_token)?;
-            request_summary(&access_token).map_err(|error| match error {
-                SummaryError::Unauthorized => {
-                    "Antigravity 登录已失效，请重新打开客户端登录".to_string()
-                }
-                SummaryError::Other(message) => message,
-            })?
+    if let Some(token) = tokens.access_token.as_deref() {
+        match request_summary(token) {
+            Ok(raw) => return Ok((raw, token.to_string())),
+            Err(SummaryError::Other(error)) => return Err(error),
+            Err(SummaryError::Unauthorized) => {}
         }
-    };
-    Ok((parse_quota_summary(&raw)?, Utc::now().to_rfc3339()))
+    }
+    let refresh_token = tokens
+        .refresh_token
+        .ok_or_else(|| NOT_SIGNED_IN.to_string())?;
+    let access_token = refresh_access_token(&refresh_token)?;
+    let raw = request_summary(&access_token).map_err(|error| match error {
+        SummaryError::Unauthorized => "Antigravity 登录已失效，请重新打开客户端登录".to_string(),
+        SummaryError::Other(message) => message,
+    })?;
+    Ok((raw, access_token))
+}
+
+/// `POST loadCodeAssist` 的 `currentTier.id`。失败不影响额度窗口。
+fn fetch_plan(access_token: &str) -> Option<String> {
+    let raw = request_code_assist(access_token)?;
+    parse_code_assist_tier(&raw)
+}
+
+/// 诊断用：吐出 `loadCodeAssist` 的原始 JSON，核对套餐档位字段到底叫什么。
+/// 不进生产取数路径，只给 `antigravity_debug_dump_plan_fields` 那个忽略测试用。
+pub fn debug_fetch_code_assist_raw() -> Result<String, String> {
+    let (_, token) = fetch_summary()?;
+    request_code_assist(&token)
+        .ok_or_else(|| "loadCodeAssist 没有返回内容，或者鉴权失败".to_string())
+}
+
+pub fn parse_code_assist_tier(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    let root = value.get("response").unwrap_or(&value);
+    // 真机验证过（Google AI Pro 账号）：`currentTier` 停留在 `free-tier`——那是 Code
+    // Assist 自己的 GCP 项目档位，跟消费者订阅是两套体系，个人账号基本永远是它。
+    // `paidTier` 才是账号实际生效的 Google AI 订阅档（Pro/Ultra），其
+    // `availableCredits` 挂着真实的 Google One 额度，`upgradeSubscriptionText`
+    // 说的是「往上升到 Ultra」而不是「开通这一档」。没有 `paidTier` 才落回
+    // `currentTier`——那时才真的是免费账号。
+    tier_label(root.get("paidTier"))
+        .or_else(|| tier_label(root.get("paid_tier")))
+        .or_else(|| tier_label(root.get("currentTier")))
+        .or_else(|| tier_label(root.get("current_tier")))
+        .or_else(|| string_label(root.get("planType")))
+        .or_else(|| string_label(root.get("plan_tier")))
+        .or_else(|| default_allowed_tier(root))
+}
+
+fn default_allowed_tier(root: &Value) -> Option<String> {
+    let tiers = root
+        .get("allowedTiers")
+        .or_else(|| root.get("allowed_tiers"))?
+        .as_array()?;
+    let chosen = tiers
+        .iter()
+        .find(|tier| tier.get("isDefault").and_then(Value::as_bool) == Some(true))
+        .or_else(|| tiers.first())?;
+    tier_label(Some(chosen))
+}
+
+fn tier_label(node: Option<&Value>) -> Option<String> {
+    let node = node?;
+    // `name` 对 Antigravity 是产品品牌（两个档都叫 "Antigravity"），档次在 `id`。
+    string_label(node.get("id"))
+        .or_else(|| string_label(node.get("name")).filter(|label| !is_product_brand(label)))
+        .or_else(|| string_label(Some(node)).filter(|label| !is_product_brand(label)))
+}
+
+fn is_product_brand(label: &str) -> bool {
+    matches!(
+        label.trim().to_ascii_lowercase().as_str(),
+        "antigravity" | "gemini" | "gemini code assist" | "code assist"
+    )
+}
+
+fn string_label(node: Option<&Value>) -> Option<String> {
+    node.and_then(Value::as_str).and_then(display_plan_label)
 }
 
 /// `groups[].buckets[]` → 每个桶一个窗口。`remainingFraction` 是「剩余」，取反才是已用。
@@ -571,4 +640,26 @@ fn request_summary(access_token: &str) -> Result<String, SummaryError> {
         }
     }
     Err(last)
+}
+
+fn request_code_assist(access_token: &str) -> Option<String> {
+    for url in SUMMARY_URLS {
+        let url = url.replace("retrieveUserQuotaSummary", "loadCodeAssist");
+        let result = crate::net::agent_with_timeout(TIMEOUT)
+            .post(&url)
+            .set("Authorization", &format!("Bearer {access_token}"))
+            .set("User-Agent", USER_AGENT)
+            .set("Content-Type", "application/json")
+            .set(
+                "Client-Metadata",
+                r#"{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}"#,
+            )
+            .send_string(CODE_ASSIST_BODY);
+        match result {
+            Ok(response) => return response.into_string().ok(),
+            Err(ureq::Error::Status(401 | 403, _)) => return None,
+            _ => {}
+        }
+    }
+    None
 }

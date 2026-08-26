@@ -14,7 +14,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
 
 const USAGE_URL: &str = "https://api.github.com/copilot_internal/user";
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -27,10 +27,18 @@ const SNAPSHOTS: [(&str, &str, &str); 3] = [
     ("completions", "completions", "补全"),
 ];
 
-pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let token = load_token().ok_or_else(|| NOT_SIGNED_IN.to_string())?;
     let raw = request_usage(&token)?;
-    Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
+    Ok(QuotaSnapshot::new(parse_usage(&raw)?, Utc::now().to_rfc3339()).with_plan(parse_plan(&raw)))
+}
+
+pub fn parse_plan(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    value
+        .get("copilot_plan")
+        .and_then(Value::as_str)
+        .and_then(display_plan_label)
 }
 
 fn config_home() -> PathBuf {
