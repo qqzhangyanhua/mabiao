@@ -1,0 +1,73 @@
+src-tauri/src/official_quota/fetch.rs
+  s_b8ed6334eb29b0::t_273a7b2e2afa12 158,204,206-207
+  s_b8ed6334eb29b0::t_a2e5091a32396b 19
+src-tauri/src/official_quota/antigravity.rs
+  s_b8ed6334eb29b0::t_0f1b5f91763304 94,140-150
+  s_47aca4e79d6da1::t_299e116ee4de79 111-119
+  s_b8ed6334eb29b0::t_34c1c03c7d82c1 644-652,657-665
+  s_b8ed6334eb29b0::t_d093b7d60b35e8 50-51,70,110,120-139,151-154,653-656
+  s_b8ed6334eb29b0::t_5ed79c207be289 27,67-69,71-74,82,92-93,95-99,108-109
+  s_47aca4e79d6da1::t_1db0c4c5918ebd 100-107
+  s_b8ed6334eb29b0::t_3088b0ef84f307 76-80,83-91
+src-tauri/src/tests/copilot_quota.rs
+  s_b8ed6334eb29b0::t_6eeffe02f213c8 14-24
+  s_b8ed6334eb29b0::t_6a0dabfbb660fd 13
+src-tauri/src/tests/antigravity_quota.rs
+  s_47aca4e79d6da1::t_8b36095fd71a20 26-53,57-58,60-61,78
+  s_b8ed6334eb29b0::t_9b47d2f2f8906f 62-63,75-77,79-86
+  s_b8ed6334eb29b0::t_c5f90cd4f70e5f 272-273
+  s_47aca4e79d6da1::t_c42dbb1be932ee 284,286-289
+  s_b8ed6334eb29b0::t_a006a97ff1299d 55,59,87-94,277
+  s_b8ed6334eb29b0::t_ff9f9d6342fd76 64,66-67,73-74
+  s_b8ed6334eb29b0::t_b56f8ff4f4a329 56,65,68-72,274-275
+  s_47aca4e79d6da1::t_7101464ba9d096 54,279-283,285
+  s_b8ed6334eb29b0::t_bbf37adb0b560a 276
+  s_47aca4e79d6da1::t_2232897117fa66 278
+src-tauri/src/official_quota/codex_usage.rs
+  s_b8ed6334eb29b0::t_b109f7e74a7e50 19,31,35-43
+src-tauri/src/tests/codex_usage.rs
+  s_b8ed6334eb29b0::t_92cf930b108d04 15-16
+  s_b8ed6334eb29b0::t_a6ada574db4e0b 13-14,17-19
+  s_b8ed6334eb29b0::t_00a7777efbe023 20-21
+src-tauri/src/tests/devin_quota.rs
+  s_b8ed6334eb29b0::t_19beb56b0b5d32 18-22
+  s_b8ed6334eb29b0::t_a16eef006fb01b 17
+src-tauri/src/official_quota/copilot.rs
+  s_b8ed6334eb29b0::t_77145350e956fa 17,30,33-41
+docs/probe/official-quota.md
+  s_b8ed6334eb29b0::t_e29f5e2616852c 165
+  s_47aca4e79d6da1::t_d3a2cd2653f859 115-117
+  s_b8ed6334eb29b0::t_bd8b93e096201e 54,118,136,191
+src-tauri/src/official_quota/mod.rs
+  s_b8ed6334eb29b0::t_377d351329d4c9 343,346
+  s_b8ed6334eb29b0::t_ea53e7d09024d3 342,344,351
+  s_b8ed6334eb29b0::t_6871cc6f102f0b 352-353
+  s_b8ed6334eb29b0::t_6a5fffb8e1023e 347
+src-tauri/src/official_quota/devin.rs
+  s_b8ed6334eb29b0::t_c8260fe2a2f796 19,32,35-44
+  s_b8ed6334eb29b0::t_7d67a7696fec0d 45-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1c65a54dbb6ae878d92d19e560807749a09f7f21",
+  "prompts": {},
+  "sessions": {
+    "s_47aca4e79d6da1": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "172419fd-23bb-4bd1-b8d6-1d06092c0875",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_b8ed6334eb29b0": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a03e2c-791c-7e63-8957-5feaab6b208b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
