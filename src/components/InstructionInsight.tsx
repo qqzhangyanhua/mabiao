@@ -11,10 +11,12 @@ export function InstructionInsight({
 }) {
   return (
     <section className="instruction-insight">
-      <div>
-        <h3>投入与用量</h3>
-        <p className="muted">对照已加载指令的字节数和本机用量。久未修改不是问题。</p>
-      </div>
+      <header className="instruction-section-head">
+        <div>
+          <h3>投入与用量</h3>
+          <p className="muted">对照已加载指令的字节数和本机用量。久未修改不是问题。</p>
+        </div>
+      </header>
       <ul className="instruction-insight-list">
         {investments.map((row) => (
           <li key={row.source} className="instruction-insight-row">

@@ -16,7 +16,7 @@ export function InstructionOverlap({
 }) {
   return (
     <section className="instruction-overlap">
-      <div className="instruction-overlap-head">
+      <header className="instruction-section-head">
         <div>
           <h3>与项目规则交叉</h3>
           <p className="muted">两侧出现相同关键词并不等于已经冲突，请对照原文自行判断。</p>
@@ -30,7 +30,7 @@ export function InstructionOverlap({
             onChange={onProjectChange}
           />
         ) : null}
-      </div>
+      </header>
       {projects.length === 0 ? (
         <EmptyState
           compact

@@ -9,12 +9,14 @@ export function InstructionClaudeMemory({ repos }: { repos: ClaudeAutoMemoryRepo
   }
   return (
     <section className="instruction-memory">
-      <div>
-        <h3>Claude 自动记忆</h3>
-        <p className="muted">
-          会话开始时会把各仓库 MEMORY.md 的开头注入上下文。这里只读，不能改也不能删。
-        </p>
-      </div>
+      <header className="instruction-section-head">
+        <div>
+          <h3>Claude 自动记忆</h3>
+          <p className="muted">
+            会话开始时会把各仓库 MEMORY.md 的开头注入上下文。这里只读，不能改也不能删。
+          </p>
+        </div>
+      </header>
       <ul className="instruction-memory-list">
         {repos.map((repo) => {
           const open = openRepo === repo.abs_path;

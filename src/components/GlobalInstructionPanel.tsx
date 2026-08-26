@@ -171,10 +171,14 @@ export function GlobalInstructionPanel() {
         : null}
       {data && data.sources.some(isIdleSource) ? (
         <section className="instruction-idle">
-          <div>
-            <h3>未创建 / 无机制</h3>
-            <p className="muted">没有已加载或被屏蔽的指令。展开后仍可查看路径或创建白名单内的文件。</p>
-          </div>
+          <header className="instruction-section-head">
+            <div>
+              <h3>未创建 / 无机制</h3>
+              <p className="muted">
+                没有已加载或被屏蔽的指令。展开后仍可查看路径或创建白名单内的文件。
+              </p>
+            </div>
+          </header>
           {data.sources.filter(isIdleSource).map((row) => {
             const open = openIdle === row.source;
             return (
@@ -235,9 +239,11 @@ function SourceFiles({
 }: FileListProps) {
   return (
     <section className="instruction-source">
-      <h3>
-        <SourceLabel source={row.source} fallback={row.application} />
-      </h3>
+      <header className="instruction-section-head">
+        <h3>
+          <SourceLabel source={row.source} fallback={row.application} />
+        </h3>
+      </header>
       <FileList
         row={row}
         drafts={drafts}
@@ -337,11 +343,13 @@ function InstructionRow({
           </div>
           {file.note ? <p className="instruction-note">{file.note}</p> : null}
         </button>
-        {canOpenInstruction(file) ? (
-          <Button type="button" variant="ghost" onClick={onOpenExternal}>
-            在外部打开
-          </Button>
-        ) : null}
+        <div className="instruction-row-action">
+          {canOpenInstruction(file) ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onOpenExternal}>
+              在外部打开
+            </Button>
+          ) : null}
+        </div>
       </div>
       {open ? (
         <div className="instruction-body">

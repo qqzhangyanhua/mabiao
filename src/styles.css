@@ -5683,6 +5683,28 @@ td.row-actions {
     grid-template-columns: 1fr;
   }
 
+  .instruction-row-head,
+  .instruction-memory-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .instruction-row-meta,
+  .instruction-memory-meta {
+    justify-content: flex-start;
+  }
+
+  .instruction-insight-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .instruction-insight-row strong {
+    grid-column: 1 / -1;
+  }
+
+  .instruction-insight-row span {
+    text-align: left;
+  }
+
   .app {
     grid-template-columns: 1fr;
   }
@@ -5813,7 +5835,7 @@ td.row-actions {
 
 .instruction-panel {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .instruction-panel .muted,
@@ -5822,32 +5844,37 @@ td.row-actions {
   font-size: 12px;
 }
 
-.instruction-source {
+.instruction-source,
+.instruction-idle,
+.instruction-checkup,
+.instruction-overlap,
+.instruction-insight,
+.instruction-memory {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
-.instruction-source h3 {
+.instruction-panel h3 {
   margin: 0;
   font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.instruction-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.instruction-section-head > div .muted {
+  margin: 4px 0 0;
 }
 
 .instruction-source h3 .source-label {
   max-width: 100%;
-}
-
-.instruction-idle {
-  display: grid;
-  gap: 8px;
-}
-
-.instruction-idle h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.instruction-idle > div .muted {
-  margin: 4px 0 0;
 }
 
 .instruction-idle-source {
@@ -5888,6 +5915,7 @@ td.row-actions {
 }
 
 .instruction-list {
+  --instruction-action-col: 100px;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -5903,24 +5931,23 @@ td.row-actions {
 }
 
 .instruction-row-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--instruction-action-col);
+  align-items: center;
+}
+
+.instruction-row-action {
   display: flex;
-  align-items: flex-start;
-  gap: 4px;
-}
-
-.instruction-row-bar .instruction-row-head {
-  flex: 1;
-  min-width: 0;
-}
-
-.instruction-row-bar > .ghost-btn {
-  margin: 8px 8px 0 0;
-  flex-shrink: 0;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
 }
 
 .instruction-row-head {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
   width: 100%;
   padding: 10px 12px;
   border: 0;
@@ -5939,12 +5966,13 @@ td.row-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px 8px;
+  min-width: 0;
 }
 
 .instruction-row-title strong {
   font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .instruction-badges {
@@ -5990,6 +6018,7 @@ td.row-actions {
 }
 
 .instruction-note {
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -5997,10 +6026,13 @@ td.row-actions {
 
 .instruction-row-meta {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .instruction-body {
@@ -6054,16 +6086,6 @@ td.row-actions {
   margin: 0;
 }
 
-.instruction-checkup {
-  display: grid;
-  gap: 8px;
-}
-
-.instruction-checkup h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
 .instruction-checkup-ok {
   margin: 0;
   color: var(--muted);
@@ -6112,6 +6134,11 @@ td.row-actions {
   font-size: 12px;
 }
 
+.instruction-checkup-head > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .instruction-checkup-item.severity-critical .instruction-checkup-severity {
   background: rgba(251, 113, 133, 0.16);
   color: var(--red-fg);
@@ -6135,28 +6162,6 @@ td.row-actions {
 .instruction-checkup-problem,
 .instruction-checkup-consequence {
   margin: 0;
-}
-
-.instruction-overlap {
-  display: grid;
-  gap: 8px;
-}
-
-.instruction-overlap-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.instruction-overlap h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.instruction-overlap-head .muted {
-  margin: 4px 0 0;
 }
 
 .instruction-overlap-list {
@@ -6206,34 +6211,20 @@ td.row-actions {
   white-space: pre-wrap;
 }
 
-.instruction-insight {
-  display: grid;
-  gap: 8px;
-}
-
-.instruction-insight h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.instruction-insight > div .muted {
-  margin: 4px 0 0;
-}
-
 .instruction-insight-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .instruction-insight-row {
   display: grid;
-  grid-template-columns: minmax(72px, 1fr) auto auto auto;
+  grid-template-columns: minmax(96px, 1fr) 92px 148px 92px;
   gap: 8px 12px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--overlay-1);
@@ -6241,11 +6232,15 @@ td.row-actions {
 }
 
 .instruction-insight-row strong {
+  min-width: 0;
   font-size: 13px;
 }
 
 .instruction-insight-row span {
   color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .instruction-insight-imbalances {
@@ -6263,20 +6258,6 @@ td.row-actions {
   border-radius: 10px;
   background: var(--overlay-1);
   font-size: 13px;
-}
-
-.instruction-memory {
-  display: grid;
-  gap: 8px;
-}
-
-.instruction-memory h3 {
-  margin: 0;
-  font-size: 14px;
-}
-
-.instruction-memory > div .muted {
-  margin: 4px 0 0;
 }
 
 .instruction-memory-list {
@@ -6299,7 +6280,9 @@ td.row-actions {
 
 .instruction-memory-head {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
   width: 100%;
   margin: 0;
   padding: 10px 12px;
@@ -6313,6 +6296,11 @@ td.row-actions {
 .instruction-memory-title {
   display: grid;
   gap: 2px;
+  min-width: 0;
+}
+
+.instruction-memory-title span {
+  overflow-wrap: anywhere;
 }
 
 .instruction-memory-title span,
@@ -6325,7 +6313,11 @@ td.row-actions {
 
 .instruction-memory-meta {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .instruction-memory-body {
