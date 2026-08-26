@@ -1,4 +1,7 @@
-//! Factory / Droid 官方额度：读本机 `~/.factory` 的登录态，打 `GET /api/billing/limits`。
+//! Factory / Droid 官方额度：读本机 `~/.factory` 的登录态，打 `GET /api/billing/limits`
+//! 取额度窗口，`GET /api/organization/subscription/schedule` 取套餐名（失败不影响
+//! 额度窗口，`x-factory-org-id` 头直接从 access_token 的 JWT `external_org_id`
+//! 声明拿，不用额外查）。
 //!
 //! droid CLI 有三种凭证存储，按其自身优先级依次尝试：
 //! 1. `login-keychain-v2`（仅 macOS）：密文在 `auth.v2.loginkeychain`，解密密钥不落盘，
@@ -23,19 +26,120 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::sanitize_percent;
+use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
 
 const LIMITS_URL: &str = "https://api.factory.ai/api/billing/limits";
+/// 网页版账号设置用的接口，本来给 web-app session 用，但真机验证过 CLI 本地凭证
+/// 也能调通。`x-factory-org-id` 其实就是 access_token 自己 JWT 里的
+/// `external_org_id`，不用额外查。
+const SUBSCRIPTION_SCHEDULE_URL: &str =
+    "https://api.factory.ai/api/organization/subscription/schedule";
 const TIMEOUT: Duration = Duration::from_secs(12);
 /// 响应里的两个额度池：standard 是主池，core 是 Droid Core。
 const POOLS: [(&str, &str, &str); 2] = [("standard", "", "标准"), ("core", "core_", "Core")];
 const BUCKETS: [(&str, &str); 3] = [("fiveHour", "5 小时"), ("weekly", "周"), ("monthly", "月")];
 
-pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     let token = load_access_token()?;
     let raw = request_limits(&token)?;
     let windows = parse_limits(&raw, Utc::now())?;
-    Ok((windows, Utc::now().to_rfc3339()))
+    let plan = fetch_subscription_plan(&token);
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+/// 套餐名是加分项，取不到（接口拒绝、JWT 没有 org id 等）不影响额度窗口。
+fn fetch_subscription_plan(token: &str) -> Option<String> {
+    let org_id = parse_jwt_external_org_id(token)?;
+    let raw = request_subscription_schedule(token, &org_id).ok()?;
+    parse_subscription_plan(&raw, Utc::now())
+}
+
+/// 诊断用：吐出 `/api/organization/subscription/schedule` 的原始 JSON。
+pub fn debug_fetch_subscription_schedule() -> Result<String, String> {
+    let token = load_access_token()?;
+    let org_id = parse_jwt_external_org_id(&token)
+        .ok_or_else(|| "access_token 的 JWT 里没有 external_org_id".to_string())?;
+    request_subscription_schedule(&token, &org_id)
+}
+
+/// WorkOS JWT 的 `external_org_id` 声明，就是网页版请求头 `x-factory-org-id` 用的值。
+pub fn parse_jwt_external_org_id(token: &str) -> Option<String> {
+    let payload = token.split('.').nth(1).filter(|part| !part.is_empty())?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload.trim_end_matches('='))
+        .ok()?;
+    let claims: Value = serde_json::from_slice(&bytes).ok()?;
+    claims
+        .get("external_org_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+}
+
+fn request_subscription_schedule(token: &str, org_id: &str) -> Result<String, String> {
+    let request = crate::net::agent_with_timeout(TIMEOUT)
+        .get(SUBSCRIPTION_SCHEDULE_URL)
+        .set("Authorization", &format!("Bearer {token}"))
+        .set("Accept", "application/json")
+        .set("x-factory-org-id", org_id);
+    match request.call() {
+        Ok(response) => response
+            .into_string()
+            .map_err(|e| format!("读取 Droid 套餐响应失败：{e}")),
+        Err(ureq::Error::Status(401 | 403, _)) => {
+            Err("Droid 套餐接口鉴权失败，CLI 本地凭证可能没有这个权限".to_string())
+        }
+        Err(ureq::Error::Status(code, response)) => {
+            let _ = response.into_string();
+            Err(format!("拉取 Droid 套餐失败：HTTP {code}"))
+        }
+        Err(_) => Err("无法连接 Droid 套餐接口，请检查网络后重试".to_string()),
+    }
+}
+
+/// 响应没有顶层 `plan` 字段：真正的套餐在 `schedule[]` 里，每项是一段生效区间
+/// （`start_date`/`end_date` + `plan.name`），账号升级/续费会留下多段历史和未来。
+/// 取 `start_date` 不晚于当前时间里最靠后那一段，就是正在生效的套餐；
+/// `upcomingTierChanges` 是下一次变更（哪怕只是续费同一档），不是当前套餐，不用它。
+/// `plan.name` 是「Factory Pro Annual Plan」这种「品牌 + 档次 + 计费周期 + Plan」的
+/// 整句，按空格切开找认得出的档次词，不依赖整句匹配（计费周期、品牌词会变）。
+pub fn parse_subscription_plan(raw: &str, now: DateTime<Utc>) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    let schedule = value.get("schedule").and_then(Value::as_array)?;
+    let current = schedule
+        .iter()
+        .filter_map(|entry| {
+            let start = entry
+                .get("start_date")
+                .and_then(Value::as_str)
+                .and_then(|text| DateTime::parse_from_rfc3339(text).ok())?
+                .with_timezone(&Utc);
+            (start <= now).then_some((start, entry))
+        })
+        .max_by_key(|(start, _)| *start)
+        .map(|(_, entry)| entry)?;
+    let name = current.pointer("/plan/name").and_then(Value::as_str)?;
+    tier_keyword_from_plan_name(name).and_then(|word| display_plan_label(&word))
+}
+
+fn tier_keyword_from_plan_name(name: &str) -> Option<String> {
+    const KNOWN: [&str; 9] = [
+        "free",
+        "pro",
+        "plus",
+        "max",
+        "ultra",
+        "business",
+        "enterprise",
+        "team",
+        "individual",
+    ];
+    name.split_whitespace()
+        .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()))
+        .find(|word| {
+            let lower = word.to_ascii_lowercase();
+            KNOWN.contains(&lower.as_str())
+        })
+        .map(str::to_string)
 }
 
 /// standard / core 两个池各三档；`windowEnd` 已过去的档位说明该桶没在计费窗内，跳过

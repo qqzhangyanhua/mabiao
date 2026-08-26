@@ -16,7 +16,7 @@ use super::{
 use crate::domain::{OfficialQuotaProvider, OfficialQuotaWindow};
 use crate::store;
 
-/// 一次成功取数的结果。`plan` 能拿到就填：Cursor / Grok / Antigravity / Codex / Copilot / Devin。
+/// 一次成功取数的结果。`plan` 能拿到就填：Cursor / Grok / Antigravity / Codex / Copilot / Devin / Droid。
 #[derive(Debug, Clone, PartialEq)]
 pub struct QuotaSnapshot {
     pub windows: Vec<OfficialQuotaWindow>,
@@ -200,7 +200,7 @@ pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
         OfficialQuotaProvider::Codex => fetch_codex(),
         OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary(),
         OfficialQuotaProvider::Grok => grok::fetch_rate_limits(),
-        OfficialQuotaProvider::Droid => snapshot(droid::fetch_rate_limits()),
+        OfficialQuotaProvider::Droid => droid::fetch_rate_limits(),
         OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits(),
         OfficialQuotaProvider::OpenCode => snapshot(opencode::fetch_usage()),
         OfficialQuotaProvider::Copilot => copilot::fetch_usage(),

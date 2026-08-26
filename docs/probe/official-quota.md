@@ -133,9 +133,17 @@ Cursor 订阅限额是多档并行，不能只取总量：
 - `limits.core.{fiveHour,weekly,monthly}` → 窗口 `core_*`，标签「Core …」（Droid Core 池）
 - 每档 `usedPercent`（0–100）、`windowEnd`（ISO，→ `resets_at`）、`secondsRemaining`
 - 另有 `extraUsageBalanceCents` / `overagePreference` / `usesTokenRateLimitsBilling`，当前不采
-- **没有套餐名字段**。社区有人用旧的 `POST /api/organization/subscription/usage` 按 token 额度反推 Pro/Max，口径已过时，本应用不采。
+- **这个接口本身没有套餐名字段**，套餐名要另打下面的套餐接口。
 
 `windowEnd` 已过去的档位跳过——对齐 droid 自己的显示逻辑（过期窗说明该桶不在计费窗内，不等于 0%）。全部过期时报结构异常，保留上次正确缓存。
+
+`GET https://api.factory.ai/api/organization/subscription/schedule`，同一个 `access_token`；本来是网页版账号设置页用的接口，真机验证过 CLI 本地凭证也能调通。失败（403/网络）不影响额度窗口，套餐标签就是缺失。
+
+- `Authorization: Bearer <access_token>` 之外还要带 `x-factory-org-id`，直接从 `access_token` 的 JWT payload 解出 `external_org_id` 声明就是这个值，不用另打接口查。
+- 响应**没有顶层 `plan` 字段**，套餐在 `schedule[]` 里：每项是一段生效区间（`start_date`/`end_date` + `plan.name`），账号续费/升降级会留下多段历史和未来。取 `start_date` 不晚于当前时间里最靠后那一段，就是正在生效的套餐。
+- `upcomingTierChanges` 是下一次变更（哪怕只是续费同一档），**不是当前套餐**，别用它当当前值。
+- `plan.name` 是「Factory Pro Annual Plan」这种「品牌 + 档次 + 计费周期 + Plan」的整句，按空格切开找认得出的档次词（Pro/Plus/Max/Business/Enterprise/Team/…），不依赖整句匹配。
+- 响应里还有 `customer.{email,balance,payment_provider,...}` 账单信息，当前不采。
 
 EU 区是 `https://api.eu.factory.ai`，当前不自动识别。
 
