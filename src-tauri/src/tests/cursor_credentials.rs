@@ -144,11 +144,12 @@ fn local_credential_smoke_hits_cursor_usage_summary() {
         credential.session_token
     );
 
-    let (windows, _as_of) = crate::official_quota::cursor::fetch_usage_summary()
+    let snapshot = crate::official_quota::cursor::fetch_usage_summary()
         .expect("用本机登录态请求 cursor.com 失败");
-    assert!(!windows.is_empty());
+    assert!(!snapshot.windows.is_empty());
     println!(
-        "cursor windows: {:?}",
-        windows.iter().map(|w| &w.kind).collect::<Vec<_>>()
+        "cursor windows: {:?} plan: {:?}",
+        snapshot.windows.iter().map(|w| &w.kind).collect::<Vec<_>>(),
+        snapshot.plan
     );
 }

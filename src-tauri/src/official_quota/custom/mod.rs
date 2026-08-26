@@ -227,7 +227,7 @@ pub fn fetch_quota(
         .collect::<Result<Vec<String>, String>>()?;
     let borrowed: Vec<&str> = bodies.iter().map(String::as_str).collect();
     let windows = parse_quota(preset, &borrowed)?;
-    Ok((windows, Utc::now().to_rfc3339()))
+    Ok(super::QuotaSnapshot::new(windows, Utc::now().to_rfc3339()))
 }
 
 pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {

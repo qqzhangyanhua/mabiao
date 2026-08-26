@@ -157,7 +157,11 @@ fn saving_a_newapi_provider_joins_official_quota_with_parsed_windows() {
     let windows = custom::parse_quota(CustomQuotaPreset::NewApi, &[SUBSCRIPTION, USAGE]).unwrap();
     let now = chrono::Utc::now();
     let conn = db::open_memory().unwrap();
-    quota::apply_fetch_results(&conn, [(id.clone(), Ok((windows, now.to_rfc3339())))]).unwrap();
+    quota::apply_fetch_results(
+        &conn,
+        [(id.clone(), Ok((windows, now.to_rfc3339()).into()))],
+    )
+    .unwrap();
 
     let dto = quota::load_dto(
         &conn,

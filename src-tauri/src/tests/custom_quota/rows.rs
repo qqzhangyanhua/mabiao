@@ -20,7 +20,10 @@ fn custom_rows_join_the_dto_after_the_builtin_ones() {
     let now = chrono::Utc::now();
     quota::apply_fetch_results(
         &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+        [(
+            "custom:a3f9c1".to_string(),
+            Ok((windows, now.to_rfc3339()).into()),
+        )],
     )
     .unwrap();
 
@@ -96,7 +99,7 @@ fn renaming_keeps_the_cache_and_does_not_alert_twice() {
         &conn,
         [(
             "custom:a3f9c1".to_string(),
-            Ok((vec![window], now.to_rfc3339())),
+            Ok((vec![window], now.to_rfc3339()).into()),
         )],
     )
     .unwrap();
@@ -139,7 +142,10 @@ fn custom_failures_keep_the_last_good_window_and_only_swap_the_message() {
         custom::parse_quota(CustomQuotaPreset::OpenAiCompatible, &[SUBSCRIPTION, USAGE]).unwrap();
     quota::apply_fetch_results(
         &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+        [(
+            "custom:a3f9c1".to_string(),
+            Ok((windows, now.to_rfc3339()).into()),
+        )],
     )
     .unwrap();
     quota::apply_fetch_results(
@@ -214,6 +220,7 @@ fn official_row(
         captured_at: Some("2026-08-24T12:00:00+00:00".into()),
         error: None,
         todo: None,
+        plan: None,
     }
 }
 
@@ -339,7 +346,10 @@ fn missing_secret_keeps_the_last_good_window_and_still_shows_the_todo() {
         custom::parse_quota(CustomQuotaPreset::OpenAiCompatible, &[SUBSCRIPTION, USAGE]).unwrap();
     quota::apply_fetch_results(
         &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+        [(
+            "custom:a3f9c1".to_string(),
+            Ok((windows, now.to_rfc3339()).into()),
+        )],
     )
     .unwrap();
     // 旧缓存里可能把这句话写成了 error；待办要把它挪走，窗口留下。

@@ -1,16 +1,19 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use base64::Engine;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
 
 const BILLING_CREDITS_URL: &str = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
 const BILLING_MONTHLY_URL: &str = "https://cli-chat-proxy.grok.com/v1/billing";
 const USER_URL: &str = "https://cli-chat-proxy.grok.com/v1/user";
+const SETTINGS_URL: &str = "https://cli-chat-proxy.grok.com/v1/settings";
 const TIMEOUT: Duration = Duration::from_secs(12);
+const SETTINGS_TIMEOUT: Duration = Duration::from_secs(5);
 const LEGACY_SCOPE: &str = "https://accounts.x.ai/sign-in";
 const SUPERGROK_SCOPE_PREFIX: &str = "https://auth.x.ai";
 const API_KEY_SCOPE: &str = "xai::api_key";
@@ -37,7 +40,7 @@ pub struct RefreshCredentials {
     pub client_id: String,
 }
 
-pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     let session = load_session()?;
     let mut token = ensure_fresh_token(&session)?;
     let mut user_id = resolve_user_id(&session, &token)?;
@@ -68,7 +71,8 @@ pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String>
     if windows.is_empty() {
         return Err("Grok 限额响应里没有可用的已用百分比".to_string());
     }
-    Ok((windows, Utc::now().to_rfc3339()))
+    let plan = fetch_plan(&token, Some(&user_id)).or_else(|| parse_jwt_plan(&token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
 /// 本地已知过期时提前现刷，省一次注定 401 的往返；没有刷新凭证才把过期错误原样交回。
@@ -325,6 +329,53 @@ pub fn parse_user_id_response(raw: &str) -> Result<String, String> {
         .ok_or_else(|| "Grok 用户信息里没有 userId".to_string())
 }
 
+/// `GET /v1/settings` 的 `subscription_tier_display`。失败不影响额度窗口。
+fn fetch_plan(token: &str, user_id: Option<&str>) -> Option<String> {
+    let raw = request_json_with_timeout(token, user_id, SETTINGS_URL, SETTINGS_TIMEOUT).ok()?;
+    parse_settings_plan(&raw)
+}
+
+pub fn parse_settings_plan(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    let node = value.get("config").unwrap_or(&value);
+    [
+        "subscription_tier_display",
+        "subscriptionTierDisplay",
+        "subscription_tier",
+        "subscriptionTier",
+    ]
+    .into_iter()
+    .find_map(|key| string_field(node, key).or_else(|| string_field(&value, key)))
+    .and_then(|value| display_plan_label(&value))
+}
+
+/// JWT `tier` 声明兜底。官方自己说它可能滞后，只在 settings 没给展示名时用。
+pub fn parse_jwt_plan(token: &str) -> Option<String> {
+    let payload = token.split('.').nth(1).filter(|part| !part.is_empty())?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload.trim_end_matches('='))
+        .ok()?;
+    let claims: Value = serde_json::from_slice(&bytes).ok()?;
+    if let Some(n) = claims.get("tier").and_then(Value::as_u64) {
+        let raw = match n {
+            0 => "free",
+            1 => "supergrok",
+            2 => "x_basic",
+            3 => "x_premium",
+            4 => "x_premium_plus",
+            5 => "supergrok_heavy",
+            6 => "supergrok_lite",
+            7 => "supergrok_plus",
+            _ => return None,
+        };
+        return display_plan_label(raw);
+    }
+    claims
+        .get("tier")
+        .and_then(Value::as_str)
+        .and_then(display_plan_label)
+}
+
 fn load_session() -> Result<GrokSession, String> {
     let path = auth_path();
     if !path.exists() {
@@ -369,7 +420,16 @@ fn grok_home() -> PathBuf {
 }
 
 fn request_json(token: &str, user_id: Option<&str>, url: &str) -> Result<String, String> {
-    let mut request = crate::net::agent_with_timeout(TIMEOUT)
+    request_json_with_timeout(token, user_id, url, TIMEOUT)
+}
+
+fn request_json_with_timeout(
+    token: &str,
+    user_id: Option<&str>,
+    url: &str,
+    timeout: Duration,
+) -> Result<String, String> {
+    let mut request = crate::net::agent_with_timeout(timeout)
         .get(url)
         .set("Authorization", &format!("Bearer {token}"))
         .set("X-XAI-Token-Auth", TOKEN_AUTH)

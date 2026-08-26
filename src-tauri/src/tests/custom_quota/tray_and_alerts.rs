@@ -49,6 +49,7 @@ fn custom_row(windows: Vec<OfficialQuotaWindow>) -> OfficialQuotaRow {
         captured_at: Some("2026-08-24T12:00:00+00:00".into()),
         error: None,
         todo: None,
+        plan: None,
     }
 }
 
@@ -78,7 +79,7 @@ fn tray_keeps_enabled_custom_providers_when_every_builtin_account_is_hidden() {
         &conn,
         [(
             "custom:a3f9c1".to_string(),
-            Ok((vec![percent_window(38.0, None)], now.to_rfc3339())),
+            Ok((vec![percent_window(38.0, None)], now.to_rfc3339()).into()),
         )],
     )
     .unwrap();
@@ -161,7 +162,10 @@ fn custom_percent_windows_without_a_reset_time_still_alert() {
     assert_eq!(windows[0].resets_at, None);
     quota::apply_fetch_results(
         &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+        [(
+            "custom:a3f9c1".to_string(),
+            Ok((windows, now.to_rfc3339()).into()),
+        )],
     )
     .unwrap();
 
@@ -221,6 +225,7 @@ fn builtin_percent_windows_without_a_reset_time_still_do_not_alert() {
             captured_at: Some("2026-08-24T12:00:00+00:00".into()),
             error: None,
             todo: None,
+            plan: None,
         }],
         true,
     );
@@ -264,7 +269,8 @@ fn a_hot_custom_balance_alerts_but_does_not_steal_the_tray_title() {
                         ..Default::default()
                     }],
                     now.to_rfc3339(),
-                )),
+                )
+                    .into()),
             ),
             (
                 "custom:a3f9c1".to_string(),
@@ -275,7 +281,8 @@ fn a_hot_custom_balance_alerts_but_does_not_steal_the_tray_title() {
                     )
                     .unwrap(),
                     now.to_rfc3339(),
-                )),
+                )
+                    .into()),
             ),
         ],
     )

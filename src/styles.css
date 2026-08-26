@@ -63,6 +63,12 @@
   --tone-qwen-fg: #c4b5fd;
   --tone-other-bg: rgba(148, 163, 184, 0.16);
   --tone-other-fg: #cbd5e1;
+  --plan-flagship-fg: #f0d070;
+  --plan-bronze-fg: #e2b07a;
+  --plan-paid-fg: #e6e9ef;
+  --plan-free-fg: var(--muted);
+  --plan-free-bg: rgba(148, 163, 184, 0.08);
+  --plan-free-line: rgba(148, 163, 184, 0.16);
   --scrim: rgba(7, 11, 22, 0.45);
   font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
   color: var(--text);
@@ -129,6 +135,12 @@
   --tone-qwen-fg: #6d28d9;
   --tone-other-bg: rgba(100, 116, 139, 0.14);
   --tone-other-fg: #475569;
+  --plan-flagship-fg: #f0d070;
+  --plan-bronze-fg: #e2b07a;
+  --plan-paid-fg: #e6e9ef;
+  --plan-free-fg: var(--muted);
+  --plan-free-bg: rgba(100, 116, 139, 0.08);
+  --plan-free-line: rgba(100, 116, 139, 0.16);
   --scrim: rgba(244, 246, 251, 0.65);
   border-color: var(--line);
 }
@@ -3622,6 +3634,129 @@ td.row-actions {
   min-width: 0;
 }
 
+.official-quota-plan {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  isolation: isolate;
+  margin-left: 8px;
+  padding: 3px 10px 5px;
+  border-radius: 7px;
+  min-width: 0;
+  max-width: 13em;
+  overflow: hidden;
+}
+
+.official-quota-plan::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  border: 1px solid rgba(168, 172, 180, 0.42);
+  background-color: #121214;
+  background-image:
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.05) 0 1px,
+      transparent 1px 2px
+    ),
+    linear-gradient(180deg, #3a3a3e 0%, #1a1a1d 46%, #0b0b0d 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.official-quota-plan-label {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+  background-image: linear-gradient(180deg, #ffffff 0%, #d4d8e0 38%, #9399a4 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: var(--plan-paid-fg);
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.28)) drop-shadow(0 1px 0 rgba(0, 0, 0, 0.78));
+}
+
+.official-quota-plan.is-flagship::before {
+  border-color: rgba(224, 186, 96, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 232, 180, 0.28),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.78),
+    inset 0 0 0 1px rgba(72, 48, 8, 0.4);
+}
+
+.official-quota-plan.is-flagship .official-quota-plan-label {
+  background-image: linear-gradient(180deg, #fff6d2 0%, #f0d070 34%, #d4a84a 62%, #9a6c18 100%);
+  color: var(--plan-flagship-fg);
+  filter: drop-shadow(0 -0.5px 0 rgba(255, 244, 210, 0.35)) drop-shadow(0 1px 0 rgba(40, 24, 0, 0.82));
+}
+
+.official-quota-plan.is-flagship::after {
+  content: "";
+  position: absolute;
+  left: 16%;
+  right: 12%;
+  bottom: 3px;
+  z-index: 2;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 220, 150, 0.15) 22%,
+    rgba(255, 242, 205, 0.95) 50%,
+    rgba(255, 220, 150, 0.15) 78%,
+    transparent 100%
+  );
+  box-shadow: 0 0 5px 0.5px rgba(255, 214, 120, 0.4);
+}
+
+.official-quota-plan.is-bronze::before {
+  border-color: rgba(196, 122, 64, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(240, 196, 150, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.78),
+    inset 0 0 0 1px rgba(72, 36, 8, 0.42);
+}
+
+.official-quota-plan.is-bronze .official-quota-plan-label {
+  background-image: linear-gradient(180deg, #f6dfc4 0%, #d4a06a 34%, #b06a38 62%, #6e3c16 100%);
+  color: var(--plan-bronze-fg);
+  filter: drop-shadow(0 -0.5px 0 rgba(255, 228, 196, 0.28)) drop-shadow(0 1px 0 rgba(48, 20, 0, 0.82));
+}
+
+.official-quota-plan.is-free {
+  padding: 1px 7px;
+  overflow: visible;
+  background: var(--plan-free-bg);
+  border: 1px solid var(--plan-free-line);
+}
+
+.official-quota-plan.is-free::before,
+.official-quota-plan.is-free::after {
+  content: none;
+}
+
+.official-quota-plan.is-free .official-quota-plan-label {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  background: none;
+  color: var(--plan-free-fg);
+  -webkit-text-fill-color: currentColor;
+  filter: none;
+}
+
 .official-quota-refresh,
 .collapsible-toggle {
   width: 22px;
@@ -3876,6 +4011,7 @@ td.row-actions {
 
 .official-quota-status li {
   display: flex;
+  align-items: center;
   gap: 10px;
   font-size: 12px;
 }

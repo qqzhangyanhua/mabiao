@@ -16,7 +16,36 @@ use super::{
 use crate::domain::{OfficialQuotaProvider, OfficialQuotaWindow};
 use crate::store;
 
-pub type ProviderFetch = Result<(Vec<OfficialQuotaWindow>, String), String>;
+/// 一次成功取数的结果。`plan` 只有 Cursor / Grok 会填；其余账号留空。
+#[derive(Debug, Clone, PartialEq)]
+pub struct QuotaSnapshot {
+    pub windows: Vec<OfficialQuotaWindow>,
+    pub captured_at: String,
+    pub plan: Option<String>,
+}
+
+impl QuotaSnapshot {
+    pub fn new(windows: Vec<OfficialQuotaWindow>, captured_at: impl Into<String>) -> Self {
+        Self {
+            windows,
+            captured_at: captured_at.into(),
+            plan: None,
+        }
+    }
+
+    pub fn with_plan(mut self, plan: Option<String>) -> Self {
+        self.plan = plan.filter(|value| !value.is_empty());
+        self
+    }
+}
+
+impl From<(Vec<OfficialQuotaWindow>, String)> for QuotaSnapshot {
+    fn from((windows, captured_at): (Vec<OfficialQuotaWindow>, String)) -> Self {
+        Self::new(windows, captured_at)
+    }
+}
+
+pub type ProviderFetch = Result<QuotaSnapshot, String>;
 
 /// 取数目标的两个共同点：额度缓存用的标识，和报错时给用户看的名字。
 ///
@@ -126,14 +155,18 @@ pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<Fetc
 /// 两条都失败时报接口那条：多数人应该走的是它。
 fn fetch_codex() -> ProviderFetch {
     match codex_usage::fetch_usage() {
-        Ok(result) => Ok(result),
-        Err(error) => codex::fetch_rate_limits().map_err(|app_server_error| {
-            if app_server_error.contains("未找到 Codex CLI") {
-                error
-            } else {
-                app_server_error
-            }
-        }),
+        Ok(result) => Ok(result.into()),
+        Err(error) => {
+            codex::fetch_rate_limits()
+                .map(QuotaSnapshot::from)
+                .map_err(|app_server_error| {
+                    if app_server_error.contains("未找到 Codex CLI") {
+                        error
+                    } else {
+                        app_server_error
+                    }
+                })
+        }
     }
 }
 
@@ -142,17 +175,23 @@ fn fetch_codex() -> ProviderFetch {
 /// 错误信息取自动接口那条，因为那是多数人应该走的路。
 fn fetch_claude() -> ProviderFetch {
     match claude_usage::fetch_usage() {
-        Ok(result) => Ok(result),
-        Err(error) => claude::refresh_from_capture(&capture_path()).map_err(|capture_error| {
-            if capture_error.contains("尚未捕获") {
-                // 两条路都没有：多数是第三方代理用户，官方登录态是空的，
-                // 提示里把 statusline 这条兜底也说出来，否则只能看到一句读不懂的报错。
-                format!("{error}。若使用第三方代理，可在设置页写入 statusline hook 后重试")
-            } else {
-                capture_error
-            }
-        }),
+        Ok(result) => Ok(result.into()),
+        Err(error) => claude::refresh_from_capture(&capture_path())
+            .map(QuotaSnapshot::from)
+            .map_err(|capture_error| {
+                if capture_error.contains("尚未捕获") {
+                    // 两条路都没有：多数是第三方代理用户，官方登录态是空的，
+                    // 提示里把 statusline 这条兜底也说出来，否则只能看到一句读不懂的报错。
+                    format!("{error}。若使用第三方代理，可在设置页写入 statusline hook 后重试")
+                } else {
+                    capture_error
+                }
+            }),
     }
+}
+
+fn snapshot(result: Result<(Vec<OfficialQuotaWindow>, String), String>) -> ProviderFetch {
+    result.map(QuotaSnapshot::from)
 }
 
 pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
@@ -161,11 +200,11 @@ pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
         OfficialQuotaProvider::Codex => fetch_codex(),
         OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary(),
         OfficialQuotaProvider::Grok => grok::fetch_rate_limits(),
-        OfficialQuotaProvider::Droid => droid::fetch_rate_limits(),
-        OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits(),
-        OfficialQuotaProvider::OpenCode => opencode::fetch_usage(),
-        OfficialQuotaProvider::Copilot => copilot::fetch_usage(),
-        OfficialQuotaProvider::Devin => devin::fetch_usage(),
+        OfficialQuotaProvider::Droid => snapshot(droid::fetch_rate_limits()),
+        OfficialQuotaProvider::Antigravity => snapshot(antigravity::fetch_rate_limits()),
+        OfficialQuotaProvider::OpenCode => snapshot(opencode::fetch_usage()),
+        OfficialQuotaProvider::Copilot => snapshot(copilot::fetch_usage()),
+        OfficialQuotaProvider::Devin => snapshot(devin::fetch_usage()),
     }
 }
 
@@ -333,9 +372,14 @@ pub fn apply_fetch_results<T: QuotaTarget>(
 ) -> Result<(), String> {
     for (target, result) in results {
         match result {
-            Ok((windows, captured_at)) => {
-                store::upsert_official_quota(conn, target.quota_id(), &windows, &captured_at, None)?
-            }
+            Ok(snapshot) => store::upsert_official_quota(
+                conn,
+                target.quota_id(),
+                &snapshot.windows,
+                &snapshot.captured_at,
+                None,
+                snapshot.plan.as_deref(),
+            )?,
             Err(error) => store::set_official_quota_error(conn, target.quota_id(), &error)?,
         }
     }

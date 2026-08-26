@@ -268,11 +268,13 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             provider TEXT PRIMARY KEY,
             windows_json TEXT NOT NULL,
             captured_at TEXT NOT NULL,
-            error TEXT
+            error TEXT,
+            plan TEXT
         );
         "#,
     )
     .map_err(|e| e.to_string())?;
+    ensure_column(conn, "official_quota", "plan", "TEXT")?;
     ensure_column(conn, "ingested_files", "source", "TEXT NOT NULL DEFAULT ''")?;
     ensure_column(
         conn,
@@ -1162,16 +1164,18 @@ pub fn upsert_official_quota(
     windows: &[OfficialQuotaWindow],
     captured_at: &str,
     error: Option<&str>,
+    plan: Option<&str>,
 ) -> Result<(), String> {
     let windows_json = serde_json::to_string(windows).map_err(|e| e.to_string())?;
     conn.execute(
-        "INSERT INTO official_quota(provider, windows_json, captured_at, error)
-         VALUES(?1, ?2, ?3, ?4)
+        "INSERT INTO official_quota(provider, windows_json, captured_at, error, plan)
+         VALUES(?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(provider) DO UPDATE SET
             windows_json = excluded.windows_json,
             captured_at = excluded.captured_at,
-            error = excluded.error",
-        params![provider, windows_json, captured_at, error],
+            error = excluded.error,
+            plan = COALESCE(excluded.plan, official_quota.plan)",
+        params![provider, windows_json, captured_at, error, plan],
     )
     .map_err(|e| e.to_string())?;
     Ok(())
@@ -1199,32 +1203,57 @@ pub fn set_official_quota_error(
     Ok(())
 }
 
-type OfficialQuotaRow = (Vec<OfficialQuotaWindow>, String, Option<String>);
+type OfficialQuotaRow = (
+    Vec<OfficialQuotaWindow>,
+    String,
+    Option<String>,
+    Option<String>,
+);
 
 pub fn load_official_quota_row(
     conn: &Connection,
     provider: &str,
 ) -> Result<Option<OfficialQuotaRow>, String> {
+    match query_official_quota_row(conn, provider, true) {
+        Ok(row) => Ok(row),
+        Err(error) if error.contains("no such column") => {
+            query_official_quota_row(conn, provider, false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn query_official_quota_row(
+    conn: &Connection,
+    provider: &str,
+    with_plan: bool,
+) -> Result<Option<OfficialQuotaRow>, String> {
+    let sql = if with_plan {
+        "SELECT windows_json, captured_at, error, plan FROM official_quota WHERE provider = ?1"
+    } else {
+        "SELECT windows_json, captured_at, error FROM official_quota WHERE provider = ?1"
+    };
     let row = conn
-        .query_row(
-            "SELECT windows_json, captured_at, error FROM official_quota WHERE provider = ?1",
-            params![provider],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                ))
-            },
-        )
+        .query_row(sql, params![provider], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                if with_plan {
+                    row.get::<_, Option<String>>(3)?
+                } else {
+                    None
+                },
+            ))
+        })
         .optional()
         .map_err(|e| e.to_string())?;
-    let Some((windows_json, captured_at, error)) = row else {
+    let Some((windows_json, captured_at, error, plan)) = row else {
         return Ok(None);
     };
     let windows: Vec<OfficialQuotaWindow> =
         serde_json::from_str(&windows_json).map_err(|e| format!("官方额度缓存损坏：{e}"))?;
-    Ok(Some((windows, captured_at, error)))
+    Ok(Some((windows, captured_at, error, plan)))
 }
 
 pub fn cursor_session_has_source_file(conn: &Connection, path: &str) -> Result<bool, String> {

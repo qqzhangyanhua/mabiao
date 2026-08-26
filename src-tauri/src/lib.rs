@@ -1050,6 +1050,7 @@ fn overlay_cooldown_message(
             captured_at: None,
             error: Some(message),
             todo: None,
+            plan: None,
         }),
     }
     Ok(dto)
@@ -1134,11 +1135,11 @@ async fn test_custom_quota_provider(
     tauri::async_runtime::spawn_blocking(move || {
         let paths = app.state::<AppState>().custom_quota_paths.clone();
         let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
-        let (windows, captured_at) =
+        let snapshot =
             official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
         Ok(official_quota::custom::panel::CustomQuotaTestDto {
-            windows,
-            captured_at,
+            windows: snapshot.windows,
+            captured_at: snapshot.captured_at,
         })
     })
     .await

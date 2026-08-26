@@ -266,6 +266,9 @@ pub struct OfficialQuotaRow {
     /// 待办提示，不是取数失败。恢复备份后缺密钥走这里。
     #[serde(default)]
     pub todo: Option<String>,
+    /// 账号套餐展示名。Cursor / Grok 能拿到；其余账号和自定义提供商留空。
+    #[serde(default)]
+    pub plan: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

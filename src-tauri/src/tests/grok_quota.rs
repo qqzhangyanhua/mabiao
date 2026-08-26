@@ -119,6 +119,48 @@ fn grok_monthly_skips_when_used_missing() {
 }
 
 #[test]
+fn grok_settings_plan_reads_subscription_tier_display() {
+    assert_eq!(
+        official_quota::grok::parse_settings_plan(
+            r#"{"subscription_tier_display":"SuperGrok Heavy"}"#
+        )
+        .as_deref(),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
+        official_quota::grok::parse_settings_plan(
+            r#"{"config":{"subscription_tier":"supergrok"}}"#
+        )
+        .as_deref(),
+        Some("SuperGrok")
+    );
+    assert!(official_quota::grok::parse_settings_plan(r#"{"ok":true}"#).is_none());
+}
+
+#[test]
+fn grok_jwt_plan_maps_numeric_tier() {
+    fn jwt(payload: &str) -> String {
+        use base64::Engine;
+        let encode =
+            |raw: &str| base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(raw.as_bytes());
+        format!("{}.{}.sig", encode(r#"{"alg":"none"}"#), encode(payload))
+    }
+    assert_eq!(
+        official_quota::grok::parse_jwt_plan(&jwt(r#"{"tier":1}"#)).as_deref(),
+        Some("SuperGrok")
+    );
+    assert_eq!(
+        official_quota::grok::parse_jwt_plan(&jwt(r#"{"tier":5}"#)).as_deref(),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
+        official_quota::grok::parse_jwt_plan(&jwt(r#"{"tier":"x_premium_plus"}"#)).as_deref(),
+        Some("X Premium+")
+    );
+    assert!(official_quota::grok::parse_jwt_plan("not-a-jwt").is_none());
+}
+
+#[test]
 fn grok_rejects_leaked_percent_and_unknown_shape() {
     let leaked = r#"{ "config": { "creditUsagePercent": 1776950400 } }"#;
     assert!(official_quota::grok::parse_credits(leaked)

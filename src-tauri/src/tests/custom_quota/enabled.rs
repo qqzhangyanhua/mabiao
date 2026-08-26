@@ -111,7 +111,7 @@ fn disabled_custom_providers_do_not_alert() {
         &conn,
         [(
             "custom:a3f9c1".to_string(),
-            Ok((vec![hot_window()], now.to_rfc3339())),
+            Ok((vec![hot_window()], now.to_rfc3339()).into()),
         )],
     )
     .unwrap();

@@ -4,17 +4,36 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::cursor_account;
+use crate::cursor_credentials;
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
 
 const USAGE_SUMMARY_URL: &str = "https://cursor.com/api/usage-summary";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
-pub fn fetch_usage_summary() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    let token = cursor_account::current_token()?;
-    let raw = request_usage_summary(&token)?;
+pub fn fetch_usage_summary() -> Result<QuotaSnapshot, String> {
+    let credential = cursor_credentials::read_local_credential()
+        .filter(|value| !value.is_expired())
+        .ok_or_else(cursor_account::missing_token_error)?;
+    let raw = request_usage_summary(&credential.session_token)?;
     let windows = parse_usage_summary(&raw)?;
-    Ok((windows, Utc::now().to_rfc3339()))
+    let plan = parse_membership_type(&raw).or_else(|| {
+        credential
+            .membership
+            .as_deref()
+            .and_then(display_plan_label)
+    });
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+/// `GET /api/usage-summary` 顶层的 `membershipType`，如 `pro` / `ultra`。
+pub fn parse_membership_type(raw: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    value
+        .get("membershipType")
+        .or_else(|| value.get("membership_type"))
+        .and_then(Value::as_str)
+        .and_then(display_plan_label)
 }
 
 /// 把 `GET /api/usage-summary` 拆成独立窗口：总量 / Auto / API / 按需。

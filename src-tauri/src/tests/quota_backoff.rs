@@ -159,7 +159,7 @@ fn parallel_fetch_runs_concurrently_and_keeps_order() {
             50
         };
         std::thread::sleep(std::time::Duration::from_millis(nap));
-        Ok((Vec::new(), provider.as_str().to_string()))
+        Ok((Vec::new(), provider.as_str().to_string()).into())
     });
     let elapsed = started.elapsed();
 
@@ -178,7 +178,7 @@ fn parallel_fetch_survives_one_provider_panicking() {
     let targets = vec![OfficialQuotaProvider::Cursor, OfficialQuotaProvider::Grok];
     let results = crate::official_quota::fetch_in_parallel(targets, |provider| {
         assert!(*provider != OfficialQuotaProvider::Cursor, "故意 panic");
-        Ok((Vec::new(), String::new()))
+        Ok((Vec::new(), String::new()).into())
     });
     // 一家炸了，另一家的结果照常拿到。
     assert_eq!(results.len(), 2);

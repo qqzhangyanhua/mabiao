@@ -121,6 +121,27 @@ export function officialQuotaEmptyCopy(data: OfficialQuotaDto | null): {
   return { title: "所选账号均已隐藏", hint: "在「配置显示」里打开要看的账号" };
 }
 
+export type OfficialQuotaPlanKind = "flagship" | "bronze" | "paid" | "free";
+
+/** Ultra / SuperGrok Heavy 金色，Pro 青铜，其余付费铂金，Free 压暗。 */
+export function officialQuotaPlanKind(plan: string): OfficialQuotaPlanKind {
+  const key = plan.trim().toLowerCase();
+  if (key === "ultra" || key === "supergrok heavy") {
+    return "flagship";
+  }
+  if (key === "pro") {
+    return "bronze";
+  }
+  if (key === "free" || key === "x basic") {
+    return "free";
+  }
+  return "paid";
+}
+
+export function officialQuotaPlanClass(plan: string): string {
+  return `official-quota-plan is-${officialQuotaPlanKind(plan)}`;
+}
+
 /** 首页额度行底下那句：待办不是取数失败，两套样式靠 `kind` 分开。 */
 export function officialQuotaNotice(row: {
   todo: string | null;

@@ -17,6 +17,89 @@ fn parse_provider_accepts_known_accounts_and_rejects_unknown() {
 }
 
 #[test]
+fn display_plan_label_maps_known_cursor_and_grok_tiers() {
+    assert_eq!(
+        official_quota::display_plan_label("pro").as_deref(),
+        Some("Pro")
+    );
+    assert_eq!(
+        official_quota::display_plan_label("pro_plus").as_deref(),
+        Some("Pro+")
+    );
+    assert_eq!(
+        official_quota::display_plan_label("SuperGrok Heavy").as_deref(),
+        Some("SuperGrok Heavy")
+    );
+    assert_eq!(
+        official_quota::display_plan_label("x-premium-plus").as_deref(),
+        Some("X Premium+")
+    );
+    assert_eq!(
+        official_quota::display_plan_label("Mystery Plan").as_deref(),
+        Some("Mystery Plan")
+    );
+    assert!(official_quota::display_plan_label("  ").is_none());
+}
+
+#[test]
+fn official_quota_keeps_last_plan_when_refresh_omits_it() {
+    let conn = store::open_memory().unwrap();
+    official_quota::apply_fetch_results(
+        &conn,
+        [(
+            crate::domain::OfficialQuotaProvider::Cursor,
+            Ok(official_quota::QuotaSnapshot::new(
+                vec![crate::domain::OfficialQuotaWindow {
+                    kind: "billing_cycle".into(),
+                    label: "总量".into(),
+                    used_percent: Some(10.0),
+                    resets_at: None,
+                    ..Default::default()
+                }],
+                "2026-08-18T12:00:00+00:00",
+            )
+            .with_plan(Some("Pro".into()))),
+        )],
+    )
+    .unwrap();
+    official_quota::apply_fetch_results(
+        &conn,
+        [(
+            crate::domain::OfficialQuotaProvider::Cursor,
+            Ok(official_quota::QuotaSnapshot::new(
+                vec![crate::domain::OfficialQuotaWindow {
+                    kind: "billing_cycle".into(),
+                    label: "总量".into(),
+                    used_percent: Some(20.0),
+                    resets_at: None,
+                    ..Default::default()
+                }],
+                "2026-08-18T12:05:00+00:00",
+            )),
+        )],
+    )
+    .unwrap();
+    let row = store::load_official_quota_row(&conn, "cursor")
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.0[0].used_percent, Some(20.0));
+    assert_eq!(row.3.as_deref(), Some("Pro"));
+    let dto = official_quota::load_dto(
+        &conn,
+        &crate::domain::OfficialQuotaConfig::default(),
+        &[],
+        chrono::Utc::now(),
+    );
+    assert_eq!(
+        dto.rows
+            .iter()
+            .find(|row| row.provider == "cursor")
+            .and_then(|row| row.plan.as_deref()),
+        Some("Pro")
+    );
+}
+
+#[test]
 fn official_quota_keeps_last_good_windows_on_fetch_failure() {
     let conn = store::open_memory().unwrap();
     let windows = vec![crate::domain::OfficialQuotaWindow {
@@ -94,6 +177,7 @@ fn tightest_window_picks_highest_cursor_dimension() {
             captured_at: Some("2026-08-18T12:00:00+00:00".into()),
             error: None,
             todo: None,
+            plan: None,
         }],
         alerts_enabled: true,
         stale_after_minutes: 10,
@@ -146,7 +230,8 @@ fn apply_fetch_results_isolates_provider_failures() {
                         ..Default::default()
                     }],
                     "2026-08-18T12:00:00+00:00".into(),
-                )),
+                )
+                    .into()),
             ),
             (
                 crate::domain::OfficialQuotaProvider::Codex,
@@ -234,6 +319,7 @@ fn visible_rows_drops_only_hidden_providers() {
             captured_at: None,
             error: None,
             todo: None,
+            plan: None,
         },
         crate::domain::OfficialQuotaRow {
             provider: "devin".into(),
@@ -243,6 +329,7 @@ fn visible_rows_drops_only_hidden_providers() {
             captured_at: None,
             error: None,
             todo: None,
+            plan: None,
         },
     ];
     let hidden = vec!["devin".to_string()];

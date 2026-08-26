@@ -35,7 +35,7 @@ use crate::store;
 pub use fetch::{
     apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_in_parallel,
     fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled, parse_provider,
-    resolve_target, FetchTarget, ProviderFetch, QuotaTarget, ThrottledFetch,
+    resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget, ThrottledFetch,
 };
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
@@ -177,7 +177,7 @@ fn load_row_by_id(
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     match store::load_official_quota_row(conn, id) {
-        Ok(Some((windows, captured_at, error))) => {
+        Ok(Some((windows, captured_at, error, plan))) => {
             let freshness = if windows.is_empty() && captured_at.is_empty() {
                 OfficialQuotaFreshness::Unavailable
             } else {
@@ -195,6 +195,7 @@ fn load_row_by_id(
                 },
                 error,
                 todo: None,
+                plan,
             }
         }
         Ok(None) => empty_row(id, display_name, None),
@@ -211,6 +212,7 @@ fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuo
         captured_at: None,
         error,
         todo: None,
+        plan: None,
     }
 }
 
@@ -220,7 +222,7 @@ pub fn apply_success(
     windows: Vec<OfficialQuotaWindow>,
     captured_at: &str,
 ) -> Result<(), String> {
-    store::upsert_official_quota(conn, provider.as_str(), &windows, captured_at, None)
+    store::upsert_official_quota(conn, provider.as_str(), &windows, captured_at, None, None)
 }
 
 pub fn apply_failure(
@@ -239,7 +241,7 @@ pub fn sync_claude_capture(conn: &Connection) -> Result<bool, String> {
     }
     let cached = store::load_official_quota_row(conn, OfficialQuotaProvider::Claude.as_str())?;
     let file_stamp = claude::file_captured_at(&path)?;
-    if let Some((_, captured_at, _)) = &cached {
+    if let Some((_, captured_at, _, _)) = &cached {
         if !captured_at.is_empty() && captured_at == &file_stamp {
             return Ok(false);
         }
@@ -319,6 +321,42 @@ fn short_label(kind: &str, label: &str) -> String {
         "product_grokbuild" => "Build".to_string(),
         _ => label.to_string(),
     }
+}
+
+/// 套餐原值（接口 membershipType / subscription_tier_display / JWT tier）→ 界面展示名。
+/// 认不出就原样返回（去空白）；空串当没有。
+pub fn display_plan_label(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let key: String = trimmed
+        .chars()
+        .map(|c| match c {
+            '-' | ' ' => '_',
+            _ => c,
+        })
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let label = match key.as_str() {
+        "hobby" | "free" => "Free",
+        "pro" => "Pro",
+        "pro_plus" | "proplus" | "pro+" => "Pro+",
+        "ultra" => "Ultra",
+        "business" => "Business",
+        "enterprise" => "Enterprise",
+        "team" => "Team",
+        "supergrok" | "grokpro" => "SuperGrok",
+        "supergrok_heavy" | "supergrokpro" | "supergrok_pro" => "SuperGrok Heavy",
+        "supergrok_lite" | "supergroklite" => "SuperGrok Lite",
+        "supergrok_plus" | "supergrokplus" => "SuperGrok Plus",
+        "x_basic" | "xbasic" => "X Basic",
+        "x_premium" | "xpremium" => "X Premium",
+        "x_premium_plus" | "xpremiumplus" | "x_premium+" => "X Premium+",
+        "api_key" | "apikey" => "API Key",
+        _ => trimmed,
+    };
+    Some(label.to_string())
 }
 
 pub fn parse_resets_at(value: &serde_json::Value) -> Option<String> {

@@ -69,7 +69,7 @@ Claude Code 2.1.80+ 在 statusline 命令的 stdin JSON 里提供：
 凭证只有一个来源：本机 Cursor 客户端。没有手动粘贴通路，也不落钥匙串。`state.vscdb`（Win `%APPDATA%\Cursor\User\globalStorage`、mac `~/Library/Application Support/Cursor/...`、Linux `~/.config/Cursor/...`，三平台都在 `dirs::config_dir()` 下）的 `ItemTable`：
 
 - `cursorAuth/accessToken`：WorkOS JWT，`iss=https://authentication.cursor.sh`，`sub` 形如 `google-oauth|user_01J…`。value 列可能是 TEXT 也可能是 BLOB。
-- `cursorAuth/cachedEmail` / `cursorAuth/stripeMembershipType`：只用于设置页展示。
+- `cursorAuth/cachedEmail` / `cursorAuth/stripeMembershipType`：email 给设置页；`stripeMembershipType` 是套餐兜底（接口缺 `membershipType` 时用）。
 - cookie 值 = `<sub 里 "|" 之后那段>` + `%3A%3A` + `<jwt>`，即 `WorkosCursorSessionToken`。
 - 过期判断用 JWT 的 `exp`（留 60s 容差）。
 
@@ -84,6 +84,7 @@ Cursor 订阅限额是多档并行，不能只取总量：
 - `individualUsage.plan.apiPercentUsed` → 窗口 `api` / API
 - `individualUsage.onDemand.used` / `limit`（无 limit 时回退 `teamUsage.onDemand`）→ 窗口 `on_demand` / 按需
 - `billingCycleEnd`
+- `membershipType`（或 `membership_type`）→ 行级套餐展示名：`pro` / `pro_plus` / `ultra` / `enterprise` / `hobby` 等。缺了回退本机 `stripeMembershipType`。
 
 与账号用量事件接口 `get-filtered-usage-events` 分开。结构变更时保留上次正确缓存。
 
@@ -203,6 +204,9 @@ REST `?format=credits` 对部分账号会 500（`Failed to serialize billing res
 - `GET https://cli-chat-proxy.grok.com/v1/billing`（失败不影响周额度）
   - `used` / `monthlyLimit`（或 `usage.totalUsed`，支持 `{val}` 包装）→ 窗口 `monthly` / 月额度
   - 缺 `used` 不当成 0%
+- `GET https://cli-chat-proxy.grok.com/v1/settings`（失败不影响额度窗口，5 秒超时）
+  - `subscription_tier_display`（其次 `subscription_tier`）→ 行级套餐展示名：`SuperGrok` / `SuperGrok Heavy` / `Free` / `X Premium+`
+  - 缺展示名时兜底 JWT `tier` 声明（0–7 的数字枚举，可能滞后）
 
 文件缺失、过期或结构变更：该行 `unavailable`，保留上次正确缓存。不把 token 或 billing 原文写入日志。
 

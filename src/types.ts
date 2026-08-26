@@ -102,6 +102,8 @@ export type OfficialQuotaRow = {
   error: string | null;
   /** 待办提示，不是取数失败。恢复备份后缺密钥走这里。 */
   todo: string | null;
+  /** 账号套餐展示名。Cursor / Grok 能拿到；其余账号和自定义提供商为 null。 */
+  plan: string | null;
 };
 
 export type OfficialQuotaConfig = {

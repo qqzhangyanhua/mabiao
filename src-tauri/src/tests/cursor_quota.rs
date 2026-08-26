@@ -4,6 +4,7 @@ use crate::official_quota;
 fn cursor_usage_summary_parses_plan_percent() {
     let raw = r#"{
         "billingCycleEnd": "2026-09-02T14:11:55.000Z",
+        "membershipType": "pro",
         "individualUsage": { "plan": { "used": 800, "limit": 1000, "totalPercentUsed": 80 } }
     }"#;
     let windows = official_quota::cursor::parse_usage_summary(raw).unwrap();
@@ -11,6 +12,28 @@ fn cursor_usage_summary_parses_plan_percent() {
     assert_eq!(windows[0].kind, "billing_cycle");
     assert_eq!(windows[0].label, "总量");
     assert_eq!(windows[0].used_percent, Some(80.0));
+    assert_eq!(
+        official_quota::cursor::parse_membership_type(raw).as_deref(),
+        Some("Pro")
+    );
+}
+
+#[test]
+fn cursor_membership_type_maps_known_plans_and_skips_missing() {
+    assert_eq!(
+        official_quota::cursor::parse_membership_type(r#"{"membershipType":"pro_plus"}"#)
+            .as_deref(),
+        Some("Pro+")
+    );
+    assert_eq!(
+        official_quota::cursor::parse_membership_type(r#"{"membershipType":"ultra"}"#).as_deref(),
+        Some("Ultra")
+    );
+    assert_eq!(
+        official_quota::cursor::parse_membership_type(r#"{"membership_type":"hobby"}"#).as_deref(),
+        Some("Free")
+    );
+    assert!(official_quota::cursor::parse_membership_type(r#"{"ok":true}"#).is_none());
 }
 
 #[test]

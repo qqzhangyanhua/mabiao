@@ -204,7 +204,7 @@ fn manual_refresh_during_custom_cooldown_says_how_long_and_keeps_last_window() {
         &conn,
         [(
             "custom:a3f9c1".to_string(),
-            Ok((windows, now().to_rfc3339())),
+            Ok((windows, now().to_rfc3339()).into()),
         )],
     )
     .unwrap();
@@ -334,7 +334,7 @@ fn precheck_failures_through_manual_refresh_do_not_enter_backoff() {
 #[test]
 fn a_successful_fetch_forgets_the_custom_provider_on_disk() {
     let (_dir, path, mut state) = seeded_cooldown("custom:a3f9c1", "对方限流了，稍后会自动重试");
-    let ok: quota::ProviderFetch = Ok((Vec::new(), now().to_rfc3339()));
+    let ok: quota::ProviderFetch = Ok((Vec::new(), now().to_rfc3339()).into());
 
     fetch::record_backoff(&mut state, [("custom:a3f9c1", &ok)], now(), &path);
 

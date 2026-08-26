@@ -8,6 +8,8 @@ import {
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
   officialQuotaNotice,
+  officialQuotaPlanClass,
+  officialQuotaPlanKind,
   officialQuotaRefreshHint,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
@@ -150,6 +152,30 @@ describe("officialQuotaAmountLabel", () => {
     expect(
       officialQuotaAmountLabel({ used_amount: null, limit_amount: null, currency: "USD" }),
     ).toBeNull();
+  });
+});
+
+describe("officialQuotaPlanKind", () => {
+  it("marks Ultra and SuperGrok Heavy as flagship", () => {
+    expect(officialQuotaPlanKind("Ultra")).toBe("flagship");
+    expect(officialQuotaPlanKind("SuperGrok Heavy")).toBe("flagship");
+    expect(officialQuotaPlanClass("Ultra")).toBe("official-quota-plan is-flagship");
+  });
+
+  it("marks Pro as bronze and leaves Pro+ on silver", () => {
+    expect(officialQuotaPlanKind("Pro")).toBe("bronze");
+    expect(officialQuotaPlanClass("Pro")).toBe("official-quota-plan is-bronze");
+    expect(officialQuotaPlanKind("Pro+")).toBe("paid");
+  });
+
+  it("keeps other paid plans on the quieter paid tone", () => {
+    expect(officialQuotaPlanKind("SuperGrok")).toBe("paid");
+    expect(officialQuotaPlanKind("Enterprise")).toBe("paid");
+  });
+
+  it("dims free-tier labels", () => {
+    expect(officialQuotaPlanKind("Free")).toBe("free");
+    expect(officialQuotaPlanKind("X Basic")).toBe("free");
   });
 });
 

@@ -5,7 +5,7 @@ import {
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import type { OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
-import { QuotaFreshnessMark, useTickingNow } from "./OfficialQuotaPanel";
+import { OfficialQuotaPlanMark, QuotaFreshnessMark, useTickingNow } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
 
@@ -107,6 +107,7 @@ export function OfficialQuotaSettingsPanel({
               <strong>
                 <SourceLabel source={row.provider} fallback={row.application} size={14} />
               </strong>
+              {row.plan ? <OfficialQuotaPlanMark plan={row.plan} /> : null}
               <QuotaFreshnessMark
                 freshness={row.freshness}
                 capturedAt={row.captured_at}

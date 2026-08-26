@@ -10,6 +10,7 @@ import {
   officialQuotaEmptyCopy,
   officialQuotaFreshnessTitle,
   officialQuotaNotice,
+  officialQuotaPlanClass,
   officialQuotaRefreshHint,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
@@ -265,6 +266,14 @@ function QuotaRow({
   );
 }
 
+export function OfficialQuotaPlanMark({ plan }: { plan: string }) {
+  return (
+    <span className={officialQuotaPlanClass(plan)} title={plan}>
+      <span className="official-quota-plan-label">{plan}</span>
+    </span>
+  );
+}
+
 function QuotaRowTitle({
   row,
   busy,
@@ -281,6 +290,7 @@ function QuotaRowTitle({
       <strong>
         <SourceLabel source={row.provider} fallback={row.application} />
       </strong>
+      {row.plan ? <OfficialQuotaPlanMark plan={row.plan} /> : null}
       {onRefresh ? (
         <Button
           variant="icon"

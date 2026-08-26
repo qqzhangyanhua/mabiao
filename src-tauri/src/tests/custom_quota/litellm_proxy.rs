@@ -238,7 +238,11 @@ fn saving_a_litellm_proxy_provider_joins_official_quota() {
     let windows = custom::parse_quota(CustomQuotaPreset::LiteLlmProxy, &[&nested()]).unwrap();
     let now = chrono::Utc::now();
     let conn = db::open_memory().unwrap();
-    quota::apply_fetch_results(&conn, [(id.clone(), Ok((windows, now.to_rfc3339())))]).unwrap();
+    quota::apply_fetch_results(
+        &conn,
+        [(id.clone(), Ok((windows, now.to_rfc3339()).into()))],
+    )
+    .unwrap();
 
     let dto = quota::load_dto(
         &conn,
@@ -348,7 +352,10 @@ fn litellm_proxy_percent_windows_alert_like_other_custom_providers() {
     let conn = db::open_memory().unwrap();
     quota::apply_fetch_results(
         &conn,
-        [("custom:a3f9c1".to_string(), Ok((windows, now.to_rfc3339())))],
+        [(
+            "custom:a3f9c1".to_string(),
+            Ok((windows, now.to_rfc3339()).into()),
+        )],
     )
     .unwrap();
 
