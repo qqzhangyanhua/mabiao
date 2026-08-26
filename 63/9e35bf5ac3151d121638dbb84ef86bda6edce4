@@ -1,0 +1,39 @@
+src/components/InstructionOverlap.tsx
+  s_1c6975da34b30a::t_413d849e2df613 19,33
+src/components/InstructionClaudeMemory.tsx
+  s_1c6975da34b30a::t_f2aefb91f78c3e 12-19
+src/components/InstructionCheckup.tsx
+  s_1c6975da34b30a::t_c5ec4dd2bfeb70 14-16
+src/components/InstructionInsight.tsx
+  s_1c6975da34b30a::t_a6a6904576f743 14-19
+src/styles.css
+  s_b8ed6334eb29b0::t_f2dc3dd96dbc1b 5686-5707,5838,5847-5852,5854,5857,5860-5861,5864-5869,5872-5873,5876-5877,5918,5934-5936,5939-5943,5948-5950,5969-5970,5975,6021,6029-6030,6035,6137-6141,6219,6224,6227,6235,6241-6243,6283-6285,6299-6303,6316-6317,6319-6320
+src/components/GlobalInstructionPanel.tsx
+  s_1c6975da34b30a::t_c77c5710a3c3aa 346-352
+  s_1c6975da34b30a::t_b54943b15fbe97 174-181
+  s_1c6975da34b30a::t_5026680e27f032 242-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "639e35bf5ac3151d121638dbb84ef86bda6edce4",
+  "prompts": {},
+  "sessions": {
+    "s_1c6975da34b30a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "88ad2f56-1350-4670-abd0-9c9832f13692",
+        "model": "grok-4.5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_b8ed6334eb29b0": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a03e2c-791c-7e63-8957-5feaab6b208b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
