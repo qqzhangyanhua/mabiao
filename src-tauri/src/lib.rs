@@ -46,7 +46,8 @@ use crate::domain::{
     FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
     OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
     PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
-    SourceDiagnostic, UsageCallPage, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
+    SourceDiagnostic, UnpricedGroupDto, UsageCallPage, WorkTimelineDto, WriteUserFileRequest,
+    WriteUserFileResult,
 };
 use crate::official_quota::QuotaTarget;
 
@@ -355,6 +356,18 @@ async fn get_filter_options(app: tauri::AppHandle) -> Result<FilterOptions, Stri
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         query::filter_options(&conn)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_unpriced_diagnosis(app: tauri::AppHandle) -> Result<Vec<UnpricedGroupDto>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        query::unpriced_diagnosis(&conn, &prices)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1411,6 +1424,7 @@ pub fn run() {
             get_top_sessions,
             get_work_timeline,
             get_filter_options,
+            get_unpriced_diagnosis,
             get_prices,
             save_price_table,
             get_budget_status,

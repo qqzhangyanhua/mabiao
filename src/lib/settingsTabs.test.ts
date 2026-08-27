@@ -18,6 +18,7 @@ describe("tabFromHash", () => {
     expect(tabFromHash("#settings-backup")).toBe("backup");
     expect(tabFromHash("#settings-cursor-account")).toBe("cursor");
     expect(tabFromHash("#settings-litellm")).toBe("pricing");
+    expect(tabFromHash("#settings-unpriced")).toBe("pricing");
     expect(tabFromHash("#settings-presets")).toBe("pricing");
     expect(tabFromHash("#settings-prices")).toBe("pricing");
   });
