@@ -112,6 +112,51 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "仅会话结束时上报（累计）",
         display_dirs: None,
     },
+    UsageAdapter {
+        source: Source::Dsh,
+        scan_dirs: dsh::scan_dirs,
+        discover: dsh::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: dsh::parse,
+        prepare_dir: None,
+        // zstd 会话整份重写，不是追加型日志；记录数下降不能当截断。
+        append_log: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Gemini,
+        scan_dirs: gemini::scan_dirs,
+        discover: gemini::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: gemini::parse,
+        prepare_dir: None,
+        append_log: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Qwen,
+        scan_dirs: qwen::scan_dirs,
+        discover: qwen::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: qwen::parse,
+        prepare_dir: None,
+        append_log: false,
+        coverage: "本地无 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Factory,
+        scan_dirs: factory::scan_dirs,
+        discover: factory::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: factory::parse,
+        prepare_dir: None,
+        append_log: false,
+        coverage: "会话累计 Token（无模型名）",
+        display_dirs: None,
+    },
 ];
 
 pub(crate) fn usage_adapter(source: Source) -> Option<&'static UsageAdapter> {
@@ -127,6 +172,26 @@ pub(crate) fn discover_jsonl(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
         paths.extend(crate::ingest::walk_files(root, "jsonl")?);
     }
     Ok(paths)
+}
+
+/// 按文件名后缀收集。dsh 的 `session.jsonl.zstd` 与 Factory 的 `.settings.json` 共用。
+pub(crate) fn discover_suffix(roots: &[PathBuf], suffix: &str) -> Result<Vec<PathBuf>, String> {
+    let mut paths = Vec::new();
+    for root in roots {
+        paths.extend(crate::ingest::walk_suffix(root, suffix)?);
+    }
+    Ok(paths)
+}
+
+/// 整份读入 JSON：先校验语法，再交给适配器解析。Gemini / Qwen / Factory 共用。
+pub(crate) fn parse_whole_json(
+    path: &Path,
+    parse: fn(&str, &str) -> Vec<UsageRecord>,
+) -> Result<Vec<UsageRecord>, String> {
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let content = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
+    serde_json::from_str::<serde::de::IgnoredAny>(content).map_err(|error| error.to_string())?;
+    Ok(parse(content, path.to_string_lossy().as_ref()))
 }
 
 pub(crate) fn empty_sidecar(_path: &Path, _dirs: &[PathBuf]) -> String {

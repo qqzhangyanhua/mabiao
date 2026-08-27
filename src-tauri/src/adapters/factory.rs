@@ -1,8 +1,29 @@
+use std::path::{Path, PathBuf};
+
 use serde_json::Value;
 
 use crate::adapters::project::decode_dashed_dir;
-use crate::adapters::{finish, i64_field, text_field};
+use crate::adapters::{discover_suffix, finish, i64_field, parse_whole_json, text_field};
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::{self, PathOverrides};
+
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    ingest::resolve_dirs(
+        overrides,
+        home,
+        "FACTORY_SESSIONS_DIR",
+        ".factory/sessions",
+        "",
+    )
+}
+
+pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    discover_suffix(roots, ".settings.json")
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    parse_whole_json(path, parse_factory_settings)
+}
 
 pub fn parse_factory_settings(content: &str, source_file: &str) -> Vec<UsageRecord> {
     let value: Value = match serde_json::from_str(content) {
