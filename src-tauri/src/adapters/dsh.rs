@@ -1,5 +1,21 @@
-use crate::adapters::{finish, i64_field, parse_jsonl_values, text_field};
+use std::path::{Path, PathBuf};
+
+use crate::adapters::{discover_suffix, finish, i64_field, parse_jsonl_values, text_field};
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::{self, PathOverrides};
+
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    ingest::resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions")
+}
+
+pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    discover_suffix(roots, "session.jsonl.zstd")
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    parse_dsh_zstd(&bytes, path.to_string_lossy().as_ref())
+}
 
 pub fn parse_dsh_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
     let mut session_id = String::new();

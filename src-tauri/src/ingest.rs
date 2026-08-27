@@ -8,7 +8,7 @@ use rusqlite::Connection;
 
 use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
 use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
-use crate::adapters::{dsh, factory, gemini, grok, qwen, usage_adapter, UsageAdapter};
+use crate::adapters::{grok, usage_adapter, UsageAdapter};
 use crate::cursor_session;
 use crate::domain::{
     CodeVolumeSummary, IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport,
@@ -102,21 +102,15 @@ pub(crate) fn source_scan_dirs_with(
             ".local/share/opencode",
             "opencode.db",
         ),
-        Source::Dsh => resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions"),
-        Source::Gemini => resolve_dirs(overrides, home, "GEMINI_DATA_DIR", ".gemini/tmp", ""),
         Source::Grok => resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions"),
-        Source::Qwen => resolve_dirs(overrides, home, "QWEN_DATA_DIR", ".qwen", "tmp"),
-        Source::Factory => resolve_dirs(
-            overrides,
-            home,
-            "FACTORY_SESSIONS_DIR",
-            ".factory/sessions",
-            "",
-        ),
         Source::Codex
         | Source::Claude
         | Source::Pi
         | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Qwen
+        | Source::Factory
         | Source::CursorAgent
         | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
@@ -252,23 +246,6 @@ fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, S
         return (adapter.discover)(dirs);
     }
     match source {
-        Source::Dsh => list_suffix_files(dirs, "session.jsonl.zstd"),
-        Source::Gemini => {
-            let mut paths = Vec::new();
-            for root in dirs {
-                for path in walk_files(root, "json")? {
-                    if path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or("")
-                        .starts_with("session-")
-                    {
-                        paths.push(path);
-                    }
-                }
-            }
-            Ok(paths)
-        }
         Source::Grok => {
             let mut paths = Vec::new();
             for root in dirs {
@@ -280,34 +257,18 @@ fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, S
             }
             Ok(paths)
         }
-        Source::Qwen => {
-            let mut paths = Vec::new();
-            for root in dirs {
-                for path in walk_files(root, "json")? {
-                    if path.file_name().and_then(|name| name.to_str()) == Some("logs.json") {
-                        paths.push(path);
-                    }
-                }
-            }
-            Ok(paths)
-        }
-        Source::Factory => list_suffix_files(dirs, ".settings.json"),
         Source::Opencode => Ok(dirs.iter().filter(|path| path.exists()).cloned().collect()),
         Source::Codex
         | Source::Claude
         | Source::Pi
         | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Qwen
+        | Source::Factory
         | Source::CursorAgent
         | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
-}
-
-fn list_suffix_files(roots: &[PathBuf], suffix: &str) -> Result<Vec<PathBuf>, String> {
-    let mut paths = Vec::new();
-    for root in roots {
-        paths.extend(walk_suffix(root, suffix)?);
-    }
-    Ok(paths)
 }
 
 /// 供测试直接注入路径覆盖表，绕开真实进程环境变量（并行跑测试改真实环境变量不安全）。
@@ -550,17 +511,17 @@ fn source_coverage(source: Source) -> &'static str {
         return adapter.coverage;
     }
     match source {
-        Source::Qwen => "本地无 Token",
-        Source::Grok => "轮级 Token",
-        // Factory 本机存储不含模型名字段，只能按 token 统计，无法按模型定价。
-        Source::Factory => "会话累计 Token（无模型名）",
+        Source::Grok | Source::Opencode => "轮级 Token",
         Source::Codex
         | Source::Claude
         | Source::Pi
         | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Qwen
+        | Source::Factory
         | Source::CursorAgent
         | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-        _ => "轮级 Token",
     }
 }
 
@@ -576,16 +537,16 @@ fn ingest_source(
         return ingest_from_adapter(conn, adapter, &dirs, report);
     }
     match source {
-        Source::Dsh => ingest_dsh(conn, &dirs, report),
-        Source::Gemini => ingest_gemini(conn, &dirs, report),
         Source::Grok => ingest_grok(conn, &dirs, report),
-        Source::Qwen => ingest_qwen(conn, &dirs, report),
-        Source::Factory => ingest_factory(conn, &dirs, report),
         Source::Opencode => ingest_opencode(conn, &dirs, report),
         Source::Codex
         | Source::Claude
         | Source::Pi
         | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Qwen
+        | Source::Factory
         | Source::CursorAgent
         | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
@@ -682,7 +643,7 @@ fn is_append_log_source(source: Source) -> bool {
     if let Some(adapter) = usage_adapter(source) {
         return adapter.append_log;
     }
-    matches!(source, Source::Dsh | Source::Grok)
+    matches!(source, Source::Grok)
 }
 
 pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
@@ -725,7 +686,8 @@ pub(crate) fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> 
 }
 
 /// 表里已登记的来源走同一条摄取路径：发现、比指纹、解析、对账。
-/// 「怎么读」在 `adapter.parse` 内部：Kimi 整份读入；jsonl 家族按行打开磁盘。
+/// 「怎么读」在 `adapter.parse` 内部：jsonl 家族按行打开磁盘；
+/// 整份读入家族（dsh / Gemini / Qwen / Factory）先解压或校验结构再解析。
 fn ingest_from_adapter(
     conn: &Connection,
     adapter: &UsageAdapter,
@@ -766,53 +728,6 @@ fn ingest_from_adapter(
         }
     }
     reconcile_source(conn, adapter.source, &seen, report)
-}
-
-fn ingest_dsh(
-    conn: &Connection,
-    roots: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Dsh;
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_suffix(root, "session.jsonl.zstd")? {
-            seen.insert(path.to_string_lossy().to_string());
-            ingest_one(conn, source, &path, "", report, dsh::parse_dsh_zstd)?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
-}
-
-fn ingest_gemini(
-    conn: &Connection,
-    roots: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Gemini;
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_files(root, "json")? {
-            if !path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .starts_with("session-")
-            {
-                continue;
-            }
-            seen.insert(path.to_string_lossy().to_string());
-            ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde::de::IgnoredAny>(content)
-                    .map_err(|e| e.to_string())?;
-                Ok(gemini::parse_gemini_session(content, loc))
-            })?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
 }
 
 fn ingest_grok(
@@ -865,53 +780,6 @@ fn ingest_grok(
                 let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
                 validate_jsonl(content)?;
                 Ok(grok::parse_grok_updates(content, loc, &model))
-            })?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
-}
-
-fn ingest_qwen(
-    conn: &Connection,
-    roots: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Qwen;
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_files(root, "json")? {
-            if path.file_name().and_then(|name| name.to_str()) != Some("logs.json") {
-                continue;
-            }
-            seen.insert(path.to_string_lossy().to_string());
-            ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde::de::IgnoredAny>(content)
-                    .map_err(|e| e.to_string())?;
-                Ok(qwen::parse_qwen_session(content, loc))
-            })?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
-}
-
-fn ingest_factory(
-    conn: &Connection,
-    roots: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Factory;
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_suffix(root, ".settings.json")? {
-            seen.insert(path.to_string_lossy().to_string());
-            ingest_one(conn, source, &path, "", report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                serde_json::from_str::<serde::de::IgnoredAny>(content)
-                    .map_err(|e| e.to_string())?;
-                Ok(factory::parse_factory_settings(content, loc))
             })?;
         }
     }
@@ -1137,7 +1005,7 @@ pub(crate) fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>, S
     })
 }
 
-fn walk_suffix(root: &Path, suffix: &str) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn walk_suffix(root: &Path, suffix: &str) -> Result<Vec<PathBuf>, String> {
     walk_matching(root, |path| {
         path.file_name()
             .and_then(|name| name.to_str())
