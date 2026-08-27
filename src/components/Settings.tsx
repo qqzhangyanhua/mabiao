@@ -89,7 +89,10 @@ export function Settings({
 }) {
   const detectedSources = diagnostics.filter((row) => row.detected).map((row) => row.source);
   const [tab, setTab] = useState<SettingsTabId>(() => tabFromHash(window.location.hash));
-  const [anchor, setAnchor] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<string | null>(() => {
+    const hash = window.location.hash.replace(/^#/, "");
+    return hash.startsWith("settings-") ? hash : null;
+  });
   const [diagnosisEpoch, setDiagnosisEpoch] = useState(0);
   const [prefillKey, setPrefillKey] = useState<string | null>(null);
 

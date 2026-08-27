@@ -4,6 +4,7 @@ import { breakdownBarOption } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
 import { rawProviderName } from "../lib/filterChips";
 import { formatCost, formatTokens, projectLabel, providerChannel } from "../lib/format";
+import { unpricedKpiLink } from "../lib/unpricedKpi";
 import type { Filter, NamedAmount } from "../types";
 import { BreakdownCallTable } from "./BreakdownCallTable";
 import { EmptyState } from "./EmptyState";
@@ -31,6 +32,7 @@ export const Breakdown = memo(function Breakdown({
   theme,
   onProviderClick,
   onOpenConversation,
+  onOpenUnpricedDiagnosis,
   onError,
 }: {
   title: string;
@@ -45,6 +47,7 @@ export const Breakdown = memo(function Breakdown({
   theme: ResolvedTheme;
   onProviderClick?: (provider: string) => void;
   onOpenConversation?: (session: { id: string; source: string }) => void;
+  onOpenUnpricedDiagnosis?: () => void;
   onError?: (error: unknown) => void;
 }) {
   const label = useCallback(
@@ -71,6 +74,8 @@ export const Breakdown = memo(function Breakdown({
 
   const top = rows.slice(0, 6);
   const maxTotal = Math.max(1, ...rows.map((row) => row.total_tokens));
+  const unpricedLink =
+    onOpenUnpricedDiagnosis != null ? unpricedKpiLink(stats.unpricedCount) : null;
 
   return (
     <div className="stack">
@@ -88,7 +93,15 @@ export const Breakdown = memo(function Breakdown({
           label="合计费用"
           value={stats.hasCost ? `$${stats.totalCost.toFixed(2)}` : "—"}
         />
-        <KpiCard icon="filter" tone="blue" label="单价未配置" value={`${stats.unpricedCount} 项`} />
+        <KpiCard
+          icon="filter"
+          tone="blue"
+          label="单价未配置"
+          value={`${stats.unpricedCount} 项`}
+          hint={unpricedLink?.hint}
+          actionLabel={unpricedLink?.actionLabel}
+          onClick={unpricedLink ? onOpenUnpricedDiagnosis : undefined}
+        />
       </section>
 
       {top.length > 0 ? (
