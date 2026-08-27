@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row};
 
 use crate::billing_window;
+use crate::cost::attach_snapshot_candidates;
 use crate::cursor_account;
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
@@ -404,11 +405,13 @@ pub fn unpriced_diagnosis(
     prices: &PriceTable,
 ) -> Result<Vec<UnpricedGroupDto>, String> {
     install_prices(conn, prices)?;
-    if crate::store::rollup_is_ready(conn) {
-        unpriced_diagnosis_from_rollup(conn)
+    let mut groups = if crate::store::rollup_is_ready(conn) {
+        unpriced_diagnosis_from_rollup(conn)?
     } else {
-        unpriced_diagnosis_from_records(conn)
-    }
+        unpriced_diagnosis_from_records(conn)?
+    };
+    attach_snapshot_candidates(&mut groups, prices);
+    Ok(groups)
 }
 
 fn unpriced_diagnosis_from_rollup(conn: &Connection) -> Result<Vec<UnpricedGroupDto>, String> {
@@ -485,6 +488,7 @@ fn finish_unpriced_groups(
             sources: acc.sources.into_iter().collect(),
             total_tokens: acc.total_tokens,
             record_count: acc.record_count,
+            candidate: None,
         })
         .collect();
     rows.sort_by(|a, b| {

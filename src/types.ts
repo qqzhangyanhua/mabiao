@@ -574,6 +574,8 @@ export type UnpricedGroupDto = {
   total_tokens: number;
   record_count: number;
   reason: UnpricedReason;
+  /** 签名兼容的候选价目；来源多为 LiteLLM 快照。精确已命中或完全对不上时为空。 */
+  candidate?: PriceEntry | null;
 };
 
 export type PriceSnapshotMeta = {

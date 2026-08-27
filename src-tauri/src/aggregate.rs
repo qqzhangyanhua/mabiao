@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use chrono::{DateTime, Datelike, Utc};
 
 use crate::billing_window;
-use crate::cost::{derive_cost, sum_costs, sum_cursor_event_costs};
+use crate::cost::{attach_snapshot_candidates, derive_cost, sum_costs, sum_cursor_event_costs};
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewDto,
@@ -111,6 +111,7 @@ pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<U
             sources: acc.sources.into_iter().collect(),
             total_tokens: acc.total_tokens,
             record_count: acc.record_count,
+            candidate: None,
         })
         .collect();
     rows.sort_by(|a, b| {
@@ -119,6 +120,7 @@ pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<U
             .then_with(|| a.model.cmp(&b.model))
             .then_with(|| a.provider.cmp(&b.provider))
     });
+    attach_snapshot_candidates(&mut rows, prices);
     rows
 }
 

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::domain::{
-    CostSource, CursorUsageEvent, DerivedCost, PriceEntry, PriceOrigin, PriceTable, UsageRecord,
+    CostSource, CursorUsageEvent, DerivedCost, PriceEntry, PriceOrigin, PriceTable,
+    UnpricedGroupDto, UnpricedReason, UsageRecord,
 };
 
 struct PricedTokens<'a> {
@@ -161,6 +162,36 @@ fn model_matches(entry_model: &str, record_model: &str) -> bool {
 
 fn provider_matches(entry_provider: &str, record_provider: &str) -> bool {
     entry_provider == record_provider || entry_provider.eq_ignore_ascii_case(record_provider)
+}
+
+/// 诊断路径：精确查价未命中时，给出签名兼容的最佳候选条目。
+///
+/// 复用 [`find_price_by_signature`] 的启发式打分，不另造匹配逻辑。
+/// **不**用于消耗记录费用推导——那边的签名模糊匹配保持关闭。
+///
+/// - 已有精确价（model+provider，或 model 且 provider 为空）时返回空
+/// - 用户价目在打分里优先于快照
+/// - 完全对不上时返回空
+/// - 返回的条目保持被命中价目的形状（含四个口径与来源），可直接预填
+pub fn snapshot_price_candidate(model: &str, prices: &PriceTable) -> Option<PriceEntry> {
+    if model.is_empty() {
+        return None;
+    }
+    if find_price(model, "", prices).is_some() {
+        return None;
+    }
+    find_price_by_signature(model, prices).cloned()
+}
+
+/// 给未定价诊断的可补组挂上快照候选。结构性那档（空模型名）不查。
+pub fn attach_snapshot_candidates(groups: &mut [UnpricedGroupDto], prices: &PriceTable) {
+    for group in groups {
+        group.candidate = if group.reason == UnpricedReason::Pricable {
+            snapshot_price_candidate(&group.model, prices)
+        } else {
+            None
+        };
+    }
 }
 
 /// Cursor 仪表盘模型名常与 LiteLLM 键不一致（`claude-4.6-sonnet` ↔ `claude-sonnet-4-6`，
