@@ -1,0 +1,39 @@
+src-tauri/src/adapters/mod.rs
+  s_0cbffc71930a52::t_44ccecdae08587 18-22,28-37,41,44-45,47-54,56-65
+  s_0cbffc71930a52::t_3c0766247d75ac 23-25,27,38-40,46
+  s_0cbffc71930a52::t_e63caec5efeeb1 26,42-43,55
+src-tauri/src/tests/ingest.rs
+  s_0cbffc71930a52::t_7c6b4719c35fa9 322,398-402
+  s_0cbffc71930a52::t_88feb9fa20db24 292-294,298-301,307-321,323-335,365-397,403-418
+  s_0cbffc71930a52::t_57ddc0cffd54e1 295-297,336-360
+  s_0cbffc71930a52::t_32d5bcc04f4030 559-563
+  s_0cbffc71930a52::t_6d999d511920cb 361-364
+  s_0cbffc71930a52::t_2bfa204d00e2ba 419
+src-tauri/src/adapters/kimi.rs
+  s_0cbffc71930a52::t_7c6b4719c35fa9 63
+  s_0cbffc71930a52::t_6d999d511920cb 35-37
+  s_0cbffc71930a52::t_cff8817caee664 2-3,7-33,40-62,64-89
+  s_0cbffc71930a52::t_3feb987a88d91c 34,38-39
+src-tauri/src/ingest.rs
+  s_0cbffc71930a52::t_90186d352835a2 271,832,834,836-837,842,873
+  s_0cbffc71930a52::t_fa6ea6db6e306a 12-13,72,110-112,124,256-258,277-279,284,424-429,592-594,598,600,615-617,628,778-780,793
+  s_0cbffc71930a52::t_405a6f529eb42d 855
+  s_0cbffc71930a52::t_50ee2b39c91a77 833,843-849,852-854,858-860,864-865,867-869
+  s_0cbffc71930a52::t_2463d255defceb 103-104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "266e020a03bf61aa669071cefc2ebc4399489366",
+  "prompts": {},
+  "sessions": {
+    "s_0cbffc71930a52": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a04299-3685-7243-ab61-dafe90b2aff0",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
