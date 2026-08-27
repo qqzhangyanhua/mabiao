@@ -1,0 +1,40 @@
+AGENTS.md
+  s_6d921103b009bd::t_4bf6c1330a9e00 70,73-84
+  s_6d921103b009bd::t_820270477dfd20 91,93-95
+  s_6d921103b009bd::t_5e04874b7bd72e 24,29-32
+  s_6d921103b009bd::t_130f016131d76d 85
+README.md
+  s_6d921103b009bd::t_88ca9e9dc2ceb5 74
+  s_6d921103b009bd::t_14020e8e1932bb 32
+  s_6d921103b009bd::t_f16f00baf73b7f 54
+  s_6d921103b009bd::t_56a0924a5a7421 53
+  s_6d921103b009bd::t_f3952e5d2a6d06 43
+README.en.md
+  s_6d921103b009bd::t_e4eb18900f8030 43
+  s_6d921103b009bd::t_fbe1f080ac09ce 74
+  s_6d921103b009bd::t_29affef7a537b2 54
+  s_6d921103b009bd::t_23954c85915ccf 53
+  s_6d921103b009bd::t_dfe8a3f7c1d560 32
+CONTEXT.md
+  s_6d921103b009bd::t_d2e24bc06cdbd2 40
+  s_6d921103b009bd::t_37a7be2b1051f8 28
+docs/platforms.md
+  s_6d921103b009bd::t_d21572ad1afa68 3
+  s_6d921103b009bd::t_199fb3af5477b7 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d689442b3e487bc98980a8cf5159a791e7ee8921",
+  "prompts": {},
+  "sessions": {
+    "s_6d921103b009bd": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "b0fe8368-027c-45ec-a49e-54647fff48b1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
