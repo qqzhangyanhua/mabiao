@@ -1755,12 +1755,21 @@ fn cursor_metadata_revision(
     .unwrap_or_default()
 }
 
-fn conversation_source_roots(home: &Path, source: Source) -> Vec<PathBuf> {
+/// Cursor Agent 对话在 `~/.cursor/projects`，与 token 包装目录不是同一条路径。
+pub(crate) fn catalog_roots(
+    overrides: &crate::ingest::PathOverrides,
+    home: &Path,
+    source: Source,
+) -> Vec<PathBuf> {
     if source == Source::CursorAgent {
         vec![home.join(".cursor/projects")]
     } else {
-        ingest::source_scan_dirs(home, source)
+        ingest::source_scan_dirs_with(overrides, home, source)
     }
+}
+
+fn conversation_source_roots(home: &Path, source: Source) -> Vec<PathBuf> {
+    catalog_roots(&ingest::env_overrides(), home, source)
 }
 
 pub fn detail_state(

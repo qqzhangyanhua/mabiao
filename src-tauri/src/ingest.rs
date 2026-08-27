@@ -24,32 +24,19 @@ pub fn default_home() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// 每个 Source 的路径环境变量名，用于整体覆盖默认扫描根目录（逗号分隔多个绝对路径）。
-/// 命名尽量对齐 ccusage 等同类工具的既有约定，方便同时使用多个统计工具的用户复用配置。
-const PATH_ENV_VARS: [&str; 12] = [
-    "CODEX_HOME",
-    "CLAUDE_CONFIG_DIR",
-    "PI_AGENT_DIR",
-    "OPENCODE_DATA_DIR",
-    "KIMI_DATA_DIR",
-    "DSH_HOME",
-    "GEMINI_DATA_DIR",
-    "GROK_HOME",
-    "QWEN_DATA_DIR",
-    "FACTORY_SESSIONS_DIR",
-    "CURSOR_AGENT_USAGE_DIR",
-    "COPILOT_HOME",
-];
-
 /// 环境变量覆盖表：键为环境变量名，值为解析后的根目录列表。只在真正设置了变量时才有
 /// 条目。用一个显式的 map 而不是在各处直接读 `std::env::var`，是为了让路径拼接逻辑可以
 /// 脱离进程级环境变量单独做单元测试（并行跑测试时修改真实环境变量并不安全）。
 pub(crate) type PathOverrides = BTreeMap<&'static str, Vec<PathBuf>>;
 
-fn env_overrides() -> PathOverrides {
-    PATH_ENV_VARS
+pub(crate) fn env_overrides() -> PathOverrides {
+    Source::ALL
         .iter()
-        .filter_map(|&var| env_override(var).map(|paths| (var, paths)))
+        .copied()
+        .filter_map(|source| {
+            let var = usage_adapter(source).path_env;
+            env_override(var).map(|paths| (var, paths))
+        })
         .collect()
 }
 
@@ -134,7 +121,28 @@ pub fn load_scan_cache(conn: &Connection) -> Result<ScanCache, String> {
 }
 
 pub fn scan_is_stale_from_cache(cache: &ScanCache, home: &Path) -> Result<bool, String> {
-    scan_is_stale_cached(cache, home, &env_overrides())
+    scan_is_stale_with_overrides(cache, home, &env_overrides())
+}
+
+/// 供测试注入与摄取相同的路径覆盖表，避免心跳判定偷偷读进程环境变量。
+pub(crate) fn scan_is_stale_with_overrides(
+    cache: &ScanCache,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<bool, String> {
+    scan_is_stale_cached(cache, home, overrides)
+}
+
+/// 心跳枚举出的消耗记录源文件路径。测试用同一份 PathOverrides 与 ingested_files 对照。
+#[cfg(test)]
+pub(crate) fn watched_usage_paths(
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<Vec<PathBuf>, String> {
+    Ok(list_watched_inputs(home, overrides)?
+        .into_iter()
+        .map(|input| input.path)
+        .collect())
 }
 
 fn scan_is_stale_cached(
@@ -304,9 +312,7 @@ pub fn rebuild_cache(
     };
     if let Some(selected) = source {
         ingest_source(&transaction, home, &overrides, selected, &mut report)?;
-        if selected == Source::CursorAgent {
-            cursor_session::ingest(&transaction, home, &mut report);
-        }
+        cursor_session::ingest_for_usage_source(&transaction, home, Some(selected), &mut report);
         refresh_conversation_catalog(
             &transaction,
             home,
@@ -316,7 +322,7 @@ pub fn rebuild_cache(
         );
     } else {
         ingest_all_sources(&transaction, home, &overrides, &mut report)?;
-        cursor_session::ingest(&transaction, home, &mut report);
+        cursor_session::ingest_for_usage_source(&transaction, home, None, &mut report);
         refresh_conversation_catalog(
             &transaction,
             home,
@@ -332,18 +338,6 @@ pub fn rebuild_cache(
     Ok(report)
 }
 
-fn conversation_source_dirs(
-    overrides: &PathOverrides,
-    home: &Path,
-    source: Source,
-) -> Vec<PathBuf> {
-    if source == Source::CursorAgent {
-        vec![home.join(".cursor/projects")]
-    } else {
-        source_scan_dirs_with(overrides, home, source)
-    }
-}
-
 fn refresh_conversation_catalog(
     conn: &Connection,
     home: &Path,
@@ -355,7 +349,7 @@ fn refresh_conversation_catalog(
         if !crate::conversation::CONVERSATION_SOURCES.contains(&source) {
             continue;
         }
-        let dirs = conversation_source_dirs(overrides, home, source);
+        let dirs = crate::conversation::catalog_roots(overrides, home, source);
         match crate::conversation::refresh_source_in_roots(conn, source, &dirs) {
             Ok(issues) => report
                 .conversation_issues
@@ -570,6 +564,12 @@ fn ingest_from_adapter(
         }
         for path in (adapter.discover)(std::slice::from_ref(root))? {
             seen.insert(path.to_string_lossy().to_string());
+            if let Some(prepare_file) = adapter.prepare_file {
+                if let Err((fail_path, error)) = prepare_file(&path) {
+                    record_failure(report, adapter.source, &fail_path.to_string_lossy(), &error);
+                    continue;
+                }
+            }
             let fingerprint = (adapter.sidecar_fingerprint)(&path, dirs);
             ingest_one_prepared(conn, adapter.source, &path, &fingerprint, report, |_| {
                 (adapter.parse)(&path, root)

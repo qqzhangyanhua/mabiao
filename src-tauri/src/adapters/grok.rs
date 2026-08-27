@@ -43,16 +43,21 @@ fn summary_path(path: &Path) -> PathBuf {
         .unwrap_or_default()
 }
 
-/// 摘要缺失时回退空模型名；解析失败必须返回 Err，由摄取记来源级失败并跳过当前文件。
+/// 摘要损坏时跳过当前会话文件，诊断路径指向 `summary.json`，不进入缓存命中/解析。
+pub(crate) fn prepare_file(path: &Path) -> Result<(), (PathBuf, String)> {
+    current_model(path)
+        .map(|_| ())
+        .map_err(|error| (summary_path(path), format!("Grok 模型摘要无效：{error}")))
+}
+
+/// 摘要缺失时回退空模型名；解析失败必须返回 Err，由 `prepare_file` 记来源级失败并跳过当前文件。
 fn current_model(path: &Path) -> Result<String, String> {
     let summary_path = summary_path(path);
     if !summary_path.exists() {
         return Ok(String::new());
     }
-    let text =
-        fs::read_to_string(&summary_path).map_err(|error| format!("Grok 模型摘要无效：{error}"))?;
-    let summary = serde_json::from_str::<Value>(&text)
-        .map_err(|error| format!("Grok 模型摘要无效：{error}"))?;
+    let text = fs::read_to_string(&summary_path).map_err(|error| error.to_string())?;
+    let summary = serde_json::from_str::<Value>(&text).map_err(|error| error.to_string())?;
     Ok(summary
         .get("current_model_id")
         .and_then(|value| value.as_str())

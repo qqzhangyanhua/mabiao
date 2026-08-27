@@ -11,7 +11,7 @@ alwaysApply: false
 ## 必须遵守的语义
 
 - 文件只有在完整读取 + 结构校验成功后，才能替换该文件在 `usage_records` 里的旧记录并更新 `ingested_files` 标记；解析失败要保留旧记录，把失败记为该 Source 的诊断问题（`record_failure`）
-- 追加型日志来源（`is_append_log_source`：codex/claude/pi/kimi/dsh/grok）如果新解析出的记录数比缓存里少，视为截断/异常，保留旧缓存并报失败，不要覆盖
+- 追加型日志来源（适配器表 `append_log`：codex / claude / pi / kimi / cursor-agent / copilot）如果新解析出的记录数比缓存里少，视为截断/异常，保留旧缓存并报失败，不要覆盖。dsh / grok / gemini / qwen / factory / opencode 不是追加型日志，记录数下降不能当截断。
 - 每个 Source 扫描完成后按本轮实际看到的路径做删除对账（`reconcile_source`）；但该 Source 本轮只要出现任何 `files_failed`，就必须跳过对账，避免把「解析失败」误判成「文件已删除」
 - 目录读取错误（`walk_matching` 报错）不能触发删除对账，只能记为来源级失败
 - 缓存键 = 主文件的 `(mtime_ms, size)` + `metadata_fingerprint`/`content_fingerprint`（辅助文件，如 Kimi 的 `kimi.json`、Grok 的 `summary.json`、OpenCode 的 `-wal`）+ `ADAPTER_VERSION`；辅助输入变化也必须使缓存失效

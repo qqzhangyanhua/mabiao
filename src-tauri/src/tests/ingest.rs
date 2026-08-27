@@ -448,6 +448,34 @@ fn invalid_grok_summary_keeps_last_good_model_and_skips_current_file() {
 }
 
 #[test]
+fn invalid_grok_summary_is_diagnosed_on_sidecar_and_not_counted_as_seen() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let updates = write_grok_session(home, "sess-a", "grok-good");
+    std::fs::write(updates.parent().unwrap().join("summary.json"), "{not-json").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let grok = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Grok.as_str())
+        .unwrap();
+
+    assert_eq!(grok.files_seen, 0);
+    assert_eq!(grok.files_failed, 1);
+    assert!(
+        report.issues.iter().any(|issue| {
+            issue.source == "grok"
+                && issue.path.ends_with("summary.json")
+                && issue.message.contains("Grok 模型摘要无效")
+        }),
+        "摘要失败应记在 summary.json 上，实际 {:?}",
+        report.issues
+    );
+}
+
+#[test]
 fn invalid_grok_summary_skips_current_file_without_failing_the_source() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -466,6 +494,7 @@ fn invalid_grok_summary_skips_current_file_without_failing_the_source() {
 
     assert_eq!(report.files_failed, 1);
     assert_eq!(grok.files_failed, 1);
+    assert_eq!(grok.files_seen, 1);
     assert_eq!(grok.files_parsed, 1);
     assert!(records.iter().all(|record| record.source == Source::Grok));
     assert!(records.iter().all(|record| record.model == "grok-good"));
@@ -828,6 +857,52 @@ fn cursor_agent_diagnostics_detect_shared_cursor_dirs_not_usage_dir() {
 }
 
 #[test]
+fn rebuild_cursor_agent_cache_refreshes_local_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    seed_cursor_transcript(
+        home,
+        "Users-test-project",
+        "sess-1",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+    let conn = store::open_memory().unwrap();
+    ingest::rebuild_cache(&conn, home, Some(Source::CursorAgent)).unwrap();
+    let summary = crate::cursor_session::load_summary(&conn).unwrap();
+    assert_eq!(summary.session_count, 1);
+}
+
+#[test]
+fn cursor_agent_conversation_index_uses_projects_dir_not_usage_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    seed_cursor_transcript(
+        home,
+        "Users-test-project",
+        "sess-1",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+    let usage_dir = home.join("elsewhere-usage");
+    std::fs::create_dir_all(&usage_dir).unwrap();
+    let overrides = ingest::PathOverrides::from([("CURSOR_AGENT_USAGE_DIR", vec![usage_dir])]);
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+    let page =
+        crate::conversation::sessions_page(&conn, &crate::domain::ConversationQuery::default())
+            .unwrap();
+    assert!(
+        page.rows
+            .iter()
+            .any(|row| row.source == Source::CursorAgent.as_str() && row.session_id == "sess-1"),
+        "对话目录必须读 ~/.cursor/projects，不能被 token 包装目录覆盖带走：{:?}",
+        page.rows
+            .iter()
+            .map(|row| (row.source.as_str(), row.session_id.as_str()))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn source_scan_dirs_default_to_home_relative_paths() {
     let home = std::path::Path::new("/home/example");
     let overrides = ingest::PathOverrides::new();
@@ -1122,13 +1197,19 @@ fn heartbeat_enumeration_matches_ingested_file_cache_for_all_sources() {
     ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
 
     let cached = store::cached_ingested_files(&conn).unwrap();
-    let mut cached_paths = Vec::new();
+    let mut cached_by_source: std::collections::BTreeMap<&str, Vec<&str>> =
+        std::collections::BTreeMap::new();
+    for row in &cached {
+        cached_by_source
+            .entry(row.source.as_str())
+            .or_default()
+            .push(row.path.as_str());
+    }
     for source in Source::ALL {
-        let source_paths: Vec<&str> = cached
-            .iter()
-            .filter(|row| row.source == source.as_str())
-            .map(|row| row.path.as_str())
-            .collect();
+        let source_paths = cached_by_source
+            .get(source.as_str())
+            .cloned()
+            .unwrap_or_default();
         assert_eq!(
             source_paths.len(),
             1,
@@ -1136,15 +1217,26 @@ fn heartbeat_enumeration_matches_ingested_file_cache_for_all_sources() {
             source.as_str(),
             source_paths
         );
-        cached_paths.push(source_paths[0].to_string());
     }
 
-    // 心跳过期判定入口对路径集合做等长 + 子集检查：不过期即心跳枚举集合
-    // 与 ingested_files 逐项相等（夹具不含 Cursor 会话，不会被会话侧新鲜度干扰）。
+    let cached_paths: std::collections::BTreeSet<String> =
+        cached.iter().map(|row| row.path.clone()).collect();
+    let watched_paths: std::collections::BTreeSet<String> =
+        ingest::watched_usage_paths(home, &overrides)
+            .unwrap()
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+    assert_eq!(
+        watched_paths, cached_paths,
+        "心跳枚举路径集合必须与 ingested_files 逐项相等（同一份 PathOverrides）"
+    );
+
+    // 夹具不含 Cursor 会话，会话侧新鲜度不会把过期判定从路径集合里带走。
     let cache = ingest::load_scan_cache(&conn).unwrap();
     assert!(
-        !ingest::scan_is_stale_from_cache(&cache, home).unwrap(),
-        "全量摄取后心跳必须不过期（枚举路径 != ingested_files）。缓存路径：{cached_paths:?}"
+        !ingest::scan_is_stale_with_overrides(&cache, home, &overrides).unwrap(),
+        "全量摄取后心跳必须不过期。缓存路径：{cached_paths:?}"
     );
 }
 
@@ -1362,6 +1454,39 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         !opencode.append_log,
         "OpenCode 不是追加型日志，迁表时不能顺手补全标记"
     );
+}
+
+#[test]
+fn usage_adapter_path_env_covers_every_registered_source_once() {
+    use crate::adapters::usage_adapters;
+    use std::collections::BTreeSet;
+
+    let home = std::path::Path::new("/home/example");
+    let mut seen = BTreeSet::new();
+    for adapter in usage_adapters() {
+        assert!(
+            !adapter.path_env.is_empty(),
+            "{} 必须登记路径覆盖环境变量",
+            adapter.source.as_str()
+        );
+        assert!(
+            seen.insert(adapter.path_env),
+            "{} 与其它来源共用了路径环境变量 {}",
+            adapter.source.as_str(),
+            adapter.path_env
+        );
+        let sentinel = PathBuf::from(format!("/override/{}", adapter.source.as_str()));
+        let overrides = ingest::PathOverrides::from([(adapter.path_env, vec![sentinel.clone()])]);
+        let dirs = (adapter.scan_dirs)(&overrides, home);
+        assert!(
+            dirs.iter().any(|dir| dir.starts_with(&sentinel)),
+            "{} 的 scan_dirs 未消费 path_env {}，实际 {:?}",
+            adapter.source.as_str(),
+            adapter.path_env,
+            dirs
+        );
+    }
+    assert_eq!(seen.len(), Source::ALL.len());
 }
 
 #[test]

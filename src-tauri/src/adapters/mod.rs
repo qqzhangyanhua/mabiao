@@ -24,6 +24,7 @@ type UsageScanDirsFn = fn(&PathOverrides, &Path) -> Vec<PathBuf>;
 type UsageDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
 type UsageSidecarFn = fn(&Path, &[PathBuf]) -> String;
 type UsagePrepareDirFn = fn(&Path) -> Result<(), (PathBuf, String)>;
+type UsagePrepareFileFn = fn(&Path) -> Result<(), (PathBuf, String)>;
 
 /// 把一个已发现的文件解析成消耗记录。
 ///
@@ -34,6 +35,8 @@ pub(crate) type UsageParseFn = fn(&Path, &Path) -> Result<Vec<UsageRecord>, Stri
 
 pub(crate) struct UsageAdapter {
     pub source: Source,
+    /// 整体覆盖默认扫描根的环境变量名。`env_overrides` 从表读取，不再手写一份名单。
+    pub path_env: &'static str,
     pub scan_dirs: UsageScanDirsFn,
     pub discover: UsageDiscoverFn,
     pub sidecar_fingerprint: UsageSidecarFn,
@@ -41,6 +44,9 @@ pub(crate) struct UsageAdapter {
     /// 扫描目录级派生上下文。失败时记来源级失败并跳过该目录，而不是让整个来源返回 Err。
     /// `Err` 的路径写入诊断，由适配器自己决定（例如辅助文件而不是扫描根）。
     pub prepare_dir: Option<UsagePrepareDirFn>,
+    /// 单个已发现文件的派生上下文。失败时记来源级失败并跳过该文件，不进入缓存命中/解析。
+    /// 用于会话级辅助文件（例如 Grok 的 `summary.json`），不要用 `prepare_dir` 代替。
+    pub prepare_file: Option<UsagePrepareFileFn>,
     pub append_log: bool,
     pub coverage: &'static str,
     pub display_dirs: Option<UsageScanDirsFn>,
@@ -68,11 +74,13 @@ impl UsageAdapter {
 const USAGE_ADAPTERS: &[UsageAdapter] = &[
     UsageAdapter {
         source: Source::Codex,
+        path_env: "CODEX_HOME",
         scan_dirs: codex::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: codex::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
@@ -80,11 +88,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Claude,
+        path_env: "CLAUDE_CONFIG_DIR",
         scan_dirs: claude::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: claude::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
@@ -92,11 +102,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Pi,
+        path_env: "PI_AGENT_DIR",
         scan_dirs: pi::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: pi::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
@@ -104,11 +116,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Kimi,
+        path_env: "KIMI_DATA_DIR",
         scan_dirs: kimi::scan_dirs,
         discover: kimi::discover,
         sidecar_fingerprint: kimi::sidecar_fingerprint,
         parse: kimi::parse,
         prepare_dir: Some(kimi::prepare_dir),
+        prepare_file: None,
         append_log: true,
         coverage: "轮级 Token（无模型名）",
         display_dirs: None,
@@ -116,11 +130,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::CursorAgent,
+        path_env: "CURSOR_AGENT_USAGE_DIR",
         scan_dirs: cursor_agent::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: cursor_agent::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: true,
         coverage: "会话与 IDE 共用本机目录；token 仅包装落盘",
         display_dirs: Some(cursor_agent::display_dirs),
@@ -128,11 +144,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Copilot,
+        path_env: "COPILOT_HOME",
         scan_dirs: copilot::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: copilot::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: true,
         coverage: "仅会话结束时上报（累计）",
         display_dirs: None,
@@ -140,11 +158,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Dsh,
+        path_env: "DSH_HOME",
         scan_dirs: dsh::scan_dirs,
         discover: dsh::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: dsh::parse,
         prepare_dir: None,
+        prepare_file: None,
         // zstd 会话整份重写，不是追加型日志；记录数下降不能当截断。
         append_log: false,
         coverage: "轮级 Token",
@@ -153,11 +173,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Gemini,
+        path_env: "GEMINI_DATA_DIR",
         scan_dirs: gemini::scan_dirs,
         discover: gemini::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: gemini::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
@@ -165,11 +187,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Qwen,
+        path_env: "QWEN_DATA_DIR",
         scan_dirs: qwen::scan_dirs,
         discover: qwen::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: qwen::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: false,
         coverage: "本地无 Token",
         display_dirs: None,
@@ -177,11 +201,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Factory,
+        path_env: "FACTORY_SESSIONS_DIR",
         scan_dirs: factory::scan_dirs,
         discover: factory::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: factory::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: false,
         coverage: "会话累计 Token（无模型名）",
         display_dirs: None,
@@ -189,11 +215,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Grok,
+        path_env: "GROK_HOME",
         scan_dirs: grok::scan_dirs,
         discover: grok::discover,
         sidecar_fingerprint: grok::sidecar_fingerprint,
         parse: grok::parse,
         prepare_dir: None,
+        prepare_file: Some(grok::prepare_file),
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
@@ -201,11 +229,13 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
     },
     UsageAdapter {
         source: Source::Opencode,
+        path_env: "OPENCODE_DATA_DIR",
         scan_dirs: opencode::scan_dirs,
         discover: opencode::discover,
         sidecar_fingerprint: opencode::sidecar_fingerprint,
         parse: opencode::parse,
         prepare_dir: None,
+        prepare_file: None,
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,

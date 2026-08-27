@@ -9,12 +9,24 @@ use crate::adapters::cursor_session::{
     apply_hash_enrichment, build_cursor_session_record, group_members_changed, group_transcripts,
     load_hash_enrichments, merge_parsed_sessions, parse_cursor_session_transcript, TranscriptGroup,
 };
-use crate::domain::{IngestIssue, IngestReport};
+use crate::domain::{IngestIssue, IngestReport, Source};
 use crate::store;
 
 pub const SOURCE_LABEL: &str = "cursor-session";
 
 pub use crate::cursor_session_query::{load_summary, sessions_page, summarize_cursor_sessions};
+
+/// 全量摄取或重建 Cursor Agent 消耗记录时，同步刷新本机 Cursor 会话。
+pub fn ingest_for_usage_source(
+    conn: &Connection,
+    home: &Path,
+    source: Option<Source>,
+    report: &mut IngestReport,
+) {
+    if source.is_none() || source == Some(Source::CursorAgent) {
+        ingest(conn, home, report);
+    }
+}
 
 pub fn ingest(conn: &Connection, home: &Path, report: &mut IngestReport) {
     let root = home.join(".cursor").join("projects");

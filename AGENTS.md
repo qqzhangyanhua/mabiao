@@ -46,8 +46,8 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 ### 新增 / 修改 Adapter
 
 1. 在 `domain.rs::Source` 注册变体
-2. 实现 `src-tauri/src/adapters/<source>.rs`（扫描目录、发现、解析；需要时再加辅助指纹 / 目录级派生上下文）
-3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行（漏填会让完备性测试失败）
+2. 实现 `src-tauri/src/adapters/<source>.rs`（扫描目录、发现、解析；需要时再加辅助指纹 / 目录级或文件级派生上下文）
+3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行，含路径环境变量（漏填会让完备性测试失败）
 4. 添加脱敏 fixture → `src-tauri/tests/fixtures/`
 5. 在 `tests/adapters.rs` 加单测（去重/累计口径必断言）
 6. 若改了归一化输出，**递增** `store.rs::ADAPTER_VERSION`（否则旧缓存不重解析）

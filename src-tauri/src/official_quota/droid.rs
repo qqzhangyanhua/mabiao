@@ -54,14 +54,6 @@ fn fetch_subscription_plan(token: &str) -> Option<String> {
     parse_subscription_plan(&raw, Utc::now())
 }
 
-/// 诊断用：吐出 `/api/organization/subscription/schedule` 的原始 JSON。
-pub fn debug_fetch_subscription_schedule() -> Result<String, String> {
-    let token = load_access_token()?;
-    let org_id = parse_jwt_external_org_id(&token)
-        .ok_or_else(|| "access_token 的 JWT 里没有 external_org_id".to_string())?;
-    request_subscription_schedule(&token, &org_id)
-}
-
 /// WorkOS JWT 的 `external_org_id` 声明，就是网页版请求头 `x-factory-org-id` 用的值。
 pub fn parse_jwt_external_org_id(token: &str) -> Option<String> {
     let payload = token.split('.').nth(1).filter(|part| !part.is_empty())?;

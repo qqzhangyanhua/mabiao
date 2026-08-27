@@ -221,19 +221,6 @@ fn droid_jwt_external_org_id_matches_the_x_factory_org_id_header() {
     );
 }
 
-/// 诊断用：核对 CLI 本地凭证能不能调通网页版的套餐接口。只有套餐名/id，没有 token，
-/// 贴出来排查是安全的。
-#[test]
-#[ignore = "需要本机已登录 droid，且会请求 Factory；用于核对套餐接口能否用 CLI 凭证调通"]
-fn droid_debug_dump_subscription_plan() {
-    let raw = droid::debug_fetch_subscription_schedule().expect("拉取 Droid 套餐原始响应失败");
-    println!("subscription/schedule raw = {raw}");
-    println!(
-        "parsed plan = {:?}",
-        droid::parse_subscription_plan(&raw, Utc::now())
-    );
-}
-
 #[test]
 fn droid_credentials_reject_bad_shape_and_key() {
     let engine = base64::engine::general_purpose::STANDARD;

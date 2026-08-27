@@ -5701,18 +5701,6 @@ td.row-actions {
     justify-content: flex-start;
   }
 
-  .instruction-insight-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .instruction-insight-row strong {
-    grid-column: 1 / -1;
-  }
-
-  .instruction-insight-row span {
-    text-align: left;
-  }
-
   .app {
     grid-template-columns: 1fr;
   }
@@ -6140,11 +6128,6 @@ td.row-actions {
 .instruction-checkup-consequence {
   color: var(--muted);
   font-size: 12px;
-}
-
-.instruction-checkup-head > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .instruction-checkup-item.severity-critical .instruction-checkup-severity {
