@@ -28,9 +28,8 @@ type UsagePrepareDirFn = fn(&Path) -> Result<(), String>;
 /// 把一个已发现的文件解析成消耗记录。
 ///
 /// 契约是「路径 + 所属扫描目录 → 记录」；「怎么读」留在适配器内部。
-/// 后续流式来源（Codex 等单文件可达 114MB）应在实现里按行打开磁盘，
-/// 不要先 `fs::read` 再解析——这个签名故意不收 `&[u8]` / `&str`，
-/// 以免把它们逼成整份读入。
+/// jsonl 家族（Codex 等单文件可达 114MB）按行打开磁盘，不要先 `fs::read`
+/// 再解析——这个签名故意不收 `&[u8]` / `&str`，以免把它们逼成整份读入。
 pub(crate) type UsageParseFn = fn(&Path, &Path) -> Result<Vec<UsageRecord>, String>;
 
 pub(crate) struct UsageAdapter {
@@ -46,22 +45,107 @@ pub(crate) struct UsageAdapter {
     pub display_dirs: Option<UsageScanDirsFn>,
 }
 
-const USAGE_ADAPTERS: &[UsageAdapter] = &[UsageAdapter {
-    source: Source::Kimi,
-    scan_dirs: kimi::scan_dirs,
-    discover: kimi::discover,
-    sidecar_fingerprint: kimi::sidecar_fingerprint,
-    parse: kimi::parse,
-    prepare_dir: Some(kimi::prepare_dir),
-    append_log: true,
-    coverage: "轮级 Token（无模型名）",
-    display_dirs: None,
-}];
+const USAGE_ADAPTERS: &[UsageAdapter] = &[
+    UsageAdapter {
+        source: Source::Codex,
+        scan_dirs: codex::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: codex::parse,
+        prepare_dir: None,
+        append_log: true,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Claude,
+        scan_dirs: claude::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: claude::parse,
+        prepare_dir: None,
+        append_log: true,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Pi,
+        scan_dirs: pi::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: pi::parse,
+        prepare_dir: None,
+        append_log: true,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Kimi,
+        scan_dirs: kimi::scan_dirs,
+        discover: kimi::discover,
+        sidecar_fingerprint: kimi::sidecar_fingerprint,
+        parse: kimi::parse,
+        prepare_dir: Some(kimi::prepare_dir),
+        append_log: true,
+        coverage: "轮级 Token（无模型名）",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::CursorAgent,
+        scan_dirs: cursor_agent::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: cursor_agent::parse,
+        prepare_dir: None,
+        append_log: true,
+        coverage: "会话与 IDE 共用本机目录；token 仅包装落盘",
+        display_dirs: Some(cursor_agent::display_dirs),
+    },
+    UsageAdapter {
+        source: Source::Copilot,
+        scan_dirs: copilot::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: copilot::parse,
+        prepare_dir: None,
+        append_log: true,
+        coverage: "仅会话结束时上报（累计）",
+        display_dirs: None,
+    },
+];
 
 pub(crate) fn usage_adapter(source: Source) -> Option<&'static UsageAdapter> {
     USAGE_ADAPTERS
         .iter()
         .find(|adapter| adapter.source == source)
+}
+
+/// 递归收集扫描目录下的 jsonl。心跳枚举与摄取共用。
+pub(crate) fn discover_jsonl(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut paths = Vec::new();
+    for root in roots {
+        paths.extend(crate::ingest::walk_files(root, "jsonl")?);
+    }
+    Ok(paths)
+}
+
+pub(crate) fn empty_sidecar(_path: &Path, _dirs: &[PathBuf]) -> String {
+    String::new()
+}
+
+/// 按行流式读取 jsonl：先校验语法，再交给适配器解析。整份文件从不进内存。
+///
+/// 会话 jsonl 单文件可以到上百 MB（真实观测到 114MB 的 Codex rollout 日志），
+/// 启动时全量摄取和对话事件索引两条路径又可能同时处理同一份大文件。
+/// 这里只保留几十 KB 的行缓冲区，不 `fs::read`。
+pub(crate) fn parse_streaming_jsonl(
+    path: &Path,
+    parse: fn(&LineFactory<'_>, &str) -> Vec<UsageRecord>,
+) -> Result<Vec<UsageRecord>, String> {
+    crate::ingest::validate_jsonl_file(path)?;
+    let loc = path.to_string_lossy();
+    let factory: &LineFactory<'_> = &|| crate::ingest::open_jsonl_lines(path);
+    Ok(parse(factory, loc.as_ref()))
 }
 
 /// 惰性逐行产出 `Value`，同一时刻只有一行的解析结果活着。

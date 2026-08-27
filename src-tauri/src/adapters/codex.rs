@@ -1,9 +1,21 @@
+use std::path::{Path, PathBuf};
+
 use serde_json::Value;
 
 use crate::adapters::{
-    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, parse_streaming_jsonl,
+    text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::{self, PathOverrides};
+
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    ingest::resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions")
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    parse_streaming_jsonl(path, parse_codex_jsonl)
+}
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct CodexUsage {

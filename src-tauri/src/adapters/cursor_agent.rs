@@ -1,5 +1,36 @@
-use crate::adapters::{finish, i64_field, parse_jsonl_value_lines, text_field, LineFactory};
+use std::path::{Path, PathBuf};
+
+use crate::adapters::{
+    finish, i64_field, parse_jsonl_value_lines, parse_streaming_jsonl, text_field, LineFactory,
+};
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::{self, PathOverrides};
+
+/// token 包装目录，不是 CLI 原生会话库。会话与 IDE 共用 ~/.cursor。
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    ingest::resolve_dirs(
+        overrides,
+        home,
+        "CURSOR_AGENT_USAGE_DIR",
+        ".cursor-agent-usage",
+        "",
+    )
+}
+
+/// 设置页优先展示与 IDE 共用的原生目录，包装目录只在真实存在时追加。
+pub(crate) fn display_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![home.join(".cursor/chats"), home.join(".cursor/projects")];
+    for dir in scan_dirs(overrides, home) {
+        if dir.exists() && !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    parse_streaming_jsonl(path, parse_cursor_agent_jsonl)
+}
 
 /// 解析 cursor-agent 无头 stream-json 的落盘 jsonl（由 scripts/cursor-agent-usage.py 采集）。
 ///

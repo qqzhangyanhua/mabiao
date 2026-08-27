@@ -1,10 +1,30 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::adapters::project::decode_dashed_dir;
 use crate::adapters::{
-    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, parse_streaming_jsonl,
+    text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::PathOverrides;
+
+/// Claude Code 在部分安装方式下把会话写到 XDG 目录（`~/.config/claude`）而不是
+/// `~/.claude`；默认两个都扫，显式设置 `CLAUDE_CONFIG_DIR` 后只扫用户指定的目录。
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    let roots = overrides
+        .get("CLAUDE_CONFIG_DIR")
+        .cloned()
+        .unwrap_or_else(|| vec![home.join(".claude"), home.join(".config/claude")]);
+    roots
+        .into_iter()
+        .map(|root| root.join("projects"))
+        .collect()
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    parse_streaming_jsonl(path, parse_claude_jsonl)
+}
 
 struct ClaudeTurn {
     record: UsageRecord,
