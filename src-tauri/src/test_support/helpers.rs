@@ -210,7 +210,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
         ),
         (
             ".cursor-agent-usage/3ce011d4-33d1-41d0-a16c-f6dc206c47f1.jsonl",
-            "cursor-agent-stream.jsonl",
+            "cursor-agent.jsonl",
         ),
     ];
     for (rel, name) in paths {

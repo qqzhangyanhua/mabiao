@@ -624,13 +624,18 @@ fn write_all_source_fixtures_covers_every_registered_source() {
 
     assert_eq!(Source::ALL.len(), 12);
     let opencode_fixture = fixture("opencode.json");
-    let cursor_agent_fixture = fixture("cursor-agent-stream.jsonl");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
         "OpenCode 夹具必须脱敏，不能含真实用户路径"
     );
+    let cursor_agent_written = std::fs::read_dir(home.join(".cursor-agent-usage"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .find(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
+        .map(|entry| std::fs::read_to_string(entry.path()).unwrap())
+        .expect("Cursor Agent jsonl written");
     assert!(
-        !cursor_agent_fixture.contains("zhangyanhua"),
+        !cursor_agent_written.contains("zhangyanhua") && !cursor_agent_written.contains("/Users/"),
         "Cursor Agent 夹具必须脱敏，不能含真实用户路径"
     );
     for source in Source::ALL {
