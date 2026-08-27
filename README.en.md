@@ -121,7 +121,7 @@ cargo run --bin probe --manifest-path src-tauri/Cargo.toml
 
 ## Contributing
 
-Issues and PRs are welcome. A new source is a new adapter: register it in `domain.rs`, implement `src-tauri/src/adapters/<source>.rs`, add redacted fixtures and tests, and bump `ADAPTER_VERSION`. See [`AGENTS.md`](AGENTS.md) for the checklist. Open PRs as drafts and mark ready after CI is green.
+Issues and PRs are welcome. A new source is one adapter file plus one UsageAdapter table row: register it in `domain.rs`, implement `src-tauri/src/adapters/<source>.rs`, register scan/discover/parse in the table, add redacted fixtures and tests, and bump `ADAPTER_VERSION` if normalization output changes. See [`AGENTS.md`](AGENTS.md) for the checklist. Open PRs as drafts and mark ready after CI is green.
 
 ## License
 

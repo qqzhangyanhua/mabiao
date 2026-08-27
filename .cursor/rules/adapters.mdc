@@ -6,15 +6,17 @@ alwaysApply: false
 
 # 适配器（Adapter-per-Source）
 
-背景：`docs/adr/0001-adapter-per-source-architecture.md`。每个 Source 的本地存储格式互不相同（jsonl / zstd 压缩 jsonl / sqlite / 每消息一个 json），新增或修改一个工具只应改动它自己的 Adapter。
+背景：`docs/adr/0001-adapter-per-source-architecture.md`。每个 Source 的本地存储格式互不相同（jsonl / zstd 压缩 jsonl / sqlite / 每消息一个 json），新增或修改一个工具只应改动它自己的 Adapter。摄取模块不认识任何具体来源：扫描、发现、辅助指纹、解析与设置页文案都登记在 `USAGE_ADAPTERS` 表里。
 
 ## 新增一个 Source 的步骤
 
 1. 在 `domain.rs::Source` 枚举、`Source::ALL`、`as_str`、`application_name`、`parse` 中加入新变体
-2. 在 `adapters/` 下新增 `xxx.rs`，实现 `parse_xxx_*(content_or_bytes, source_file, ...) -> Vec<UsageRecord>`（或 `Result<Vec<UsageRecord>, String>`，若需要先解压/校验），并在 `adapters/mod.rs` 声明 `pub mod xxx;`
-3. 在 `ingest.rs::source_root` 加入本机路径、`ingest.rs::ingest_source` 加入分发分支、必要时新增 `ingest_xxx` 函数（参考 `ingest_kimi`/`ingest_grok` 处理辅助 sidecar 文件的写法）
-4. 在 `src-tauri/tests/fixtures/` 添加最小化脱敏 fixture，并在 `tests.rs` 写对应单测（参照 `codex_adapter_counts_last_token_usage_not_cumulative`）
+2. 在 `adapters/` 下新增 `xxx.rs`，实现该来源的 `scan_dirs` / `discover` / `parse`（以及可选的 `sidecar_fingerprint`、`prepare_dir`、`display_dirs`、`detected`），并在 `adapters/mod.rs` 声明 `pub mod xxx;`
+3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行：登记扫描目录、发现、解析、是否追加型日志、覆盖说明。漏填会让表完备性测试失败
+4. 在 `src-tauri/tests/fixtures/` 添加最小化脱敏 fixture，并在 `tests/adapters.rs` 写对应单测（参照 `codex_adapter_counts_last_token_usage_not_cumulative`）
 5. 若新增/修改了归一化规则，必须递增 `store.rs::ADAPTER_VERSION`（见 ingestion-cache 规则），否则旧缓存不会重新解析
+
+不要在 `ingest.rs` 里按来源加分叉。摄取模块只负责可信摄取语义（发现、比指纹、解析、验证、落库、对账、同步预聚合）。
 
 ## 编写 Adapter 时的注意事项
 

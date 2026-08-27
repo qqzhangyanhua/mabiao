@@ -23,7 +23,7 @@ use crate::ingest::PathOverrides;
 type UsageScanDirsFn = fn(&PathOverrides, &Path) -> Vec<PathBuf>;
 type UsageDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
 type UsageSidecarFn = fn(&Path, &[PathBuf]) -> String;
-type UsagePrepareDirFn = fn(&Path) -> Result<(), String>;
+type UsagePrepareDirFn = fn(&Path) -> Result<(), (PathBuf, String)>;
 
 /// 把一个已发现的文件解析成消耗记录。
 ///
@@ -39,10 +39,30 @@ pub(crate) struct UsageAdapter {
     pub sidecar_fingerprint: UsageSidecarFn,
     pub parse: UsageParseFn,
     /// 扫描目录级派生上下文。失败时记来源级失败并跳过该目录，而不是让整个来源返回 Err。
+    /// `Err` 的路径写入诊断，由适配器自己决定（例如辅助文件而不是扫描根）。
     pub prepare_dir: Option<UsagePrepareDirFn>,
     pub append_log: bool,
     pub coverage: &'static str,
     pub display_dirs: Option<UsageScanDirsFn>,
+    /// 摄取报告的「已检测到」。缺省为任一扫描目录存在。
+    pub detected: Option<fn(&[PathBuf]) -> bool>,
+}
+
+impl UsageAdapter {
+    pub(crate) fn display_or_scan_dirs(
+        &self,
+        overrides: &PathOverrides,
+        home: &Path,
+    ) -> Vec<PathBuf> {
+        self.display_dirs.unwrap_or(self.scan_dirs)(overrides, home)
+    }
+
+    pub(crate) fn roots_detected(&self, dirs: &[PathBuf]) -> bool {
+        self.detected.map_or_else(
+            || dirs.iter().any(|root| root.exists()),
+            |detected| detected(dirs),
+        )
+    }
 }
 
 const USAGE_ADAPTERS: &[UsageAdapter] = &[
@@ -56,6 +76,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Claude,
@@ -67,6 +88,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Pi,
@@ -78,6 +100,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Kimi,
@@ -89,6 +112,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "轮级 Token（无模型名）",
         display_dirs: None,
+        detected: Some(kimi::detected),
     },
     UsageAdapter {
         source: Source::CursorAgent,
@@ -100,6 +124,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "会话与 IDE 共用本机目录；token 仅包装落盘",
         display_dirs: Some(cursor_agent::display_dirs),
+        detected: None,
     },
     UsageAdapter {
         source: Source::Copilot,
@@ -111,6 +136,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         coverage: "仅会话结束时上报（累计）",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Dsh,
@@ -123,6 +149,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Gemini,
@@ -134,6 +161,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Qwen,
@@ -145,6 +173,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "本地无 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Factory,
@@ -156,6 +185,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "会话累计 Token（无模型名）",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Grok,
@@ -167,6 +197,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
     UsageAdapter {
         source: Source::Opencode,
@@ -178,13 +209,15 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         coverage: "轮级 Token",
         display_dirs: None,
+        detected: None,
     },
 ];
 
-pub(crate) fn usage_adapter(source: Source) -> Option<&'static UsageAdapter> {
+pub(crate) fn usage_adapter(source: Source) -> &'static UsageAdapter {
     USAGE_ADAPTERS
         .iter()
         .find(|adapter| adapter.source == source)
+        .expect("UsageAdapter 表必须覆盖 Source::ALL 的每个变体")
 }
 
 #[cfg(test)]
