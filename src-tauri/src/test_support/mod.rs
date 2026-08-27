@@ -19,7 +19,7 @@ pub use crate::domain::{
     BudgetConfig, ConversationAttachmentKind, ConversationAttachmentStatus, ConversationEventActor,
     ConversationEventCapabilityStatus, ConversationEventContentStatus, ConversationEventKind,
     ConversationExportFormat, CostSource, CursorSessionQuery, Filter, PriceEntry, PriceOrigin,
-    PriceTable, SessionQuery, Source, UsageRecord,
+    PriceTable, SessionQuery, Source, UnpricedReason, UsageRecord,
 };
 pub use crate::ingest;
 pub use crate::query;

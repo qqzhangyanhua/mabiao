@@ -6359,3 +6359,25 @@ td.row-actions {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.unpriced-zone {
+  margin-top: 14px;
+}
+
+.unpriced-zone + .unpriced-zone {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.unpriced-zone h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.unpriced-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}

@@ -14,7 +14,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   {
     id: "pricing",
     label: "价格",
-    anchors: ["settings-litellm", "settings-presets", "settings-prices"],
+    anchors: ["settings-litellm", "settings-unpriced", "settings-presets", "settings-prices"],
   },
 ];
 

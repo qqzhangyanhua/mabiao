@@ -1127,3 +1127,106 @@ fn usage_calls_page_filters_and_paginates_newest_first() {
     assert_eq!(unlabeled.rows[0].session_id, "s-unlabeled");
     assert_eq!(unlabeled.rows[0].provider, "");
 }
+
+#[test]
+fn unpriced_diagnosis_groups_unpriced_parts_and_splits_reasons() {
+    let mut records = diverse_records();
+    // 同一 (unknown-model, official) 里再塞一条自带费用：只应统计未定价那部分。
+    let mut native_same = rec(
+        "2026-08-11T10:00:00Z",
+        Source::Codex,
+        "unknown-model",
+        "official",
+        "",
+        "s5-native",
+        99,
+    );
+    native_same.native_cost = Some(1.25);
+    records.push(native_same);
+    // 同一空模型名、不同 provider：应拆成两行结构性记录。
+    let empty_other = rec(
+        "2026-08-16T10:00:00Z",
+        Source::Factory,
+        "",
+        "openai",
+        "/proj/b",
+        "s7",
+        12,
+    );
+    records.push(empty_other);
+    // 另一来源、同一 (空模型, anthropic)：来源列表合并。
+    let empty_other_source = rec(
+        "2026-08-16T11:00:00Z",
+        Source::CursorAgent,
+        "",
+        "anthropic",
+        "/proj/b",
+        "s8",
+        8,
+    );
+    records.push(empty_other_source);
+
+    let prices = diverse_prices();
+    let mem = aggregate::unpriced_diagnosis(&records, &prices);
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    let sql_raw = query::unpriced_diagnosis(&conn, &prices).unwrap();
+    assert_eq!(sql_raw, mem);
+
+    store::backfill_rollup(&conn).unwrap();
+    let sql_rollup = query::unpriced_diagnosis(&conn, &prices).unwrap();
+    assert_eq!(sql_rollup, mem);
+
+    let pricable: Vec<_> = mem
+        .iter()
+        .filter(|row| row.reason == UnpricedReason::Pricable)
+        .collect();
+    let structural: Vec<_> = mem
+        .iter()
+        .filter(|row| row.reason == UnpricedReason::StructurallyUnbillable)
+        .collect();
+    assert_eq!(pricable.len(), 1);
+    assert_eq!(pricable[0].model, "unknown-model");
+    assert_eq!(pricable[0].provider, "official");
+    assert_eq!(pricable[0].sources, vec!["codex".to_string()]);
+    assert_eq!(pricable[0].total_tokens, 30);
+    assert_eq!(pricable[0].record_count, 1);
+
+    assert_eq!(structural.len(), 2);
+    let anthropic = structural
+        .iter()
+        .find(|row| row.provider == "anthropic")
+        .expect("anthropic 结构性分组");
+    assert_eq!(anthropic.model, "");
+    assert_eq!(
+        anthropic.sources,
+        vec!["cursor_agent".to_string(), "factory".to_string()]
+    );
+    assert_eq!(anthropic.total_tokens, 48);
+    assert_eq!(anthropic.record_count, 2);
+    let openai = structural
+        .iter()
+        .find(|row| row.provider == "openai")
+        .expect("openai 结构性分组");
+    assert_eq!(openai.model, "");
+    assert_eq!(openai.sources, vec!["factory".to_string()]);
+    assert_eq!(openai.total_tokens, 12);
+    assert_eq!(openai.record_count, 1);
+
+    let mut filled = prices.clone();
+    filled.prices.push(PriceEntry {
+        model: "unknown-model".into(),
+        provider: None,
+        input: 0.001,
+        output: 0.0,
+        cache_read: 0.0,
+        cache_creation: 0.0,
+        origin: PriceOrigin::User,
+    });
+    let after = query::unpriced_diagnosis(&conn, &filled).unwrap();
+    assert_eq!(after, aggregate::unpriced_diagnosis(&records, &filled));
+    assert!(after
+        .iter()
+        .all(|row| row.reason == UnpricedReason::StructurallyUnbillable));
+    assert_eq!(after.len(), 2);
+}

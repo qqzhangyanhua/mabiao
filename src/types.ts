@@ -565,6 +565,17 @@ export type PriceTable = {
   prices: PriceEntry[];
 };
 
+export type UnpricedReason = "pricable" | "structurally_unbillable";
+
+export type UnpricedGroupDto = {
+  model: string;
+  provider: string;
+  sources: string[];
+  total_tokens: number;
+  record_count: number;
+  reason: UnpricedReason;
+};
+
 export type PriceSnapshotMeta = {
   as_of: string;
   source: string;
