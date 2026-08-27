@@ -13,7 +13,7 @@ _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记�
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
-把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个工具 = 新增一个 Adapter，统计与界面逻辑不受影响。
+把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源 = 往适配器表加一行 + 写一个 Adapter，统计与界面逻辑不受影响。
 _Avoid_: parser、解析器、插件
 
 **Token 口径 (Token Dimension)**：

@@ -31,10 +31,17 @@ pub(crate) fn sidecar_fingerprint(path: &Path, dirs: &[PathBuf]) -> String {
     ingest::content_fingerprint(&root.join("kimi.json"))
 }
 
-pub(crate) fn prepare_dir(scan_dir: &Path) -> Result<(), String> {
-    projects(scan_dir)
-        .map(|_| ())
-        .map_err(|error| format!("Kimi 项目映射无效：{error}"))
+pub(crate) fn detected(dirs: &[PathBuf]) -> bool {
+    dirs.iter().any(|root| root.join("sessions").exists())
+}
+
+pub(crate) fn prepare_dir(scan_dir: &Path) -> Result<(), (PathBuf, String)> {
+    projects(scan_dir).map(|_| ()).map_err(|error| {
+        (
+            scan_dir.join("kimi.json"),
+            format!("Kimi 项目映射无效：{error}"),
+        )
+    })
 }
 
 pub(crate) fn parse(path: &Path, scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {

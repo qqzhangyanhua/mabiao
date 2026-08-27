@@ -1,3 +1,8 @@
+//! 可信摄取：发现、比指纹、解析、验证、落库、对账、同步预聚合。
+//!
+//! 各来源的扫描目录、发现规则、辅助指纹、解析与展示文案由适配器表提供。
+//! 本模块只负责缓存命中、失败不覆盖、追加型日志截断检测、删除对账与预聚合同步。
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{BufRead, BufReader};
@@ -83,30 +88,13 @@ pub(crate) fn resolve_dirs(
     }
 }
 
-/// 每个 Source 实际要扫描的目录（可能不止一个）。Kimi 在表里登记的是「工具根目录」
-/// 而不是叶子目录，发现与辅助指纹再从根目录派生 `sessions/` 和 `kimi.json`。
+/// 每个来源实际要扫描的目录（可能不止一个），一律从表里取。
 pub(crate) fn source_scan_dirs_with(
     overrides: &PathOverrides,
     home: &Path,
     source: Source,
 ) -> Vec<PathBuf> {
-    if let Some(adapter) = usage_adapter(source) {
-        return (adapter.scan_dirs)(overrides, home);
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
+    (usage_adapter(source).scan_dirs)(overrides, home)
 }
 
 pub fn ingest_all(conn: &Connection, home: &Path) -> Result<IngestReport, String> {
@@ -201,57 +189,17 @@ fn list_watched_inputs(
 ) -> Result<Vec<WatchedInput>, String> {
     let mut files = Vec::new();
     for source in Source::ALL {
-        let dirs = source_scan_dirs_with(overrides, home, source);
-        for path in list_source_paths(source, &dirs)? {
-            let extra_fingerprint = sidecar_fingerprint(source, &path, &dirs);
+        let adapter = usage_adapter(source);
+        let dirs = (adapter.scan_dirs)(overrides, home);
+        for path in (adapter.discover)(&dirs)? {
             files.push(WatchedInput {
                 source,
                 path,
-                extra_fingerprint,
+                extra_fingerprint: (adapter.sidecar_fingerprint)(&path, &dirs),
             });
         }
     }
     Ok(files)
-}
-
-fn sidecar_fingerprint(source: Source, path: &Path, dirs: &[PathBuf]) -> String {
-    if let Some(adapter) = usage_adapter(source) {
-        return (adapter.sidecar_fingerprint)(path, dirs);
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
-}
-
-fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    if let Some(adapter) = usage_adapter(source) {
-        return (adapter.discover)(dirs);
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
 }
 
 /// 供测试直接注入路径覆盖表，绕开真实进程环境变量（并行跑测试改真实环境变量不安全）。
@@ -309,7 +257,8 @@ pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDi
     Source::ALL
         .iter()
         .map(|source| {
-            let dirs = source_display_dirs(&overrides, home, *source);
+            let adapter = usage_adapter(*source);
+            let dirs = adapter.display_or_scan_dirs(&overrides, home);
             let (cached_files, record_count, total_tokens, archived_record_count) =
                 store::source_cache_stats(conn, *source)?;
             Ok(SourceDiagnostic {
@@ -324,22 +273,11 @@ pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDi
                 cached_files,
                 record_count,
                 total_tokens,
-                coverage: source_coverage(*source).to_string(),
+                coverage: adapter.coverage.to_string(),
                 archived_record_count,
             })
         })
         .collect()
-}
-
-/// 设置页展示的路径：表里有 `display_dirs` 的来源用它（Cursor Agent 先展示与 IDE 共用的原生目录）。
-fn source_display_dirs(overrides: &PathOverrides, home: &Path, source: Source) -> Vec<PathBuf> {
-    if let Some(adapter) = usage_adapter(source) {
-        return match adapter.display_dirs {
-            Some(display_dirs) => display_dirs(overrides, home),
-            None => (adapter.scan_dirs)(overrides, home),
-        };
-    }
-    source_scan_dirs_with(overrides, home, source)
 }
 
 pub fn rebuild_cache(
@@ -350,13 +288,12 @@ pub fn rebuild_cache(
     let overrides = env_overrides();
     let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut removed_unknown = 0;
-    match source {
-        Some(source) => store::invalidate_source(&transaction, source)?,
-        None => {
-            removed_unknown = store::remove_unknown_sources(&transaction)?;
-            for source in Source::ALL {
-                store::invalidate_source(&transaction, source)?;
-            }
+    if let Some(selected) = source {
+        store::invalidate_source(&transaction, selected)?;
+    } else {
+        removed_unknown = store::remove_unknown_sources(&transaction)?;
+        for item in Source::ALL {
+            store::invalidate_source(&transaction, item)?;
         }
     }
 
@@ -364,31 +301,28 @@ pub fn rebuild_cache(
         records_removed: removed_unknown,
         ..IngestReport::default()
     };
-    match source {
-        Some(source) => {
-            ingest_source(&transaction, home, &overrides, source, &mut report)?;
-            if source == Source::CursorAgent {
-                cursor_session::ingest(&transaction, home, &mut report);
-            }
-            refresh_conversation_catalog(
-                &transaction,
-                home,
-                &overrides,
-                std::slice::from_ref(&source),
-                &mut report,
-            );
-        }
-        None => {
-            ingest_all_sources(&transaction, home, &overrides, &mut report)?;
+    if let Some(selected) = source {
+        ingest_source(&transaction, home, &overrides, selected, &mut report)?;
+        if selected == Source::CursorAgent {
             cursor_session::ingest(&transaction, home, &mut report);
-            refresh_conversation_catalog(
-                &transaction,
-                home,
-                &overrides,
-                crate::conversation::CONVERSATION_SOURCES,
-                &mut report,
-            );
         }
+        refresh_conversation_catalog(
+            &transaction,
+            home,
+            &overrides,
+            std::slice::from_ref(&selected),
+            &mut report,
+        );
+    } else {
+        ingest_all_sources(&transaction, home, &overrides, &mut report)?;
+        cursor_session::ingest(&transaction, home, &mut report);
+        refresh_conversation_catalog(
+            &transaction,
+            home,
+            &overrides,
+            crate::conversation::CONVERSATION_SOURCES,
+            &mut report,
+        );
     }
     report.partial_success = report.files_failed > 0 || !report.conversation_issues.is_empty();
     // 重建缓存必然动了记录，不走 sync_rollup 的「没变就跳过」判断。
@@ -489,26 +423,6 @@ fn ingest_all_sources(
     Ok(())
 }
 
-fn source_coverage(source: Source) -> &'static str {
-    if let Some(adapter) = usage_adapter(source) {
-        return adapter.coverage;
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
-}
-
 fn ingest_source(
     conn: &Connection,
     home: &Path,
@@ -516,42 +430,12 @@ fn ingest_source(
     source: Source,
     report: &mut IngestReport,
 ) -> Result<(), String> {
-    let dirs = source_scan_dirs_with(overrides, home, source);
-    if let Some(adapter) = usage_adapter(source) {
-        return ingest_from_adapter(conn, adapter, &dirs, report);
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
+    let adapter = usage_adapter(source);
+    let dirs = (adapter.scan_dirs)(overrides, home);
+    ingest_from_adapter(conn, adapter, &dirs, report)
 }
 
-#[allow(dead_code)]
-fn ingest_one(
-    conn: &Connection,
-    source: Source,
-    path: &Path,
-    fingerprint: &str,
-    report: &mut IngestReport,
-    parse: impl Fn(&[u8], &str) -> Result<Vec<UsageRecord>, String>,
-) -> Result<(), String> {
-    ingest_one_prepared(conn, source, path, fingerprint, report, |loc| {
-        let bytes = fs::read(path).map_err(|error| error.to_string())?;
-        parse(&bytes, loc)
-    })
-}
-
-/// `ingest_one` 与适配器 `parse` 共用的缓存检查 + 落库逻辑。
+/// 缓存检查、校验、落库。适配器只负责把路径变成消耗记录。
 fn ingest_one_prepared(
     conn: &Connection,
     source: Source,
@@ -625,23 +509,7 @@ fn ingest_one_prepared(
 }
 
 fn is_append_log_source(source: Source) -> bool {
-    if let Some(adapter) = usage_adapter(source) {
-        return adapter.append_log;
-    }
-    match source {
-        Source::Codex
-        | Source::Claude
-        | Source::Pi
-        | Source::Opencode
-        | Source::Kimi
-        | Source::Dsh
-        | Source::Gemini
-        | Source::Grok
-        | Source::Qwen
-        | Source::Factory
-        | Source::CursorAgent
-        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
-    }
+    usage_adapter(source).append_log
 }
 
 pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
@@ -683,37 +551,19 @@ pub(crate) fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> 
     }
 }
 
-/// 表里已登记的来源走同一条摄取路径：发现、比指纹、解析、对账。
-/// 「怎么读」在 `adapter.parse` 内部：jsonl 家族按行打开磁盘；
-/// 整份读入家族先解压或校验结构；Grok / OpenCode 在解析前读派生上下文。
+/// 发现、比指纹、解析、对账。怎么读文件由适配器自己决定。
 fn ingest_from_adapter(
     conn: &Connection,
     adapter: &UsageAdapter,
     dirs: &[PathBuf],
     report: &mut IngestReport,
 ) -> Result<(), String> {
-    set_detected(
-        report,
-        adapter.source,
-        dirs.iter().any(|root| {
-            if adapter.source == Source::Kimi {
-                root.join("sessions").exists()
-            } else {
-                root.exists()
-            }
-        }),
-    );
+    set_detected(report, adapter.source, adapter.roots_detected(dirs));
     let mut seen = BTreeSet::new();
     for root in dirs {
         if let Some(prepare_dir) = adapter.prepare_dir {
-            if let Err(error) = prepare_dir(root) {
-                // Kimi 的派生上下文文件固定为扫描根下的 kimi.json；目前只有 Kimi 登记了 prepare_dir。
-                record_failure(
-                    report,
-                    adapter.source,
-                    &root.join("kimi.json").to_string_lossy(),
-                    &error,
-                );
+            if let Err((path, error)) = prepare_dir(root) {
+                record_failure(report, adapter.source, &path.to_string_lossy(), &error);
                 continue;
             }
         }

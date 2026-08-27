@@ -1338,18 +1338,22 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     use crate::adapters::{usage_adapter, usage_adapters};
 
     let adapters = usage_adapters();
-    assert_eq!(adapters.len(), Source::ALL.len());
+    assert_eq!(
+        adapters.len(),
+        Source::ALL.len(),
+        "适配器表不能多行也不能少行：人为删掉一行必须使本测试失败"
+    );
     for source in Source::ALL {
         let matches = adapters
             .iter()
             .filter(|adapter| adapter.source == source)
             .count();
         assert_eq!(matches, 1, "{} 应在适配器表中恰好一行", source.as_str());
-        assert!(usage_adapter(source).is_some());
+        assert_eq!(usage_adapter(source).source, source);
     }
 
-    let grok = usage_adapter(Source::Grok).unwrap();
-    let opencode = usage_adapter(Source::Opencode).unwrap();
+    let grok = usage_adapter(Source::Grok);
+    let opencode = usage_adapter(Source::Opencode);
     assert!(
         !grok.append_log,
         "Grok 不是追加型日志，迁表时不能顺手补全标记"
