@@ -1,0 +1,27 @@
+src-tauri/src/test_support/helpers.rs
+  s_c2dad0450d3c0a::t_0bd8f904be14b7 181-182
+  s_c2dad0450d3c0a::t_7f8da62a4fd877 184,211-214,230-249
+src-tauri/tests/fixtures/opencode.json
+  s_c2dad0450d3c0a::t_a4c1975563972c 1-14
+src-tauri/src/tests/ingest.rs
+  s_c2dad0450d3c0a::t_797280fa150d79 626-635
+  s_c2dad0450d3c0a::t_17e3faaa6b4361 646,673-674,681,684,688-689,691-694,696-703,706-707,710-726,728,737
+  s_c2dad0450d3c0a::t_3cde6f08332c29 619-625,636-645,647-666,676-680,682-683,685-687,690,695,704-705,708-709,727,729-734,739,742-743
+  s_c2dad0450d3c0a::t_ab6ad2f25b5f8a 618
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "5dcf68f61a0898c795d6a871def086f5cdd247b4",
+  "prompts": {},
+  "sessions": {
+    "s_c2dad0450d3c0a": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a04237-57dd-7c52-b4e3-1ae2948c00a0",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
