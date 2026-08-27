@@ -7,8 +7,7 @@ use std::time::UNIX_EPOCH;
 use rusqlite::Connection;
 
 use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
-use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
-use crate::adapters::{grok, usage_adapter, UsageAdapter};
+use crate::adapters::{usage_adapter, UsageAdapter};
 use crate::cursor_session;
 use crate::domain::{
     CodeVolumeSummary, IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport,
@@ -95,20 +94,14 @@ pub(crate) fn source_scan_dirs_with(
         return (adapter.scan_dirs)(overrides, home);
     }
     match source {
-        Source::Opencode => resolve_dirs(
-            overrides,
-            home,
-            "OPENCODE_DATA_DIR",
-            ".local/share/opencode",
-            "opencode.db",
-        ),
-        Source::Grok => resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions"),
         Source::Codex
         | Source::Claude
         | Source::Pi
+        | Source::Opencode
         | Source::Kimi
         | Source::Dsh
         | Source::Gemini
+        | Source::Grok
         | Source::Qwen
         | Source::Factory
         | Source::CursorAgent
@@ -226,18 +219,18 @@ fn sidecar_fingerprint(source: Source, path: &Path, dirs: &[PathBuf]) -> String 
         return (adapter.sidecar_fingerprint)(path, dirs);
     }
     match source {
-        Source::Grok => {
-            let summary = path
-                .parent()
-                .map(|parent| parent.join("summary.json"))
-                .unwrap_or_default();
-            content_fingerprint(&summary)
-        }
-        Source::Opencode => {
-            let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
-            metadata_fingerprint(&wal)
-        }
-        _ => String::new(),
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Opencode
+        | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Grok
+        | Source::Qwen
+        | Source::Factory
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
 }
 
@@ -246,24 +239,14 @@ fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, S
         return (adapter.discover)(dirs);
     }
     match source {
-        Source::Grok => {
-            let mut paths = Vec::new();
-            for root in dirs {
-                for path in walk_files(root, "jsonl")? {
-                    if path.file_name().and_then(|name| name.to_str()) == Some("updates.jsonl") {
-                        paths.push(path);
-                    }
-                }
-            }
-            Ok(paths)
-        }
-        Source::Opencode => Ok(dirs.iter().filter(|path| path.exists()).cloned().collect()),
         Source::Codex
         | Source::Claude
         | Source::Pi
+        | Source::Opencode
         | Source::Kimi
         | Source::Dsh
         | Source::Gemini
+        | Source::Grok
         | Source::Qwen
         | Source::Factory
         | Source::CursorAgent
@@ -511,13 +494,14 @@ fn source_coverage(source: Source) -> &'static str {
         return adapter.coverage;
     }
     match source {
-        Source::Grok | Source::Opencode => "轮级 Token",
         Source::Codex
         | Source::Claude
         | Source::Pi
+        | Source::Opencode
         | Source::Kimi
         | Source::Dsh
         | Source::Gemini
+        | Source::Grok
         | Source::Qwen
         | Source::Factory
         | Source::CursorAgent
@@ -537,14 +521,14 @@ fn ingest_source(
         return ingest_from_adapter(conn, adapter, &dirs, report);
     }
     match source {
-        Source::Grok => ingest_grok(conn, &dirs, report),
-        Source::Opencode => ingest_opencode(conn, &dirs, report),
         Source::Codex
         | Source::Claude
         | Source::Pi
+        | Source::Opencode
         | Source::Kimi
         | Source::Dsh
         | Source::Gemini
+        | Source::Grok
         | Source::Qwen
         | Source::Factory
         | Source::CursorAgent
@@ -552,6 +536,7 @@ fn ingest_source(
     }
 }
 
+#[allow(dead_code)]
 fn ingest_one(
     conn: &Connection,
     source: Source,
@@ -643,7 +628,20 @@ fn is_append_log_source(source: Source) -> bool {
     if let Some(adapter) = usage_adapter(source) {
         return adapter.append_log;
     }
-    matches!(source, Source::Grok)
+    match source {
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Opencode
+        | Source::Kimi
+        | Source::Dsh
+        | Source::Gemini
+        | Source::Grok
+        | Source::Qwen
+        | Source::Factory
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
+    }
 }
 
 pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
@@ -687,7 +685,7 @@ pub(crate) fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> 
 
 /// 表里已登记的来源走同一条摄取路径：发现、比指纹、解析、对账。
 /// 「怎么读」在 `adapter.parse` 内部：jsonl 家族按行打开磁盘；
-/// 整份读入家族（dsh / Gemini / Qwen / Factory）先解压或校验结构再解析。
+/// 整份读入家族先解压或校验结构；Grok / OpenCode 在解析前读派生上下文。
 fn ingest_from_adapter(
     conn: &Connection,
     adapter: &UsageAdapter,
@@ -728,105 +726,6 @@ fn ingest_from_adapter(
         }
     }
     reconcile_source(conn, adapter.source, &seen, report)
-}
-
-fn ingest_grok(
-    conn: &Connection,
-    roots: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Grok;
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_files(root, "jsonl")? {
-            if path.file_name().and_then(|name| name.to_str()) != Some("updates.jsonl") {
-                continue;
-            }
-            seen.insert(path.to_string_lossy().to_string());
-            let summary_path = path
-                .parent()
-                .map(|parent| parent.join("summary.json"))
-                .unwrap_or_default();
-            let fingerprint = content_fingerprint(&summary_path);
-            let summary = if summary_path.exists() {
-                match fs::read_to_string(&summary_path)
-                    .map_err(|error| error.to_string())
-                    .and_then(|text| {
-                        serde_json::from_str::<serde_json::Value>(&text)
-                            .map_err(|error| error.to_string())
-                    }) {
-                    Ok(summary) => Some(summary),
-                    Err(error) => {
-                        record_failure(
-                            report,
-                            source,
-                            &summary_path.to_string_lossy(),
-                            &format!("Grok 模型摘要无效：{error}"),
-                        );
-                        continue;
-                    }
-                }
-            } else {
-                None
-            };
-            let model = summary
-                .as_ref()
-                .and_then(|value| value.get("current_model_id"))
-                .and_then(|value| value.as_str())
-                .unwrap_or("")
-                .to_string();
-            ingest_one(conn, source, &path, &fingerprint, report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                validate_jsonl(content)?;
-                Ok(grok::parse_grok_updates(content, loc, &model))
-            })?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
-}
-
-/// `db_paths` 是每个候选 OpenCode 数据目录下的 `opencode.db` 文件本身（叶子文件路径）。
-fn ingest_opencode(
-    conn: &Connection,
-    db_paths: &[PathBuf],
-    report: &mut IngestReport,
-) -> Result<(), String> {
-    let source = Source::Opencode;
-    set_detected(report, source, db_paths.iter().any(|path| path.exists()));
-    let mut seen = BTreeSet::new();
-    for db_path in db_paths {
-        if !db_path.exists() {
-            continue;
-        }
-        seen.insert(db_path.to_string_lossy().to_string());
-        let wal_path = PathBuf::from(format!("{}-wal", db_path.to_string_lossy()));
-        let fingerprint = metadata_fingerprint(&wal_path);
-        ingest_one(conn, source, db_path, &fingerprint, report, |_, loc| {
-            let source_db = open_readonly(db_path)?;
-            let mut stmt = source_db
-                .prepare("SELECT session_id, data FROM message")
-                .map_err(|e| e.to_string())?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
-                .map_err(|e| e.to_string())?;
-            let mut messages = Vec::new();
-            for row in rows {
-                let (session_id, data) = row.map_err(|e| e.to_string())?;
-                let data = serde_json::from_str(&data)
-                    .map_err(|error| format!("OpenCode message JSON 无效：{error}"))?;
-                messages.push(OpencodeMessage {
-                    session_id,
-                    source_file: loc.to_string(),
-                    data,
-                });
-            }
-            Ok(parse_opencode_messages(&messages))
-        })?;
-    }
-    reconcile_source(conn, source, &seen, report)
 }
 
 fn reconcile_source(

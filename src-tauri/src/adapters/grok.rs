@@ -1,10 +1,64 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use crate::adapters::project::decode_url_dir;
 use crate::adapters::{finish, i64_field, parse_jsonl_values, text_field};
 use crate::domain::{Source, UsageRecord};
+use crate::ingest::{self, PathOverrides};
+
+pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
+    ingest::resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions")
+}
+
+pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut paths = Vec::new();
+    for root in roots {
+        for path in ingest::walk_files(root, "jsonl")? {
+            if path.file_name().and_then(|name| name.to_str()) == Some("updates.jsonl") {
+                paths.push(path);
+            }
+        }
+    }
+    Ok(paths)
+}
+
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    ingest::content_fingerprint(&summary_path(path))
+}
+
+pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    let model = current_model(path)?;
+    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    let content = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
+    ingest::validate_jsonl(content)?;
+    Ok(parse_grok_updates(content, &path.to_string_lossy(), &model))
+}
+
+fn summary_path(path: &Path) -> PathBuf {
+    path.parent()
+        .map(|parent| parent.join("summary.json"))
+        .unwrap_or_default()
+}
+
+/// 摘要缺失时回退空模型名；解析失败必须返回 Err，由摄取记来源级失败并跳过当前文件。
+fn current_model(path: &Path) -> Result<String, String> {
+    let summary_path = summary_path(path);
+    if !summary_path.exists() {
+        return Ok(String::new());
+    }
+    let text =
+        fs::read_to_string(&summary_path).map_err(|error| format!("Grok 模型摘要无效：{error}"))?;
+    let summary = serde_json::from_str::<Value>(&text)
+        .map_err(|error| format!("Grok 模型摘要无效：{error}"))?;
+    Ok(summary
+        .get("current_model_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string())
+}
 
 /// `costUsdTicks`：1 tick = 1e-10 USD（与 Grok CLI / cc-switch 一致）。
 const USD_TICKS_PER_DOLLAR: f64 = 10_000_000_000.0;
