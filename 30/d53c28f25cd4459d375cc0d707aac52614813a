@@ -1,0 +1,35 @@
+src-tauri/src/ingest.rs
+  s_e19f153c903e5e::t_6854fdc2e88720 11,116-121,296-301,390,398,557-562,585-590,608,685,702,704,718,720,728
+src-tauri/src/adapters/copilot.rs
+  s_e19f153c903e5e::t_ecc20b51a94d45 1-2,6-7,10-18
+src-tauri/src/adapters/pi.rs
+  s_e19f153c903e5e::t_d73c5123b7a590 1-2,5-6,9-17
+src-tauri/src/adapters/mod.rs
+  s_e19f153c903e5e::t_aa6783fe07182d 31-32
+  s_e19f153c903e5e::t_a9381597cf974b 48-115,123-149
+  s_e19f153c903e5e::t_562f958324c698 150
+src-tauri/src/adapters/codex.rs
+  s_e19f153c903e5e::t_9cbde5d0e36bf4 1-2,6-7,10-18
+src-tauri/src/adapters/claude.rs
+  s_e19f153c903e5e::t_c3acbc05c01a8f 2,6-7,11-27
+  s_e19f153c903e5e::t_b71cbb641303fc 10
+src-tauri/src/adapters/cursor_agent.rs
+  s_e19f153c903e5e::t_75d96f9cede51f 1-5,7-27
+  s_e19f153c903e5e::t_73b16b6aabfce3 28-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "30d53c28f25cd4459d375cc0d707aac52614813a",
+  "prompts": {},
+  "sessions": {
+    "s_e19f153c903e5e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a042bd-a476-7f41-83d2-90c1b73bca0b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
