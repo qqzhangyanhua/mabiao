@@ -896,12 +896,8 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
-        ingest::source_scan_dirs_with(&overrides, home, Source::Grok),
-        vec![home.join(".grok/sessions")],
-    );
-    assert_eq!(
-        ingest::source_scan_dirs_with(&overrides, home, Source::Opencode),
-        vec![home.join(".local/share/opencode/opencode.db")],
+        ingest::source_scan_dirs_with(&overrides, home, Source::Pi),
+        vec![home.join(".pi/agent/sessions")],
     );
 }
 
