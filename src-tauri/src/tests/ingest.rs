@@ -749,6 +749,115 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
 }
 
 #[test]
+fn heartbeat_enumeration_matches_ingested_file_cache_for_all_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_all_source_fixtures(home);
+    let conn = store::open_memory().unwrap();
+    let overrides = ingest::PathOverrides::new();
+    ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+
+    let cached = store::cached_ingested_files(&conn).unwrap();
+    let mut cached_paths = Vec::new();
+    for source in Source::ALL {
+        let source_paths: Vec<&str> = cached
+            .iter()
+            .filter(|row| row.source == source.as_str())
+            .map(|row| row.path.as_str())
+            .collect();
+        assert_eq!(
+            source_paths.len(),
+            1,
+            "{} 全量摄取后 ingested_files 应为 1 条，实际 {:?}",
+            source.as_str(),
+            source_paths
+        );
+        cached_paths.push(source_paths[0].to_string());
+    }
+
+    // 心跳过期判定入口对路径集合做等长 + 子集检查：不过期即心跳枚举集合
+    // 与 ingested_files 逐项相等（夹具不含 Cursor 会话，不会被会话侧新鲜度干扰）。
+    let cache = ingest::load_scan_cache(&conn).unwrap();
+    assert!(
+        !ingest::scan_is_stale_from_cache(&cache, home).unwrap(),
+        "全量摄取后心跳必须不过期（枚举路径 != ingested_files）。缓存路径：{cached_paths:?}"
+    );
+}
+
+#[test]
+fn all_source_ingest_report_matches_behavior_baseline() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_all_source_fixtures(home);
+    let conn = store::open_memory().unwrap();
+    let overrides = ingest::PathOverrides::new();
+    let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+    let stored = store::load_all(&conn).unwrap();
+
+    assert_eq!(report.files_seen, 12);
+    assert_eq!(report.files_skipped, 0);
+    assert_eq!(report.files_parsed, 12);
+    assert_eq!(report.files_failed, 0);
+    assert_eq!(report.records_written, 19);
+    assert_eq!(report.records_archived, 0);
+    assert_eq!(stored.len(), 19);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 848352);
+    assert!(
+        report.issues.is_empty(),
+        "全来源夹具首次摄取不应产生诊断问题：{:?}",
+        report.issues
+    );
+
+    assert_eq!(report.sources.len(), Source::ALL.len());
+    for source in Source::ALL {
+        let (
+            files_seen,
+            files_skipped,
+            files_parsed,
+            records_written,
+            files_failed,
+            records_archived,
+        ) = match source {
+            Source::Codex
+            | Source::Claude
+            | Source::Pi
+            | Source::Kimi
+            | Source::Dsh
+            | Source::Grok
+            | Source::CursorAgent
+            | Source::Copilot => (1, 0, 1, 2, 0, 0),
+            Source::Opencode | Source::Gemini | Source::Factory => (1, 0, 1, 1, 0, 0),
+            Source::Qwen => (1, 0, 1, 0, 0, 0),
+        };
+        let entry = report
+            .sources
+            .iter()
+            .find(|entry| entry.source == source.as_str())
+            .expect("ingest report has every registered source");
+        assert_eq!(
+            (
+                entry.files_seen,
+                entry.files_skipped,
+                entry.files_parsed,
+                entry.records_written,
+                entry.files_failed,
+                entry.records_archived
+            ),
+            (
+                files_seen,
+                files_skipped,
+                files_parsed,
+                records_written,
+                files_failed,
+                records_archived
+            ),
+            "{} 每来源报告与行为基线不一致",
+            source.as_str()
+        );
+    }
+}
+
+#[test]
 fn scan_is_stale_detects_new_changed_and_deleted_source_files() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
