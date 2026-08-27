@@ -1,0 +1,21 @@
+src-tauri/src/tests/ingest.rs
+  s_5f913072228fef::t_7dffa523a43df6 813-831
+  s_5f913072228fef::t_5da8522e94a645 751-760,762,774,776-777,780-782,784-812,832-859
+  s_5f913072228fef::t_38cd8e0361f570 761,763-773,775,778-779,783
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "60203327d84c7a6df13339b7ac781249ef3194e9",
+  "prompts": {},
+  "sessions": {
+    "s_5f913072228fef": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0427c-716e-7f13-873e-6299d7b759f5",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
