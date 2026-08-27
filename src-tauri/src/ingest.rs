@@ -192,10 +192,11 @@ fn list_watched_inputs(
         let adapter = usage_adapter(source);
         let dirs = (adapter.scan_dirs)(overrides, home);
         for path in (adapter.discover)(&dirs)? {
+            let extra_fingerprint = (adapter.sidecar_fingerprint)(&path, &dirs);
             files.push(WatchedInput {
                 source,
                 path,
-                extra_fingerprint: (adapter.sidecar_fingerprint)(&path, &dirs),
+                extra_fingerprint,
             });
         }
     }
