@@ -1,6 +1,6 @@
 # 跨平台构建与运行
 
-码表基于 **Tauri 2**，核心逻辑跨平台；菜单栏托盘与钥匙串以 **macOS** 为一等公民。安装包由 [`.github/workflows/release.yml`](../.github/workflows/release.yml) 在 GitHub Actions 上打好，挂到 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。
+码表基于 **Tauri 2**，核心逻辑跨平台；菜单栏托盘以 **macOS** 为一等公民。安装包由 [`.github/workflows/release.yml`](../.github/workflows/release.yml) 在 GitHub Actions 上打好，挂到 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。
 
 ## 支持矩阵
 
@@ -11,7 +11,7 @@
 | Windows x64 | ✅ NSIS `.exe` | ❌ | `windows_subsystem = "windows"` 隐藏控制台；无 macOS `Reopen` / template icon |
 | Linux ARM | ❌ 未纳入矩阵 | ⚠️ | 公开仓库可用 `ubuntu-22.04-arm`，需要时再加 |
 
-Cursor 会话 token 走 `keyring` 的 `apple-native`，Windows / Linux 上该入口可能失败，其余本机文件摄取不受影响。
+官方额度的凭证都是读各客户端本机已有的登录态，跨平台可用；例外是 Antigravity——它的登录态由 zalando go-keyring 写进 macOS 钥匙串，`macos_keychain_password()` 在非 macOS 上直接返回 `None`，所以这一家在 Windows / Linux 上只能靠客户端 `state.vscdb` 里那份，读不到就整行不可用。其余本机文件摄取不受影响。
 
 ## macOS（推荐）
 

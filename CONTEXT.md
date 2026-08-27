@@ -25,7 +25,7 @@ Cursor `scored_commits` 记录的提交行数：新增/删除/净增、Composer�
 _Avoid_: 用量、消耗（避免与 token 混淆）；不要把 hash 条数当成行数
 
 **Cursor 账号用量 (Cursor Account Usage)**：
-从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。会话 token 在设置页或 Cursor 页粘贴进钥匙串；缓存可在设置页独立清空，不参与本机文件对账。界面可翻看已缓存的单条事件，对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、应用统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；应用统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
+从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。凭证只有一个来源：本机 Cursor 客户端写在 globalStorage `state.vscdb` 里的登录态（Cursor 自己续期），没有手动粘贴通路、也不落钥匙串；缓存可在设置页独立清空，不参与本机文件对账。界面可翻看已缓存的单条事件，对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、应用统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；应用统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
 _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不要把它并进本机 token KPI 或 5 小时窗
 
 **Cursor 会话 (Cursor Session)**：
@@ -37,7 +37,7 @@ _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor
 _Avoid_: 消耗记录、Cursor 会话仪表盘、把正文写进缓存
 
 **官方额度 (Official Quota)**：
-账号级订阅限额（已用百分比与重置时间）。成员由两部分构成：内置账号（Claude / Codex / Cursor / Grok 等）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 用已有钥匙串打限额接口，Grok 读本机 `~/.grok/auth.json` 打 CLI 限额接口。
+账号级订阅限额（已用百分比与重置时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 读 globalStorage `state.vscdb`，Grok 读 `~/.grok/auth.json`，Antigravity 先读 macOS 钥匙串再回落客户端本机状态。本机既没凭证、也没历史缓存的账号不占一行。
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条
 
 **自定义提供商 (Custom Quota Provider)**：

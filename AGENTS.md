@@ -21,11 +21,15 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 | 层级 | 命令 | 覆盖 |
 |------|------|------|
-| 前端纯函数 | `pnpm test` | format、exportRows、viewCache、价目表等 |
+| 前端纯函数 | `pnpm test` | format、exportRows、viewCache、价目表等（`src/lib/*.test.ts` 与 `src/hooks/*.test.ts`） |
 | Rust 适配器 | `cargo test adapters` | 各 Source fixture → UsageRecord |
 | 聚合 SQL parity | `cargo test parity` | `query.rs` vs `aggregate.rs` 逐字段对照 |
 | 摄取缓存 | `cargo test ingest` | tempfile 模拟 home，不读真实 `~/.*` |
 | Cursor 会话/账号 | `cargo test cursor` | transcript / 账号 JSON fixture |
+| 官方额度 | `cargo test quota` | 各家响应 fixture、退避、告警去重、自定义提供商 |
+| 对话记录 | `cargo test conversation` | 事件索引、增量、分页、各来源正文解析 |
+| 全局指令 | `cargo test instructions` | 加载判定、冲突、体检、白名单写入 |
+| 备份 / 恢复 | `cargo test backup` | 往返、拒绝坏包、legacy 包兼容 |
 | 构建 | `pnpm build` | 类型检查 + chunk 拆分 |
 
 Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `src-tauri/src/test_support/`。
@@ -63,16 +67,32 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ### 修改摄取 / 备份
 
-1. 跑 `cargo test ingest` 与 `cargo test backup`（若有）
+1. 跑 `cargo test ingest` 与 `cargo test backup`
 2. 对照 `docs/adr/0003-trusted-ingestion-cache.md`
+
+### 修改官方额度 / 自定义提供商
+
+1. 内置九家在 `domain.rs::OfficialQuotaProvider::ALL`（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）；新增一家要同时补 `official_quota/<provider>.rs`、`detect.rs` 的凭证探测与 `fetch.rs` 的分派
+2. 凭证只读各客户端本机已有的登录态，不要加手动粘贴通路、不要写钥匙串；自定义提供商的密钥单独存一份文件，**不进备份**
+3. 用 fixture 测响应解析，不打真实接口（Cloud 上没有登录态）；跑 `cargo test quota`
+4. 对照 `docs/adr/0008-official-quota-dimension.md`、`0012-custom-quota-providers.md`、`0013-custom-quota-implemented-presets.md`
+
+### 修改对话记录 / 事件索引
+
+1. 正文与事件按需读原文件，**不写进缓存**；索引只存元数据
+2. 跑 `cargo test conversation`（含增量与回填）
+3. 对照 `docs/adr/0011-conversation-event-index.md`
 
 ## 领域词汇（简述）
 
 - **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain.rs`
 - **来源 (Source)**：codex、claude、pi… 不要用「工具/渠道」
 - **代码量 (Code Volume)**：Cursor 行数统计，与 token 严格分区
-- **官方额度 (Official Quota)**：账号级订阅限额，成员含内置账号（Claude / Codex / Cursor / Grok）与用户登记的**自定义提供商**，不进总览 token KPI
+- **官方额度 (Official Quota)**：账号级订阅限额，成员含内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户登记的**自定义提供商**，不进总览 token KPI
 - **Cursor 会话**：agent-transcripts 行为统计，不进总览 token KPI
+- **对话记录 (Conversation Record)**：索引存元数据，正文与事件流按需读原文件，不进缓存、不进 token KPI
+- **全局指令 (Global Instruction)**：某个 Source 真正会跨项目加载的用户手写指令，不进 token KPI；避免用「规则 / 记忆」
+- **工作时间线 (Work Timeline)**：单日会话区间铺开，不是又一份 token KPI
 
 详见 `CONTEXT.md` 与 `docs/adr/`。各平台构建与托盘差异见 `docs/platforms.md`。
 

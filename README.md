@@ -29,7 +29,7 @@
 | grok | ✅ | ✅ | |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh 需解压；copilot 仅会话结束时累计 |
 | Factory / droid | ✅ | ❌ | 会话累计，无模型名 |
-| Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（需主动提供已有凭证） |
+| Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（读本机客户端登录态） |
 | cursor-agent | ⚠️ | ❌ | Token 仅在包装落盘后可读 |
 | qwen / amp | ❌ | ❌ | 本机无 Token（amp 用量在云端） |
 
@@ -40,7 +40,7 @@
 - **总览与拆分**：按时 / 日 / 周 / 月看趋势，按来源、模型、Provider、项目、会话拆分；可导出 CSV / JSON，图表可另存图片
 - **工作时间线**：按日把各来源会话铺成片段，看当天执行时长、对话轮次与并行强度
 - **对话记录**：按需读本机正文与事件流（提问 / 思考 / 工具 / 回复），可导出 Markdown / JSON
-- **额度分开展示**：本机 5 小时 / 7 天估计窗（非官方配额）与 **官方额度**分开；内置 Claude / Codex / Cursor / Grok / Droid / Copilot 等账号，设置里还可登记自定义提供商。菜单栏显示今日花费和最紧的官方百分比
+- **额度分开展示**：本机 5 小时 / 7 天估计窗（非官方配额）与 **官方额度**分开；内置 Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin 九家账号并显示套餐名，设置里还可登记自定义提供商。菜单栏显示今日花费和最紧的官方百分比
 - **全局指令**：汇总各来源真正会加载的用户手写指令，与用量分区，不进 Token KPI
 - **Cursor 代码量**：编辑器 AI 行数独立统计，不并入 Token KPI
 - **本机缓存**：sqlite 可备份、恢复、按来源重建；源文件被清理后记录归档仍计入，不会静默消失
@@ -50,8 +50,8 @@
 
 - 默认只读扫描本机各来源会话目录，**不上传本机消耗记录**
 - 聚合结果缓存在本机 sqlite，可在设置页备份、恢复或重建
-- Cursor 账号用量与部分官方额度需要你主动提供本机已有凭证；不会改写会话正文
-- Cursor 会话 token 写入 macOS 钥匙串（`keyring` 仅启用 `apple-native`）；Windows / Linux 打包后该入口可能不可用
+- Cursor 账号用量与官方额度只读本机各客户端已有的登录态（如 Cursor 的 `state.vscdb`），没有手动粘贴通路，也不落钥匙串；不会改写会话正文
+- 唯一读钥匙串的地方是 Antigravity 官方额度（AGY CLI 把登录态写在 macOS 钥匙串里），非 macOS 上退回读客户端本机状态；其余本机文件摄取不涉及钥匙串
 - 编辑全局指令会按白名单写入用户自己的指令文件，见 [`docs/adr/0010-writing-user-owned-files.md`](docs/adr/0010-writing-user-owned-files.md)
 
 ## 下载安装
@@ -71,7 +71,7 @@
 xattr -cr "/Applications/Mabiao.app"
 ```
 
-Windows 可能被 SmartScreen 拦截，选择「仍要运行」即可。托盘与钥匙串以 macOS 为一等公民，Linux / Windows 差异见 [`docs/platforms.md`](docs/platforms.md)。
+Windows 可能被 SmartScreen 拦截，选择「仍要运行」即可。托盘以 macOS 为一等公民，Linux / Windows 差异见 [`docs/platforms.md`](docs/platforms.md)。
 
 ## 从源码构建
 

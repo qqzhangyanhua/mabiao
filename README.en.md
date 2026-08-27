@@ -29,7 +29,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | grok | ✅ | ✅ | |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |
 | Factory / droid | ✅ | ❌ | Session totals, no model name |
-| Cursor | ⚠️ | ❌ | Code volume + account usage (you paste existing credentials) |
+| Cursor | ⚠️ | ❌ | Code volume + account usage (reads the local client's login state) |
 | cursor-agent | ⚠️ | ❌ | Tokens only after a wrapper writes them to disk |
 | qwen / amp | ❌ | ❌ | No local tokens (amp usage is cloud-only) |
 
@@ -40,7 +40,7 @@ Dimensions, default paths, and limits: [`CONTEXT.md`](CONTEXT.md).
 - **Overview and breakdowns**: trends by hour / day / week / month; split by source, model, provider, project, and session; export CSV / JSON; save charts as images
 - **Work timeline**: lay sessions out as daily segments — duration, turns, and how much you ran in parallel
 - **Conversation records**: read local bodies and the event stream on demand (prompt / thought / tool / reply); export Markdown / JSON
-- **Quotas stay separate**: local 5-hour / 7-day estimate windows (not official caps) vs **official quota**. Built-in accounts include Claude / Codex / Cursor / Grok / Droid / Copilot and more; Settings also accepts custom providers. The menubar shows today's spend and the tightest official percentage
+- **Quotas stay separate**: local 5-hour / 7-day estimate windows (not official caps) vs **official quota**. Nine built-in accounts — Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin — each with its plan label; Settings also accepts custom providers. The menubar shows today's spend and the tightest official percentage
 - **Global instructions**: lists the user-written instructions each source actually loads, kept out of token KPIs
 - **Cursor code volume**: editor AI line counts are a separate dimension, not mixed into token KPIs
 - **Local cache**: sqlite backup / restore / per-source rebuild; records stay archived (and counted) after source files rotate away
@@ -50,8 +50,8 @@ Dimensions, default paths, and limits: [`CONTEXT.md`](CONTEXT.md).
 
 - Default scan is read-only. **Local usage records are not uploaded**
 - Aggregates live in local sqlite; backup, restore, or rebuild from Settings
-- Cursor account usage and some official quotas need credentials you already have locally; session bodies are not rewritten
-- Cursor session tokens go to the macOS Keychain (`keyring` is `apple-native` only). That path may be unavailable in Windows / Linux builds
+- Cursor account usage and official quota only read login state each client already keeps locally (e.g. Cursor's `state.vscdb`). There is no manual paste path and nothing is written to a keychain; session bodies are not rewritten
+- The only keychain read is Antigravity's official quota (the AGY CLI keeps its login state in the macOS Keychain); off macOS it falls back to the client's local state. Local file ingestion never touches a keychain
 - Editing global instructions writes the user's own instruction files through a whitelist; see [`docs/adr/0010-writing-user-owned-files.md`](docs/adr/0010-writing-user-owned-files.md)
 
 ## Install
@@ -71,7 +71,7 @@ Builds are **unsigned**. On first macOS open, right-click → Open in Finder, or
 xattr -cr "/Applications/Mabiao.app"
 ```
 
-Windows SmartScreen may block the installer; choose “Run anyway”. Menubar and keychain treat macOS as first-class; Linux / Windows differences are in [`docs/platforms.md`](docs/platforms.md).
+Windows SmartScreen may block the installer; choose “Run anyway”. The menubar treats macOS as first-class; Linux / Windows differences are in [`docs/platforms.md`](docs/platforms.md).
 
 ## Build from source
 
