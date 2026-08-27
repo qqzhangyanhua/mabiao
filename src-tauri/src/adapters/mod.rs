@@ -15,7 +15,54 @@ pub mod pi;
 pub mod project;
 pub mod qwen;
 
-use crate::domain::UsageRecord;
+use std::path::{Path, PathBuf};
+
+use crate::domain::{Source, UsageRecord};
+use crate::ingest::PathOverrides;
+
+type UsageScanDirsFn = fn(&PathOverrides, &Path) -> Vec<PathBuf>;
+type UsageDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
+type UsageSidecarFn = fn(&Path, &[PathBuf]) -> String;
+type UsagePrepareDirFn = fn(&Path) -> Result<(), String>;
+
+/// 把一个已发现的文件解析成消耗记录。
+///
+/// 契约是「路径 + 所属扫描目录 → 记录」；「怎么读」留在适配器内部。
+/// 后续流式来源（Codex 等单文件可达 114MB）应在实现里按行打开磁盘，
+/// 不要先 `fs::read` 再解析——这个签名故意不收 `&[u8]` / `&str`，
+/// 以免把它们逼成整份读入。
+pub(crate) type UsageParseFn = fn(&Path, &Path) -> Result<Vec<UsageRecord>, String>;
+
+pub(crate) struct UsageAdapter {
+    pub source: Source,
+    pub scan_dirs: UsageScanDirsFn,
+    pub discover: UsageDiscoverFn,
+    pub sidecar_fingerprint: UsageSidecarFn,
+    pub parse: UsageParseFn,
+    /// 扫描目录级派生上下文。失败时记来源级失败并跳过该目录，而不是让整个来源返回 Err。
+    pub prepare_dir: Option<UsagePrepareDirFn>,
+    pub append_log: bool,
+    pub coverage: &'static str,
+    pub display_dirs: Option<UsageScanDirsFn>,
+}
+
+const USAGE_ADAPTERS: &[UsageAdapter] = &[UsageAdapter {
+    source: Source::Kimi,
+    scan_dirs: kimi::scan_dirs,
+    discover: kimi::discover,
+    sidecar_fingerprint: kimi::sidecar_fingerprint,
+    parse: kimi::parse,
+    prepare_dir: Some(kimi::prepare_dir),
+    append_log: true,
+    coverage: "轮级 Token（无模型名）",
+    display_dirs: None,
+}];
+
+pub(crate) fn usage_adapter(source: Source) -> Option<&'static UsageAdapter> {
+    USAGE_ADAPTERS
+        .iter()
+        .find(|adapter| adapter.source == source)
+}
 
 /// 惰性逐行产出 `Value`，同一时刻只有一行的解析结果活着。
 ///

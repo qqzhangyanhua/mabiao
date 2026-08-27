@@ -9,7 +9,8 @@ use rusqlite::Connection;
 use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
 use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 use crate::adapters::{
-    claude, codex, copilot, cursor_agent, dsh, factory, gemini, grok, kimi, pi, qwen, LineFactory,
+    claude, codex, copilot, cursor_agent, dsh, factory, gemini, grok, pi, qwen, usage_adapter,
+    LineFactory, UsageAdapter,
 };
 use crate::cursor_session;
 use crate::domain::{
@@ -68,7 +69,7 @@ fn env_override(var: &str) -> Option<Vec<PathBuf>> {
 
 /// 解析某个 Source 的根目录列表：环境变量整体覆盖优先，否则退回默认的单个 home 相对路径；
 /// 两种情况都按同样的规则拼接叶子子路径（`leaf` 为空表示根目录本身就是扫描目标）。
-fn resolve_dirs(
+pub(crate) fn resolve_dirs(
     overrides: &PathOverrides,
     home: &Path,
     env_var: &str,
@@ -99,13 +100,16 @@ fn resolve_claude_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// 每个 Source 实际要扫描的目录（可能不止一个）。Kimi 的条目是「工具根目录」而不是
-/// 叶子目录，因为 `ingest_kimi` 还要从根目录派生 `sessions/` 和 `kimi.json` 两个子路径。
+/// 每个 Source 实际要扫描的目录（可能不止一个）。Kimi 在表里登记的是「工具根目录」
+/// 而不是叶子目录，发现与辅助指纹再从根目录派生 `sessions/` 和 `kimi.json`。
 pub(crate) fn source_scan_dirs_with(
     overrides: &PathOverrides,
     home: &Path,
     source: Source,
 ) -> Vec<PathBuf> {
+    if let Some(adapter) = usage_adapter(source) {
+        return (adapter.scan_dirs)(overrides, home);
+    }
     match source {
         Source::Codex => resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions"),
         Source::Claude => resolve_claude_dirs(overrides, home),
@@ -117,7 +121,7 @@ pub(crate) fn source_scan_dirs_with(
             ".local/share/opencode",
             "opencode.db",
         ),
-        Source::Kimi => resolve_dirs(overrides, home, "KIMI_DATA_DIR", ".kimi", ""),
+        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions"),
         Source::Gemini => resolve_dirs(overrides, home, "GEMINI_DATA_DIR", ".gemini/tmp", ""),
         Source::Grok => resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions"),
@@ -249,15 +253,10 @@ fn list_watched_inputs(
 }
 
 fn sidecar_fingerprint(source: Source, path: &Path, dirs: &[PathBuf]) -> String {
+    if let Some(adapter) = usage_adapter(source) {
+        return (adapter.sidecar_fingerprint)(path, dirs);
+    }
     match source {
-        Source::Kimi => {
-            let root = dirs
-                .iter()
-                .find(|dir| path.starts_with(dir))
-                .cloned()
-                .unwrap_or_else(|| path.to_path_buf());
-            content_fingerprint(&root.join("kimi.json"))
-        }
         Source::Grok => {
             let summary = path
                 .parent()
@@ -269,26 +268,20 @@ fn sidecar_fingerprint(source: Source, path: &Path, dirs: &[PathBuf]) -> String 
             let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
             metadata_fingerprint(&wal)
         }
+        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         _ => String::new(),
     }
 }
 
 fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    if let Some(adapter) = usage_adapter(source) {
+        return (adapter.discover)(dirs);
+    }
     match source {
         Source::Codex | Source::Claude | Source::Pi | Source::CursorAgent | Source::Copilot => {
             list_ext_files(dirs, "jsonl")
         }
-        Source::Kimi => {
-            let mut paths = Vec::new();
-            for root in dirs {
-                for path in walk_files(&root.join("sessions"), "jsonl")? {
-                    if path.file_name().and_then(|name| name.to_str()) == Some("wire.jsonl") {
-                        paths.push(path);
-                    }
-                }
-            }
-            Ok(paths)
-        }
+        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => list_suffix_files(dirs, "session.jsonl.zstd"),
         Source::Gemini => {
             let mut paths = Vec::new();
@@ -428,6 +421,12 @@ pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDi
 
 /// 设置页展示的路径：Cursor Agent 先展示与 IDE 共用的原生目录，包装目录只在实际存在时追加。
 fn source_display_dirs(overrides: &PathOverrides, home: &Path, source: Source) -> Vec<PathBuf> {
+    if let Some(adapter) = usage_adapter(source) {
+        return match adapter.display_dirs {
+            Some(display_dirs) => display_dirs(overrides, home),
+            None => (adapter.scan_dirs)(overrides, home),
+        };
+    }
     match source {
         Source::CursorAgent => {
             let mut dirs = vec![home.join(".cursor/chats"), home.join(".cursor/projects")];
@@ -590,12 +589,15 @@ fn ingest_all_sources(
 }
 
 fn source_coverage(source: Source) -> &'static str {
+    if let Some(adapter) = usage_adapter(source) {
+        return adapter.coverage;
+    }
     match source {
         Source::Qwen => "本地无 Token",
         Source::Grok => "轮级 Token",
-        // Factory/Kimi 本机存储都不含模型名字段，只能按 token 统计，无法按模型定价。
+        // Factory 本机存储不含模型名字段，只能按 token 统计，无法按模型定价。
         Source::Factory => "会话累计 Token（无模型名）",
-        Source::Kimi => "轮级 Token（无模型名）",
+        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::CursorAgent => "会话与 IDE 共用本机目录；token 仅包装落盘",
         Source::Copilot => "仅会话结束时上报（累计）",
         _ => "轮级 Token",
@@ -610,6 +612,9 @@ fn ingest_source(
     report: &mut IngestReport,
 ) -> Result<(), String> {
     let dirs = source_scan_dirs_with(overrides, home, source);
+    if let Some(adapter) = usage_adapter(source) {
+        return ingest_from_adapter(conn, adapter, &dirs, report);
+    }
     match source {
         Source::Codex => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
             codex::parse_codex_jsonl(lines, path)
@@ -620,7 +625,7 @@ fn ingest_source(
         Source::Pi => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
             pi::parse_pi_jsonl(lines, path)
         }),
-        Source::Kimi => ingest_kimi(conn, &dirs, report),
+        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => ingest_dsh(conn, &dirs, report),
         Source::Gemini => ingest_gemini(conn, &dirs, report),
         Source::Grok => ingest_grok(conn, &dirs, report),
@@ -770,12 +775,14 @@ fn ingest_one_prepared(
 }
 
 fn is_append_log_source(source: Source) -> bool {
+    if let Some(adapter) = usage_adapter(source) {
+        return adapter.append_log;
+    }
     matches!(
         source,
         Source::Codex
             | Source::Claude
             | Source::Pi
-            | Source::Kimi
             | Source::Dsh
             | Source::Grok
             | Source::CursorAgent
@@ -783,7 +790,7 @@ fn is_append_log_source(source: Source) -> bool {
     )
 }
 
-fn validate_jsonl(content: &str) -> Result<(), String> {
+pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
     for (index, line) in content.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() {
@@ -822,91 +829,48 @@ fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> {
     }
 }
 
-/// `roots` 里的每一项都是一个 Kimi 工具根目录（下面挂 `sessions/` 和 `kimi.json`）。
-fn ingest_kimi(
+/// 表里已登记的来源走同一条摄取路径：发现、比指纹、解析、对账。
+/// 「怎么读」在 `adapter.parse` 内部：Kimi 仍整份读入；后续流式来源按行打开磁盘。
+fn ingest_from_adapter(
     conn: &Connection,
-    roots: &[PathBuf],
+    adapter: &UsageAdapter,
+    dirs: &[PathBuf],
     report: &mut IngestReport,
 ) -> Result<(), String> {
-    let source = Source::Kimi;
     set_detected(
         report,
-        source,
-        roots.iter().any(|root| root.join("sessions").exists()),
+        adapter.source,
+        dirs.iter().any(|root| {
+            if adapter.source == Source::Kimi {
+                root.join("sessions").exists()
+            } else {
+                root.exists()
+            }
+        }),
     );
     let mut seen = BTreeSet::new();
-    for root in roots {
-        let sessions = root.join("sessions");
-        let sidecar = root.join("kimi.json");
-        let fingerprint = content_fingerprint(&sidecar);
-        let projects = match kimi_projects(root) {
-            Ok(projects) => projects,
-            Err(error) => {
+    for root in dirs {
+        if let Some(prepare_dir) = adapter.prepare_dir {
+            if let Err(error) = prepare_dir(root) {
+                // Kimi 的派生上下文文件固定为扫描根下的 kimi.json；目前只有 Kimi 登记了 prepare_dir。
                 record_failure(
                     report,
-                    source,
-                    &sidecar.to_string_lossy(),
-                    &format!("Kimi 项目映射无效：{error}"),
+                    adapter.source,
+                    &root.join("kimi.json").to_string_lossy(),
+                    &error,
                 );
                 continue;
             }
-        };
-        for path in walk_files(&sessions, "jsonl")? {
-            if path.file_name().and_then(|name| name.to_str()) != Some("wire.jsonl") {
-                continue;
-            }
+        }
+        for path in (adapter.discover)(std::slice::from_ref(root))? {
             seen.insert(path.to_string_lossy().to_string());
-            let session_id = path
-                .parent()
-                .and_then(|parent| parent.file_name())
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .to_string();
-            let project = projects
-                .iter()
-                .find(|(id, _)| id == &session_id)
-                .map(|(_, project)| project.clone())
-                .unwrap_or_else(|| {
-                    path.parent()
-                        .and_then(|parent| parent.parent())
-                        .and_then(|parent| parent.file_name())
-                        .and_then(|name| name.to_str())
-                        .unwrap_or("")
-                        .to_string()
-                });
-            ingest_one(conn, source, &path, &fingerprint, report, |bytes, loc| {
-                let content = std::str::from_utf8(bytes).map_err(|e| e.to_string())?;
-                validate_jsonl(content)?;
-                Ok(kimi::parse_kimi_wire(content, loc, &project))
+            let fingerprint = (adapter.sidecar_fingerprint)(&path, dirs);
+            ingest_one_prepared(conn, adapter.source, &path, &fingerprint, report, |_| {
+                (adapter.parse)(&path, root)
             })?;
         }
     }
-    reconcile_source(conn, source, &seen, report)
-}
-
-fn kimi_projects(root: &Path) -> Result<Vec<(String, String)>, String> {
-    let path = root.join("kimi.json");
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let text = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let value =
-        serde_json::from_str::<serde_json::Value>(&text).map_err(|error| error.to_string())?;
-    Ok(value
-        .get("work_dirs")
-        .and_then(|value| value.as_array())
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|item| {
-                    Some((
-                        item.get("last_session_id")?.as_str()?.to_string(),
-                        item.get("path")?.as_str()?.to_string(),
-                    ))
-                })
-                .collect()
-        })
-        .unwrap_or_default())
+    reconcile_source(conn, adapter.source, &seen, report)
 }
 
 fn ingest_dsh(

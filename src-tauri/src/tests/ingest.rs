@@ -289,9 +289,132 @@ fn invalid_kimi_sidecar_keeps_last_good_project_mapping() {
     let records = store::load_all(&conn).unwrap();
 
     assert_eq!(report.files_failed, 1);
+    assert_eq!(report.records_archived, 0);
+    assert!(
+        report.issues.iter().any(|issue| {
+            issue.source == "kimi"
+                && issue.path.ends_with("kimi.json")
+                && issue.message.contains("Kimi 项目映射无效")
+        }),
+        "派生上下文失败应记为来源级诊断，实际 {:?}",
+        report.issues
+    );
     assert!(records
         .iter()
         .all(|record| record.project == "/project/good"));
+}
+
+#[test]
+fn invalid_kimi_sidecar_defers_deleted_file_reconciliation() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let first_id = "bd1ab6fc-768d-4cff-b4c4-221a583c3af8";
+    let second_id = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+    let first = home.join(format!(".kimi/sessions/hash/{first_id}/wire.jsonl"));
+    let second = home.join(format!(".kimi/sessions/hash/{second_id}/wire.jsonl"));
+    let sidecar = home.join(".kimi/kimi.json");
+    std::fs::create_dir_all(first.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(second.parent().unwrap()).unwrap();
+    std::fs::write(&first, fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(&second, fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(
+        &sidecar,
+        format!(r#"{{"work_dirs":[{{"last_session_id":"{first_id}","path":"/project/good"}}]}}"#),
+    )
+    .unwrap();
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(store::load_all(&conn).unwrap().len(), 4);
+
+    std::fs::write(&sidecar, "{not-json").unwrap();
+    std::fs::remove_file(&second).unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert_eq!(report.records_archived, 0);
+    assert_eq!(store::load_all(&conn).unwrap().len(), 4);
+}
+
+#[test]
+fn invalid_kimi_sidecar_fails_once_per_scan_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let first = home.join(".kimi/sessions/hash/sess-a/wire.jsonl");
+    let second = home.join(".kimi/sessions/hash/sess-b/wire.jsonl");
+    std::fs::create_dir_all(first.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(second.parent().unwrap()).unwrap();
+    std::fs::write(&first, fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(&second, fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(home.join(".kimi/kimi.json"), "{not-json").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let kimi = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Kimi.as_str())
+        .unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert_eq!(kimi.files_seen, 0);
+    assert_eq!(kimi.files_failed, 1);
+    assert!(report
+        .issues
+        .iter()
+        .all(|issue| issue.path.ends_with("kimi.json")));
+}
+
+#[test]
+fn invalid_kimi_sidecar_does_not_abort_other_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let session_id = "bd1ab6fc-768d-4cff-b4c4-221a583c3af8";
+    let wire = home.join(format!(".kimi/sessions/hash/{session_id}/wire.jsonl"));
+    std::fs::create_dir_all(wire.parent().unwrap()).unwrap();
+    std::fs::write(&wire, fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(home.join(".kimi/kimi.json"), "{not-json").unwrap();
+    let session_dir = home.join(".codex/sessions");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("one.jsonl"), fixture("codex.jsonl")).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert!(records.iter().any(|record| record.source == Source::Codex));
+    assert!(records.iter().all(|record| record.source != Source::Kimi));
+}
+
+#[test]
+fn kimi_ingest_ignores_jsonl_that_is_not_wire() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let session_id = "bd1ab6fc-768d-4cff-b4c4-221a583c3af8";
+    let session_dir = home.join(format!(".kimi/sessions/hash/{session_id}"));
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("wire.jsonl"), fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(session_dir.join("other.jsonl"), fixture("kimi-wire.jsonl")).unwrap();
+    std::fs::write(
+        home.join(".kimi/sessions/orphan.jsonl"),
+        fixture("kimi-wire.jsonl"),
+    )
+    .unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+    let kimi = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Kimi.as_str())
+        .unwrap();
+
+    assert_eq!(kimi.files_seen, 1);
+    assert_eq!(records.len(), 2);
+    assert!(records
+        .iter()
+        .all(|record| record.source_file.ends_with("wire.jsonl")));
 }
 
 #[test]
@@ -433,6 +556,11 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
     assert_eq!(codex.coverage, "轮级 Token");
     assert!(!qwen.detected);
     assert_eq!(qwen.coverage, "本地无 Token");
+    let kimi = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "kimi")
+        .unwrap();
+    assert_eq!(kimi.coverage, "轮级 Token（无模型名）");
 
     let cursor_agent = diagnostics
         .iter()
