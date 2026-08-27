@@ -1,0 +1,50 @@
+src-tauri/src/adapters/mod.rs
+  s_5b7bfe3dfd1262::t_51206b1618c2b7 27,47-49,83,97,111,125,139,153,167,182,196,210,224,238
+  s_5b7bfe3dfd1262::t_7a4af6e5976aa5 38-39,77,91,105,119,133,147,161,176,190,204,218,232
+AGENTS.md
+  s_5b7bfe3dfd1262::t_b9a791986570ef 49-50
+.cursor/rules/ingestion-cache.mdc
+  s_5b7bfe3dfd1262::t_e624fc7799e180 14
+src-tauri/src/cursor_session.rs
+  s_5b7bfe3dfd1262::t_2fec8df40d6088 12,19-29
+  s_5b7bfe3dfd1262::t_41b07ea1ad0906 30
+src-tauri/src/ingest.rs
+  s_5b7bfe3dfd1262::t_8c4db558b9ac7a 32,315,325,352
+  s_5b7bfe3dfd1262::t_f421fc1ea80770 33,35-39
+  s_5b7bfe3dfd1262::t_9da26f34e8714c 124-136,138-145
+  s_5b7bfe3dfd1262::t_0c62dbcc7aa397 137
+  s_5b7bfe3dfd1262::t_9079adb4084deb 569
+  s_5b7bfe3dfd1262::t_fc4227673c178d 567-568,570-572
+.cursor/rules/adapters.mdc
+  s_5b7bfe3dfd1262::t_16f0b7a59cd915 14-15
+src-tauri/src/conversation.rs
+  s_5b7bfe3dfd1262::t_0a133f6f98555d 1772
+  s_5b7bfe3dfd1262::t_597f976d8f78a8 1758-1763,1767,1771
+  s_5b7bfe3dfd1262::t_4b256b48f39584 1773-1774
+src-tauri/src/tests/ingest.rs
+  s_5b7bfe3dfd1262::t_9079adb4084deb 887,890-892,1479
+  s_5b7bfe3dfd1262::t_853f92560eabce 450,859-886,888-889,893-904,1459
+  s_5b7bfe3dfd1262::t_e881c7650ae1b1 1464,1477-1478,1480-1486
+  s_5b7bfe3dfd1262::t_0c026585c05c2a 1460-1463,1465-1476,1487-1491
+  s_5b7bfe3dfd1262::t_55dd396a4a9cb1 451-477
+  s_5b7bfe3dfd1262::t_b29986d31ea6b1 497,1200-1207,1209-1212,1222-1235,1238-1239
+src-tauri/src/adapters/grok.rs
+  s_5b7bfe3dfd1262::t_896a612628ac92 46-47,51-53,59-60
+  s_5b7bfe3dfd1262::t_9079adb4084deb 48-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6740ac4b415d1601f8e3d8c04a32cd0b94df8f7f",
+  "prompts": {},
+  "sessions": {
+    "s_5b7bfe3dfd1262": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a04357-4015-7bf3-bc71-17ad78bdf2a1",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
