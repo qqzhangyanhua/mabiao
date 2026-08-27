@@ -33,6 +33,7 @@ fn sql_queries_match_in_memory_aggregates() {
         assert_eq!(sql_row.total_tokens, mem_row.total_tokens);
         assert_eq!(sql_row.record_count, mem_row.record_count);
         assert_eq!(sql_row.reason, mem_row.reason);
+        assert_eq!(sql_row.candidate, mem_row.candidate);
     }
 
     // trend 四种粒度

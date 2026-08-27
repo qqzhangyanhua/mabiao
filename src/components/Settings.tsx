@@ -91,6 +91,7 @@ export function Settings({
   const [tab, setTab] = useState<SettingsTabId>(() => tabFromHash(window.location.hash));
   const [anchor, setAnchor] = useState<string | null>(null);
   const [diagnosisEpoch, setDiagnosisEpoch] = useState(0);
+  const [prefillKey, setPrefillKey] = useState<string | null>(null);
 
   useEffect(() => {
     function applyHash() {
@@ -223,14 +224,21 @@ export function Settings({
                 setDiagnosisEpoch((value) => value + 1);
               }}
             />
-            <UnpricedDiagnosisPanel key={diagnosisEpoch} />
+            <UnpricedDiagnosisPanel
+              key={diagnosisEpoch}
+              prices={prices}
+              onChange={onChange}
+              onPrefillHighlight={setPrefillKey}
+            />
             <PricePresetPanel prices={prices} observedModels={observedModels} onChange={onChange} />
             <PriceConfigPanel
               prices={prices}
+              highlightKey={prefillKey}
               onChange={onChange}
               onSave={() => {
                 void Promise.resolve(onSave()).finally(() => {
                   setDiagnosisEpoch((value) => value + 1);
+                  setPrefillKey(null);
                 });
               }}
             />

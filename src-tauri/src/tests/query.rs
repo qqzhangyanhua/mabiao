@@ -1230,3 +1230,64 @@ fn unpriced_diagnosis_groups_unpriced_parts_and_splits_reasons() {
         .all(|row| row.reason == UnpricedReason::StructurallyUnbillable));
     assert_eq!(after.len(), 2);
 }
+
+#[test]
+fn unpriced_diagnosis_attaches_signature_candidate_without_pricing_usage() {
+    let mut record = rec(
+        "2026-08-16T10:00:00Z",
+        Source::Claude,
+        "claude-4.6-sonnet",
+        "anthropic",
+        "/proj/a",
+        "s-candidate",
+        80,
+    );
+    record.input_tokens = 80;
+    let prices = PriceTable {
+        prices: vec![PriceEntry {
+            model: "claude-sonnet-4-6".into(),
+            provider: None,
+            input: 3.0 / 1_000_000.0,
+            output: 15.0 / 1_000_000.0,
+            cache_read: 0.3 / 1_000_000.0,
+            cache_creation: 3.75 / 1_000_000.0,
+            origin: PriceOrigin::Snapshot,
+        }],
+    };
+    let mem = aggregate::unpriced_diagnosis(&[record.clone()], &prices);
+    assert_eq!(mem.len(), 1);
+    assert_eq!(mem[0].reason, UnpricedReason::Pricable);
+    let candidate = mem[0]
+        .candidate
+        .as_ref()
+        .expect("签名兼容快照应出现在可补组上");
+    assert_eq!(candidate.model, "claude-sonnet-4-6");
+    assert_eq!(candidate.origin, PriceOrigin::Snapshot);
+    assert!((candidate.input - 3.0 / 1_000_000.0).abs() < 1e-12);
+
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &[record.clone()]).unwrap();
+    let sql = query::unpriced_diagnosis(&conn, &prices).unwrap();
+    assert_eq!(sql, mem);
+
+    // 消耗记录取价仍关闭签名匹配：精确名对不上就保持 unpriced。
+    let overview = query::overview(&conn, &Filter::default(), &prices).unwrap();
+    assert!(overview.unpriced);
+    assert_eq!(overview.cost, None);
+
+    let mut filled = prices.clone();
+    filled.prices.push(PriceEntry {
+        model: "claude-4.6-sonnet".into(),
+        provider: Some("anthropic".into()),
+        input: 3.0 / 1_000_000.0,
+        output: 15.0 / 1_000_000.0,
+        cache_read: 0.3 / 1_000_000.0,
+        cache_creation: 3.75 / 1_000_000.0,
+        origin: PriceOrigin::User,
+    });
+    let after = query::unpriced_diagnosis(&conn, &filled).unwrap();
+    assert!(after.is_empty());
+    let priced = query::overview(&conn, &Filter::default(), &filled).unwrap();
+    assert!(!priced.unpriced);
+    assert!(priced.cost.is_some());
+}

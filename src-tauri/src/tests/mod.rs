@@ -15,6 +15,7 @@ mod conversation_index_incremental;
 mod conversation_index_sources;
 mod conversation_line_direct;
 mod copilot_quota;
+mod cost;
 mod cursor_account;
 mod cursor_conversation;
 mod cursor_credentials;

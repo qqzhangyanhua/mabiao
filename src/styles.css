@@ -6381,3 +6381,52 @@ td.row-actions {
   gap: 8px 12px;
   align-items: center;
 }
+
+.unpriced-candidate,
+.unpriced-candidate-miss {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.unpriced-candidate-miss,
+.unpriced-candidate-match,
+.unpriced-candidate-origin,
+.unpriced-candidate-price {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.unpriced-candidate-miss {
+  color: var(--muted);
+}
+
+.unpriced-candidate-match {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.unpriced-candidate-origin {
+  color: var(--cyan-fg);
+}
+
+.unpriced-candidate-origin.user {
+  color: var(--purple-fg);
+}
+
+.unpriced-candidate-price {
+  color: var(--text);
+}
+
+.unpriced-candidate-warn {
+  margin: 0;
+}
+
+.price-row-prefilled {
+  outline: 1px solid rgba(34, 211, 238, 0.45);
+  outline-offset: 4px;
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.06);
+}

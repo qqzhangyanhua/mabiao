@@ -1154,6 +1154,9 @@ pub struct UnpricedGroupDto {
     pub total_tokens: i64,
     pub record_count: i64,
     pub reason: UnpricedReason,
+    /// 可补组上的签名兼容候选；形状与价目条目一致，来源多为快照。精确已命中或完全对不上时为空。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub candidate: Option<PriceEntry>,
 }
 
 /// 内置/可刷新的价目快照（当前来自 LiteLLM 社区维护的 `model_prices_and_context_window.json`）。
