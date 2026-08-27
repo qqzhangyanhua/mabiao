@@ -1,0 +1,23 @@
+src-tauri/src/tests/ingest.rs
+  s_c2dad0450d3c0a::t_35b8be88c6e2da 631-636,638
+src-tauri/src/test_support/helpers.rs
+  s_c2dad0450d3c0a::t_7247889929b513 213
+src-tauri/tests/fixtures/cursor-agent.jsonl
+  s_c2dad0450d3c0a::t_4ac52da640cfed 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fe9529b739323d09f670bd48ba376c23fa286d42",
+  "prompts": {},
+  "sessions": {
+    "s_c2dad0450d3c0a": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a04237-57dd-7c52-b4e3-1ae2948c00a0",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
