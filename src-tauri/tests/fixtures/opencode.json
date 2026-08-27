@@ -1,0 +1,14 @@
+[
+  {
+    "session_id": "ses-fixture-1",
+    "data": {
+      "role": "assistant",
+      "modelID": "opencode-test-model",
+      "providerID": "test-provider",
+      "path": { "cwd": "/workspace/app", "root": "/workspace/app" },
+      "time": { "created": 1780000001000, "completed": 1780000003000 },
+      "tokens": { "input": 12, "output": 5, "reasoning": 1, "cache": { "read": 2, "write": 0 } },
+      "cost": 0.42
+    }
+  }
+]
