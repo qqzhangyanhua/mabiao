@@ -8,10 +8,7 @@ use rusqlite::Connection;
 
 use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
 use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
-use crate::adapters::{
-    claude, codex, copilot, cursor_agent, dsh, factory, gemini, grok, pi, qwen, usage_adapter,
-    LineFactory, UsageAdapter,
-};
+use crate::adapters::{dsh, factory, gemini, grok, qwen, usage_adapter, UsageAdapter};
 use crate::cursor_session;
 use crate::domain::{
     CodeVolumeSummary, IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport,
@@ -87,19 +84,6 @@ pub(crate) fn resolve_dirs(
     }
 }
 
-/// Claude Code 在部分安装方式下把会话写到 XDG 目录（`~/.config/claude`）而不是
-/// `~/.claude`；默认两个都扫，显式设置 `CLAUDE_CONFIG_DIR` 后只扫用户指定的目录。
-fn resolve_claude_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    let roots = overrides
-        .get("CLAUDE_CONFIG_DIR")
-        .cloned()
-        .unwrap_or_else(|| vec![home.join(".claude"), home.join(".config/claude")]);
-    roots
-        .into_iter()
-        .map(|root| root.join("projects"))
-        .collect()
-}
-
 /// 每个 Source 实际要扫描的目录（可能不止一个）。Kimi 在表里登记的是「工具根目录」
 /// 而不是叶子目录，发现与辅助指纹再从根目录派生 `sessions/` 和 `kimi.json`。
 pub(crate) fn source_scan_dirs_with(
@@ -111,9 +95,6 @@ pub(crate) fn source_scan_dirs_with(
         return (adapter.scan_dirs)(overrides, home);
     }
     match source {
-        Source::Codex => resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions"),
-        Source::Claude => resolve_claude_dirs(overrides, home),
-        Source::Pi => resolve_dirs(overrides, home, "PI_AGENT_DIR", ".pi/agent/sessions", ""),
         Source::Opencode => resolve_dirs(
             overrides,
             home,
@@ -121,7 +102,6 @@ pub(crate) fn source_scan_dirs_with(
             ".local/share/opencode",
             "opencode.db",
         ),
-        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions"),
         Source::Gemini => resolve_dirs(overrides, home, "GEMINI_DATA_DIR", ".gemini/tmp", ""),
         Source::Grok => resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions"),
@@ -133,17 +113,12 @@ pub(crate) fn source_scan_dirs_with(
             ".factory/sessions",
             "",
         ),
-        // token 包装目录，不是 CLI 原生会话库。会话与 IDE 共用 ~/.cursor。
-        Source::CursorAgent => resolve_dirs(
-            overrides,
-            home,
-            "CURSOR_AGENT_USAGE_DIR",
-            ".cursor-agent-usage",
-            "",
-        ),
-        Source::Copilot => {
-            resolve_dirs(overrides, home, "COPILOT_HOME", ".copilot", "session-state")
-        }
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Kimi
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
 }
 
@@ -268,7 +243,6 @@ fn sidecar_fingerprint(source: Source, path: &Path, dirs: &[PathBuf]) -> String 
             let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
             metadata_fingerprint(&wal)
         }
-        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         _ => String::new(),
     }
 }
@@ -278,10 +252,6 @@ fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, S
         return (adapter.discover)(dirs);
     }
     match source {
-        Source::Codex | Source::Claude | Source::Pi | Source::CursorAgent | Source::Copilot => {
-            list_ext_files(dirs, "jsonl")
-        }
-        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => list_suffix_files(dirs, "session.jsonl.zstd"),
         Source::Gemini => {
             let mut paths = Vec::new();
@@ -323,15 +293,13 @@ fn list_source_paths(source: Source, dirs: &[PathBuf]) -> Result<Vec<PathBuf>, S
         }
         Source::Factory => list_suffix_files(dirs, ".settings.json"),
         Source::Opencode => Ok(dirs.iter().filter(|path| path.exists()).cloned().collect()),
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Kimi
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
-}
-
-fn list_ext_files(roots: &[PathBuf], ext: &str) -> Result<Vec<PathBuf>, String> {
-    let mut paths = Vec::new();
-    for root in roots {
-        paths.extend(walk_files(root, ext)?);
-    }
-    Ok(paths)
 }
 
 fn list_suffix_files(roots: &[PathBuf], suffix: &str) -> Result<Vec<PathBuf>, String> {
@@ -419,7 +387,7 @@ pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDi
         .collect()
 }
 
-/// 设置页展示的路径：Cursor Agent 先展示与 IDE 共用的原生目录，包装目录只在实际存在时追加。
+/// 设置页展示的路径：表里有 `display_dirs` 的来源用它（Cursor Agent 先展示与 IDE 共用的原生目录）。
 fn source_display_dirs(overrides: &PathOverrides, home: &Path, source: Source) -> Vec<PathBuf> {
     if let Some(adapter) = usage_adapter(source) {
         return match adapter.display_dirs {
@@ -427,18 +395,7 @@ fn source_display_dirs(overrides: &PathOverrides, home: &Path, source: Source) -
             None => (adapter.scan_dirs)(overrides, home),
         };
     }
-    match source {
-        Source::CursorAgent => {
-            let mut dirs = vec![home.join(".cursor/chats"), home.join(".cursor/projects")];
-            for dir in source_scan_dirs_with(overrides, home, source) {
-                if dir.exists() && !dirs.contains(&dir) {
-                    dirs.push(dir);
-                }
-            }
-            dirs
-        }
-        _ => source_scan_dirs_with(overrides, home, source),
-    }
+    source_scan_dirs_with(overrides, home, source)
 }
 
 pub fn rebuild_cache(
@@ -597,9 +554,12 @@ fn source_coverage(source: Source) -> &'static str {
         Source::Grok => "轮级 Token",
         // Factory 本机存储不含模型名字段，只能按 token 统计，无法按模型定价。
         Source::Factory => "会话累计 Token（无模型名）",
-        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
-        Source::CursorAgent => "会话与 IDE 共用本机目录；token 仅包装落盘",
-        Source::Copilot => "仅会话结束时上报（累计）",
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Kimi
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
         _ => "轮级 Token",
     }
 }
@@ -616,58 +576,19 @@ fn ingest_source(
         return ingest_from_adapter(conn, adapter, &dirs, report);
     }
     match source {
-        Source::Codex => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
-            codex::parse_codex_jsonl(lines, path)
-        }),
-        Source::Claude => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
-            claude::parse_claude_jsonl(lines, path)
-        }),
-        Source::Pi => ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
-            pi::parse_pi_jsonl(lines, path)
-        }),
-        Source::Kimi => unreachable!("Kimi 由 UsageAdapter 表分发"),
         Source::Dsh => ingest_dsh(conn, &dirs, report),
         Source::Gemini => ingest_gemini(conn, &dirs, report),
         Source::Grok => ingest_grok(conn, &dirs, report),
         Source::Qwen => ingest_qwen(conn, &dirs, report),
         Source::Factory => ingest_factory(conn, &dirs, report),
-        Source::CursorAgent => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
-                cursor_agent::parse_cursor_agent_jsonl(lines, path)
-            })
-        }
-        Source::Copilot => {
-            ingest_jsonl_tree(conn, source, &dirs, "jsonl", report, |lines, path| {
-                copilot::parse_copilot_jsonl(lines, path)
-            })
-        }
         Source::Opencode => ingest_opencode(conn, &dirs, report),
+        Source::Codex
+        | Source::Claude
+        | Source::Pi
+        | Source::Kimi
+        | Source::CursorAgent
+        | Source::Copilot => unreachable!("由 UsageAdapter 表分发"),
     }
-}
-
-/// `roots` 里的每一项都是一个可以直接遍历的扫描目录（叶子目录，已经拼接好子路径）。
-///
-/// 走 `ingest_one_lines`：按行流式读取磁盘文件，不会先把整份文件内容读进内存。
-/// 会话 jsonl 单文件可以到上百 MB（真实观测到 114MB 的 Codex rollout 日志），
-/// 启动时全量摄取和对话事件索引两条路径又可能同时处理到同一份大文件，
-/// 流式读取能把这条路径的峰值内存从「文件大小」降到几十 KB 的行缓冲区。
-fn ingest_jsonl_tree(
-    conn: &Connection,
-    source: Source,
-    roots: &[PathBuf],
-    ext: &str,
-    report: &mut IngestReport,
-    parse: impl Fn(&LineFactory<'_>, &str) -> Vec<UsageRecord>,
-) -> Result<(), String> {
-    set_detected(report, source, roots.iter().any(|root| root.exists()));
-    let mut seen = BTreeSet::new();
-    for root in roots {
-        for path in walk_files(root, ext)? {
-            seen.insert(path.to_string_lossy().to_string());
-            ingest_one_lines(conn, source, &path, report, &parse)?;
-        }
-    }
-    reconcile_source(conn, source, &seen, report)
 }
 
 fn ingest_one(
@@ -684,24 +605,7 @@ fn ingest_one(
     })
 }
 
-/// jsonl 专用：整份文件从不进内存，逐行校验+解析在同一趟磁盘流式读取里完成。
-/// `fingerprint` 固定传空串——jsonl 来源的缓存键只看 `(mtime_ms, size)`。
-fn ingest_one_lines(
-    conn: &Connection,
-    source: Source,
-    path: &Path,
-    report: &mut IngestReport,
-    parse: impl Fn(&LineFactory<'_>, &str) -> Vec<UsageRecord>,
-) -> Result<(), String> {
-    ingest_one_prepared(conn, source, path, "", report, |loc| {
-        validate_jsonl_file(path)?;
-        let factory: &LineFactory<'_> = &|| open_jsonl_lines(path);
-        Ok(parse(factory, loc))
-    })
-}
-
-/// `ingest_one`/`ingest_one_lines` 共用的缓存检查 + 落库逻辑，二者只在
-/// 「如何把文件内容变成 `Vec<UsageRecord>`」这一步不同（整份读入 vs 流式读取）。
+/// `ingest_one` 与适配器 `parse` 共用的缓存检查 + 落库逻辑。
 fn ingest_one_prepared(
     conn: &Connection,
     source: Source,
@@ -778,16 +682,7 @@ fn is_append_log_source(source: Source) -> bool {
     if let Some(adapter) = usage_adapter(source) {
         return adapter.append_log;
     }
-    matches!(
-        source,
-        Source::Codex
-            | Source::Claude
-            | Source::Pi
-            | Source::Dsh
-            | Source::Grok
-            | Source::CursorAgent
-            | Source::Copilot
-    )
+    matches!(source, Source::Dsh | Source::Grok)
 }
 
 pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
@@ -804,9 +699,9 @@ pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
 }
 
 /// `validate_jsonl` 的磁盘流式版本：按行读取校验，不把整份文件读进内存。
-/// 供 `ingest_one_lines` 使用；只读一遍磁盘（内容随后交给适配器再读一遍，
+/// 供流式 jsonl 适配器使用；只读一遍磁盘（内容随后交给适配器再读一遍，
 /// 这时文件通常已经在 OS page cache 里，重复读盘的代价远小于把整份文件留在内存里）。
-fn validate_jsonl_file(path: &Path) -> Result<(), String> {
+pub(crate) fn validate_jsonl_file(path: &Path) -> Result<(), String> {
     let file = fs::File::open(path).map_err(|error| error.to_string())?;
     for (index, line) in BufReader::new(file).lines().enumerate() {
         let line = line.map_err(|error| format!("第 {} 行读取失败：{error}", index + 1))?;
@@ -820,9 +715,9 @@ fn validate_jsonl_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 打开文件并按行流式产出内容；打开失败时返回空迭代器——`ingest_one_lines` 已经在
+/// 打开文件并按行流式产出内容；打开失败时返回空迭代器——调用方已经在
 /// `validate_jsonl_file` 里对同一个 `path` 做过一次可读性检查，这里理论上不会失败。
-fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> {
+pub(crate) fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> {
     match fs::File::open(path) {
         Ok(file) => Box::new(BufReader::new(file).lines().map_while(Result::ok)),
         Err(_) => Box::new(std::iter::empty()),
@@ -830,7 +725,7 @@ fn open_jsonl_lines(path: &Path) -> Box<dyn Iterator<Item = String>> {
 }
 
 /// 表里已登记的来源走同一条摄取路径：发现、比指纹、解析、对账。
-/// 「怎么读」在 `adapter.parse` 内部：Kimi 仍整份读入；后续流式来源按行打开磁盘。
+/// 「怎么读」在 `adapter.parse` 内部：Kimi 整份读入；jsonl 家族按行打开磁盘。
 fn ingest_from_adapter(
     conn: &Connection,
     adapter: &UsageAdapter,
