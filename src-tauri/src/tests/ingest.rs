@@ -616,26 +616,136 @@ fn overview_matches_source_model_project_and_session_rollups() {
 }
 
 #[test]
+fn write_all_source_fixtures_covers_every_registered_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_all_source_fixtures(home);
+    let overrides = ingest::PathOverrides::new();
+
+    assert_eq!(Source::ALL.len(), 12);
+    let opencode_fixture = fixture("opencode.json");
+    assert!(
+        !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
+        "OpenCode 夹具必须脱敏，不能含真实用户路径"
+    );
+    let cursor_agent_written = std::fs::read_dir(home.join(".cursor-agent-usage"))
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .find(|entry| entry.path().extension().and_then(|ext| ext.to_str()) == Some("jsonl"))
+        .map(|entry| std::fs::read_to_string(entry.path()).unwrap())
+        .expect("Cursor Agent jsonl written");
+    assert!(
+        !cursor_agent_written.contains("zhangyanhua") && !cursor_agent_written.contains("/Users/"),
+        "Cursor Agent 夹具必须脱敏，不能含真实用户路径"
+    );
+    for source in Source::ALL {
+        let dirs = ingest::source_scan_dirs_with(&overrides, home, source);
+        assert!(
+            dirs.iter().any(|path| path.exists()),
+            "{} 扫描路径在铺满夹具后不存在：{dirs:?}",
+            source.as_str()
+        );
+    }
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+    assert_eq!(report.sources.len(), Source::ALL.len());
+    for source in Source::ALL {
+        let entry = report
+            .sources
+            .iter()
+            .find(|entry| entry.source == source.as_str())
+            .expect("ingest report has every registered source");
+        assert!(
+            entry.detected,
+            "{} 铺满夹具后的摄取报告未标记 detected",
+            source.as_str()
+        );
+        assert!(
+            entry.files_seen >= 1,
+            "{} 铺满夹具后的摄取报告 files_seen=0",
+            source.as_str()
+        );
+    }
+}
+
+#[test]
 fn ingest_all_fixtures_is_stable_on_refresh() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     write_all_source_fixtures(home);
     let conn = store::open_memory().unwrap();
-    let first = ingest::ingest_all(&conn, home).unwrap();
-    assert_eq!(first.files_parsed, 10);
-    assert_eq!(first.records_written, 16);
+    let overrides = ingest::PathOverrides::new();
+    let first = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
-    assert_eq!(stored.len(), 16);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 828446);
+
+    // 旧夹具覆盖 10 个来源时的常量；差值必须能归因到新增的 OpenCode 与 Cursor Agent。
+    const PREV_FILES: u64 = 10;
+    const PREV_RECORDS: usize = 16;
+    const PREV_TOKENS: i64 = 828446;
+    const OPENCODE_FILES: u64 = 1;
+    const OPENCODE_RECORDS: usize = 1;
+    const OPENCODE_TOKENS: i64 = 20;
+    const CURSOR_AGENT_FILES: u64 = 1;
+    const CURSOR_AGENT_RECORDS: usize = 2;
+    const CURSOR_AGENT_TOKENS: i64 = 19886;
+
+    let opencode = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Opencode.as_str())
+        .unwrap();
+    let cursor_agent = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::CursorAgent.as_str())
+        .unwrap();
+    assert_eq!(opencode.files_parsed, OPENCODE_FILES);
+    assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
+    assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
+    assert_eq!(cursor_agent.records_written, CURSOR_AGENT_RECORDS as u64);
+
+    let opencode_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Opencode)
+        .collect();
+    let cursor_agent_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::CursorAgent)
+        .collect();
+    assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
+    assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
+    assert_eq!(
+        opencode_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        OPENCODE_TOKENS
+    );
+    assert_eq!(
+        cursor_agent_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        CURSOR_AGENT_TOKENS
+    );
+
+    let files = PREV_FILES + OPENCODE_FILES + CURSOR_AGENT_FILES;
+    let records = PREV_RECORDS + OPENCODE_RECORDS + CURSOR_AGENT_RECORDS;
+    let tokens = PREV_TOKENS + OPENCODE_TOKENS + CURSOR_AGENT_TOKENS;
+    assert_eq!(first.files_parsed, files);
+    assert_eq!(first.records_written, records as u64);
+    assert_eq!(stored.len(), records);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), tokens);
     assert_rollups_match_overview(&stored, &Filter::default());
 
-    let second = ingest::ingest_all(&conn, home).unwrap();
+    let second = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     assert_eq!(second.files_parsed, 0);
-    assert_eq!(second.files_skipped, 10);
+    assert_eq!(second.files_skipped, files);
     assert_eq!(second.records_written, 0);
     let again = store::load_all(&conn).unwrap();
-    assert_eq!(again.len(), 16);
-    assert_eq!(again.iter().map(|r| r.total_tokens).sum::<i64>(), 828446);
+    assert_eq!(again.len(), records);
+    assert_eq!(again.iter().map(|r| r.total_tokens).sum::<i64>(), tokens);
 }
 
 #[test]

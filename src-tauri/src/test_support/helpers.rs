@@ -178,8 +178,10 @@ pub fn assert_rollups_match_overview(
     assert_eq!(overview.total_tokens, session_total);
 }
 
+/// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode 写 sqlite 消息表，
+/// Cursor Agent 写 token 包装目录下的 jsonl。
 pub fn write_all_source_fixtures(home: &std::path::Path) {
-    let paths: [(&str, &str); 8] = [
+    let paths: [(&str, &str); 9] = [
         (".codex/sessions/one.jsonl", "codex.jsonl"),
         (
             ".claude/projects/-Users-zhangyanhua-AI-TradingAgents-CN/04868551-34c3-4588-b984-6ae9a5d95f8a.jsonl",
@@ -206,6 +208,10 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
             ".copilot/session-state/c0ffee11-2222-4333-8444-555566667777/events.jsonl",
             "copilot-events.jsonl",
         ),
+        (
+            ".cursor-agent-usage/3ce011d4-33d1-41d0-a16c-f6dc206c47f1.jsonl",
+            "cursor-agent.jsonl",
+        ),
     ];
     for (rel, name) in paths {
         let path = home.join(rel);
@@ -221,6 +227,26 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     std::fs::create_dir_all(dsh.parent().unwrap()).unwrap();
     let compressed = zstd::encode_all(fixture("dsh.jsonl").as_bytes(), 0).unwrap();
     std::fs::write(&dsh, compressed).unwrap();
+    write_opencode_fixture_db(home);
+}
+
+fn write_opencode_fixture_db(home: &std::path::Path) {
+    let path = home.join(".local/share/opencode/opencode.db");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TABLE message (session_id TEXT NOT NULL, data TEXT NOT NULL);")
+        .unwrap();
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&fixture("opencode.json")).unwrap();
+    for row in rows {
+        db.execute(
+            "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+            rusqlite::params![
+                row["session_id"].as_str().expect("opencode session_id"),
+                row["data"].to_string(),
+            ],
+        )
+        .unwrap();
+    }
 }
 
 pub fn window_rec(
