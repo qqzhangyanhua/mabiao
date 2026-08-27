@@ -157,12 +157,39 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "会话累计 Token（无模型名）",
         display_dirs: None,
     },
+    UsageAdapter {
+        source: Source::Grok,
+        scan_dirs: grok::scan_dirs,
+        discover: grok::discover,
+        sidecar_fingerprint: grok::sidecar_fingerprint,
+        parse: grok::parse,
+        prepare_dir: None,
+        append_log: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
+    UsageAdapter {
+        source: Source::Opencode,
+        scan_dirs: opencode::scan_dirs,
+        discover: opencode::discover,
+        sidecar_fingerprint: opencode::sidecar_fingerprint,
+        parse: opencode::parse,
+        prepare_dir: None,
+        append_log: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+    },
 ];
 
 pub(crate) fn usage_adapter(source: Source) -> Option<&'static UsageAdapter> {
     USAGE_ADAPTERS
         .iter()
         .find(|adapter| adapter.source == source)
+}
+
+#[cfg(test)]
+pub(crate) fn usage_adapters() -> &'static [UsageAdapter] {
+    USAGE_ADAPTERS
 }
 
 /// 递归收集扫描目录下的 jsonl。心跳枚举与摄取共用。

@@ -387,6 +387,214 @@ fn invalid_kimi_sidecar_does_not_abort_other_sources() {
 }
 
 #[test]
+fn grok_summary_model_change_rewrites_cached_records() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let updates = write_grok_session(home, "sess-a", "grok-one");
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert!(store::load_all(&conn)
+        .unwrap()
+        .iter()
+        .all(|record| record.model == "grok-one"));
+
+    std::fs::write(
+        updates.parent().unwrap().join("summary.json"),
+        r#"{"current_model_id":"grok-two"}"#,
+    )
+    .unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+
+    assert_eq!(report.files_parsed, 1);
+    assert!(store::load_all(&conn)
+        .unwrap()
+        .iter()
+        .all(|record| record.model == "grok-two"));
+}
+
+#[test]
+fn invalid_grok_summary_keeps_last_good_model_and_skips_current_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let updates = write_grok_session(home, "sess-a", "grok-good");
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert!(store::load_all(&conn)
+        .unwrap()
+        .iter()
+        .all(|record| record.model == "grok-good"));
+
+    std::fs::write(updates.parent().unwrap().join("summary.json"), "{not-json").unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+    let grok = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Grok.as_str())
+        .unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert_eq!(grok.files_failed, 1);
+    assert_eq!(grok.files_parsed, 0);
+    assert_eq!(report.records_archived, 0);
+    assert!(
+        report.issues.iter().any(|issue| {
+            issue.source == "grok" && issue.message.contains("Grok 模型摘要无效")
+        }),
+        "摘要失败应记为来源级诊断，实际 {:?}",
+        report.issues
+    );
+    assert!(records.iter().all(|record| record.model == "grok-good"));
+}
+
+#[test]
+fn invalid_grok_summary_skips_current_file_without_failing_the_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let bad = write_grok_session(home, "sess-bad", "grok-bad");
+    write_grok_session(home, "sess-good", "grok-good");
+    std::fs::write(bad.parent().unwrap().join("summary.json"), "{not-json").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+    let grok = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Grok.as_str())
+        .unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert_eq!(grok.files_failed, 1);
+    assert_eq!(grok.files_parsed, 1);
+    assert!(records.iter().all(|record| record.source == Source::Grok));
+    assert!(records.iter().all(|record| record.model == "grok-good"));
+    assert!(records
+        .iter()
+        .all(|record| record.session_id == "sess-good"));
+}
+
+#[test]
+fn invalid_grok_summary_defers_deleted_file_reconciliation() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let first = write_grok_session(home, "sess-a", "grok-a");
+    let second = write_grok_session(home, "sess-b", "grok-b");
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(store::load_all(&conn).unwrap().len(), 2);
+
+    std::fs::write(first.parent().unwrap().join("summary.json"), "{not-json").unwrap();
+    std::fs::remove_file(&second).unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert_eq!(report.records_archived, 0);
+    assert_eq!(store::load_all(&conn).unwrap().len(), 2);
+}
+
+#[test]
+fn invalid_grok_summary_does_not_abort_other_sources() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let updates = write_grok_session(home, "sess-a", "grok-good");
+    std::fs::write(updates.parent().unwrap().join("summary.json"), "{not-json").unwrap();
+    let session_dir = home.join(".codex/sessions");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("one.jsonl"), fixture("codex.jsonl")).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+
+    assert_eq!(report.files_failed, 1);
+    assert!(records.iter().any(|record| record.source == Source::Codex));
+    assert!(records.iter().all(|record| record.source != Source::Grok));
+}
+
+#[test]
+fn grok_ingest_ignores_jsonl_that_is_not_updates() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let session_dir = home.join(".grok/sessions/proj/sess-a");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(
+        session_dir.join("updates.jsonl"),
+        fixture("grok-updates.jsonl"),
+    )
+    .unwrap();
+    std::fs::write(
+        session_dir.join("other.jsonl"),
+        fixture("grok-updates.jsonl"),
+    )
+    .unwrap();
+    std::fs::write(
+        home.join(".grok/sessions/orphan.jsonl"),
+        fixture("grok-updates.jsonl"),
+    )
+    .unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+    let grok = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Grok.as_str())
+        .unwrap();
+
+    assert_eq!(grok.files_seen, 1);
+    assert_eq!(records.len(), 2);
+    assert!(records
+        .iter()
+        .all(|record| record.source_file.ends_with("updates.jsonl")));
+}
+
+#[test]
+fn grok_record_count_drop_is_not_treated_as_truncation() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let updates = home.join(".grok/sessions/proj/sess-a/updates.jsonl");
+    std::fs::create_dir_all(updates.parent().unwrap()).unwrap();
+    std::fs::write(&updates, fixture("grok-updates.jsonl")).unwrap();
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(store::load_all(&conn).unwrap().len(), 2);
+
+    let partial = fixture("grok-updates.jsonl")
+        .lines()
+        .take(3)
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&updates, partial).unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let records = store::load_all(&conn).unwrap();
+
+    assert_eq!(report.files_failed, 0);
+    assert_eq!(report.files_parsed, 1);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].total_tokens, 26857);
+}
+
+fn write_grok_session(home: &std::path::Path, session: &str, model: &str) -> PathBuf {
+    let updates = home.join(format!(".grok/sessions/proj/{session}/updates.jsonl"));
+    std::fs::create_dir_all(updates.parent().unwrap()).unwrap();
+    // 不带 modelUsage / modelId，消耗记录的模型名只能来自 summary.json。
+    std::fs::write(
+        &updates,
+        r#"{"timestamp":1785938172913,"method":"_x.ai/session/update","params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"p1","usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12}}}}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        updates.parent().unwrap().join("summary.json"),
+        format!(r#"{{"current_model_id":"{model}"}}"#),
+    )
+    .unwrap();
+    updates
+}
+
+#[test]
 fn kimi_ingest_ignores_jsonl_that_is_not_wire() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -561,6 +769,16 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
         .find(|diagnostic| diagnostic.source == "kimi")
         .unwrap();
     assert_eq!(kimi.coverage, "轮级 Token（无模型名）");
+    let grok = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "grok")
+        .unwrap();
+    assert_eq!(grok.coverage, "轮级 Token");
+    let opencode = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "opencode")
+        .unwrap();
+    assert_eq!(opencode.coverage, "轮级 Token");
 
     let cursor_agent = diagnostics
         .iter()
@@ -618,6 +836,14 @@ fn source_scan_dirs_default_to_home_relative_paths() {
         ingest::source_scan_dirs_with(&overrides, home, Source::Codex),
         vec![home.join(".codex/sessions")],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Grok),
+        vec![home.join(".grok/sessions")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Opencode),
+        vec![home.join(".local/share/opencode/opencode.db")],
+    );
     // Claude Code 有的安装方式写到 XDG 目录而不是 ~/.claude，默认两个都扫。
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Claude),
@@ -644,6 +870,8 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
                 PathBuf::from("/custom/claude-b"),
             ],
         ),
+        ("GROK_HOME", vec![PathBuf::from("/custom/grok")]),
+        ("OPENCODE_DATA_DIR", vec![PathBuf::from("/custom/opencode")]),
     ]);
 
     assert_eq!(
@@ -658,10 +886,22 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
             PathBuf::from("/custom/claude-b/projects"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Grok),
+        vec![PathBuf::from("/custom/grok/sessions")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Opencode),
+        vec![PathBuf::from("/custom/opencode/opencode.db")],
+    );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Grok),
         vec![home.join(".grok/sessions")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Opencode),
+        vec![home.join(".local/share/opencode/opencode.db")],
     );
 }
 
@@ -1095,4 +1335,102 @@ fn scan_is_stale_detects_opencode_wal_change() {
         ingest::scan_is_stale(&conn, home).unwrap(),
         "opencode.db-wal change should be stale"
     );
+}
+
+#[test]
+fn usage_adapter_table_covers_every_registered_source_once() {
+    use crate::adapters::{usage_adapter, usage_adapters};
+
+    let adapters = usage_adapters();
+    assert_eq!(adapters.len(), Source::ALL.len());
+    for source in Source::ALL {
+        let matches = adapters
+            .iter()
+            .filter(|adapter| adapter.source == source)
+            .count();
+        assert_eq!(matches, 1, "{} 应在适配器表中恰好一行", source.as_str());
+        assert!(usage_adapter(source).is_some());
+    }
+
+    let grok = usage_adapter(Source::Grok).unwrap();
+    let opencode = usage_adapter(Source::Opencode).unwrap();
+    assert!(
+        !grok.append_log,
+        "Grok 不是追加型日志，迁表时不能顺手补全标记"
+    );
+    assert!(
+        !opencode.append_log,
+        "OpenCode 不是追加型日志，迁表时不能顺手补全标记"
+    );
+}
+
+#[test]
+fn opencode_ingest_opens_source_database_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let db_path = home.join(".local/share/opencode/opencode.db");
+    std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&db_path).unwrap();
+    db.execute_batch("CREATE TABLE message (session_id TEXT, data TEXT);")
+        .unwrap();
+    db.execute(
+        "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+        rusqlite::params![
+            "sess-ro",
+            r#"{"role":"assistant","modelID":"opencode-test","time":{"created":1787000000000,"completed":1787000001000},"tokens":{"input":3,"output":5,"reasoning":0,"cache":{"read":0,"write":0}},"path":{"cwd":"/workspace/opencode"}}"#,
+        ],
+    )
+    .unwrap();
+    drop(db);
+
+    let mut permissions = std::fs::metadata(&db_path).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&db_path, permissions).unwrap();
+    let bytes_before = std::fs::read(&db_path).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let opencode = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Opencode.as_str())
+        .unwrap();
+
+    assert_eq!(opencode.files_parsed, 1);
+    assert_eq!(opencode.files_failed, 0);
+    assert_eq!(store::load_all(&conn).unwrap().len(), 1);
+    assert_eq!(std::fs::read(&db_path).unwrap(), bytes_before);
+}
+
+#[test]
+fn opencode_record_count_drop_is_not_treated_as_truncation() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let db_path = home.join(".local/share/opencode/opencode.db");
+    std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&db_path).unwrap();
+    db.execute_batch("CREATE TABLE message (session_id TEXT, data TEXT);")
+        .unwrap();
+    db.execute(
+        "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+        rusqlite::params![
+            "sess-a",
+            r#"{"role":"assistant","modelID":"opencode-test","time":{"created":1787000000000,"completed":1787000001000},"tokens":{"input":3,"output":5,"reasoning":0,"cache":{"read":0,"write":0}},"path":{"cwd":"/workspace/opencode"}}"#,
+        ],
+    )
+    .unwrap();
+    drop(db);
+
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(store::load_all(&conn).unwrap().len(), 1);
+
+    let db = rusqlite::Connection::open(&db_path).unwrap();
+    db.execute("DELETE FROM message", []).unwrap();
+    drop(db);
+
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(report.files_failed, 0);
+    assert_eq!(report.files_parsed, 1);
+    assert!(store::load_all(&conn).unwrap().is_empty());
 }
