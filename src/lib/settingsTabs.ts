@@ -1,5 +1,7 @@
 import type { SettingsTab, SettingsTabId } from "./type";
 
+export const SETTINGS_UNPRICED_ANCHOR = "settings-unpriced";
+
 export const SETTINGS_TABS: readonly SettingsTab[] = [
   { id: "general", label: "通用", anchors: ["settings-appearance"] },
   { id: "sources", label: "数据源", anchors: ["settings-diagnostics", "settings-conversation-index"] },
@@ -14,7 +16,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   {
     id: "pricing",
     label: "价格",
-    anchors: ["settings-litellm", "settings-presets", "settings-prices"],
+    anchors: ["settings-litellm", SETTINGS_UNPRICED_ANCHOR, "settings-presets", "settings-prices"],
   },
 ];
 

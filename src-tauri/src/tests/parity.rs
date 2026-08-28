@@ -21,6 +21,21 @@ fn sql_queries_match_in_memory_aggregates() {
     assert_eq!(sql_ov.unpriced, mem_ov.unpriced);
     assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
 
+    // 未定价诊断：全库、不接筛选，逐字段对照
+    let sql_ud = query::unpriced_diagnosis(&conn, &prices).unwrap();
+    let mem_ud = aggregate::unpriced_diagnosis(&records, &prices);
+    assert_eq!(sql_ud, mem_ud);
+    assert_eq!(sql_ud.len(), mem_ud.len());
+    for (sql_row, mem_row) in sql_ud.iter().zip(mem_ud.iter()) {
+        assert_eq!(sql_row.model, mem_row.model);
+        assert_eq!(sql_row.provider, mem_row.provider);
+        assert_eq!(sql_row.sources, mem_row.sources);
+        assert_eq!(sql_row.total_tokens, mem_row.total_tokens);
+        assert_eq!(sql_row.record_count, mem_row.record_count);
+        assert_eq!(sql_row.reason, mem_row.reason);
+        assert_eq!(sql_row.candidate, mem_row.candidate);
+    }
+
     // trend 四种粒度
     for grain in ["hour", "day", "week", "month"] {
         let sql_tr = query::trend(&conn, &Filter::default(), &prices, grain).unwrap();

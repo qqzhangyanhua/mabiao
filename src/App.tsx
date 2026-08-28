@@ -179,6 +179,7 @@ export default function App() {
                         : undefined
                     }
                     onOpenConversation={(session) => data.openConversations(session)}
+                    onOpenUnpricedDiagnosis={data.openUnpricedDiagnosis}
                     onError={data.reportError}
                   />
                 ) : null}

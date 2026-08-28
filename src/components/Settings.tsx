@@ -23,6 +23,7 @@ import { OverviewLayoutPanel } from "./OverviewLayoutPanel";
 import { PriceConfigPanel } from "./PriceConfigPanel";
 import { PricePresetPanel } from "./PricePresetPanel";
 import { SourceDiagnosticsPanel } from "./SourceDiagnosticsPanel";
+import { UnpricedDiagnosisPanel } from "./UnpricedDiagnosisPanel";
 import type { SettingsTabIcon } from "./type";
 
 const TAB_ICONS: SettingsTabIcon = {
@@ -73,7 +74,7 @@ export function Settings({
   themeMode: ThemeMode;
   autoRefresh: string;
   onChange: (prices: PriceTable) => void;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
   onRebuild: (source: string | null) => void;
   onPurgeArchived: (source: string | null) => void;
   onSnapshotRefreshed: () => void;
@@ -88,7 +89,12 @@ export function Settings({
 }) {
   const detectedSources = diagnostics.filter((row) => row.detected).map((row) => row.source);
   const [tab, setTab] = useState<SettingsTabId>(() => tabFromHash(window.location.hash));
-  const [anchor, setAnchor] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState<string | null>(() => {
+    const hash = window.location.hash.replace(/^#/, "");
+    return hash.startsWith("settings-") ? hash : null;
+  });
+  const [diagnosisEpoch, setDiagnosisEpoch] = useState(0);
+  const [prefillKey, setPrefillKey] = useState<string | null>(null);
 
   useEffect(() => {
     function applyHash() {
@@ -215,9 +221,30 @@ export function Settings({
         {tab === "cursor" ? <CursorAccountSettingsPanel /> : null}
         {tab === "pricing" ? (
           <>
-            <LiteLlmSnapshotPanel onRefreshed={onSnapshotRefreshed} />
+            <LiteLlmSnapshotPanel
+              onRefreshed={() => {
+                onSnapshotRefreshed();
+                setDiagnosisEpoch((value) => value + 1);
+              }}
+            />
+            <UnpricedDiagnosisPanel
+              key={diagnosisEpoch}
+              prices={prices}
+              onChange={onChange}
+              onPrefillHighlight={setPrefillKey}
+            />
             <PricePresetPanel prices={prices} observedModels={observedModels} onChange={onChange} />
-            <PriceConfigPanel prices={prices} onChange={onChange} onSave={onSave} />
+            <PriceConfigPanel
+              prices={prices}
+              highlightKey={prefillKey}
+              onChange={onChange}
+              onSave={() => {
+                void Promise.resolve(onSave()).finally(() => {
+                  setDiagnosisEpoch((value) => value + 1);
+                  setPrefillKey(null);
+                });
+              }}
+            />
           </>
         ) : null}
       </div>

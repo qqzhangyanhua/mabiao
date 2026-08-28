@@ -19,6 +19,9 @@ export function KpiCard({
   spark,
   live,
   radar,
+  hint,
+  actionLabel,
+  onClick,
 }: {
   icon: IconName;
   tone: KpiTone;
@@ -28,9 +31,13 @@ export function KpiCard({
   spark?: number[];
   live?: boolean;
   radar?: boolean;
+  hint?: string;
+  actionLabel?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <article className={`kpi tone-${tone}`}>
+  const interactive = onClick != null;
+  const body = (
+    <>
       {radar ? <div className="radar" /> : null}
       <div className="kpi-top">
         <span className="kpi-ico">
@@ -44,12 +51,35 @@ export function KpiCard({
         ) : null}
       </div>
       <div className="kpi-value">{value}</div>
+      {hint ? <p className="kpi-hint">{hint}</p> : null}
       <div className="kpi-foot">
-        {delta ? <span className={`delta ${delta.tone}`}>{delta.text}</span> : <span />}
+        {actionLabel ? (
+          <span className="kpi-action">
+            {actionLabel}
+            <Icon name="chevron" size={12} className="flip" />
+          </span>
+        ) : delta ? (
+          <span className={`delta ${delta.tone}`}>{delta.text}</span>
+        ) : (
+          <span />
+        )}
         {spark ? <Spark values={spark} color={toneColor(tone)} /> : null}
       </div>
-    </article>
+    </>
   );
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        className={`kpi tone-${tone} is-clickable`}
+        aria-label={[label, value, hint, actionLabel].filter(Boolean).join("，")}
+        onClick={onClick}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <article className={`kpi tone-${tone}`}>{body}</article>;
 }
 
 export function Spark({ values, color }: { values: number[]; color: string }) {

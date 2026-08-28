@@ -921,6 +921,40 @@ input[type="checkbox"] {
   min-height: 92px;
 }
 
+button.kpi {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kpi.is-clickable {
+  overflow: visible;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.kpi.is-clickable:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.kpi-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.kpi-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--blue-fg);
+  font-size: 12px;
+}
+
 .kpi-top {
   display: flex;
   align-items: center;
@@ -3184,7 +3218,8 @@ tr.selected {
 .sidebar-collapse-btn:focus-visible,
 .instruction-row-head:focus-visible,
 .instruction-memory-head:focus-visible,
-.instruction-idle-head:focus-visible {
+.instruction-idle-head:focus-visible,
+.kpi.is-clickable:focus-visible {
   outline: 2px solid rgba(139, 108, 255, 0.55);
   outline-offset: 1px;
 }
@@ -6341,4 +6376,75 @@ td.row-actions {
   font-size: 13px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.unpriced-zone {
+  margin-top: 14px;
+}
+
+.unpriced-zone + .unpriced-zone {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.unpriced-zone h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.unpriced-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.unpriced-candidate,
+.unpriced-candidate-miss {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  max-width: 360px;
+}
+
+.unpriced-candidate-miss,
+.unpriced-candidate-match,
+.unpriced-candidate-origin,
+.unpriced-candidate-price {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.unpriced-candidate-miss {
+  color: var(--muted);
+}
+
+.unpriced-candidate-match {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.unpriced-candidate-origin {
+  color: var(--cyan-fg);
+}
+
+.unpriced-candidate-origin.user {
+  color: var(--purple-fg);
+}
+
+.unpriced-candidate-price {
+  color: var(--text);
+}
+
+.unpriced-candidate-warn {
+  margin: 0;
+}
+
+.price-row-prefilled {
+  outline: 1px solid rgba(34, 211, 238, 0.45);
+  outline-offset: 4px;
+  border-radius: 8px;
+  background: rgba(34, 211, 238, 0.06);
 }

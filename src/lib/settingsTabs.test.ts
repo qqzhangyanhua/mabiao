@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashForTab, SETTINGS_TABS, tabFromHash } from "./settingsTabs";
+import { hashForTab, SETTINGS_TABS, SETTINGS_UNPRICED_ANCHOR, tabFromHash } from "./settingsTabs";
 
 describe("tabFromHash", () => {
   it("maps the settings root and general aliases to the general tab", () => {
@@ -18,6 +18,7 @@ describe("tabFromHash", () => {
     expect(tabFromHash("#settings-backup")).toBe("backup");
     expect(tabFromHash("#settings-cursor-account")).toBe("cursor");
     expect(tabFromHash("#settings-litellm")).toBe("pricing");
+    expect(tabFromHash(`#${SETTINGS_UNPRICED_ANCHOR}`)).toBe("pricing");
     expect(tabFromHash("#settings-presets")).toBe("pricing");
     expect(tabFromHash("#settings-prices")).toBe("pricing");
   });
@@ -40,5 +41,11 @@ describe("hashForTab", () => {
       expect(hashForTab(tab.id)).toBe(tab.anchors[0]);
       expect(tabFromHash(hashForTab(tab.id))).toBe(tab.id);
     }
+  });
+
+  it("keeps the unpriced diagnosis list on the pricing tab", () => {
+    const pricing = SETTINGS_TABS.find((tab) => tab.id === "pricing");
+    expect(pricing?.anchors).toContain(SETTINGS_UNPRICED_ANCHOR);
+    expect(tabFromHash(SETTINGS_UNPRICED_ANCHOR)).toBe("pricing");
   });
 });

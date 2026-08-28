@@ -1,14 +1,14 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Datelike, Utc};
 
 use crate::billing_window;
-use crate::cost::{derive_cost, sum_costs, sum_cursor_event_costs};
+use crate::cost::{attach_snapshot_candidates, derive_cost, sum_costs, sum_cursor_event_costs};
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewDto,
-    PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow, TurnRow, UsageRecord,
-    WorkTimelineDto,
+    PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto,
+    UnpricedReason, UsageRecord, WorkTimelineDto,
 };
 
 pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
@@ -75,6 +75,53 @@ pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -
     dto.cost = cost;
     dto.unpriced = unpriced;
     dto
+}
+
+/// 全库未定价诊断。不接筛选，语义与 `query::unpriced_diagnosis` 对齐。
+pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<UnpricedGroupDto> {
+    #[derive(Default)]
+    struct Acc {
+        sources: BTreeSet<String>,
+        total_tokens: i64,
+        record_count: i64,
+    }
+    let mut groups: BTreeMap<(String, String), Acc> = BTreeMap::new();
+    for record in records {
+        let derived = derive_cost(record, prices);
+        if !derived.unpriced {
+            continue;
+        }
+        let acc = groups
+            .entry((record.model.clone(), record.provider.clone()))
+            .or_default();
+        acc.sources.insert(record.source.as_str().to_string());
+        acc.total_tokens += record.total_tokens;
+        acc.record_count += 1;
+    }
+    let mut rows: Vec<UnpricedGroupDto> = groups
+        .into_iter()
+        .map(|((model, provider), acc)| UnpricedGroupDto {
+            reason: if model.is_empty() {
+                UnpricedReason::StructurallyUnbillable
+            } else {
+                UnpricedReason::Pricable
+            },
+            model,
+            provider,
+            sources: acc.sources.into_iter().collect(),
+            total_tokens: acc.total_tokens,
+            record_count: acc.record_count,
+            candidate: None,
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.total_tokens
+            .cmp(&a.total_tokens)
+            .then_with(|| a.model.cmp(&b.model))
+            .then_with(|| a.provider.cmp(&b.provider))
+    });
+    attach_snapshot_candidates(&mut rows, prices);
+    rows
 }
 
 pub fn billing_windows(

@@ -1,3 +1,4 @@
+import { priceRowKey } from "../lib/priceCandidate";
 import { formatPerMillionInput, parsePerMillionInput } from "../lib/priceUnits";
 import type { PriceEntry, PriceTable } from "../types";
 import { Button } from "./ui/Button";
@@ -5,10 +6,12 @@ import { Field } from "./ui/Field";
 
 export function PriceConfigPanel({
   prices,
+  highlightKey,
   onChange,
   onSave,
 }: {
   prices: PriceTable;
+  highlightKey?: string | null;
   onChange: (prices: PriceTable) => void;
   onSave: () => void;
 }) {
@@ -50,7 +53,14 @@ export function PriceConfigPanel({
         </div>
       </div>
       {prices.prices.map((row, index) => (
-        <div className="price-row" key={index}>
+        <div
+          className={
+            highlightKey && priceRowKey(row.model, row.provider) === highlightKey
+              ? "price-row price-row-prefilled"
+              : "price-row"
+          }
+          key={index}
+        >
           <Field
             label="模型"
             placeholder="模型名"

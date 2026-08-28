@@ -320,7 +320,7 @@ pub fn diverse_prices() -> crate::domain::PriceTable {
     }
 }
 
-/// 覆盖：多来源、精确/兜底 provider 价格、native_cost、空项目、跨来源同名会话。
+/// 覆盖：多来源、精确/兜底 provider 价格、native_cost、空项目、空模型名、跨来源同名会话。
 pub fn diverse_records() -> Vec<crate::domain::UsageRecord> {
     use crate::domain::Source;
     let mut r1 = rec(
@@ -401,7 +401,19 @@ pub fn diverse_records() -> Vec<crate::domain::UsageRecord> {
     );
     r6.input_tokens = 30;
 
-    vec![r1, r2, r3, r4, r5, r6]
+    // Factory / droid 只落 provider、不落模型名；独立会话让会话聚合的展示标签也是空模型。
+    let mut r7 = rec(
+        "2026-08-15T10:00:00Z",
+        Source::Factory,
+        "",
+        "anthropic",
+        "/proj/b",
+        "s6",
+        40,
+    );
+    r7.input_tokens = 40;
+
+    vec![r1, r2, r3, r4, r5, r6, r7]
 }
 
 pub fn local_noon_iso(date: chrono::NaiveDate) -> String {
