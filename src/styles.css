@@ -921,6 +921,40 @@ input[type="checkbox"] {
   min-height: 92px;
 }
 
+button.kpi {
+  display: block;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kpi.is-clickable {
+  overflow: visible;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.kpi.is-clickable:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.kpi-hint {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.kpi-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--blue-fg);
+  font-size: 12px;
+}
+
 .kpi-top {
   display: flex;
   align-items: center;
@@ -3184,7 +3218,8 @@ tr.selected {
 .sidebar-collapse-btn:focus-visible,
 .instruction-row-head:focus-visible,
 .instruction-memory-head:focus-visible,
-.instruction-idle-head:focus-visible {
+.instruction-idle-head:focus-visible,
+.kpi.is-clickable:focus-visible {
   outline: 2px solid rgba(139, 108, 255, 0.55);
   outline-offset: 1px;
 }

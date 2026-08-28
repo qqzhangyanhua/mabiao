@@ -36,6 +36,7 @@ import {
   viewsWarmedBy,
   type ViewScope,
 } from "./viewCache";
+import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
 import { emptyFilter } from "./usage/constants";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useIngestOperations } from "./usage/useIngestOperations";
@@ -287,6 +288,11 @@ export function useUsageData() {
     window.history.replaceState(null, "", "#conversations");
   }, []);
 
+  const openUnpricedDiagnosis = useCallback(() => {
+    setView("settings");
+    window.history.replaceState(null, "", `#${SETTINGS_UNPRICED_ANCHOR}`);
+  }, []);
+
   const clearConversationFocus = useCallback(() => {
     setConversationFocus(null);
   }, []);
@@ -426,6 +432,7 @@ export function useUsageData() {
     canGoBack,
     applyFilter,
     openConversations,
+    openUnpricedDiagnosis,
     clearConversationFocus,
     runIngest: runIngestWithCacheClear,
     runRebuild: runRebuildWithCacheClear,
