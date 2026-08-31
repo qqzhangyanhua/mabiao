@@ -1,0 +1,16 @@
+src/hooks/viewCache.test.ts
+  h_4132837b09b7e7 12,28-48,169,199
+src/hooks/viewCache.ts
+  h_4132837b09b7e7 2,25-26,31,37,42-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "caf29820a9aa13edae4c1be1a91911399b06d3d0",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
