@@ -1,0 +1,28 @@
+docs/adr/0003-trusted-ingestion-cache.md
+  h_4132837b09b7e7 12
+src-tauri/src/adapters/mod.rs
+  h_4132837b09b7e7 123
+src-tauri/src/adapters/omp.rs
+  h_4132837b09b7e7 27,31-34,39-54
+src-tauri/src/conversation.rs
+  h_4132837b09b7e7 224
+src-tauri/src/conversation/omp.rs
+  h_4132837b09b7e7 19-26
+src-tauri/src/tests/adapters.rs
+  h_4132837b09b7e7 216-237
+src/lib/format.test.ts
+  h_4132837b09b7e7 126
+src/lib/format.ts
+  h_4132837b09b7e7 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "f5809d8ba3091bfc6de4b4b8a39e5ca2d8e9daa2",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
