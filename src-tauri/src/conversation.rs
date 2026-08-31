@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::{BufRead, BufReader, Cursor, Read, Seek, SeekFrom};
+use std::io::{BufRead, BufReader, Cursor};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -11,20 +11,18 @@ use serde_json::Value;
 use crate::domain::{
     ConversationAgentCapabilityStatus as AgentCapabilityStatus, ConversationAgentLink,
     ConversationAgentLinkStatus as AgentLinkStatus, ConversationAgentRelations,
-    ConversationAttachment, ConversationAttachmentContentDto,
-    ConversationAttachmentKind as AttachmentKind, ConversationAttachmentStatus as AttachmentStatus,
-    ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
-    ConversationEventActor as EventActor, ConversationEventCapabilityStatus as EventStatus,
-    ConversationEventContentDto, ConversationEventContentStatus as ContentStatus,
-    ConversationEventKind as EventKind, ConversationIndexProgressDto, ConversationMessage,
-    ConversationPage, ConversationParsedDetail, ConversationQuery, ConversationSessionRow,
-    ConversationUsagePage, CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source,
-    UsageRecord,
+    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
+    ConversationAttachmentStatus as AttachmentStatus, ConversationDetailDto,
+    ConversationDetailStateDto, ConversationEvent, ConversationEventContentDto,
+    ConversationEventKind as EventKind, ConversationIndexProgressDto, ConversationPage,
+    ConversationParsedDetail, ConversationQuery, ConversationSessionRow, ConversationUsagePage,
+    CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source, UsageRecord,
 };
 use crate::ingest;
 use crate::query;
 
 mod claude;
+mod codex;
 mod copilot;
 mod cursor;
 mod droid;
@@ -40,6 +38,14 @@ mod line_direct;
 mod opencode;
 mod pi;
 mod qwen;
+mod toolbox;
+
+use toolbox::{
+    attachment_candidates, compare_event_order, compare_event_timestamps,
+    compare_optional_timestamps, compare_timestamps, semantic_event, CAPABILITY_EVENTS,
+    CAPABILITY_MESSAGES, CAPABILITY_USAGE, EXPERIMENTAL,
+};
+pub(crate) use toolbox::{AttachmentCandidate, FileIndexCursor, ParsedConversation};
 
 pub use export::build_export;
 #[cfg(test)]
@@ -48,10 +54,6 @@ pub(crate) use export::{export_default_name, write_conversation_export};
 
 const DEFAULT_PAGE_SIZE: u32 = 20;
 const MAX_PAGE_SIZE: u32 = 200;
-const TITLE_MAX_CHARS: usize = 80;
-const CAPABILITY_MESSAGES: &str = "messages";
-const CAPABILITY_EVENTS: &str = "events";
-const CAPABILITY_USAGE: &str = "usage";
 pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Codex,
     Source::Claude,
@@ -66,10 +68,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Qwen,
     Source::Copilot,
 ];
-const EXPERIMENTAL: &str = "experimental";
 const DETAIL_READ_ATTEMPTS: usize = 3;
-const LARGE_CONTENT_THRESHOLD: usize = 4_096;
-const CONTENT_PREVIEW_CHARS: usize = 2_000;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 10;
@@ -93,12 +92,6 @@ struct CachedConversationFingerprint {
     has_live_generation: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct FileIndexCursor {
-    pub byte_offset: i64,
-    pub line: i64,
-}
-
 struct SessionFileCursorWrite<'a> {
     path: &'a Path,
     cursor: FileIndexCursor,
@@ -106,14 +99,6 @@ struct SessionFileCursorWrite<'a> {
     mtime_ns: i64,
     size: i64,
     source_revision: &'a str,
-}
-
-pub(crate) struct ParsedConversation {
-    pub(crate) session: ConversationSessionRow,
-    messages: Vec<ConversationMessage>,
-    pub(crate) events: Vec<ConversationEvent>,
-    is_top_level: bool,
-    index_cursor: Option<FileIndexCursor>,
 }
 
 struct ConversationIndexBatch {
@@ -130,6 +115,8 @@ struct IndexedFile {
 
 type ConversationDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
 type ConversationIndexFn = fn(&Path) -> Result<ConversationIndexBatch, ConversationIndexIssue>;
+type ConversationIndexSuffixFn =
+    fn(&Path, u64, u32, &str) -> Result<ParsedConversation, ConversationIndexIssue>;
 type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedConversation, String>;
 type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 
@@ -137,6 +124,8 @@ struct ConversationAdapter {
     source: Source,
     discover: ConversationDiscoverFn,
     index: ConversationIndexFn,
+    /// 只解析后缀、不写库。未填则刷新时一律全量 index。
+    index_suffix: Option<ConversationIndexSuffixFn>,
     detail: ConversationDetailFn,
     revision: ConversationRevisionFn,
     raw_extension: Option<&'static str>,
@@ -147,8 +136,9 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
     ConversationAdapter {
         source: Source::Codex,
         discover: discover_jsonl,
-        index: index_codex,
-        detail: detail_codex,
+        index: codex::index,
+        index_suffix: Some(codex::index_suffix),
+        detail: codex::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
@@ -157,6 +147,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Claude,
         discover: discover_jsonl,
         index: index_claude,
+        index_suffix: None,
         detail: detail_claude,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -166,6 +157,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::CursorAgent,
         discover: cursor::discover,
         index: cursor::index,
+        index_suffix: None,
         detail: cursor::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -175,6 +167,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Dsh,
         discover: discover_dsh,
         index: dsh::index,
+        index_suffix: None,
         detail: dsh::detail,
         revision: regular_source_revision,
         raw_extension: None,
@@ -184,6 +177,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Factory,
         discover: discover_droid,
         index: droid::index,
+        index_suffix: None,
         detail: droid::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -193,6 +187,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Kimi,
         discover: kimi::discover,
         index: kimi::index,
+        index_suffix: None,
         detail: kimi::detail,
         revision: kimi::source_revision,
         raw_extension: Some("jsonl"),
@@ -202,6 +197,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Grok,
         discover: grok::discover,
         index: grok::index,
+        index_suffix: None,
         detail: grok::detail,
         revision: grok::source_revision,
         raw_extension: Some("jsonl"),
@@ -211,6 +207,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Pi,
         discover: discover_jsonl,
         index: index_pi,
+        index_suffix: None,
         detail: detail_pi,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -220,6 +217,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Gemini,
         discover: discover_gemini,
         index: index_gemini,
+        index_suffix: None,
         detail: detail_gemini,
         revision: regular_source_revision,
         raw_extension: Some("json"),
@@ -229,6 +227,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Opencode,
         discover: discover_opencode,
         index: opencode::index,
+        index_suffix: None,
         detail: opencode::detail,
         revision: opencode::source_revision,
         raw_extension: None,
@@ -238,6 +237,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Qwen,
         discover: qwen::discover,
         index: qwen::index,
+        index_suffix: None,
         detail: qwen::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
@@ -247,6 +247,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Copilot,
         discover: copilot::discover,
         index: copilot::index,
+        index_suffix: None,
         detail: copilot::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -392,21 +393,6 @@ fn diagnostic_detail(
     }
 }
 
-fn index_codex(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    parse_codex_file_mode(path, false, false).map(|conversation| ConversationIndexBatch {
-        conversations: vec![conversation],
-        diagnostics: Vec::new(),
-    })
-}
-
-fn detail_codex(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    single_detail(path, session_id, include_deferred_content, parse_codex_file)
-}
-
 fn index_claude(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
     single_index(path, claude::parse)
 }
@@ -453,13 +439,6 @@ struct IndexedAgentMetadata {
 struct IndexedSpawnAttempt {
     launch_event_id: String,
     child_session_id: Option<String>,
-}
-
-struct PendingMessageDelta {
-    sequence: u32,
-    occurred_at: String,
-    role: String,
-    text: String,
 }
 
 pub(crate) struct PreparedConversationDetail {
@@ -591,31 +570,27 @@ pub(crate) fn refresh_source_in_roots(
             }
             continue;
         }
-        let fingerprint = cached
+        let cached_row = cached
             .iter()
             .find(|row| row.indexed_byte_offset > 0)
-            .or(cached.first())
-            .map(|row| ConversationFileFingerprint {
-                mtime_ns: row.source_file_mtime_ns,
-                size: row.source_file_size,
-                revision: row.source_revision.clone(),
-                indexed_byte_offset: row.indexed_byte_offset,
-                has_live_generation: row.has_live_generation,
-            });
+            .or(cached.first());
+        let fingerprint = cached_row.map(|row| ConversationFileFingerprint {
+            mtime_ns: row.source_file_mtime_ns,
+            size: row.source_file_size,
+            revision: row.source_revision.clone(),
+            indexed_byte_offset: row.indexed_byte_offset,
+            has_live_generation: row.has_live_generation,
+        });
         if plan_conversation_file_index(
             fingerprint.as_ref(),
             mtime_ns,
             size,
             &source_revision,
-            source == Source::Codex,
+            adapter.index_suffix.is_some(),
         ) == ConversationFileIndexPlan::Incremental
         {
-            if let Some(row) = cached
-                .iter()
-                .find(|row| row.indexed_byte_offset > 0)
-                .or(cached.first())
-            {
-                match prepare_incremental_codex(conn, &path, row) {
+            if let (Some(index_suffix), Some(row)) = (adapter.index_suffix, cached_row) {
+                match prepare_incremental(conn, source, index_suffix, &path, row) {
                     Ok(IncrementalPrepare::Ready(parsed)) => {
                         incremental_paths
                             .entry(row.session_id.clone())
@@ -631,26 +606,7 @@ pub(crate) fn refresh_source_in_roots(
                         });
                         continue;
                     }
-                    Ok(IncrementalPrepare::NeedFull) => {
-                        match parse_codex_file_mode(&path, true, false) {
-                            Ok(parsed) => {
-                                record_full_parse(
-                                    conn,
-                                    source,
-                                    parsed,
-                                    &mut event_generations,
-                                    &mut grouped,
-                                    &mut file_cursors,
-                                )?;
-                                continue;
-                            }
-                            Err(issue) => {
-                                blocking_issues.push(issue.clone());
-                                issues.push(issue);
-                                continue;
-                            }
-                        }
-                    }
+                    Ok(IncrementalPrepare::NeedFull) => {}
                     Err(message) => {
                         let issue = ConversationIndexIssue {
                             path: path.to_string_lossy().to_string(),
@@ -785,7 +741,7 @@ pub(crate) fn refresh_source_in_roots(
             continue;
         }
         let path = pending.path.to_string_lossy().to_string();
-        if let Err(message) = apply_incremental_codex(conn, pending) {
+        if let Err(message) = apply_incremental(conn, source, pending) {
             let issue = ConversationIndexIssue {
                 path,
                 message,
@@ -904,12 +860,14 @@ fn record_full_parse(
     Ok(())
 }
 
-fn prepare_incremental_codex(
+fn prepare_incremental(
     conn: &Connection,
+    source: Source,
+    index_suffix: ConversationIndexSuffixFn,
     path: &Path,
     cached: &CachedConversationFingerprint,
 ) -> Result<IncrementalPrepare, String> {
-    let parsed = match parse_codex_suffix(
+    let parsed = match index_suffix(
         path,
         cached.indexed_byte_offset as u64,
         cached.indexed_line as u32,
@@ -921,25 +879,24 @@ fn prepare_incremental_codex(
     if parsed.session.session_id != cached.session_id {
         return Ok(IncrementalPrepare::NeedFull);
     }
-    if !event_index::has_live_generation(conn, Source::Codex, &cached.session_id)? {
+    if !event_index::has_live_generation(conn, source, &cached.session_id)? {
         return Ok(IncrementalPrepare::NeedFull);
     }
-    if event_index::live_index_would_rewind(
-        conn,
-        Source::Codex,
-        &cached.session_id,
-        &parsed.events,
-    )? {
+    if event_index::live_index_would_rewind(conn, source, &cached.session_id, &parsed.events)? {
         return Ok(IncrementalPrepare::NeedFull);
     }
     Ok(IncrementalPrepare::Ready(Box::new(parsed)))
 }
 
-fn apply_incremental_codex(conn: &Connection, pending: PendingIncremental) -> Result<(), String> {
+fn apply_incremental(
+    conn: &Connection,
+    source: Source,
+    pending: PendingIncremental,
+) -> Result<(), String> {
     let tx = conn
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
-    let result = apply_incremental_codex_in_tx(&tx, pending);
+    let result = apply_incremental_in_tx(&tx, source, pending);
     match result {
         Ok(()) => tx.commit().map_err(|error| error.to_string()),
         Err(error) => {
@@ -949,8 +906,9 @@ fn apply_incremental_codex(conn: &Connection, pending: PendingIncremental) -> Re
     }
 }
 
-fn apply_incremental_codex_in_tx(
+fn apply_incremental_in_tx(
     conn: &Connection,
+    source: Source,
     pending: PendingIncremental,
 ) -> Result<(), String> {
     let PendingIncremental {
@@ -961,15 +919,14 @@ fn apply_incremental_codex_in_tx(
         size,
         source_revision,
     } = pending;
-    let max_sequence =
-        event_index::append_live_events(conn, Source::Codex, &session_id, &parsed.events)?;
+    let max_sequence = event_index::append_live_events(conn, source, &session_id, &parsed.events)?;
     let cursor = parsed.index_cursor.unwrap_or(FileIndexCursor {
         byte_offset: size,
         line: 0,
     });
     persist_file_cursor(
         conn,
-        Source::Codex,
+        source,
         &session_id,
         &SessionFileCursorWrite {
             path: &path,
@@ -980,11 +937,20 @@ fn apply_incremental_codex_in_tx(
             source_revision: &source_revision,
         },
     )?;
-    touch_session_after_append(conn, &session_id, &parsed, mtime_ns, size, &source_revision)
+    touch_session_after_append(
+        conn,
+        source,
+        &session_id,
+        &parsed,
+        mtime_ns,
+        size,
+        &source_revision,
+    )
 }
 
 fn touch_session_after_append(
     conn: &Connection,
+    source: Source,
     session_id: &str,
     parsed: &ParsedConversation,
     mtime_ns: i64,
@@ -1007,7 +973,7 @@ fn touch_session_after_append(
         WHERE source = ?1 AND session_id = ?2
         "#,
         params![
-            Source::Codex.as_str(),
+            source.as_str(),
             session_id,
             ended_at,
             parsed.session.model,
@@ -1981,589 +1947,6 @@ fn resolve_attachment(
     Ok(candidate)
 }
 
-fn parse_codex_file(
-    path: &Path,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    parse_codex_file_mode(path, true, include_deferred_content).map_err(|issue| issue.message)
-}
-
-fn parse_codex_file_mode(
-    path: &Path,
-    tolerate_incomplete_tail: bool,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, ConversationIndexIssue> {
-    let content = fs::read_to_string(path).map_err(|error| ConversationIndexIssue {
-        path: path.to_string_lossy().to_string(),
-        message: format!("读取原始文件失败：{error}"),
-        event_type: None,
-        line: None,
-    })?;
-    parse_codex_content(
-        path,
-        &content,
-        0,
-        0,
-        tolerate_incomplete_tail,
-        include_deferred_content,
-        None,
-    )
-}
-
-fn parse_codex_suffix(
-    path: &Path,
-    byte_offset: u64,
-    start_line: u32,
-    session_id: &str,
-) -> Result<ParsedConversation, ConversationIndexIssue> {
-    let content = read_file_suffix(path, byte_offset)?;
-    parse_codex_content(
-        path,
-        &content,
-        byte_offset,
-        start_line,
-        true,
-        false,
-        Some(session_id.to_string()),
-    )
-}
-
-fn read_file_suffix(path: &Path, byte_offset: u64) -> Result<String, ConversationIndexIssue> {
-    let mut file = fs::File::open(path).map_err(|error| ConversationIndexIssue {
-        path: path.to_string_lossy().to_string(),
-        message: format!("读取原始文件失败：{error}"),
-        event_type: None,
-        line: None,
-    })?;
-    file.seek(SeekFrom::Start(byte_offset))
-        .map_err(|error| ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message: format!("读取原始文件失败：{error}"),
-            event_type: None,
-            line: None,
-        })?;
-    let mut content = String::new();
-    file.read_to_string(&mut content)
-        .map_err(|error| ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message: format!("读取原始文件失败：{error}"),
-            event_type: None,
-            line: None,
-        })?;
-    Ok(content)
-}
-
-fn next_line_index(content: &str) -> u32 {
-    let newlines = content.bytes().filter(|&byte| byte == b'\n').count() as u32;
-    if content.is_empty() || content.ends_with('\n') {
-        newlines
-    } else {
-        newlines + 1
-    }
-}
-
-pub(super) fn parse_codex_content(
-    path: &Path,
-    content: &str,
-    start_byte: u64,
-    start_line: u32,
-    tolerate_incomplete_tail: bool,
-    include_deferred_content: bool,
-    session_hint: Option<String>,
-) -> Result<ParsedConversation, ConversationIndexIssue> {
-    let mut session_id = session_hint.clone().unwrap_or_default();
-    let mut title = String::new();
-    let mut project = String::new();
-    let mut model = String::new();
-    let mut started_at = String::new();
-    let mut ended_at = String::new();
-    let mut response_messages = Vec::new();
-    let mut event_messages = Vec::new();
-    let mut events = Vec::new();
-    let mut pending_delta = None;
-    let last_line_index = content.lines().count().saturating_sub(1);
-    let has_unterminated_tail = !content.ends_with('\n');
-    let mut skipped_incomplete = false;
-
-    for (index, raw) in content.lines().enumerate() {
-        let line = start_line as usize + index;
-        let raw = raw.trim();
-        if raw.is_empty() {
-            continue;
-        }
-        let value: Value = match serde_json::from_str(raw) {
-            Ok(value) => value,
-            Err(error)
-                if tolerate_incomplete_tail
-                    && has_unterminated_tail
-                    && index == last_line_index
-                    && error.classify() == serde_json::error::Category::Eof =>
-            {
-                skipped_incomplete = true;
-                break;
-            }
-            Err(error) => {
-                return Err(ConversationIndexIssue {
-                    path: path.to_string_lossy().to_string(),
-                    message: format!("JSON 无效：{error}"),
-                    event_type: Some("json_line".to_string()),
-                    line: Some((line + 1) as u64),
-                });
-            }
-        };
-        let timestamp = text_field(&value, "timestamp");
-        if !timestamp.is_empty() {
-            if started_at.is_empty() {
-                started_at = timestamp.clone();
-            }
-            ended_at = timestamp.clone();
-        }
-        let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
-        let payload = value.get("payload").unwrap_or(&Value::Null);
-        match kind {
-            "session_meta" => {
-                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                session_id = first_text(payload, &["id", "session_id"]);
-                project = first_text(payload, &["cwd"]);
-                title = first_text(payload, &["title", "name"]);
-                events.push(semantic_event(
-                    line,
-                    EventKind::SystemStatus,
-                    &timestamp,
-                    None,
-                    Some("session_started".to_string()),
-                    None,
-                    payload.clone(),
-                ));
-            }
-            "turn_context" => {
-                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                let next_project = first_text(payload, &["cwd"]);
-                if !next_project.is_empty() {
-                    project = next_project;
-                }
-                let next_model = first_text(payload, &["model"]);
-                if !next_model.is_empty() && next_model != model {
-                    events.push(semantic_event(
-                        line,
-                        EventKind::ModelChange,
-                        &timestamp,
-                        None,
-                        Some(next_model.clone()),
-                        None,
-                        payload.clone(),
-                    ));
-                    model = next_model;
-                }
-            }
-            "response_item" => {
-                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                if let Some(message) = response_message(payload, &timestamp) {
-                    events.push(message_event(line, &message, payload.clone()));
-                    response_messages.push(message);
-                } else if let Some(event) =
-                    response_semantic_event(line, &timestamp, payload, include_deferred_content)
-                {
-                    events.push(event);
-                }
-            }
-            "event_msg" => {
-                let event_kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
-                match event_kind {
-                    "agent_message_delta" => append_message_delta(
-                        &mut pending_delta,
-                        line,
-                        &timestamp,
-                        "assistant",
-                        payload,
-                    ),
-                    "token_count" | "heartbeat" => {}
-                    _ => {
-                        flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                        if let Some(message) = event_message(payload, &timestamp) {
-                            events.push(message_event(line, &message, payload.clone()));
-                            event_messages.push(message);
-                        } else {
-                            events.push(event_msg_semantic_event(
-                                line, &timestamp, event_kind, payload,
-                            ));
-                        }
-                    }
-                }
-            }
-            _ => {
-                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                events.push(unadapted_event(line, &timestamp, kind, value.clone()));
-            }
-        }
-    }
-    flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-    populate_attachments(&mut events, &project);
-    strip_message_bodies_from_details(&mut events);
-    deduplicate_message_channels(&mut events);
-    let source_file = path.to_string_lossy().to_string();
-    assign_event_provenance(&mut events, &source_file);
-    events.sort_by(compare_event_order);
-
-    if session_id.is_empty() {
-        return Err(ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message: "缺少 Codex 会话 ID".to_string(),
-            event_type: Some("session_meta".to_string()),
-            line: None,
-        });
-    }
-    let messages = if response_messages.is_empty() {
-        event_messages
-    } else {
-        response_messages
-    };
-    if title.is_empty() {
-        title = messages
-            .iter()
-            .find(|message| message.role == "user")
-            .map(|message| truncate_title(&strip_prompt_wrappers(&message.text)))
-            .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| session_id.clone());
-    }
-    let mut capabilities = Vec::new();
-    if !messages.is_empty() {
-        capabilities.push(CAPABILITY_MESSAGES.to_string());
-    }
-    if !events.is_empty() {
-        capabilities.push(CAPABILITY_EVENTS.to_string());
-    }
-    capabilities.push(CAPABILITY_USAGE.to_string());
-    let session = ConversationSessionRow {
-        source: Source::Codex.as_str().to_string(),
-        session_id,
-        title,
-        project,
-        model,
-        started_at,
-        ended_at,
-        source_file: path.to_string_lossy().to_string(),
-        source_files: vec![path.to_string_lossy().to_string()],
-        capabilities,
-        support_status: EXPERIMENTAL.to_string(),
-        file_available: true,
-        ..Default::default()
-    };
-    let (consumed_bytes, consumed_lines) = if skipped_incomplete {
-        match content.rfind('\n') {
-            Some(pos) => (
-                (pos + 1) as i64,
-                i64::from(next_line_index(&content[..=pos])),
-            ),
-            None => (0, 0),
-        }
-    } else {
-        (content.len() as i64, i64::from(next_line_index(content)))
-    };
-    Ok(ParsedConversation {
-        session,
-        messages,
-        events,
-        is_top_level: true,
-        index_cursor: Some(FileIndexCursor {
-            byte_offset: start_byte as i64 + consumed_bytes,
-            line: i64::from(start_line) + consumed_lines,
-        }),
-    })
-}
-
-fn tag_source_events(
-    events: &mut [ConversationEvent],
-    source_sequence: usize,
-    native_identity: Option<&str>,
-) {
-    for event in events {
-        event.source_sequence = source_sequence as u32;
-        if let (Some(native_identity), Value::Object(details)) =
-            (native_identity, &mut event.details)
-        {
-            details.insert(
-                "native_id".to_string(),
-                Value::String(native_identity.to_string()),
-            );
-        }
-    }
-}
-
-fn assign_native_event_ids(events: &mut [ConversationEvent], source: Source, session_id: &str) {
-    for event in events {
-        if !event.event_id.is_empty() {
-            continue;
-        }
-        if let Some(native_id) = optional_text(
-            &event.details,
-            &[
-                "native_id",
-                "call_id",
-                "message_id",
-                "prompt_id",
-                "event_id",
-            ],
-        ) {
-            event.event_id = format!(
-                "{}:{session_id}:{}:{native_id}",
-                source.as_str(),
-                event.kind.as_str()
-            );
-        }
-    }
-}
-
-fn assign_event_provenance(events: &mut [ConversationEvent], source_file: &str) {
-    let mut occurrences = BTreeMap::<u32, u32>::new();
-    for event in events {
-        let occurrence = occurrences.entry(event.source_sequence).or_default();
-        event.source_file = source_file.to_string();
-        if event.event_id.is_empty() {
-            let base_id = event_id_for(source_file, event.source_sequence);
-            event.event_id = if *occurrence == 0 {
-                base_id
-            } else {
-                format!("{base_id}:{}", *occurrence)
-            };
-        }
-        *occurrence += 1;
-        for (index, attachment) in event.attachments.iter_mut().enumerate() {
-            attachment.id = format!("{}:{index}", event.event_id);
-        }
-    }
-}
-
-/// 这 7 个来源（claude/pi/cursor/kimi/grok/droid/copilot）后续都要按 id/prompt 做
-/// 「只留最后一次」的去重或跨行聚合，天然需要整份 `Vec<(usize, Value)>` 常驻——这块内存
-/// 省不掉。但「先把整份文件读成一份 `String`，再逐行解析出第二份 `Value` 树」等于同时
-/// 攥着两份内容，其中原始文本那份纯属浪费：按行流式读盘，只让当前这一行的原始文本活着，
-/// 能把这一步的峰值内存打个对折（省掉的正是原始文件那一份）。
-fn parse_jsonl_conversation_values(path: &Path) -> Result<Vec<(usize, Value)>, String> {
-    let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-    BufReader::new(file)
-        .lines()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            let raw = match line {
-                Ok(raw) => raw,
-                Err(error) => return Some(Err(format!("第 {} 行读取失败：{error}", index + 1))),
-            };
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                return None;
-            }
-            Some(
-                serde_json::from_str(trimmed)
-                    .map(|value| (index, value))
-                    .map_err(|error| format!("第 {} 行 JSON 无效：{error}", index + 1)),
-            )
-        })
-        .collect()
-}
-
-fn update_time_bounds(timestamp: &str, started_at: &mut String, ended_at: &mut String) {
-    if timestamp.is_empty() {
-        return;
-    }
-    if started_at.is_empty() || compare_timestamps(timestamp, started_at).is_lt() {
-        *started_at = timestamp.to_string();
-    }
-    if ended_at.is_empty() || compare_timestamps(timestamp, ended_at).is_gt() {
-        *ended_at = timestamp.to_string();
-    }
-}
-
-fn push_projected_message(
-    sequence: usize,
-    timestamp: &str,
-    role: &str,
-    content: &Value,
-    details: Value,
-    messages: &mut Vec<ConversationMessage>,
-    events: &mut Vec<ConversationEvent>,
-) {
-    let text = content_text(content);
-    if text.is_empty() {
-        return;
-    }
-    let message = ConversationMessage {
-        role: role.to_string(),
-        occurred_at: timestamp.to_string(),
-        text,
-    };
-    events.push(message_event(sequence, &message, details));
-    messages.push(message);
-}
-
-fn append_capability_degradation_status(
-    sequence: usize,
-    messages: &[ConversationMessage],
-    model: &str,
-    events: &mut Vec<ConversationEvent>,
-) {
-    let mut missing = Vec::new();
-    if !messages.iter().any(|message| message.role == "user") {
-        missing.push("user_message");
-    }
-    if model.is_empty() {
-        missing.push("model");
-    }
-    let tool_results = events
-        .iter()
-        .filter(|event| event.kind == EventKind::ToolResult)
-        .filter_map(|event| event.details.get("call_id").and_then(Value::as_str))
-        .collect::<BTreeSet<_>>();
-    if events
-        .iter()
-        .filter(|event| event.kind == EventKind::ToolCall)
-        .any(|event| {
-            event
-                .details
-                .get("call_id")
-                .and_then(Value::as_str)
-                .is_none_or(|call_id| !tool_results.contains(call_id))
-        })
-    {
-        missing.push("tool_result");
-    }
-    if events.iter().any(|event| {
-        matches!(
-            event.capability_status,
-            EventStatus::MissingTimestamp | EventStatus::UnadaptedMissingTimestamp
-        )
-    }) {
-        missing.push("timestamp");
-    }
-    append_declared_capability_degradation_status(sequence, &missing, events);
-}
-
-fn append_declared_capability_degradation_status(
-    sequence: usize,
-    missing: &[&str],
-    events: &mut Vec<ConversationEvent>,
-) {
-    if missing.is_empty() {
-        return;
-    }
-    let occurred_at = events
-        .iter()
-        .filter_map(|event| event.occurred_at.as_deref())
-        .max()
-        .unwrap_or("");
-    events.push(semantic_event(
-        sequence,
-        EventKind::SystemStatus,
-        occurred_at,
-        None,
-        Some("capability_degraded".to_string()),
-        Some(missing.join(", ")),
-        serde_json::json!({ "missing": missing }),
-    ));
-}
-
-#[allow(clippy::too_many_arguments)]
-fn finish_source_conversation(
-    source: Source,
-    path: &Path,
-    session_id: String,
-    mut title: String,
-    project: String,
-    model: String,
-    started_at: String,
-    ended_at: String,
-    messages: Vec<ConversationMessage>,
-    mut events: Vec<ConversationEvent>,
-    is_top_level: bool,
-) -> Result<ParsedConversation, String> {
-    if session_id.is_empty() {
-        return Err(format!("缺少 {} 会话 ID", source.application_name()));
-    }
-    populate_attachments(&mut events, &project);
-    strip_message_bodies_from_details(&mut events);
-    deduplicate_message_channels(&mut events);
-    let source_file = path.to_string_lossy().to_string();
-    assign_event_provenance(&mut events, &source_file);
-    events.sort_by(compare_event_order);
-    if title.is_empty() {
-        title = messages
-            .iter()
-            .find(|message| message.role == "user")
-            .map(|message| truncate_title(&strip_prompt_wrappers(&message.text)))
-            .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| session_id.clone());
-    }
-    let mut capabilities = Vec::new();
-    if !messages.is_empty() {
-        capabilities.push(CAPABILITY_MESSAGES.to_string());
-    }
-    if !events.is_empty() {
-        capabilities.push(CAPABILITY_EVENTS.to_string());
-    }
-    // Capabilities describe supported detail surfaces; an empty usage list is valid data, not a degraded parser.
-    capabilities.push(CAPABILITY_USAGE.to_string());
-    Ok(ParsedConversation {
-        session: ConversationSessionRow {
-            source: source.as_str().to_string(),
-            session_id,
-            title,
-            project,
-            model,
-            started_at,
-            ended_at,
-            source_file: source_file.clone(),
-            source_files: vec![source_file],
-            capabilities,
-            support_status: EXPERIMENTAL.to_string(),
-            file_available: true,
-            ..Default::default()
-        },
-        messages,
-        events,
-        is_top_level,
-        index_cursor: None,
-    })
-}
-
-fn normalize_tool_call_details(item: &Value) -> Value {
-    let mut details = item.clone();
-    if let Value::Object(object) = &mut details {
-        if !object.contains_key("call_id") {
-            if let Some(id) = object.get("id").cloned() {
-                object.insert("call_id".to_string(), id);
-            }
-        }
-    }
-    details
-}
-
-fn normalize_tool_result_details(item: &Value) -> Value {
-    let mut details = item.clone();
-    if let Value::Object(object) = &mut details {
-        if !object.contains_key("call_id") {
-            if let Some(id) = object
-                .get("tool_use_id")
-                .or_else(|| object.get("toolCallId"))
-                .or_else(|| object.get("id"))
-                .cloned()
-            {
-                object.insert("call_id".to_string(), id);
-            }
-        }
-        if !object.contains_key("agent_id") {
-            if let Some(agent_id) = object.get("agentId").cloned() {
-                object.insert("agent_id".to_string(), agent_id);
-            }
-        }
-        if !object.contains_key("output") {
-            if let Some(content) = object.get("content").or_else(|| object.get("result")) {
-                object.insert("output".to_string(), Value::String(content_text(content)));
-            }
-        }
-    }
-    details
-}
-
 fn parse_conversation_file(
     source: Source,
     path: &Path,
@@ -2899,13 +2282,6 @@ fn structured_agent_id(value: &Value) -> Option<String> {
     None
 }
 
-fn event_id_for(source_file: &str, source_sequence: u32) -> String {
-    format!(
-        "{}:{source_sequence}",
-        BASE64_URL_SAFE_NO_PAD.encode(source_file.as_bytes())
-    )
-}
-
 pub(crate) fn event_identity(event: &ConversationEvent) -> String {
     let mut normalized = event.clone();
     normalized.event_id.clear();
@@ -2916,357 +2292,6 @@ pub(crate) fn event_identity(event: &ConversationEvent) -> String {
         attachment.id = index.to_string();
     }
     serde_json::to_string(&normalized).unwrap_or_default()
-}
-
-fn compare_event_timestamps(
-    left: &ConversationEvent,
-    right: &ConversationEvent,
-) -> std::cmp::Ordering {
-    compare_optional_timestamps(&left.occurred_at, &right.occurred_at)
-}
-
-/// 缺时间的事件一律排在有时间的之后。
-fn compare_optional_timestamps(
-    left: &Option<String>,
-    right: &Option<String>,
-) -> std::cmp::Ordering {
-    match (left, right) {
-        (Some(left_time), Some(right_time)) => compare_timestamps(left_time, right_time),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum MessageChannel {
-    Response,
-    Event,
-    Delta,
-}
-
-fn deduplicate_message_channels(events: &mut Vec<ConversationEvent>) {
-    let mut current_actor = None;
-    let mut seen: Vec<(String, MessageChannel)> = Vec::new();
-    events.retain(|event| {
-        if event.kind != EventKind::Message {
-            return true;
-        }
-        let Some(actor) = event.actor.as_ref() else {
-            return true;
-        };
-        let Some(text) = event.text.as_ref() else {
-            return true;
-        };
-        if current_actor.as_ref() != Some(actor) {
-            current_actor = Some(*actor);
-            seen.clear();
-        }
-        let channel = match event.details.get("type").and_then(Value::as_str) {
-            Some("message") => MessageChannel::Response,
-            Some("user_message" | "agent_message") => MessageChannel::Event,
-            _ => MessageChannel::Delta,
-        };
-        if seen
-            .iter()
-            .any(|(seen_text, seen_channel)| seen_text == text && *seen_channel != channel)
-        {
-            return false;
-        }
-        seen.push((text.clone(), channel));
-        true
-    });
-}
-
-fn compare_event_order(left: &ConversationEvent, right: &ConversationEvent) -> std::cmp::Ordering {
-    match (&left.occurred_at, &right.occurred_at) {
-        (Some(left_time), Some(right_time)) => compare_timestamps(left_time, right_time)
-            .then_with(|| left.sequence.cmp(&right.sequence)),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => left.sequence.cmp(&right.sequence),
-    }
-}
-
-fn compare_timestamps(left: &str, right: &str) -> std::cmp::Ordering {
-    match (
-        chrono::DateTime::parse_from_rfc3339(left),
-        chrono::DateTime::parse_from_rfc3339(right),
-    ) {
-        (Ok(left), Ok(right)) => left.cmp(&right),
-        _ => left.cmp(right),
-    }
-}
-
-fn append_message_delta(
-    pending: &mut Option<PendingMessageDelta>,
-    sequence: usize,
-    occurred_at: &str,
-    role: &str,
-    payload: &Value,
-) {
-    let delta = first_text(payload, &["delta", "message", "text"]);
-    if delta.is_empty() {
-        return;
-    }
-    match pending {
-        Some(current) if current.role == role => current.text.push_str(&delta),
-        Some(_) => {}
-        None => {
-            *pending = Some(PendingMessageDelta {
-                sequence: sequence as u32,
-                occurred_at: occurred_at.to_string(),
-                role: role.to_string(),
-                text: delta,
-            });
-        }
-    }
-}
-
-fn flush_message_delta(
-    pending: &mut Option<PendingMessageDelta>,
-    messages: &mut Vec<ConversationMessage>,
-    events: &mut Vec<ConversationEvent>,
-) {
-    let Some(delta) = pending.take() else {
-        return;
-    };
-    let Some(message) = message(&delta.role, &delta.occurred_at, &Value::String(delta.text)) else {
-        return;
-    };
-    events.push(message_event(
-        delta.sequence as usize,
-        &message,
-        Value::Null,
-    ));
-    messages.push(message);
-}
-
-fn message_event(
-    sequence: usize,
-    message: &ConversationMessage,
-    details: Value,
-) -> ConversationEvent {
-    let actor = match message.role.as_str() {
-        "user" => EventActor::User,
-        "assistant" => EventActor::Assistant,
-        _ => unreachable!("conversation messages only contain user or assistant roles"),
-    };
-    semantic_event(
-        sequence,
-        EventKind::Message,
-        &message.occurred_at,
-        Some(actor),
-        None,
-        Some(message.text.clone()),
-        details,
-    )
-}
-
-fn semantic_event(
-    sequence: usize,
-    kind: EventKind,
-    occurred_at: &str,
-    actor: Option<EventActor>,
-    name: Option<String>,
-    text: Option<String>,
-    details: Value,
-) -> ConversationEvent {
-    ConversationEvent {
-        event_id: String::new(),
-        sequence: sequence as u32,
-        source_file: String::new(),
-        source_sequence: sequence as u32,
-        kind,
-        occurred_at: (!occurred_at.is_empty()).then(|| occurred_at.to_string()),
-        actor,
-        name,
-        text,
-        details,
-        attachments: Vec::new(),
-        capability_status: if occurred_at.is_empty() {
-            EventStatus::MissingTimestamp
-        } else {
-            EventStatus::Complete
-        },
-        content_status: ContentStatus::Complete,
-    }
-}
-
-fn response_semantic_event(
-    sequence: usize,
-    occurred_at: &str,
-    payload: &Value,
-    include_deferred_content: bool,
-) -> Option<ConversationEvent> {
-    let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
-    match kind {
-        "message" => None,
-        "function_call" | "custom_tool_call" | "web_search_call" | "local_shell_call" => {
-            Some(semantic_event(
-                sequence,
-                EventKind::ToolCall,
-                occurred_at,
-                Some(EventActor::Assistant),
-                optional_text(payload, &["name", "tool", "type"]),
-                optional_text(payload, &["arguments", "input", "query", "command"]),
-                payload.clone(),
-            ))
-        }
-        "function_call_output" | "custom_tool_call_output" => Some(tool_result_event(
-            sequence,
-            occurred_at,
-            payload,
-            include_deferred_content,
-        )),
-        "reasoning" => Some(semantic_event(
-            sequence,
-            EventKind::Plan,
-            occurred_at,
-            Some(EventActor::Assistant),
-            None,
-            optional_text(payload, &["summary", "text", "content"]),
-            payload.clone(),
-        )),
-        "developer" | "system" => None,
-        _ => Some(unadapted_event(
-            sequence,
-            occurred_at,
-            kind,
-            payload.clone(),
-        )),
-    }
-}
-
-fn tool_result_event(
-    sequence: usize,
-    occurred_at: &str,
-    payload: &Value,
-    include_deferred_content: bool,
-) -> ConversationEvent {
-    let text = optional_text(payload, &["output", "result"]);
-    let should_defer = !include_deferred_content
-        && text
-            .as_ref()
-            .is_some_and(|text| text.len() > LARGE_CONTENT_THRESHOLD);
-    let mut details = payload.clone();
-    let rendered_text = if should_defer {
-        if let Value::Object(object) = &mut details {
-            object.remove("output");
-            object.remove("result");
-        }
-        text.map(|text| text.chars().take(CONTENT_PREVIEW_CHARS).collect())
-    } else {
-        text
-    };
-    let mut event = semantic_event(
-        sequence,
-        EventKind::ToolResult,
-        occurred_at,
-        Some(EventActor::Tool),
-        optional_text(payload, &["name"]),
-        rendered_text,
-        details,
-    );
-    if should_defer {
-        event.content_status = ContentStatus::Deferred;
-    }
-    event
-}
-
-fn event_msg_semantic_event(
-    sequence: usize,
-    occurred_at: &str,
-    kind: &str,
-    payload: &Value,
-) -> ConversationEvent {
-    match kind {
-        "plan_update" | "agent_reasoning" => semantic_event(
-            sequence,
-            EventKind::Plan,
-            occurred_at,
-            Some(EventActor::Assistant),
-            None,
-            optional_text(payload, &["explanation", "message", "text"]),
-            payload.clone(),
-        ),
-        "error" | "stream_error" => semantic_event(
-            sequence,
-            EventKind::Error,
-            occurred_at,
-            None,
-            optional_text(payload, &["code", "type"]),
-            optional_text(payload, &["message", "error"]),
-            payload.clone(),
-        ),
-        "task_started" | "task_complete" | "turn_aborted" | "context_compacted" | "warning" => {
-            semantic_event(
-                sequence,
-                EventKind::SystemStatus,
-                occurred_at,
-                None,
-                Some(kind.to_string()),
-                optional_text(payload, &["message", "reason", "text"]),
-                payload.clone(),
-            )
-        }
-        _ => unadapted_event(sequence, occurred_at, kind, payload.clone()),
-    }
-}
-
-fn unadapted_event(
-    sequence: usize,
-    occurred_at: &str,
-    raw_kind: &str,
-    details: Value,
-) -> ConversationEvent {
-    let mut event = semantic_event(
-        sequence,
-        EventKind::Unadapted,
-        occurred_at,
-        None,
-        Some(if raw_kind.is_empty() {
-            "unknown".to_string()
-        } else {
-            raw_kind.to_string()
-        }),
-        None,
-        details,
-    );
-    event.capability_status = if occurred_at.is_empty() {
-        EventStatus::UnadaptedMissingTimestamp
-    } else {
-        EventStatus::Unadapted
-    };
-    event
-}
-
-pub(super) struct AttachmentCandidate {
-    attachment: ConversationAttachment,
-    source: String,
-    resolved_path: Option<PathBuf>,
-}
-
-fn populate_attachments(events: &mut [ConversationEvent], project: &str) {
-    for event in events {
-        event.attachments = attachment_candidates(event.sequence, &event.details, project)
-            .into_iter()
-            .map(|candidate| candidate.attachment)
-            .collect();
-    }
-}
-
-fn strip_message_bodies_from_details(events: &mut [ConversationEvent]) {
-    for event in events {
-        if event.kind != EventKind::Message {
-            continue;
-        }
-        if let Value::Object(object) = &mut event.details {
-            object.remove("content");
-            object.remove("message");
-            object.remove("attachments");
-        }
-    }
 }
 
 /// 按行号流式读取源文件的一行。行号从 0 计；只保留当前行，不把整份文件读进内存。
@@ -3314,131 +2339,6 @@ pub(super) fn read_source_payload(
     let value: Value =
         serde_json::from_str(&raw).map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
     Ok(value.get("payload").cloned().unwrap_or(value))
-}
-
-pub(super) fn attachment_candidates(
-    sequence: u32,
-    payload: &Value,
-    project: &str,
-) -> Vec<AttachmentCandidate> {
-    let mut values = Vec::new();
-    for key in ["content", "attachments"] {
-        match payload.get(key) {
-            Some(Value::Array(items)) => values.extend(items),
-            Some(value @ Value::Object(_)) => values.push(value),
-            _ => {}
-        }
-    }
-    values
-        .into_iter()
-        .filter_map(|value| attachment_candidate(value, project))
-        .enumerate()
-        .map(|(index, mut candidate)| {
-            candidate.attachment.id = format!("{sequence}:{index}");
-            candidate
-        })
-        .collect()
-}
-
-fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandidate> {
-    let object = value.as_object()?;
-    let raw_type = object.get("type").and_then(Value::as_str).unwrap_or("");
-    let kind = if raw_type.contains("image") {
-        AttachmentKind::Image
-    } else if raw_type.contains("file") || raw_type.contains("attachment") {
-        AttachmentKind::File
-    } else {
-        return None;
-    };
-    let source = ["file_path", "path", "url", "image_url"]
-        .iter()
-        .find_map(|key| object.get(*key).and_then(attachment_source_value))?;
-    let embedded = source.starts_with("data:");
-    let remote = source.starts_with("http://") || source.starts_with("https://");
-    let resolved_path = if embedded || remote {
-        None
-    } else {
-        let path = PathBuf::from(&source);
-        Some(if path.is_absolute() || project.is_empty() {
-            path
-        } else {
-            PathBuf::from(project).join(path)
-        })
-    };
-    let metadata = resolved_path
-        .as_ref()
-        .and_then(|path| fs::metadata(path).ok());
-    let status = if embedded {
-        AttachmentStatus::Embedded
-    } else if remote {
-        AttachmentStatus::Unsupported
-    } else if metadata.is_some() {
-        AttachmentStatus::Available
-    } else {
-        AttachmentStatus::Missing
-    };
-    let original_path = if embedded {
-        "内嵌图片数据".to_string()
-    } else {
-        source.clone()
-    };
-    let name = first_text(value, &["name", "file_name"]);
-    let name = if name.is_empty() {
-        Path::new(&original_path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or(if kind == AttachmentKind::Image {
-                "image"
-            } else {
-                "attachment"
-            })
-            .to_string()
-    } else {
-        name
-    };
-    let media_type = optional_text(value, &["mime_type", "media_type"])
-        .unwrap_or_else(|| infer_media_type(&name, kind));
-    Some(AttachmentCandidate {
-        attachment: ConversationAttachment {
-            id: String::new(),
-            kind,
-            name,
-            original_path,
-            media_type,
-            size_bytes: metadata.map(|metadata| metadata.len()),
-            status,
-        },
-        source,
-        resolved_path,
-    })
-}
-
-fn attachment_source_value(value: &Value) -> Option<String> {
-    value
-        .as_str()
-        .map(str::to_string)
-        .or_else(|| value.get("url").and_then(Value::as_str).map(str::to_string))
-}
-
-fn infer_media_type(name: &str, kind: AttachmentKind) -> String {
-    let extension = Path::new(name)
-        .extension()
-        .and_then(|extension| extension.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
-    match extension.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "pdf" => "application/pdf",
-        "json" => "application/json",
-        "md" => "text/markdown",
-        "txt" => "text/plain",
-        _ if kind == AttachmentKind::Image => "image/*",
-        _ => "application/octet-stream",
-    }
-    .to_string()
 }
 
 pub(super) fn ensure_attachment_path_allowed(
@@ -3523,120 +2423,6 @@ fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> 
                 .ok_or_else(|| "附件路径不可用".to_string())?;
             fs::read(path).map_err(|error| format!("读取原附件失败：{error}"))
         }
-    }
-}
-
-fn optional_text(value: &Value, keys: &[&str]) -> Option<String> {
-    let text = first_text(value, keys);
-    (!text.is_empty()).then_some(text)
-}
-
-fn response_message(payload: &Value, occurred_at: &str) -> Option<ConversationMessage> {
-    if payload.get("type").and_then(Value::as_str) != Some("message") {
-        return None;
-    }
-    let role = payload.get("role").and_then(Value::as_str)?;
-    if role != "user" && role != "assistant" {
-        return None;
-    }
-    message(role, occurred_at, payload.get("content")?)
-}
-
-fn event_message(payload: &Value, occurred_at: &str) -> Option<ConversationMessage> {
-    let role = match payload.get("type").and_then(Value::as_str)? {
-        "user_message" => "user",
-        "agent_message" => "assistant",
-        _ => return None,
-    };
-    message(role, occurred_at, payload.get("message")?)
-}
-
-fn message(role: &str, occurred_at: &str, content: &Value) -> Option<ConversationMessage> {
-    let text = content_text(content).trim().to_string();
-    if text.is_empty() {
-        return None;
-    }
-    Some(ConversationMessage {
-        role: role.to_string(),
-        occurred_at: occurred_at.to_string(),
-        text,
-    })
-}
-
-fn content_text(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Array(items) => items
-            .iter()
-            .map(content_text)
-            .filter(|text| !text.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n"),
-        Value::Object(object) => object
-            .get("text")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| {
-                [
-                    "content",
-                    "output",
-                    "result",
-                    "response",
-                    "functionResponse",
-                ]
-                .iter()
-                .find_map(|key| object.get(*key).map(content_text))
-            })
-            .unwrap_or_default(),
-        _ => String::new(),
-    }
-}
-
-fn first_text(value: &Value, keys: &[&str]) -> String {
-    keys.iter()
-        .find_map(|key| value.get(*key).and_then(Value::as_str))
-        .unwrap_or("")
-        .to_string()
-}
-
-fn text_field(value: &Value, key: &str) -> String {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string()
-}
-
-fn strip_prompt_wrappers(text: &str) -> String {
-    let mut remaining = text;
-    let mut stripped = String::new();
-    while let Some(start) = remaining.find("<timestamp>") {
-        stripped.push_str(&remaining[..start]);
-        let after = &remaining[start + "<timestamp>".len()..];
-        match after.find("</timestamp>") {
-            Some(end) => remaining = &after[end + "</timestamp>".len()..],
-            None => {
-                remaining = "";
-                break;
-            }
-        }
-    }
-    stripped.push_str(remaining);
-    stripped
-        .replace("<user_query>", " ")
-        .replace("</user_query>", " ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn truncate_title(text: &str) -> String {
-    let mut chars = text.chars();
-    let title: String = chars.by_ref().take(TITLE_MAX_CHARS).collect();
-    if chars.next().is_some() {
-        format!("{title}…")
-    } else {
-        title
     }
 }
 

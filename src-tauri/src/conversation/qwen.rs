@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::fs;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use super::*;
+use super::toolbox::*;
+use super::{discover_extension, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::project::project_from_source_file;
 
 #[cfg(test)]

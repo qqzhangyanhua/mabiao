@@ -5,7 +5,8 @@ use std::time::UNIX_EPOCH;
 use chrono::{FixedOffset, NaiveDateTime, TimeZone};
 use serde_json::{json, Value};
 
-use super::*;
+use super::toolbox::*;
+use super::{discover_extension, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::cursor_session::{
     group_transcripts, is_subagent_transcript, project_from_transcript_path,
     session_dir_from_transcript,
