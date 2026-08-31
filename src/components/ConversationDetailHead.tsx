@@ -1,7 +1,7 @@
 import { Icon } from "../icons";
 import {
   capabilityLabel,
-  conversationApplicationLabel,
+  conversationSourceLabel,
   conversationDetailSummary,
   conversationFileUnavailableLabel,
   conversationStatusLabel,
@@ -83,7 +83,7 @@ export function ConversationDetailHead({
         extra={
           <SourceLabel
             source={session.source}
-            fallback={conversationApplicationLabel(session.source)}
+            fallback={conversationSourceLabel(session.source)}
             size={14}
           />
         }

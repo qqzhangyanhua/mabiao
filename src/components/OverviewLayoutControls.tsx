@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { applicationLabel } from "../lib/format";
+import { sourceLabel } from "../lib/format";
 import {
   applyDetectedQuotaSources,
   applyFavoriteQuotaSources,
@@ -147,7 +147,7 @@ export function OverviewLayoutControls({
           <ToggleChip
             key={id}
             icon={<SourceIcon source={id} size={14} />}
-            label={applicationLabel(id)}
+            label={sourceLabel(id)}
             pressed={isQuotaSourceVisible(layout, id)}
             badge={detected.has(id) ? "已检测" : undefined}
             onToggle={() =>

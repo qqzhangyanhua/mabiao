@@ -162,7 +162,7 @@ export default function App() {
                 {["model", "provider", "project"].includes(view) ? (
                   <LazyBreakdown
                     title={
-                      view === "model" ? "按模型" : view === "provider" ? "按 provider" : "按项目"
+                      view === "model" ? "按模型" : view === "provider" ? "按接口" : "按项目"
                     }
                     icon={view === "model" ? "model" : view === "provider" ? "provider" : "project"}
                     rows={data.breakdown}

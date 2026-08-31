@@ -1,5 +1,5 @@
 import type { ConversationSessionRow } from "../types";
-import { applicationLabel, formatClock, projectLabel, relativeTime } from "./format";
+import { sourceLabel, formatClock, projectLabel, relativeTime } from "./format";
 
 const CAPABILITY_LABELS: Record<string, string> = {
   messages: "基础正文",
@@ -11,8 +11,8 @@ export function capabilityLabel(capability: string): string {
   return CAPABILITY_LABELS[capability] ?? capability;
 }
 
-export function conversationApplicationLabel(source: string): string {
-  return source === "cursor_agent" ? "Cursor / Cursor Agent" : applicationLabel(source);
+export function conversationSourceLabel(source: string): string {
+  return source === "cursor_agent" ? "Cursor / Cursor Agent" : sourceLabel(source);
 }
 
 export function conversationSourceOptions(usageSources: string[]): string[] {
@@ -60,7 +60,7 @@ export function conversationRangeTitle(
 export function conversationDetailSummary(session: ConversationSessionRow): string {
   const time = conversationSessionTime(session);
   const parts = [
-    conversationApplicationLabel(session.source),
+    conversationSourceLabel(session.source),
     projectLabel(session.project),
     session.model || "未标注",
   ];

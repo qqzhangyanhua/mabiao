@@ -77,7 +77,7 @@ export function formatDelta(
   };
 }
 
-const applicationNames: Record<string, string> = {
+const sourceNames: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
   factory: "Droid",
@@ -104,11 +104,11 @@ export function weeklyCountLabel(source: string, count: number): string {
   return `共 ${count} 个会话`;
 }
 
-export function applicationLabel(source: string): string {
-  return applicationNames[source] ?? source;
+export function sourceLabel(source: string): string {
+  return sourceNames[source] ?? source;
 }
 
-export function applicationSourceOptions(usageSources: string[]): string[] {
+export function sourceFilterOptions(usageSources: string[]): string[] {
   const sources = new Set(usageSources);
   sources.add("cursor");
   return [...sources].sort();

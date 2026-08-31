@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { chartPalette, donutOption } from "../lib/chartTheme";
-import { applicationLabel, formatCompact, projectLabel, relativeTime } from "../lib/format";
+import { sourceLabel, formatCompact, projectLabel, relativeTime } from "../lib/format";
 import type { ResolvedTheme } from "../hooks/useTheme";
 import type { NamedAmount, OverviewDto, SessionRow } from "../types";
 import { DonutChart } from "./DonutChart";
@@ -122,7 +122,7 @@ export function OverviewDetail({
                     {row.model ? (
                       <ModelLabel name={row.model} size={14} />
                     ) : (
-                      applicationLabel(row.source)
+                      sourceLabel(row.source)
                     )}
                   </div>
                 </div>

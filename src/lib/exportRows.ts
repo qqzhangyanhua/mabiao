@@ -44,7 +44,7 @@ export function trendSeriesTable(points: SeriesPoint[]): ExportTable {
 
 export function applicationEfficiencyTable(data: ApplicationAnalyticsDto): ExportTable {
   return {
-    headers: ["应用", "总 Token", "会话数", "平均会话 Token", "缓存命中率", "推理占比"],
+    headers: ["来源", "总 Token", "会话数", "平均会话 Token", "缓存命中率", "推理占比"],
     rows: data.by_application.map((row) => [
       row.application,
       row.metrics.total_tokens,

@@ -22,6 +22,7 @@ import { SessionIdCell, SortArrow } from "./SessionTableParts";
 import { Spinner } from "./Spinner";
 import { SearchField } from "./ui/Field";
 import { Select } from "./ui/Select";
+import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
 const PAGE_SIZE = 20;
 const EXPORT_ROW_LIMIT = 20000;
@@ -192,7 +193,10 @@ export function CursorSessionTable({
   return (
     <section className="panel partition">
       <div className="panel-head">
-        <h2>会话明细</h2>
+        <div>
+          <h2>会话明细</h2>
+          <p className="panel-note">{SESSION_ENTRY_COPY.cursorSessionsTableNote}</p>
+        </div>
         <SearchField
           value={searchInput}
           onChange={setSearchInput}
@@ -272,7 +276,8 @@ export function CursorSessionTable({
                 key={`${row.source_file}-${row.session_id}`}
                 className="clickable"
                 tabIndex={0}
-                aria-label={`打开对话：${row.session_id}`}
+                title={SESSION_ENTRY_COPY.openConversationRowTitle}
+                aria-label={`${SESSION_ENTRY_COPY.openConversationRow}：${row.session_id}`}
                 onClick={() => onSelectSession(row)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
@@ -282,7 +287,10 @@ export function CursorSessionTable({
                 }}
               >
                 <td>
-                  <SessionIdCell sessionId={row.session_id} />
+                  <div className="cell-stack">
+                    <SessionIdCell sessionId={row.session_id} />
+                    <span className="muted">{SESSION_ENTRY_COPY.openConversationRow}</span>
+                  </div>
                 </td>
                 <td title={row.project}>
                   <div className="cell-stack">

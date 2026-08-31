@@ -68,7 +68,7 @@ export function PriceConfigPanel({
             onChange={(event) => update(index, { model: event.target.value })}
           />
           <Field
-            label="Provider"
+            label="接口"
             placeholder="可空"
             value={row.provider ?? ""}
             onChange={(event) => update(index, { provider: event.target.value || null })}

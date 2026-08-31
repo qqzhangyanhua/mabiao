@@ -1,5 +1,5 @@
 import { sourceTone } from "../icons";
-import { applicationLabel } from "../lib/format";
+import { sourceLabel } from "../lib/format";
 import { resolveSourceIconId } from "../lib/sourceIcon";
 import type { SourceIconId } from "../lib/type";
 import type { SourceIconProps, SourceLabelProps, SourceMark } from "./type";
@@ -129,7 +129,7 @@ export function SourceIcon({ source, size = 16 }: SourceIconProps) {
   return (
     <span
       className={`source-ico ${tone}`}
-      title={applicationLabel(source)}
+      title={sourceLabel(source)}
       aria-hidden
       style={{ width: size, height: size }}
     >
@@ -148,7 +148,7 @@ export function SourceIcon({ source, size = 16 }: SourceIconProps) {
 }
 
 export function SourceLabel({ source, fallback, size = 16 }: SourceLabelProps) {
-  const text = fallback ?? applicationLabel(source);
+  const text = fallback ?? sourceLabel(source);
   return (
     <span className="source-label">
       <SourceIcon source={source} size={size} />

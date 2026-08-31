@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationSessionRow } from "../types";
 import {
   capabilityLabel,
-  conversationApplicationLabel,
+  conversationSourceLabel,
   conversationDetailSummary,
   conversationFileUnavailableLabel,
   conversationRangeLabel,
@@ -40,8 +40,8 @@ describe("conversation display labels", () => {
   });
 
   it("keeps Cursor Agent grouped with Cursor", () => {
-    expect(conversationApplicationLabel("cursor_agent")).toBe("Cursor / Cursor Agent");
-    expect(conversationApplicationLabel("codex")).toBe("Codex");
+    expect(conversationSourceLabel("cursor_agent")).toBe("Cursor / Cursor Agent");
+    expect(conversationSourceLabel("codex")).toBe("Codex");
   });
 
   it("always offers Cursor Agent in the conversation source list", () => {

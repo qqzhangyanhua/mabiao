@@ -13,6 +13,7 @@ import {
 import { ExportButton } from "./ExportButton";
 import { SessionIdCell } from "./SessionTableParts";
 import type { CursorSessionDetailProps } from "./type";
+import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
 function fileLabel(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
@@ -35,6 +36,7 @@ export function CursorSessionDetail({ detail, embedded = false }: CursorSessionD
             <SessionIdCell sessionId={session.session_id} />
           </div>
         )}
+        {embedded ? <p className="panel-note">{SESSION_ENTRY_COPY.behaviorTabNote}</p> : null}
         <p className="note">
           {projectLabel(session.project)} · {session.models.join(", ") || "无模型"} ·{" "}
           {session.sources.join(", ") || "无来源"}

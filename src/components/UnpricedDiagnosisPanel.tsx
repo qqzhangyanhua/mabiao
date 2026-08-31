@@ -77,7 +77,7 @@ function GroupTable({
         <thead>
           <tr>
             {showModel ? <th>模型</th> : null}
-            <th>Provider</th>
+            <th>接口</th>
             <th>来源</th>
             <th>Token</th>
             <th>记录</th>
@@ -198,7 +198,7 @@ export function UnpricedDiagnosisPanel({
         <h3>结构上无法计费</h3>
         <p className="panel-note">
           本机消耗记录没有模型名（Factory / droid 就是这种）。价目表以模型名为键，没有按
-          Provider 计价的路径，补单价也算不出费用。
+          接口计价的路径，补单价也算不出费用。
         </p>
         {groups !== null && structural.length === 0 ? (
           <p className="panel-note">当前没有无模型名的消耗记录。</p>

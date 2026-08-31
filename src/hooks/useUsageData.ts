@@ -37,6 +37,7 @@ import {
   type ViewScope,
 } from "./viewCache";
 import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
+import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { emptyFilter } from "./usage/constants";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useIngestOperations } from "./usage/useIngestOperations";
@@ -281,9 +282,7 @@ export function useUsageData() {
   }, [grain]);
 
   const openConversations = useCallback((session?: { id: string; source: string }) => {
-    setConversationFocus(
-      session ? { source: session.source, session_id: session.id } : null,
-    );
+    setConversationFocus(conversationFocusFromSession(session));
     setView("conversations");
     window.history.replaceState(null, "", "#conversations");
   }, []);

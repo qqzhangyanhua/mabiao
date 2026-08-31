@@ -148,7 +148,7 @@ export function BreakdownCallTable({
           <thead>
             <tr>
               <th>时间</th>
-              <th>应用</th>
+              <th>来源</th>
               <th>模型</th>
               <th>项目</th>
               <th>输入</th>

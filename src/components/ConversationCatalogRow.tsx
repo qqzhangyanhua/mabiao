@@ -1,7 +1,7 @@
 import { Icon } from "../icons";
 import {
   capabilityLabel,
-  conversationApplicationLabel,
+  conversationSourceLabel,
   conversationFileUnavailableLabel,
   conversationRangeLabel,
   conversationRangeTitle,
@@ -33,7 +33,7 @@ export function ConversationCatalogRow({ row, maxTotal, onOpen }: ConversationCa
         </div>
       </td>
       <td>
-        <SourceLabel source={row.source} fallback={conversationApplicationLabel(row.source)} />
+        <SourceLabel source={row.source} fallback={conversationSourceLabel(row.source)} />
       </td>
       <td title={row.project}>{projectLabel(row.project)}</td>
       <td>{row.model || "未标注"}</td>

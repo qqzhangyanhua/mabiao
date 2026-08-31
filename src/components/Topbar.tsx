@@ -3,12 +3,12 @@ import { Icon, type IconName } from "../icons";
 import { useAnchoredPanel } from "../hooks/useAnchoredPanel";
 import { useDismissible } from "../hooks/useDismissible";
 import {
-  conversationApplicationLabel,
+  conversationSourceLabel,
   conversationSourceOptions,
 } from "../lib/conversationDisplay";
 import {
-  applicationLabel,
-  applicationSourceOptions,
+  sourceLabel,
+  sourceFilterOptions,
   customRangeFilter,
   formatRangeLabel,
   projectLabel,
@@ -43,7 +43,7 @@ function chipLabel(chip: FilterChip): string {
     return projectLabel(chip.value);
   }
   if (chip.kind === "source") {
-    return applicationLabel(chip.value);
+    return sourceLabel(chip.value);
   }
   if (chip.kind === "provider") {
     const name = chip.value || "（未标注）";
@@ -88,9 +88,9 @@ export function Topbar({
     view === "conversations"
       ? conversationSourceOptions(options.sources)
       : view === "application" || view === "trend" || view === "project"
-        ? applicationSourceOptions(options.sources)
+        ? sourceFilterOptions(options.sources)
         : options.sources;
-  const sourceLabel = view === "conversations" ? conversationApplicationLabel : applicationLabel;
+  const renderSourceLabel = view === "conversations" ? conversationSourceLabel : sourceLabel;
   const committedFrom = (filter.from ?? "").slice(0, 10);
   const committedTo = (filter.to ?? "").slice(0, 10);
   const rangeKey = `${preset}:${filter.from ?? ""}:${filter.to ?? ""}`;
@@ -193,11 +193,11 @@ export function Topbar({
               onChange={(projects) => onChange({ ...filter, projects })}
             />
             <MultiSelect
-              label="全部应用"
+              label="全部来源"
               icon="filter"
               options={sourceOptions}
               selected={filter.sources}
-              renderLabel={sourceLabel}
+              renderLabel={renderSourceLabel}
               renderIcon={(source) => <SourceIcon source={source} size={14} />}
               disabled={disabled}
               onChange={(sources) => onChange({ ...filter, sources })}
@@ -214,7 +214,7 @@ export function Topbar({
             ) : null}
             {showUsageOnlyFilters ? (
               <MultiSelect
-                label="全部 Provider"
+                label="全部接口"
                 options={options.providers}
                 selected={filter.providers}
                 disabled={disabled}

@@ -101,6 +101,7 @@ describe("trend series table", () => {
 describe("application tables", () => {
   it("exports efficiency rows with blank null ratios", () => {
     const table = applicationEfficiencyTable(analytics);
+    expect(table.headers[0]).toBe("来源");
     expect(table.rows[1]).toEqual(["Codex", 10, 1, 10, "", ""]);
   });
 

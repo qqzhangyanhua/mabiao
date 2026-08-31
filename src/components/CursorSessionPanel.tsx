@@ -28,6 +28,7 @@ import { ExportButton } from "./ExportButton";
 import { ExportableChart } from "./ExportableChart";
 import { KpiCard, LegendRow } from "./Kpi";
 import { LoadingOverlay } from "./LoadingOverlay";
+import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
 const TOOL_GROUP_LABELS: Record<string, string> = {
   read: "读取",
@@ -129,8 +130,8 @@ export function CursorSessionPanel({
       <div className="panel partition">
         <EmptyState
           icon="cursor"
-          title="暂无 Cursor 会话数据"
-          hint="请确认本机已有 Cursor Agent 对话，并已启用自动刷新或手动刷新。"
+          title={SESSION_ENTRY_COPY.cursorSessionsEmptyTitle}
+          hint={SESSION_ENTRY_COPY.cursorSessionsEmptyHint}
         />
       </div>
     );
@@ -138,6 +139,7 @@ export function CursorSessionPanel({
 
   return (
     <LoadingOverlay active={loading} className="stack">
+      <p className="panel-note">{SESSION_ENTRY_COPY.cursorSessionsBanner}</p>
       <section className="kpi-row">
         <KpiCard
           icon="sessions"
@@ -202,7 +204,6 @@ export function CursorSessionPanel({
         }
         onError={onError}
       />
-      <p className="note">点击会话行打开对话记录，查看正文、工具、读写路径和哈希文件。</p>
 
       <section className="panel partition">
         <div className="panel-head">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Icon } from "../icons";
-import { applicationLabel } from "../lib/format";
+import { sourceLabel } from "../lib/format";
 import {
   defaultOverviewLayout,
   officialQuotaProviderLabel,
@@ -87,7 +87,7 @@ function formatLayoutSummary(layout: OverviewLayout, presentSources: string[]): 
     );
   }
   if (hiddenPresentSources.length > 0) {
-    parts.push(`额度未显示 ${hiddenPresentSources.map((id) => applicationLabel(id)).join("、")}`);
+    parts.push(`额度未显示 ${hiddenPresentSources.map((id) => sourceLabel(id)).join("、")}`);
   }
   return parts.join(" · ");
 }

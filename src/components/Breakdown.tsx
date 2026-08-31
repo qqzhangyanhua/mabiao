@@ -147,7 +147,7 @@ export const Breakdown = memo(function Breakdown({
           <div>
             <h2>明细列表</h2>
             {onProviderClick ? (
-              <p className="panel-note">点击名称可只看该 Provider 的明细调用。</p>
+              <p className="panel-note">点击名称可只看该接口的明细调用。</p>
             ) : null}
           </div>
           <ExportButton

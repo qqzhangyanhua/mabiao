@@ -55,6 +55,7 @@ import type { ConversationExportFormat } from "./type";
 import { Button } from "./ui/Button";
 import { SearchField } from "./ui/Field";
 import { Segmented } from "./ui/Segmented";
+import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
 const PAGE_SIZE = 20;
 
@@ -893,7 +894,7 @@ export function Conversations({
       <div className="panel-head conversation-catalog-head">
         <div>
           <h2>本地会话目录</h2>
-          <p className="panel-note">目录只索引元数据；正文仅在进入详情后读取。</p>
+          <p className="panel-note">{SESSION_ENTRY_COPY.conversationCatalogNote}</p>
         </div>
         <SearchField
           value={searchInput}

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons";
 import { parseDateValue, toDateValue } from "../lib/calendar";
 import {
-  applicationLabel,
+  sourceLabel,
   formatClock,
   formatCompact,
   formatDuration,
@@ -20,6 +20,7 @@ import { EmptyState } from "./EmptyState";
 import { KpiCard } from "./Kpi";
 import { SourceLabel } from "./SourceIcon";
 import { LoadingOverlay } from "./LoadingOverlay";
+import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
 const AXIS_HOURS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
 const LANE_HEIGHT = 34;
@@ -34,7 +35,7 @@ function shiftDay(day: string, delta: number): string {
 }
 
 function segmentLabel(segment: WorkSegment): string {
-  return `${projectLabel(segment.project)} · ${applicationLabel(segment.source)}/${segment.model}`;
+  return `${projectLabel(segment.project)} · ${sourceLabel(segment.source)}/${segment.model}`;
 }
 
 export function WorkTimeline({
@@ -99,6 +100,7 @@ export function WorkTimeline({
 
   return (
     <div className="stack worktime">
+      <p className="panel-note">{SESSION_ENTRY_COPY.workTimelineBanner}</p>
       <section className="panel worktime-head">
         <div className="worktime-day-nav">
           <button
@@ -205,7 +207,7 @@ export function WorkTimeline({
                     onMouseEnter={(e) => handleSegmentEnter(e, item)}
                     onMouseMove={handleSegmentMove}
                     onMouseLeave={handleSegmentLeave}
-                    aria-label={`${label}，点击查看会话明细`}
+                    aria-label={`${label}，点击${SESSION_ENTRY_COPY.openConversationRow}`}
                   >
                     <span>{label}</span>
                   </button>

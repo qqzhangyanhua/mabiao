@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Filter } from "../types";
 import {
-  applicationLabel,
-  applicationSourceOptions,
+  sourceLabel,
+  sourceFilterOptions,
   weeklyCountLabel,
   callRangeWindow,
   customRangeFilter,
@@ -116,21 +116,21 @@ describe("formatDelta", () => {
   });
 });
 
-describe("applicationLabel", () => {
+describe("sourceLabel", () => {
   it("maps known sources to display names", () => {
-    expect(applicationLabel("claude")).toBe("Claude Code");
-    expect(applicationLabel("codex")).toBe("Codex");
-    expect(applicationLabel("cursor")).toBe("Cursor");
-    expect(applicationLabel("factory")).toBe("Droid");
-    expect(applicationLabel("droid")).toBe("Droid");
-    expect(applicationLabel("omp")).toBe("OMP");
-    expect(applicationLabel("antigravity")).toBe("Antigravity");
-    expect(applicationLabel("devin")).toBe("Devin");
+    expect(sourceLabel("claude")).toBe("Claude Code");
+    expect(sourceLabel("codex")).toBe("Codex");
+    expect(sourceLabel("cursor")).toBe("Cursor");
+    expect(sourceLabel("factory")).toBe("Droid");
+    expect(sourceLabel("droid")).toBe("Droid");
+    expect(sourceLabel("omp")).toBe("OMP");
+    expect(sourceLabel("antigravity")).toBe("Antigravity");
+    expect(sourceLabel("devin")).toBe("Devin");
   });
 
-  it("always offers Cursor in the application source list", () => {
-    expect(applicationSourceOptions(["claude", "codex"])).toEqual(["claude", "codex", "cursor"]);
-    expect(applicationSourceOptions(["cursor"])).toEqual(["cursor"]);
+  it("always offers Cursor in the source filter list", () => {
+    expect(sourceFilterOptions(["claude", "codex"])).toEqual(["claude", "codex", "cursor"]);
+    expect(sourceFilterOptions(["cursor"])).toEqual(["cursor"]);
   });
 
   it("labels cursor weekly rows as events", () => {
@@ -139,7 +139,7 @@ describe("applicationLabel", () => {
   });
 
   it("falls back to the raw source id when unknown", () => {
-    expect(applicationLabel("some_new_source")).toBe("some_new_source");
+    expect(sourceLabel("some_new_source")).toBe("some_new_source");
   });
 });
 

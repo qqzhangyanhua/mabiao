@@ -189,7 +189,7 @@ pub fn load_summary_filtered(
     Ok(dto)
 }
 
-/// 供应用统计挂一行：认时间与模型，不套用来源/项目/provider。
+/// 供来源统计挂一行：认时间与模型，不套用来源/项目/provider。
 pub fn events_for_application_analytics(
     conn: &Connection,
     filter: &Filter,

@@ -1,4 +1,4 @@
-import { applicationLabel, formatTokens } from "../lib/format";
+import { sourceLabel, formatTokens } from "../lib/format";
 import type { IngestIssue, IngestReport, SourceDiagnostic } from "../types";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
@@ -74,7 +74,7 @@ export function SourceDiagnosticsPanel({
         <table>
           <thead>
             <tr>
-              <th>应用</th>
+              <th>来源</th>
               <th>状态</th>
               <th>统计口径</th>
               <th>缓存文件</th>
@@ -92,7 +92,7 @@ export function SourceDiagnosticsPanel({
                   <strong>
                     <SourceLabel
                       source={row.source}
-                      fallback={row.application || applicationLabel(row.source)}
+                      fallback={row.application || sourceLabel(row.source)}
                     />
                   </strong>
                 </td>

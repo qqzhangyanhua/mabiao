@@ -73,7 +73,7 @@ export function ConversationUsageTable({
             <tr>
               <th>时间</th>
               <th>模型</th>
-              <th>Provider</th>
+              <th>接口</th>
               <th>输入</th>
               <th>输出</th>
               <th>缓存读</th>

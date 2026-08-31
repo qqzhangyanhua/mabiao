@@ -86,9 +86,9 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>应用趋势堆叠图</h2>
+            <h2>来源趋势堆叠图</h2>
             <p className="panel-note">
-              查看各应用在总 Token 中的时间分布。Cursor 为账号用量，不计入上方本机效率卡片。
+              查看各来源在总 Token 中的时间分布。Cursor 为账号用量，不计入上方本机效率卡片。
             </p>
           </div>
           <GrainSwitch value={grain} onChange={setGrain} />
@@ -111,7 +111,7 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
                 </span>
               ))}
             </div>
-            <ExportableChart option={option} style={{ height: 360 }} filename="应用趋势图" />
+            <ExportableChart option={option} style={{ height: 360 }} filename="来源趋势图" />
           </>
         ) : (
           <div className="analytics-empty">
@@ -123,13 +123,13 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>应用效率明细</h2>
+            <h2>来源效率明细</h2>
             <p className="panel-note">
-              按应用比较缓存复用、单会话规模与推理开销。Cursor 会话数按账号事件计。
+              按来源比较缓存复用、单会话规模与推理开销。Cursor 会话数按账号事件计。
             </p>
           </div>
           <ExportButton
-            filename="应用效率"
+            filename="来源效率"
             headers={efficiencyExport.headers}
             rows={efficiencyExport.rows}
           />
@@ -138,7 +138,7 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           <table>
             <thead>
               <tr>
-                <th>应用</th>
+                <th>来源</th>
                 <th>总 Token</th>
                 <th>会话数</th>
                 <th>平均会话 Token</th>
@@ -164,7 +164,7 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
               {data.by_application.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="analytics-empty">
-                    <EmptyState icon="source" title="暂无应用数据" />
+                    <EmptyState icon="source" title="暂无来源数据" />
                   </td>
                 </tr>
               ) : null}
@@ -176,13 +176,13 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
       <section className="panel">
         <div className="panel-head">
           <div>
-            <h2>应用 × 项目交叉统计</h2>
+            <h2>来源 × 项目交叉统计</h2>
             <p className="panel-note">
-              行按项目总 Token 排序，颜色越深表示该应用在项目中的消耗越高。
+              行按项目总 Token 排序，颜色越深表示该来源在项目中的消耗越高。
             </p>
           </div>
           <ExportButton
-            filename="应用项目交叉"
+            filename="来源项目交叉"
             headers={matrixExport.headers}
             rows={matrixExport.rows}
           />

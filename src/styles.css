@@ -533,7 +533,7 @@ button {
   background: var(--bg);
 }
 
-/* 对话详情不需要目录筛选（全部项目 / 全部应用），把顶栏高度让给正文。 */
+/* 对话详情不需要目录筛选（全部项目 / 全部来源），把顶栏高度让给正文。 */
 .workspace:has(.conversation-detail-view) .topbar {
   display: none;
 }

@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { Icon, type IconName } from "../icons";
+import { navLabel, viewTitle } from "../lib/viewTitle";
 import type { View } from "../types";
 import appIcon from "../../src-tauri/icons/icon.png";
+
+export { viewTitle };
 
 const SIDEBAR_COLLAPSED_KEY = "mabiao:sidebar-collapsed";
 
@@ -13,35 +16,35 @@ function loadCollapsed(): boolean {
   }
 }
 
-const navGroups: { label: string; items: { id: View; label: string; icon: IconName }[] }[] = [
+const navGroups: { label: string; items: { id: View; icon: IconName }[] }[] = [
   {
     label: "用量",
     items: [
-      { id: "overview", label: "概览", icon: "overview" },
-      { id: "trend", label: "使用统计", icon: "trend" },
-      { id: "model", label: "模型统计", icon: "model" },
-      { id: "project", label: "项目统计", icon: "project" },
-      { id: "application", label: "应用统计", icon: "source" },
-      { id: "provider", label: "Provider", icon: "provider" },
-      { id: "worktime", label: "工作时间线", icon: "clock" },
+      { id: "overview", icon: "overview" },
+      { id: "trend", icon: "trend" },
+      { id: "model", icon: "model" },
+      { id: "project", icon: "project" },
+      { id: "application", icon: "source" },
+      { id: "provider", icon: "provider" },
+      { id: "worktime", icon: "clock" },
     ],
   },
   {
     label: "对话",
-    items: [{ id: "conversations", label: "对话记录", icon: "chat" }],
+    items: [{ id: "conversations", icon: "chat" }],
   },
   {
     label: "Cursor",
     items: [
-      { id: "cursor", label: "代码量", icon: "cursor" },
-      { id: "cursor-sessions", label: "会话", icon: "sessions" },
+      { id: "cursor", icon: "cursor" },
+      { id: "cursor-sessions", icon: "sessions" },
     ],
   },
   {
     label: "系统",
     items: [
-      { id: "instructions", label: "全局指令", icon: "instruction" },
-      { id: "settings", label: "设置", icon: "settings" },
+      { id: "instructions", icon: "instruction" },
+      { id: "settings", icon: "settings" },
     ],
   },
 ];
@@ -85,17 +88,20 @@ export function Sidebar({
         {navGroups.map((group) => (
           <div className="nav-group" key={group.label}>
             <div className={collapsed ? "sr-only" : "nav-group-label"}>{group.label}</div>
-            {group.items.map((item) => (
-              <button
-                key={item.id}
-                className={view === item.id ? "nav-btn active" : "nav-btn"}
-                onClick={() => onNavigate(item.id)}
-                title={collapsed ? item.label : undefined}
-              >
-                <Icon name={item.icon} size={16} />
-                <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
-              </button>
-            ))}
+            {group.items.map((item) => {
+              const label = navLabel(item.id);
+              return (
+                <button
+                  key={item.id}
+                  className={view === item.id ? "nav-btn active" : "nav-btn"}
+                  onClick={() => onNavigate(item.id)}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon name={item.icon} size={16} />
+                  <span className={collapsed ? "sr-only" : undefined}>{label}</span>
+                </button>
+              );
+            })}
           </div>
         ))}
       </nav>
@@ -137,33 +143,4 @@ export function Sidebar({
       )}
     </aside>
   );
-}
-
-export function viewTitle(view: View): { title: string; subtitle: string } {
-  switch (view) {
-    case "overview":
-      return { title: "概览", subtitle: "全局 Token 使用概览" };
-    case "trend":
-      return { title: "使用统计", subtitle: "按时间查看 Token 消耗" };
-    case "conversations":
-      return { title: "对话记录", subtitle: "本地会话正文，含 Cursor Agent" };
-    case "model":
-      return { title: "模型统计", subtitle: "按模型拆分 Token 与费用" };
-    case "project":
-      return { title: "项目统计", subtitle: "按项目拆分 Token 与费用" };
-    case "application":
-      return { title: "应用统计", subtitle: "趋势、项目交叉与效率指标" };
-    case "provider":
-      return { title: "Provider", subtitle: "按官方 / 中转渠道拆分" };
-    case "worktime":
-      return { title: "工作时间线", subtitle: "所选日期的工作片段分布" };
-    case "cursor":
-      return { title: "Cursor 代码量", subtitle: "独立口径，不计入 Token" };
-    case "cursor-sessions":
-      return { title: "Cursor 会话", subtitle: "Agent 行为统计，不计入 Token" };
-    case "instructions":
-      return { title: "全局指令", subtitle: "跨来源的全局指令与体检" };
-    case "settings":
-      return { title: "设置", subtitle: "外观、数据源与单价" };
-  }
 }

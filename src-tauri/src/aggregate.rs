@@ -353,7 +353,7 @@ pub fn application_analytics(
     }
 }
 
-/// 把 Cursor 账号用量挂进应用统计（不改 summary，不进本机 Token KPI）。
+/// 把 Cursor 账号用量挂进来源统计（不改 summary，不进本机 Token KPI）。
 pub fn attach_cursor_application(
     mut dto: ApplicationAnalyticsDto,
     events: &[CursorUsageEvent],

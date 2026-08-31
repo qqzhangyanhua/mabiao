@@ -775,7 +775,7 @@ pub fn application_analytics(
     filter: &Filter,
     grain: &str,
 ) -> Result<ApplicationAnalyticsDto, String> {
-    // 这个视图要发四组聚合（总览 / 按应用 / 按时间桶 / 按项目），全走原始表就是把
+    // 这个视图要发四组聚合（总览 / 按来源 / 按时间桶 / 按项目），全走原始表就是把
     // 同一份数据扫四遍——350 万行时实测 43 秒。预聚合表把每遍的基数压到几万行。
     let use_rollup = can_use_rollup(conn, filter) && rollup_bucket_expr(grain).is_some();
     let (table, alias) = if use_rollup {
