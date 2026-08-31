@@ -1,0 +1,60 @@
+CONTEXT.md
+  h_4132837b09b7e7 12,74
+README.en.md
+  h_4132837b09b7e7 28
+README.md
+  h_4132837b09b7e7 28
+docs/adr/0005-configurable-source-paths.md
+  h_4132837b09b7e7 17
+docs/probe/token-fields.md
+  h_4132837b09b7e7 67
+src-tauri/src/adapters/mod.rs
+  h_4132837b09b7e7 13,117-130
+src-tauri/src/adapters/omp.rs
+  h_4132837b09b7e7 1-120
+src-tauri/src/conversation.rs
+  h_4132837b09b7e7 38,67,218-227,432-443
+src-tauri/src/conversation/line_direct.rs
+  h_4132837b09b7e7 18-21,33,181-183
+src-tauri/src/conversation/omp.rs
+  h_4132837b09b7e7 1-181
+src-tauri/src/domain.rs
+  h_4132837b09b7e7 9,22,26,43,61,79
+src-tauri/src/test_support/helpers.rs
+  h_4132837b09b7e7 184,194-197
+src-tauri/src/test_support/mod.rs
+  h_4132837b09b7e7 11
+src-tauri/src/tests/adapters.rs
+  h_4132837b09b7e7 156-215,519
+src-tauri/src/tests/conversation_index_sources.rs
+  h_4132837b09b7e7 209-254
+src-tauri/src/tests/conversation_line_direct.rs
+  h_4132837b09b7e7 184-191,232-241
+src-tauri/src/tests/ingest.rs
+  h_4132837b09b7e7 934-937,1068,1125,1135-1137,1149-1153,1158-1159,1169-1172,1175,1190-1196,1198-1200,1279,1281,1283,1285-1286,1306
+src-tauri/tests/fixtures/omp-conversation.jsonl
+  h_4132837b09b7e7 1-5
+src-tauri/tests/fixtures/omp.jsonl
+  h_4132837b09b7e7 1-6
+src/lib/overviewLayout.ts
+  h_4132837b09b7e7 38
+src/lib/sessionResume.test.ts
+  h_4132837b09b7e7 25
+src/lib/sessionResume.ts
+  h_4132837b09b7e7 62-65
+src/lib/sourceIcon.test.ts
+  h_4132837b09b7e7 8
+src/lib/sourceIcon.ts
+  h_4132837b09b7e7 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "889d84ba926616a38ed37845af9d741d2d4e636a",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
