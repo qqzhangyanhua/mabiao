@@ -6,8 +6,8 @@ use serde_json::Value;
 use super::toolbox::{attachment_candidates, AttachmentCandidate};
 use super::{
     ensure_attachment_path_allowed, ensure_matching_session, event_index, event_index_ready,
-    load_trusted_session_files, parse_codex_content, parse_conversation_files, prepare_detail,
-    read_source_line, read_source_payload, AttachmentKind,
+    load_trusted_session_files, parse_conversation_files, prepare_detail, read_source_line,
+    read_source_payload, AttachmentKind,
 };
 use crate::domain::{
     ConversationEvent, ConversationEventContentDto,
@@ -140,7 +140,7 @@ fn rebuild_codex(
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
     let raw = read_jsonl_record(path, source_sequence)?;
-    let parsed = parse_codex_content(
+    let parsed = super::codex::parse_content(
         path,
         &format!("{raw}\n"),
         0,
