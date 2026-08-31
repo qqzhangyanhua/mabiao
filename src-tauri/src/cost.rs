@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::domain::{
     CostSource, CursorUsageEvent, DerivedCost, PriceEntry, PriceOrigin, PriceTable,
@@ -184,7 +184,7 @@ pub fn snapshot_price_candidate(model: &str, prices: &PriceTable) -> Option<Pric
 }
 
 /// 给未定价诊断的可补组挂上快照候选。结构性那档（空模型名）不查。
-pub fn attach_snapshot_candidates(groups: &mut [UnpricedGroupDto], prices: &PriceTable) {
+fn attach_snapshot_candidates(groups: &mut [UnpricedGroupDto], prices: &PriceTable) {
     for group in groups {
         group.candidate = if group.reason == UnpricedReason::Pricable {
             snapshot_price_candidate(&group.model, prices)
@@ -192,6 +192,46 @@ pub fn attach_snapshot_candidates(groups: &mut [UnpricedGroupDto], prices: &Pric
             None
         };
     }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct UnpricedGroupAcc {
+    pub sources: BTreeSet<String>,
+    pub total_tokens: i64,
+    pub record_count: i64,
+}
+
+/// 未定价诊断收尾：reason、排序、快照候选。
+///
+/// query / aggregate 只按 `(model, provider)` 累加；滤行仍走各自的 SQL 或 `derive_cost`。
+pub(crate) fn finish_unpriced_groups(
+    groups: BTreeMap<(String, String), UnpricedGroupAcc>,
+    prices: &PriceTable,
+) -> Vec<UnpricedGroupDto> {
+    let mut rows: Vec<UnpricedGroupDto> = groups
+        .into_iter()
+        .map(|((model, provider), acc)| UnpricedGroupDto {
+            reason: if model.is_empty() {
+                UnpricedReason::StructurallyUnbillable
+            } else {
+                UnpricedReason::Pricable
+            },
+            model,
+            provider,
+            sources: acc.sources.into_iter().collect(),
+            total_tokens: acc.total_tokens,
+            record_count: acc.record_count,
+            candidate: None,
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.total_tokens
+            .cmp(&a.total_tokens)
+            .then_with(|| a.model.cmp(&b.model))
+            .then_with(|| a.provider.cmp(&b.provider))
+    });
+    attach_snapshot_candidates(&mut rows, prices);
+    rows
 }
 
 /// Cursor 仪表盘模型名常与 LiteLLM 键不一致（`claude-4.6-sonnet` ↔ `claude-sonnet-4-6`，

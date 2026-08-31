@@ -3,20 +3,20 @@
 //! 与 `cost::derive_cost` 保持同一语义（native_cost 优先，其次 model+provider 匹配，
 //! 再次 model 且 provider 为 NULL 的兜底，都没有则标记 unpriced；model/provider 大小写不敏感）。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection, Row};
 
 use crate::billing_window;
-use crate::cost::attach_snapshot_candidates;
+use crate::cost::{finish_unpriced_groups, UnpricedGroupAcc};
 use crate::cursor_account;
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
     InstructionUsageSummary, NamedAmount, OverviewDto, PriceTable, ProjectApplicationRow,
     SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UnpricedGroupDto,
-    UnpricedReason, UsageCallPage, UsageCallRow, UsageRecord, WorkSessionSpan, WorkTimelineDto,
+    UsageCallPage, UsageCallRow, UsageRecord, WorkSessionSpan, WorkTimelineDto,
 };
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
@@ -405,16 +405,17 @@ pub fn unpriced_diagnosis(
     prices: &PriceTable,
 ) -> Result<Vec<UnpricedGroupDto>, String> {
     install_prices(conn, prices)?;
-    let mut groups = if crate::store::rollup_is_ready(conn) {
+    let groups = if crate::store::rollup_is_ready(conn) {
         unpriced_diagnosis_from_rollup(conn)?
     } else {
         unpriced_diagnosis_from_records(conn)?
     };
-    attach_snapshot_candidates(&mut groups, prices);
-    Ok(groups)
+    Ok(finish_unpriced_groups(groups, prices))
 }
 
-fn unpriced_diagnosis_from_rollup(conn: &Connection) -> Result<Vec<UnpricedGroupDto>, String> {
+fn unpriced_diagnosis_from_rollup(
+    conn: &Connection,
+) -> Result<BTreeMap<(String, String), UnpricedGroupAcc>, String> {
     let sql = format!(
         "SELECT d.model, d.provider, d.source,
             SUM(d.total_tokens),
@@ -427,7 +428,9 @@ fn unpriced_diagnosis_from_rollup(conn: &Connection) -> Result<Vec<UnpricedGroup
     fold_unpriced_groups(conn, &sql)
 }
 
-fn unpriced_diagnosis_from_records(conn: &Connection) -> Result<Vec<UnpricedGroupDto>, String> {
+fn unpriced_diagnosis_from_records(
+    conn: &Connection,
+) -> Result<BTreeMap<(String, String), UnpricedGroupAcc>, String> {
     let sql = format!(
         "SELECT r.model, r.provider, r.source,
             SUM(r.total_tokens),
@@ -440,14 +443,10 @@ fn unpriced_diagnosis_from_records(conn: &Connection) -> Result<Vec<UnpricedGrou
     fold_unpriced_groups(conn, &sql)
 }
 
-#[derive(Default)]
-struct UnpricedGroupAcc {
-    sources: BTreeSet<String>,
-    total_tokens: i64,
-    record_count: i64,
-}
-
-fn fold_unpriced_groups(conn: &Connection, sql: &str) -> Result<Vec<UnpricedGroupDto>, String> {
+fn fold_unpriced_groups(
+    conn: &Connection,
+    sql: &str,
+) -> Result<BTreeMap<(String, String), UnpricedGroupAcc>, String> {
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([], |row| {
@@ -469,35 +468,7 @@ fn fold_unpriced_groups(conn: &Connection, sql: &str) -> Result<Vec<UnpricedGrou
         acc.total_tokens += total_tokens;
         acc.record_count += record_count;
     }
-    Ok(finish_unpriced_groups(groups))
-}
-
-fn finish_unpriced_groups(
-    groups: BTreeMap<(String, String), UnpricedGroupAcc>,
-) -> Vec<UnpricedGroupDto> {
-    let mut rows: Vec<UnpricedGroupDto> = groups
-        .into_iter()
-        .map(|((model, provider), acc)| UnpricedGroupDto {
-            reason: if model.is_empty() {
-                UnpricedReason::StructurallyUnbillable
-            } else {
-                UnpricedReason::Pricable
-            },
-            model,
-            provider,
-            sources: acc.sources.into_iter().collect(),
-            total_tokens: acc.total_tokens,
-            record_count: acc.record_count,
-            candidate: None,
-        })
-        .collect();
-    rows.sort_by(|a, b| {
-        b.total_tokens
-            .cmp(&a.total_tokens)
-            .then_with(|| a.model.cmp(&b.model))
-            .then_with(|| a.provider.cmp(&b.provider))
-    });
-    rows
+    Ok(groups)
 }
 
 /// 全时段、全来源的费用标量。给代码量 ROI 用，不扫 token 维度、不算会话数。
