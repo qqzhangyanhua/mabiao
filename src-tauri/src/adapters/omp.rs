@@ -24,15 +24,32 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
 
 /// 子代理 jsonl 在父会话同名目录里；消耗记录打到父会话。
 pub(crate) fn parent_session_id(path: &Path) -> Option<String> {
-    let dir = path.parent()?;
-    let stem = dir.file_name()?.to_str()?;
-    let sibling = dir.parent()?.join(format!("{stem}.jsonl"));
+    let sibling = parent_jsonl_candidate(path)?;
     if !sibling.is_file() {
         return None;
     }
-    stem.rsplit_once('_')
+    sibling
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .and_then(|stem| stem.rsplit_once('_'))
         .map(|(_, id)| id.to_string())
         .filter(|id| !id.is_empty())
+}
+
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    match parent_jsonl_candidate(path) {
+        Some(parent) => ingest::metadata_fingerprint(&parent),
+        None => String::new(),
+    }
+}
+
+fn parent_jsonl_candidate(path: &Path) -> Option<PathBuf> {
+    let dir = path.parent()?;
+    let stem = dir.file_name()?.to_str()?;
+    if !stem.contains('_') {
+        return None;
+    }
+    Some(dir.parent()?.join(format!("{stem}.jsonl")))
 }
 
 pub fn parse_omp_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {

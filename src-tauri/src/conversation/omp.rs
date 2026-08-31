@@ -16,6 +16,14 @@ pub(super) fn parse(
     )
 }
 
+pub(super) fn source_revision(path: &Path) -> Result<String, String> {
+    Ok(format!(
+        "{}:{}",
+        super::regular_source_revision(path)?,
+        crate::adapters::omp::sidecar_fingerprint(path, &[])
+    ))
+}
+
 pub(super) fn parse_from_values(
     path: &Path,
     values: Vec<(usize, Value)>,

@@ -120,7 +120,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         path_env: "OMP_AGENT_DIR",
         scan_dirs: omp::scan_dirs,
         discover: discover_jsonl,
-        sidecar_fingerprint: empty_sidecar,
+        sidecar_fingerprint: omp::sidecar_fingerprint,
         parse: omp::parse,
         prepare_dir: None,
         prepare_file: None,

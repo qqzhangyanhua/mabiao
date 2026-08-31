@@ -221,7 +221,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: index_omp,
         index_suffix: None,
         detail: detail_omp,
-        revision: regular_source_revision,
+        revision: omp::source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
     },

@@ -83,6 +83,7 @@ const applicationNames: Record<string, string> = {
   factory: "Droid",
   droid: "Droid",
   pi: "Pi",
+  omp: "OMP",
   opencode: "OpenCode",
   kimi: "Kimi CLI",
   dsh: "DeepSeek Harness",

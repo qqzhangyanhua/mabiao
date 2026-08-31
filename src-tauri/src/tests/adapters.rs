@@ -214,6 +214,28 @@ fn omp_adapter_attributes_subagent_usage_to_parent_session() {
 }
 
 #[test]
+fn omp_sidecar_fingerprint_changes_when_parent_jsonl_appears() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent_stem = "2026-08-31T10-00-00-000Z_01a00000-1111-7000-8000-aaaaaaaaaaaa";
+    let cwd = dir.path().join("-workspace-app");
+    std::fs::create_dir_all(cwd.join(parent_stem)).unwrap();
+    let nested = cwd.join(parent_stem).join("Scout.jsonl");
+    std::fs::write(&nested, "{}\n").unwrap();
+
+    let missing = omp::sidecar_fingerprint(&nested, &[]);
+    assert_eq!(missing, "missing");
+
+    std::fs::write(
+        cwd.join(format!("{parent_stem}.jsonl")),
+        fixture("omp.jsonl"),
+    )
+    .unwrap();
+    let present = omp::sidecar_fingerprint(&nested, &[]);
+    assert_ne!(present, "missing");
+    assert_ne!(present, missing);
+}
+
+#[test]
 fn opencode_adapter_skips_user_and_keeps_native_cost() {
     let raw = fixture("opencode-messages.json");
     let values: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap();
