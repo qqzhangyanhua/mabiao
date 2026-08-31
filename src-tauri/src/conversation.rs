@@ -115,6 +115,8 @@ struct IndexedFile {
 
 type ConversationDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
 type ConversationIndexFn = fn(&Path) -> Result<ConversationIndexBatch, ConversationIndexIssue>;
+type ConversationIndexSuffixFn =
+    fn(&Path, u64, u32, &str) -> Result<ParsedConversation, ConversationIndexIssue>;
 type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedConversation, String>;
 type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 
@@ -122,6 +124,8 @@ struct ConversationAdapter {
     source: Source,
     discover: ConversationDiscoverFn,
     index: ConversationIndexFn,
+    /// 只解析后缀、不写库。未填则刷新时一律全量 index。
+    index_suffix: Option<ConversationIndexSuffixFn>,
     detail: ConversationDetailFn,
     revision: ConversationRevisionFn,
     raw_extension: Option<&'static str>,
@@ -133,6 +137,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Codex,
         discover: discover_jsonl,
         index: codex::index,
+        index_suffix: Some(codex::index_suffix),
         detail: codex::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -142,6 +147,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Claude,
         discover: discover_jsonl,
         index: index_claude,
+        index_suffix: None,
         detail: detail_claude,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -151,6 +157,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::CursorAgent,
         discover: cursor::discover,
         index: cursor::index,
+        index_suffix: None,
         detail: cursor::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -160,6 +167,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Dsh,
         discover: discover_dsh,
         index: dsh::index,
+        index_suffix: None,
         detail: dsh::detail,
         revision: regular_source_revision,
         raw_extension: None,
@@ -169,6 +177,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Factory,
         discover: discover_droid,
         index: droid::index,
+        index_suffix: None,
         detail: droid::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -178,6 +187,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Kimi,
         discover: kimi::discover,
         index: kimi::index,
+        index_suffix: None,
         detail: kimi::detail,
         revision: kimi::source_revision,
         raw_extension: Some("jsonl"),
@@ -187,6 +197,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Grok,
         discover: grok::discover,
         index: grok::index,
+        index_suffix: None,
         detail: grok::detail,
         revision: grok::source_revision,
         raw_extension: Some("jsonl"),
@@ -196,6 +207,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Pi,
         discover: discover_jsonl,
         index: index_pi,
+        index_suffix: None,
         detail: detail_pi,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -205,6 +217,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Gemini,
         discover: discover_gemini,
         index: index_gemini,
+        index_suffix: None,
         detail: detail_gemini,
         revision: regular_source_revision,
         raw_extension: Some("json"),
@@ -214,6 +227,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Opencode,
         discover: discover_opencode,
         index: opencode::index,
+        index_suffix: None,
         detail: opencode::detail,
         revision: opencode::source_revision,
         raw_extension: None,
@@ -223,6 +237,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Qwen,
         discover: qwen::discover,
         index: qwen::index,
+        index_suffix: None,
         detail: qwen::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
@@ -232,6 +247,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Copilot,
         discover: copilot::discover,
         index: copilot::index,
+        index_suffix: None,
         detail: copilot::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -554,31 +570,27 @@ pub(crate) fn refresh_source_in_roots(
             }
             continue;
         }
-        let fingerprint = cached
+        let cached_row = cached
             .iter()
             .find(|row| row.indexed_byte_offset > 0)
-            .or(cached.first())
-            .map(|row| ConversationFileFingerprint {
-                mtime_ns: row.source_file_mtime_ns,
-                size: row.source_file_size,
-                revision: row.source_revision.clone(),
-                indexed_byte_offset: row.indexed_byte_offset,
-                has_live_generation: row.has_live_generation,
-            });
+            .or(cached.first());
+        let fingerprint = cached_row.map(|row| ConversationFileFingerprint {
+            mtime_ns: row.source_file_mtime_ns,
+            size: row.source_file_size,
+            revision: row.source_revision.clone(),
+            indexed_byte_offset: row.indexed_byte_offset,
+            has_live_generation: row.has_live_generation,
+        });
         if plan_conversation_file_index(
             fingerprint.as_ref(),
             mtime_ns,
             size,
             &source_revision,
-            source == Source::Codex,
+            adapter.index_suffix.is_some(),
         ) == ConversationFileIndexPlan::Incremental
         {
-            if let Some(row) = cached
-                .iter()
-                .find(|row| row.indexed_byte_offset > 0)
-                .or(cached.first())
-            {
-                match prepare_incremental_codex(conn, &path, row) {
+            if let (Some(index_suffix), Some(row)) = (adapter.index_suffix, cached_row) {
+                match prepare_incremental(conn, source, index_suffix, &path, row) {
                     Ok(IncrementalPrepare::Ready(parsed)) => {
                         incremental_paths
                             .entry(row.session_id.clone())
@@ -594,26 +606,7 @@ pub(crate) fn refresh_source_in_roots(
                         });
                         continue;
                     }
-                    Ok(IncrementalPrepare::NeedFull) => {
-                        match codex::parse_file_mode(&path, true, false) {
-                            Ok(parsed) => {
-                                record_full_parse(
-                                    conn,
-                                    source,
-                                    parsed,
-                                    &mut event_generations,
-                                    &mut grouped,
-                                    &mut file_cursors,
-                                )?;
-                                continue;
-                            }
-                            Err(issue) => {
-                                blocking_issues.push(issue.clone());
-                                issues.push(issue);
-                                continue;
-                            }
-                        }
-                    }
+                    Ok(IncrementalPrepare::NeedFull) => {}
                     Err(message) => {
                         let issue = ConversationIndexIssue {
                             path: path.to_string_lossy().to_string(),
@@ -748,7 +741,7 @@ pub(crate) fn refresh_source_in_roots(
             continue;
         }
         let path = pending.path.to_string_lossy().to_string();
-        if let Err(message) = apply_incremental_codex(conn, pending) {
+        if let Err(message) = apply_incremental(conn, source, pending) {
             let issue = ConversationIndexIssue {
                 path,
                 message,
@@ -867,12 +860,14 @@ fn record_full_parse(
     Ok(())
 }
 
-fn prepare_incremental_codex(
+fn prepare_incremental(
     conn: &Connection,
+    source: Source,
+    index_suffix: ConversationIndexSuffixFn,
     path: &Path,
     cached: &CachedConversationFingerprint,
 ) -> Result<IncrementalPrepare, String> {
-    let parsed = match codex::index_suffix(
+    let parsed = match index_suffix(
         path,
         cached.indexed_byte_offset as u64,
         cached.indexed_line as u32,
@@ -884,25 +879,24 @@ fn prepare_incremental_codex(
     if parsed.session.session_id != cached.session_id {
         return Ok(IncrementalPrepare::NeedFull);
     }
-    if !event_index::has_live_generation(conn, Source::Codex, &cached.session_id)? {
+    if !event_index::has_live_generation(conn, source, &cached.session_id)? {
         return Ok(IncrementalPrepare::NeedFull);
     }
-    if event_index::live_index_would_rewind(
-        conn,
-        Source::Codex,
-        &cached.session_id,
-        &parsed.events,
-    )? {
+    if event_index::live_index_would_rewind(conn, source, &cached.session_id, &parsed.events)? {
         return Ok(IncrementalPrepare::NeedFull);
     }
     Ok(IncrementalPrepare::Ready(Box::new(parsed)))
 }
 
-fn apply_incremental_codex(conn: &Connection, pending: PendingIncremental) -> Result<(), String> {
+fn apply_incremental(
+    conn: &Connection,
+    source: Source,
+    pending: PendingIncremental,
+) -> Result<(), String> {
     let tx = conn
         .unchecked_transaction()
         .map_err(|error| error.to_string())?;
-    let result = apply_incremental_codex_in_tx(&tx, pending);
+    let result = apply_incremental_in_tx(&tx, source, pending);
     match result {
         Ok(()) => tx.commit().map_err(|error| error.to_string()),
         Err(error) => {
@@ -912,8 +906,9 @@ fn apply_incremental_codex(conn: &Connection, pending: PendingIncremental) -> Re
     }
 }
 
-fn apply_incremental_codex_in_tx(
+fn apply_incremental_in_tx(
     conn: &Connection,
+    source: Source,
     pending: PendingIncremental,
 ) -> Result<(), String> {
     let PendingIncremental {
@@ -924,15 +919,14 @@ fn apply_incremental_codex_in_tx(
         size,
         source_revision,
     } = pending;
-    let max_sequence =
-        event_index::append_live_events(conn, Source::Codex, &session_id, &parsed.events)?;
+    let max_sequence = event_index::append_live_events(conn, source, &session_id, &parsed.events)?;
     let cursor = parsed.index_cursor.unwrap_or(FileIndexCursor {
         byte_offset: size,
         line: 0,
     });
     persist_file_cursor(
         conn,
-        Source::Codex,
+        source,
         &session_id,
         &SessionFileCursorWrite {
             path: &path,
@@ -943,11 +937,20 @@ fn apply_incremental_codex_in_tx(
             source_revision: &source_revision,
         },
     )?;
-    touch_session_after_append(conn, &session_id, &parsed, mtime_ns, size, &source_revision)
+    touch_session_after_append(
+        conn,
+        source,
+        &session_id,
+        &parsed,
+        mtime_ns,
+        size,
+        &source_revision,
+    )
 }
 
 fn touch_session_after_append(
     conn: &Connection,
+    source: Source,
     session_id: &str,
     parsed: &ParsedConversation,
     mtime_ns: i64,
@@ -970,7 +973,7 @@ fn touch_session_after_append(
         WHERE source = ?1 AND session_id = ?2
         "#,
         params![
-            Source::Codex.as_str(),
+            source.as_str(),
             session_id,
             ended_at,
             parsed.session.model,

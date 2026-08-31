@@ -260,3 +260,48 @@ fn an_earlier_timestamp_on_new_events_rebuilds_the_session() {
         Some("rewound")
     );
 }
+
+#[test]
+fn a_suffix_with_a_different_session_id_rebuilds_instead_of_appending() {
+    use std::io::Write;
+
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = seed_codex_fixture(home, "rollout-conv-1.jsonl", "codex-conversation.jsonl");
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    let before = crate::conversation::indexed_events(&conn, "codex", "conv-1").unwrap();
+    assert!(!before.is_empty());
+
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .unwrap();
+    writeln!(
+        file,
+        r#"{{"type":"session_meta","timestamp":"2026-08-20T00:04:00Z","payload":{{"id":"conv-other","cwd":"/workspace/example-project"}}}}"#
+    )
+    .unwrap();
+    writeln!(
+        file,
+        r#"{{"type":"response_item","timestamp":"2026-08-20T00:04:01Z","payload":{{"type":"message","role":"assistant","content":[{{"type":"output_text","text":"hijacked"}}]}}}}"#
+    )
+    .unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let original = crate::conversation::indexed_events(&conn, "codex", "conv-1").unwrap();
+    assert!(
+        original
+            .iter()
+            .all(|event| event.text.as_deref() != Some("hijacked")),
+        "不得把另一会话的后缀追加到原会话"
+    );
+    let rebuilt = crate::conversation::indexed_events(&conn, "codex", "conv-other").unwrap();
+    assert!(
+        rebuilt
+            .iter()
+            .any(|event| event.text.as_deref() == Some("hijacked")),
+        "会话 ID 不一致时应整份重索引到后缀里的会话"
+    );
+    assert_conversation_index_matches_parse(&conn, home, "codex", "conv-other");
+}

@@ -151,6 +151,30 @@ fn adapter_indexes_codex_suffix_matching_suffix_content_and_full_tail() {
 }
 
 #[test]
+fn adapter_indexes_codex_suffix_reports_session_id_from_suffix_meta() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("suffix-meta.jsonl");
+    let prefix = concat!(
+        r#"{"type":"session_meta","timestamp":"2026-08-20T00:00:00Z","payload":{"id":"conv-1"}}"#,
+        "\n",
+    );
+    let suffix = concat!(
+        r#"{"type":"session_meta","timestamp":"2026-08-20T00:04:00Z","payload":{"id":"conv-other"}}"#,
+        "\n",
+        r#"{"type":"response_item","timestamp":"2026-08-20T00:04:01Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"hijacked"}]}}"#,
+        "\n",
+    );
+    std::fs::write(&path, format!("{prefix}{suffix}")).unwrap();
+
+    let parsed = index_suffix(&path, prefix.len() as u64, 1, "conv-1").unwrap();
+    assert_eq!(parsed.session.session_id, "conv-other");
+    assert!(parsed
+        .events
+        .iter()
+        .any(|event| event.text.as_deref() == Some("hijacked")));
+}
+
+#[test]
 fn adapter_indexes_codex_suffix_stops_before_incomplete_trailing_line() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("codex-incomplete.jsonl");

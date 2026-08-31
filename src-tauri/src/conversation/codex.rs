@@ -26,7 +26,7 @@ pub(super) fn detail(
     single_detail(path, session_id, include_deferred_content, parse_file)
 }
 
-pub(super) fn parse_file_mode(
+fn parse_file_mode(
     path: &Path,
     tolerate_incomplete_tail: bool,
     include_deferred_content: bool,
