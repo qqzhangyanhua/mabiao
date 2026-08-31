@@ -139,3 +139,88 @@ fn adapter_merges_grok_prompt_identity_and_keeps_unknown_json_out_of_diagnostics
     std::fs::write(&path, "{not-json\n").unwrap();
     assert!(index(&path).is_err());
 }
+
+#[test]
+fn adapter_maps_high_frequency_lifecycle_kinds() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("grok/sessions/project/grok-lifecycle");
+    let path = root.join("updates.jsonl");
+    std::fs::create_dir_all(&root).unwrap();
+    let lines = [
+        serde_json::json!({"timestamp":1,"method":"session/update","params":{"_meta":{"eventId":"h1"},"update":{"sessionUpdate":"hook_execution","event_name":"pre_tool_use","tool_name":"read_file","runs":[{"name":"hook-a","status":{"status":"success"}}]}}}),
+        serde_json::json!({"timestamp":2,"method":"session/update","params":{"_meta":{"eventId":"t1"},"update":{"sessionUpdate":"task_backgrounded","description":"type-check","command":"pnpm test"}}}),
+        serde_json::json!({"timestamp":3,"method":"session/update","params":{"_meta":{"eventId":"c1"},"update":{"sessionUpdate":"task_completed","task_snapshot":{"command":"pnpm test","output":"ok"}}}}),
+        serde_json::json!({"timestamp":4,"method":"session/update","params":{"_meta":{"eventId":"r1"},"update":{"sessionUpdate":"retry_state","type":"retrying","reason":"request error"}}}),
+        serde_json::json!({"timestamp":5,"method":"session/update","params":{"_meta":{"eventId":"s1"},"update":{"sessionUpdate":"session_recap","summary":"Closed the issues"}}}),
+        serde_json::json!({"timestamp":6,"method":"session/update","params":{"_meta":{"eventId":"a1"},"update":{"sessionUpdate":"subagent_spawned","description":"Spec review","subagent_type":"general-purpose"}}}),
+        serde_json::json!({"timestamp":7,"method":"session/update","params":{"_meta":{"eventId":"b1"},"update":{"sessionUpdate":"subagent_finished","status":"completed"}}}),
+        serde_json::json!({"timestamp":8,"method":"session/update","params":{"_meta":{"eventId":"f1"},"update":{"sessionUpdate":"future_update","secret_body":"still unknown"}}}),
+    ];
+    let content = lines
+        .iter()
+        .map(serde_json::Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, content).unwrap();
+    std::fs::write(
+        root.join("summary.json"),
+        "{\"current_model_id\":\"grok-test\"}",
+    )
+    .unwrap();
+
+    let parsed = index(&path).unwrap();
+    let events = &parsed.conversations[0].events;
+    let hook = events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("pre_tool_use"))
+        .unwrap();
+    assert_eq!(hook.kind, EventKind::SystemStatus);
+    assert_eq!(hook.text.as_deref(), Some("read_file"));
+    assert_eq!(
+        events
+            .iter()
+            .find(|event| event.name.as_deref() == Some("task_backgrounded"))
+            .and_then(|event| event.text.as_deref()),
+        Some("type-check")
+    );
+    assert_eq!(
+        events
+            .iter()
+            .find(|event| event.name.as_deref() == Some("task_completed"))
+            .and_then(|event| event.text.as_deref()),
+        Some("pnpm test")
+    );
+    let retry = events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("retrying"))
+        .unwrap();
+    assert_eq!(retry.kind, EventKind::SystemStatus);
+    assert_eq!(retry.text.as_deref(), Some("request error"));
+    assert_eq!(
+        events
+            .iter()
+            .find(|event| event.name.as_deref() == Some("session_recap"))
+            .and_then(|event| event.text.as_deref()),
+        Some("Closed the issues")
+    );
+    assert!(events.iter().any(|event| {
+        event.kind == EventKind::SystemStatus && event.name.as_deref() == Some("subagent_spawned")
+    }));
+    assert!(events.iter().any(|event| {
+        event.kind == EventKind::SystemStatus && event.name.as_deref() == Some("subagent_finished")
+    }));
+    let unknown = events
+        .iter()
+        .find(|event| event.kind == EventKind::Unadapted)
+        .unwrap();
+    assert_eq!(unknown.name.as_deref(), Some("future_update"));
+    assert!(parsed
+        .diagnostics
+        .iter()
+        .all(|issue| !issue.message.contains("hook_execution")));
+    assert!(parsed
+        .diagnostics
+        .iter()
+        .any(|issue| issue.message.contains("future_update")));
+}

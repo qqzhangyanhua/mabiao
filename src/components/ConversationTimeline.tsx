@@ -7,7 +7,11 @@ import {
   type UIEvent,
 } from "react";
 import { useConversationEventPages } from "../lib/useConversationEventPages";
-import type { ConversationAgentLink } from "../types";
+import {
+  groupTimelineEvents,
+  unadaptedGroupLabel,
+} from "../lib/conversationEventDisplay";
+import type { ConversationAgentLink, ConversationEvent } from "../types";
 import { ConversationAgentBranch } from "./ConversationAgentBranch";
 import { ConversationEventItem } from "./ConversationEventItem";
 import { EmptyState } from "./EmptyState";
@@ -43,7 +47,7 @@ function captureVisibleEventAnchor(node: HTMLElement): VisibleEventAnchor | null
   const groups = node.querySelectorAll<HTMLElement>("[data-event-id]");
   for (const group of groups) {
     const eventId = group.dataset.eventId;
-    if (!eventId) {
+    if (!eventId || group.offsetHeight === 0) {
       continue;
     }
     if (group.offsetTop + group.offsetHeight > node.scrollTop) {
@@ -168,6 +172,20 @@ export function ConversationTimeline({
     ));
   }
 
+  function renderTimelineEvent(event: ConversationEvent) {
+    return (
+      <div className="conversation-event-group" data-event-id={event.event_id} key={event.event_id}>
+        <ConversationEventItem
+          event={event}
+          source={source}
+          sessionId={sessionId}
+          onEventContentLoaded={applyEventContent}
+        />
+        {renderAgentLinks(linksForEvent(event.event_id))}
+      </div>
+    );
+  }
+
   function revealAdjacent(direction: "earlier" | "later") {
     const node = nodeRef.current;
     visibleAnchorRef.current = node ? captureVisibleEventAnchor(node) : null;
@@ -215,17 +233,18 @@ export function ConversationTimeline({
                 {error}
               </span>
             ) : null}
-            {events.map((event) => (
-              <div className="conversation-event-group" data-event-id={event.event_id} key={event.event_id}>
-                <ConversationEventItem
-                  event={event}
-                  source={source}
-                  sessionId={sessionId}
-                  onEventContentLoaded={applyEventContent}
-                />
-                {renderAgentLinks(linksForEvent(event.event_id))}
-              </div>
-            ))}
+            {groupTimelineEvents(events).map((group) => {
+              if (group.type === "unadapted") {
+                const firstId = group.events[0]?.event_id;
+                return (
+                  <details className="conversation-unadapted-group" key={firstId}>
+                    <summary>{unadaptedGroupLabel(group.events)}</summary>
+                    {group.events.map((event) => renderTimelineEvent(event))}
+                  </details>
+                );
+              }
+              return renderTimelineEvent(group.event);
+            })}
             {eventWindow.hasMoreAfter ? (
               <div className="conversation-timeline-page-gate">
                 <span className="muted">下方还有更新事件</span>

@@ -253,6 +253,18 @@ fn parse(
                 ));
                 sequence += 1;
             }
+            (raw_kind, _) if is_grok_lifecycle(raw_kind) => {
+                events.push(semantic_event(
+                    sequence,
+                    EventKind::SystemStatus,
+                    &occurred_at,
+                    None,
+                    Some(grok_lifecycle_name(raw_kind, update)),
+                    grok_lifecycle_text(raw_kind, update),
+                    update.clone(),
+                ));
+                sequence += 1;
+            }
             (_, Some("user")) => {
                 push_projected_message(
                     sequence,
@@ -541,6 +553,78 @@ fn display_kind(kind: &str) -> &str {
     } else {
         kind
     }
+}
+
+fn is_grok_lifecycle(kind: &str) -> bool {
+    matches!(
+        kind,
+        "hook_execution"
+            | "task_backgrounded"
+            | "task_completed"
+            | "retry_state"
+            | "session_recap"
+            | "subagent_spawned"
+            | "subagent_finished"
+            | "image_compressed"
+            | "auto_compact_started"
+            | "compaction_checkpoint"
+            | "auto_compact_completed"
+            | "hooks_changed"
+    )
+}
+
+fn grok_lifecycle_name(kind: &str, update: &Value) -> String {
+    match kind {
+        "hook_execution" => {
+            optional_text(update, &["event_name"]).unwrap_or_else(|| kind.to_string())
+        }
+        "retry_state" => optional_text(update, &["type"]).unwrap_or_else(|| kind.to_string()),
+        _ => kind.to_string(),
+    }
+}
+
+fn grok_lifecycle_text(kind: &str, update: &Value) -> Option<String> {
+    match kind {
+        "hook_execution" => grok_hook_text(update),
+        "task_backgrounded" => optional_text(update, &["description", "command"]),
+        "task_completed" => update
+            .pointer("/task_snapshot/command")
+            .and_then(Value::as_str)
+            .filter(|text| !text.is_empty())
+            .map(str::to_string)
+            .or_else(|| optional_text(update, &["description", "command"])),
+        "retry_state" => optional_text(update, &["reason", "message"]),
+        "session_recap" => optional_text(update, &["summary"]),
+        "subagent_spawned" => optional_text(update, &["description", "subagent_type"]),
+        "subagent_finished" => optional_text(update, &["status"]),
+        "image_compressed" => optional_text(update, &["message"]),
+        "auto_compact_started" => optional_text(update, &["reason"]),
+        "auto_compact_completed" => grok_compact_text(update),
+        "compaction_checkpoint" => optional_text(update, &["checkpoint_id"]),
+        _ => optional_text(update, &["message", "description", "summary", "reason"]),
+    }
+}
+
+fn grok_hook_text(update: &Value) -> Option<String> {
+    if let Some(tool_name) = optional_text(update, &["tool_name"]) {
+        return Some(tool_name);
+    }
+    let runs = update.get("runs")?.as_array()?;
+    let names = runs
+        .iter()
+        .filter_map(|run| run.get("name").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    if names.is_empty() {
+        None
+    } else {
+        Some(names.join(", "))
+    }
+}
+
+fn grok_compact_text(update: &Value) -> Option<String> {
+    let before = update.get("tokens_before").and_then(Value::as_u64)?;
+    let after = update.get("tokens_after").and_then(Value::as_u64)?;
+    Some(format!("{before} → {after}"))
 }
 
 fn grok_timestamp(value: &Value, params: &Value) -> String {

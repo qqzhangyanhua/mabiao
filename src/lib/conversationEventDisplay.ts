@@ -1,5 +1,6 @@
 import type {
   ConversationAttachment,
+  ConversationEvent,
   ConversationEventActor,
   ConversationEventCapabilityStatus,
   ConversationEventKind,
@@ -91,4 +92,38 @@ export function attachmentSignature(attachment: ConversationAttachment): string 
 
 export function attachmentRequestKey(attachment: ConversationAttachment): string {
   return `${attachment.id}\u0000${attachmentSignature(attachment)}`;
+}
+
+export type ConversationTimelineGroup =
+  | { type: "event"; event: ConversationEvent }
+  | { type: "unadapted"; events: ConversationEvent[] };
+
+export function groupTimelineEvents(
+  events: ConversationEvent[],
+): ConversationTimelineGroup[] {
+  const groups: ConversationTimelineGroup[] = [];
+  const unadapted: ConversationEvent[] = [];
+  for (const event of events) {
+    if (event.kind === "unadapted") {
+      unadapted.push(event);
+      continue;
+    }
+    groups.push({ type: "event", event });
+  }
+  if (unadapted.length > 0) {
+    groups.push({ type: "unadapted", events: unadapted });
+  }
+  return groups;
+}
+
+export function unadaptedGroupLabel(events: ConversationEvent[]): string {
+  const names = [
+    ...new Set(events.map((event) => event.name).filter((name): name is string => Boolean(name))),
+  ];
+  const countLabel = `${events.length} 条尚未适配`;
+  if (names.length === 0) {
+    return countLabel;
+  }
+  const shown = names.slice(0, 3).join(" / ");
+  return names.length > 3 ? `${countLabel} · ${shown} 等` : `${countLabel} · ${shown}`;
 }

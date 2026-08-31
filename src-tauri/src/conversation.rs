@@ -73,7 +73,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
 const DETAIL_READ_ATTEMPTS: usize = 3;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 10;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 11;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {

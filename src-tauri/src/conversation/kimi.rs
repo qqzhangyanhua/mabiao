@@ -157,6 +157,55 @@ fn parse(
                 ));
                 sequence += 1;
             }
+            ("turnbegin", _) => {
+                push_projected_message(
+                    sequence,
+                    &occurred_at,
+                    "user",
+                    payload.get("user_input").unwrap_or(&Value::Null),
+                    structural_details(line, raw_kind, message),
+                    &mut messages,
+                    &mut events,
+                );
+                sequence += 1;
+            }
+            ("contentpart", _) => {
+                if payload.get("type").and_then(Value::as_str) == Some("think") {
+                    events.push(semantic_event(
+                        sequence,
+                        EventKind::Plan,
+                        &occurred_at,
+                        Some(EventActor::Assistant),
+                        Some("think".to_string()),
+                        optional_text(payload, &["think", "text"]),
+                        payload.clone(),
+                    ));
+                } else {
+                    push_projected_message(
+                        sequence,
+                        &occurred_at,
+                        "assistant",
+                        message_content(payload),
+                        structural_details(line, raw_kind, message),
+                        &mut messages,
+                        &mut events,
+                    );
+                }
+                sequence += 1;
+            }
+            ("stepbegin" | "approvalrequest" | "approvalresponse", _) => {
+                events.push(semantic_event(
+                    sequence,
+                    EventKind::SystemStatus,
+                    &occurred_at,
+                    None,
+                    Some(raw_kind.to_string()),
+                    optional_text(payload, &["description", "action", "response"])
+                        .or_else(|| payload.get("n").map(|value| value.to_string())),
+                    payload.clone(),
+                ));
+                sequence += 1;
+            }
             _ => {
                 events.push(unadapted_event(
                     sequence,

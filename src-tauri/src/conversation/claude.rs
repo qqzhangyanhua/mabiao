@@ -108,7 +108,21 @@ pub(super) fn parse_from_values(
             }
         }
         if !matches!(kind, "user" | "assistant") {
-            let event = if matches!(kind, "system" | "progress" | "result" | "queue-operation") {
+            let event = if matches!(
+                kind,
+                "system"
+                    | "progress"
+                    | "result"
+                    | "queue-operation"
+                    | "attachment"
+                    | "mode"
+                    | "last-prompt"
+                    | "permission-mode"
+                    | "file-history-snapshot"
+                    | "file-history-delta"
+                    | "ai-title"
+                    | "frame-link"
+            ) {
                 semantic_event(
                     *index,
                     if value.get("is_error").and_then(Value::as_bool) == Some(true) {

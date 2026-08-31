@@ -5001,6 +5001,35 @@ td.row-actions {
   font-size: 11px;
 }
 
+.conversation-unadapted-group {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.conversation-unadapted-group > summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--orange-fg);
+  font-size: 12px;
+}
+
+.conversation-unadapted-group > summary:hover {
+  color: var(--text);
+}
+
+.conversation-unadapted-group > summary:focus-visible {
+  outline: 2px solid var(--purple-fg);
+  outline-offset: 3px;
+}
+
+.conversation-unadapted-group[open] {
+  padding-bottom: 0;
+}
+
+.conversation-unadapted-group .conversation-event:last-child {
+  border-bottom: 0;
+}
+
 .conversation-event-details {
   width: 100%;
   color: var(--text-faint);
