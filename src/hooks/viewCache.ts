@@ -1,4 +1,5 @@
 import type { Filter, Grain, View } from "../types";
+import { rangeFromPreset } from "../lib/format";
 import { emptyFilter } from "./usage/constants";
 
 export const views: View[] = [
@@ -21,24 +22,39 @@ export type ViewScope = {
   preset: string;
 };
 
+const DEFAULT_RANGE_PRESET = "7";
+
 export function emptyViewScope(): ViewScope {
   return {
     filter: {
       ...emptyFilter,
+      ...rangeFromPreset(DEFAULT_RANGE_PRESET),
       sources: [],
       models: [],
       projects: [],
       providers: [],
     },
-    preset: "all",
+    preset: DEFAULT_RANGE_PRESET,
   };
 }
 
 export function initialViewScopes(): Record<View, ViewScope> {
-  return Object.fromEntries(views.map((view) => [view, emptyViewScope()])) as Record<
-    View,
-    ViewScope
-  >;
+  const seed = emptyViewScope();
+  return Object.fromEntries(
+    views.map((view) => [
+      view,
+      {
+        preset: seed.preset,
+        filter: {
+          ...seed.filter,
+          sources: [],
+          models: [],
+          projects: [],
+          providers: [],
+        },
+      },
+    ]),
+  ) as Record<View, ViewScope>;
 }
 
 function sameItems(left: string[], right: string[]): boolean {

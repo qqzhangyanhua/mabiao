@@ -9,6 +9,7 @@ import {
   reconcileLoadedStamps,
   syncSourceProjectFilters,
   viewStamp,
+  views,
   viewsInvalidatedBy,
   viewsWarmedBy,
 } from "./viewCache";
@@ -23,6 +24,27 @@ const filter: Filter = {
 };
 
 const ranged: Filter = { ...filter, from: "2026-08-01", to: "2026-08-07" };
+
+describe("emptyViewScope", () => {
+  it("defaults to the last 7 days instead of all history", () => {
+    const scope = emptyViewScope();
+    expect(scope.preset).toBe("7");
+    expect(scope.filter.from).toBeTruthy();
+    expect(scope.filter.to).toBeTruthy();
+    expect(Date.parse(scope.filter.to!) - Date.parse(scope.filter.from!)).toBe(
+      7 * 24 * 3600 * 1000,
+    );
+  });
+
+  it("gives every view the same initial window", () => {
+    const scopes = initialViewScopes();
+    for (const view of views) {
+      expect(scopes[view].preset).toBe("7");
+      expect(scopes[view].filter.from).toBe(scopes.overview.filter.from);
+      expect(scopes[view].filter.to).toBe(scopes.overview.filter.to);
+    }
+  });
+});
 
 describe("parseViewHash", () => {
   it("maps known view hashes", () => {
@@ -144,7 +166,7 @@ describe("viewsInvalidatedBy", () => {
 describe("reconcileLoadedStamps", () => {
   it("warms sibling views only when their filters still match", () => {
     const scopes = initialViewScopes();
-    const used = emptyViewScope();
+    const used = scopes.overview;
     const loaded = reconcileLoadedStamps({}, "overview", used, scopes, "day", 1);
 
     expect(loaded.overview).toBe(viewStamp("overview", used.filter, used.preset, "day", 1));
@@ -174,7 +196,7 @@ describe("reconcileLoadedStamps", () => {
 
   it("invalidates overview when a sibling overwrites shared data with a different filter", () => {
     const scopes = initialViewScopes();
-    const overviewScope = emptyViewScope();
+    const overviewScope = scopes.overview;
     const projectScope = { filter: ranged, preset: "7" };
     scopes.project = projectScope;
     const afterOverview = reconcileLoadedStamps({}, "overview", overviewScope, scopes, "day", 1);
