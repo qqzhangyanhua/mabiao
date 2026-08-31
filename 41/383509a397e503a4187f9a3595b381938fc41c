@@ -1,0 +1,24 @@
+src/components/SourceIcon.tsx
+  h_4132837b09b7e7 83-87
+src/icons.tsx
+  h_4132837b09b7e7 242
+src/lib/sourceIcon.test.ts
+  h_4132837b09b7e7 34
+src/lib/sourceIcon.ts
+  h_4132837b09b7e7 16
+src/lib/type.ts
+  h_4132837b09b7e7 25
+src/styles.css
+  h_4132837b09b7e7 54-55,128-129,2598-2601
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "41383509a397e503a4187f9a3595b381938fc41c",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
