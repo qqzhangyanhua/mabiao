@@ -124,7 +124,7 @@ export function Sidebar({
             </div>
           </div>
           <div className="version" title="数字键切页 · R 刷新 · Esc 清空筛选">
-            版本 0.1.0 · 快捷键 R / 1-0
+            版本 {__APP_VERSION__} · 快捷键 R / 1-0
           </div>
         </div>
       ) : (
