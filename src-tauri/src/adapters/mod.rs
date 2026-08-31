@@ -10,6 +10,7 @@ pub mod factory;
 pub mod gemini;
 pub mod grok;
 pub mod kimi;
+pub mod omp;
 pub mod opencode;
 pub mod pi;
 pub mod project;
@@ -107,6 +108,20 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: pi::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Omp,
+        path_env: "OMP_AGENT_DIR",
+        scan_dirs: omp::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: omp::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: true,

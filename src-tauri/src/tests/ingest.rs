@@ -931,6 +931,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
         ingest::source_scan_dirs_with(&overrides, home, Source::Copilot),
         vec![home.join(".copilot/session-state")],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Omp),
+        vec![home.join(".omp/agent/sessions")],
+    );
 }
 
 #[test]
@@ -1061,7 +1065,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 12);
+    assert_eq!(Source::ALL.len(), 13);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1118,7 +1122,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     let first = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    // 旧夹具覆盖 10 个来源时的常量；差值必须能归因到新增的 OpenCode 与 Cursor Agent。
+    // 旧夹具覆盖 10 个来源时的常量；差值必须能归因到新增来源。
     const PREV_FILES: u64 = 10;
     const PREV_RECORDS: usize = 16;
     const PREV_TOKENS: i64 = 828446;
@@ -1128,6 +1132,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const CURSOR_AGENT_FILES: u64 = 1;
     const CURSOR_AGENT_RECORDS: usize = 2;
     const CURSOR_AGENT_TOKENS: i64 = 19886;
+    const OMP_FILES: u64 = 1;
+    const OMP_RECORDS: usize = 2;
+    const OMP_TOKENS: i64 = 199;
 
     let opencode = first
         .sources
@@ -1139,10 +1146,17 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::CursorAgent.as_str())
         .unwrap();
+    let omp = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Omp.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
     assert_eq!(cursor_agent.records_written, CURSOR_AGENT_RECORDS as u64);
+    assert_eq!(omp.files_parsed, OMP_FILES);
+    assert_eq!(omp.records_written, OMP_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1152,8 +1166,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::CursorAgent)
         .collect();
+    let omp_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Omp)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
+    assert_eq!(omp_rows.len(), OMP_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1168,10 +1187,17 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         CURSOR_AGENT_TOKENS
     );
+    assert_eq!(
+        omp_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        OMP_TOKENS
+    );
 
-    let files = PREV_FILES + OPENCODE_FILES + CURSOR_AGENT_FILES;
-    let records = PREV_RECORDS + OPENCODE_RECORDS + CURSOR_AGENT_RECORDS;
-    let tokens = PREV_TOKENS + OPENCODE_TOKENS + CURSOR_AGENT_TOKENS;
+    let files = PREV_FILES + OPENCODE_FILES + CURSOR_AGENT_FILES + OMP_FILES;
+    let records = PREV_RECORDS + OPENCODE_RECORDS + CURSOR_AGENT_RECORDS + OMP_RECORDS;
+    let tokens = PREV_TOKENS + OPENCODE_TOKENS + CURSOR_AGENT_TOKENS + OMP_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
     assert_eq!(stored.len(), records);
@@ -1250,14 +1276,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 12);
+    assert_eq!(report.files_seen, 13);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 12);
+    assert_eq!(report.files_parsed, 13);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 19);
+    assert_eq!(report.records_written, 21);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 19);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 848352);
+    assert_eq!(stored.len(), 21);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 848551);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -1277,6 +1303,7 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             Source::Codex
             | Source::Claude
             | Source::Pi
+            | Source::Omp
             | Source::Kimi
             | Source::Dsh
             | Source::Grok

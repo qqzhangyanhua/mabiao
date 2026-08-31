@@ -5,6 +5,7 @@ const KNOWN_SOURCES = [
   "claude",
   "codex",
   "pi",
+  "omp",
   "opencode",
   "kimi",
   "dsh",

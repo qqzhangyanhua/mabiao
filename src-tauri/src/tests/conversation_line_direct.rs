@@ -181,6 +181,14 @@ fn seed_pi(home: &std::path::Path) {
     );
 }
 
+fn seed_omp(home: &std::path::Path) {
+    write_home_fixture(
+        home,
+        ".omp/agent/sessions/omp-session-1.jsonl",
+        "omp-conversation.jsonl",
+    );
+}
+
 fn seed_gemini(home: &std::path::Path) {
     write_home_fixture(
         home,
@@ -219,6 +227,16 @@ fn pi_line_rebuild_matches_full_parse_event_fields() {
     let conn = store::open_memory().unwrap();
     refresh_source(&conn, home, Source::Pi);
     assert_line_rebuild_matches_or_falls_back(&conn, home, "pi", "pi-session-1");
+}
+
+#[test]
+fn omp_line_rebuild_matches_full_parse_event_fields() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_omp(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Omp);
+    assert_line_rebuild_matches_or_falls_back(&conn, home, "omp", "omp-session-1");
 }
 
 #[test]

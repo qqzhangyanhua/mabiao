@@ -207,6 +207,52 @@ fn pi_event_index_matches_full_parse() {
 }
 
 #[test]
+fn omp_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".omp/agent/sessions/omp-session-1.jsonl",
+        "omp-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Omp);
+    assert_conversation_index_matches_parse(&conn, home, "omp", "omp-session-1");
+}
+
+#[test]
+fn omp_subagent_jsonl_is_not_a_catalog_row() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let parent_stem = "2026-08-31T10-00-00-000Z_omp-session-1";
+    write_home_fixture(
+        home,
+        &format!(".omp/agent/sessions/-workspace-app/{parent_stem}.jsonl"),
+        "omp-conversation.jsonl",
+    );
+    let scout = home.join(format!(
+        ".omp/agent/sessions/-workspace-app/{parent_stem}/Scout.jsonl"
+    ));
+    std::fs::create_dir_all(scout.parent().unwrap()).unwrap();
+    std::fs::write(
+        &scout,
+        concat!(
+            r#"{"type":"session","version":3,"id":"scout-1","timestamp":"2026-09-02T09:01:00Z","cwd":"/workspace/omp-app"}"#,
+            "\n",
+            r#"{"type":"message","id":"s-user","timestamp":"2026-09-02T09:01:01Z","message":{"role":"user","content":[{"type":"text","text":"scout"}]}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Omp);
+    let page = crate::conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    let omp_rows: Vec<_> = page.rows.iter().filter(|row| row.source == "omp").collect();
+    assert_eq!(omp_rows.len(), 1);
+    assert_eq!(omp_rows[0].session_id, "omp-session-1");
+}
+
+#[test]
 fn gemini_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

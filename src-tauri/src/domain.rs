@@ -6,6 +6,7 @@ pub enum Source {
     Codex,
     Claude,
     Pi,
+    Omp,
     Opencode,
     Kimi,
     Dsh,
@@ -18,10 +19,11 @@ pub enum Source {
 }
 
 impl Source {
-    pub const ALL: [Source; 12] = [
+    pub const ALL: [Source; 13] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
+        Source::Omp,
         Source::Opencode,
         Source::Kimi,
         Source::Dsh,
@@ -38,6 +40,7 @@ impl Source {
             Source::Codex => "codex",
             Source::Claude => "claude",
             Source::Pi => "pi",
+            Source::Omp => "omp",
             Source::Opencode => "opencode",
             Source::Kimi => "kimi",
             Source::Dsh => "dsh",
@@ -55,6 +58,7 @@ impl Source {
             Source::Codex => "Codex",
             Source::Claude => "Claude Code",
             Source::Pi => "Pi",
+            Source::Omp => "OMP",
             Source::Opencode => "OpenCode",
             Source::Kimi => "Kimi CLI",
             Source::Dsh => "DeepSeek Harness",
@@ -72,6 +76,7 @@ impl Source {
             "codex" => Some(Source::Codex),
             "claude" => Some(Source::Claude),
             "pi" => Some(Source::Pi),
+            "omp" => Some(Source::Omp),
             "opencode" => Some(Source::Opencode),
             "kimi" => Some(Source::Kimi),
             "dsh" => Some(Source::Dsh),

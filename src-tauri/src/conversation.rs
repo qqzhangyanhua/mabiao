@@ -35,6 +35,7 @@ mod grok;
 mod incremental;
 mod kimi;
 mod line_direct;
+mod omp;
 mod opencode;
 mod pi;
 mod qwen;
@@ -63,6 +64,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Kimi,
     Source::Grok,
     Source::Pi,
+    Source::Omp,
     Source::Gemini,
     Source::Opencode,
     Source::Qwen,
@@ -209,6 +211,16 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: index_pi,
         index_suffix: None,
         detail: detail_pi,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Omp,
+        discover: discover_jsonl,
+        index: index_omp,
+        index_suffix: None,
+        detail: detail_omp,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
@@ -415,6 +427,18 @@ fn detail_pi(
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
     single_detail(path, session_id, include_deferred_content, pi::parse)
+}
+
+fn index_omp(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
+    single_index(path, omp::parse)
+}
+
+fn detail_omp(
+    path: &Path,
+    session_id: &str,
+    include_deferred_content: bool,
+) -> Result<ParsedConversation, String> {
+    single_detail(path, session_id, include_deferred_content, omp::parse)
 }
 
 fn index_gemini(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {

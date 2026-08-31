@@ -25,6 +25,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | Claude Code | ✅ | ✅ | Native `costUSD` |
 | Codex | ✅ | ❌ | |
 | pi | ✅ | ✅ | |
+| OMP | ✅ | ✅ | Native `cost.total`; subagent tokens roll into the parent session |
 | opencode | ✅ | ✅ | |
 | grok | ✅ | ✅ | |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |

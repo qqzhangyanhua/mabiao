@@ -59,6 +59,10 @@ const RESUME_TEMPLATES: Record<string, ResumeTemplate> = {
     command: (id) => `pi --session ${id}`,
     hint: DEFAULT_HINT,
   },
+  omp: {
+    command: (id) => `omp --session ${id}`,
+    hint: DEFAULT_HINT,
+  },
   qwen: {
     command: (id) => `qwen --resume ${id}`,
     hint: DEFAULT_HINT,

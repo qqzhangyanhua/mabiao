@@ -35,6 +35,7 @@ export const QUOTA_SOURCE_IDS = [
   "copilot",
   "factory",
   "pi",
+  "omp",
   "opencode",
   "kimi",
   "dsh",

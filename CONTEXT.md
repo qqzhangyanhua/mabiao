@@ -9,7 +9,7 @@
 _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记录）
 
 **来源 (Source)**：
-一个被统计的 AI 工具（如 codex、claude code、pi、opencode、kimi 等）。每个 Source 有各自的本地存储格式与字段命名。
+一个被统计的 AI 工具（如 codex、claude code、pi、omp、opencode、kimi 等）。每个 Source 有各自的本地存储格式与字段命名。
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
@@ -71,6 +71,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | Codex | jsonl `~/.codex/sessions` | ✅ | ❌ |
 | Claude Code | jsonl `~/.claude/projects` | ✅ | ✅ 自带 `costUSD` |
 | pi | jsonl `~/.pi/agent/sessions` | ✅ | ✅ 自带 |
+| OMP | jsonl `~/.omp/agent/sessions` | ✅ | ✅ 自带 `cost.total` |
 | dsh | zstd jsonl `~/.dsh/sessions` | ✅(需解压) | ❌ |
 | opencode | sqlite+json `~/.local/share/opencode` | ✅ | ✅ 自带 |
 | kimi | jsonl `~/.kimi/sessions/*/wire.jsonl` | ✅ | ❌ |

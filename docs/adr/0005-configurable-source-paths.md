@@ -14,6 +14,7 @@
 | Codex | `CODEX_HOME` | `~/.codex`（扫 `sessions/`） |
 | Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` **和** `~/.config/claude`（都扫 `projects/`） |
 | Pi | `PI_AGENT_DIR` | `~/.pi/agent/sessions` |
+| OMP | `OMP_AGENT_DIR` | `~/.omp/agent/sessions` |
 | OpenCode | `OPENCODE_DATA_DIR` | `~/.local/share/opencode`（扫 `opencode.db`） |
 | Kimi | `KIMI_DATA_DIR` | `~/.kimi`（扫 `sessions/` + `kimi.json`） |
 | dsh | `DSH_HOME` | `~/.dsh`（扫 `sessions/`） |

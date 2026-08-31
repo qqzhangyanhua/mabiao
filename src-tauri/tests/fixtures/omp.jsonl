@@ -1,0 +1,6 @@
+{"type":"session","version":3,"id":"01a00000-1111-7000-8000-aaaaaaaaaaaa","timestamp":"2026-08-31T10:00:00.000Z","cwd":"/workspace/app"}
+{"type":"model_change","id":"m1","timestamp":"2026-08-31T10:00:01.000Z","model":"xai-oauth/grok-4.6"}
+{"type":"message","id":"u1","timestamp":"2026-08-31T10:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"hi"}]}}
+{"type":"message","id":"a1","timestamp":"2026-08-31T10:00:03.000Z","message":{"role":"assistant","provider":"xai-oauth","model":"grok-4.6","usage":{"input":10,"output":5,"cacheRead":100,"cacheWrite":2,"reasoning":3,"totalTokens":120,"cost":{"total":0.01}}}}
+{"type":"message","id":"a2","timestamp":"2026-08-31T10:00:04.000Z","message":{"role":"assistant","provider":"xai-oauth","model":"grok-4.6","usage":{"input":20,"output":8,"cacheRead":50,"cacheWrite":0,"reasoning":1,"totalTokens":79,"cost":{"total":0.02}}}}
+{"type":"message","id":"a3","timestamp":"2026-08-31T10:00:05.000Z","message":{"role":"assistant","provider":"xai-oauth","model":"grok-4.6","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":0}}}

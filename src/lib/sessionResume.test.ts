@@ -22,6 +22,7 @@ describe("sessionResumeHint", () => {
       "claude --resume auth-refactor",
     );
     expect(sessionResumeHint("pi", "sess01").command).toBe("pi --session sess01");
+    expect(sessionResumeHint("omp", "sess01").command).toBe("omp --session sess01");
     expect(sessionResumeHint("opencode", "ses_abc123").command).toBe(
       "opencode --session ses_abc123",
     );

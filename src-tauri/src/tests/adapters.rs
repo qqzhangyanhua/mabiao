@@ -154,6 +154,66 @@ fn pi_adapter_skips_zero_token_assistant_messages() {
 }
 
 #[test]
+fn omp_adapter_uses_native_cost_and_skips_zero_usage() {
+    let records = omp::parse_omp_jsonl(
+        &fixture_lines(&fixture("omp.jsonl")),
+        "/workspace/.omp/agent/sessions/-workspace-app/2026-08-31T10-00-00-000Z_01a00000-1111-7000-8000-aaaaaaaaaaaa.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Omp);
+    assert_eq!(records[0].model, "grok-4.6");
+    assert_eq!(records[0].provider, "xai-oauth");
+    assert_eq!(records[0].project, "/workspace/app");
+    assert_eq!(
+        records[0].session_id,
+        "01a00000-1111-7000-8000-aaaaaaaaaaaa"
+    );
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 5);
+    assert_eq!(records[0].cache_read_tokens, 100);
+    assert_eq!(records[0].cache_creation_tokens, 2);
+    assert_eq!(records[0].reasoning_tokens, 3);
+    assert_eq!(records[0].total_tokens, 120);
+    assert_eq!(records[0].native_cost, Some(0.01));
+    assert_eq!(records[1].input_tokens, 20);
+    assert_eq!(records[1].output_tokens, 8);
+    assert_eq!(records[1].cache_read_tokens, 50);
+    assert_eq!(records[1].total_tokens, 79);
+    assert_eq!(records[1].native_cost, Some(0.02));
+    assert!(records.iter().all(|record| record.total_tokens > 0));
+}
+
+#[test]
+fn omp_adapter_attributes_subagent_usage_to_parent_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let parent_stem = "2026-08-31T10-00-00-000Z_01a00000-1111-7000-8000-aaaaaaaaaaaa";
+    let cwd = dir.path().join("-workspace-app");
+    std::fs::create_dir_all(cwd.join(parent_stem)).unwrap();
+    let parent = cwd.join(format!("{parent_stem}.jsonl"));
+    let nested = cwd.join(parent_stem).join("Scout.jsonl");
+    std::fs::write(&parent, fixture("omp.jsonl")).unwrap();
+    std::fs::write(
+        &nested,
+        concat!(
+            r#"{"type":"session","version":3,"id":"scout-1","timestamp":"2026-08-31T10:01:00.000Z","cwd":"/workspace/app"}"#,
+            "\n",
+            r#"{"type":"message","id":"a1","timestamp":"2026-08-31T10:01:01.000Z","message":{"role":"assistant","provider":"xai-oauth","model":"grok-4.6","usage":{"input":7,"output":3,"cacheRead":0,"cacheWrite":0,"reasoning":0,"totalTokens":10,"cost":{"total":0.003}}}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let records = omp::parse(&nested, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].session_id,
+        "01a00000-1111-7000-8000-aaaaaaaaaaaa"
+    );
+    assert_eq!(records[0].input_tokens, 7);
+    assert_eq!(records[0].native_cost, Some(0.003));
+}
+
+#[test]
 fn opencode_adapter_skips_user_and_keeps_native_cost() {
     let raw = fixture("opencode-messages.json");
     let values: Vec<serde_json::Value> = serde_json::from_str(&raw).unwrap();
@@ -456,6 +516,7 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Opencode.application_name(), "OpenCode");
     assert_eq!(Source::Dsh.application_name(), "DeepSeek Harness");
     assert_eq!(Source::CursorAgent.application_name(), "Cursor Agent");
+    assert_eq!(Source::Omp.application_name(), "OMP");
     assert_eq!(Source::Copilot.application_name(), "GitHub Copilot CLI");
 }
 

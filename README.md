@@ -25,6 +25,7 @@
 | Claude Code | ✅ | ✅ | 自带 `costUSD` |
 | Codex | ✅ | ❌ | |
 | pi | ✅ | ✅ | |
+| OMP | ✅ | ✅ | 自带 `cost.total`；子代理计入父会话 |
 | opencode | ✅ | ✅ | |
 | grok | ✅ | ✅ | |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh 需解压；copilot 仅会话结束时累计 |

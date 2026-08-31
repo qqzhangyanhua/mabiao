@@ -13,6 +13,7 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   droid: "factory",
   antigravity: "gemini",
   pi: "pi",
+  omp: "pi",
   dsh: "dsh",
   cursor: "cursor",
   cursor_agent: "cursor",

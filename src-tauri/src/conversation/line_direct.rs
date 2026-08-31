@@ -15,7 +15,10 @@ use crate::domain::{
 };
 
 pub(super) fn source_maps_line_to_events(source: Source) -> bool {
-    matches!(source, Source::Codex | Source::Claude | Source::Pi)
+    matches!(
+        source,
+        Source::Codex | Source::Claude | Source::Pi | Source::Omp
+    )
 }
 
 pub fn rebuild_events_from_line(
@@ -27,7 +30,7 @@ pub fn rebuild_events_from_line(
 ) -> Result<Vec<ConversationEvent>, String> {
     match source {
         Source::Codex => rebuild_codex(path, session_id, source_sequence, include_deferred_content),
-        Source::Claude | Source::Pi => rebuild_jsonl_values(
+        Source::Claude | Source::Pi | Source::Omp => rebuild_jsonl_values(
             source,
             path,
             session_id,
@@ -174,6 +177,9 @@ fn rebuild_jsonl_values(
         )?,
         Source::Pi => {
             super::pi::parse_from_values(path, values, include_deferred_content, Some(session_id))?
+        }
+        Source::Omp => {
+            super::omp::parse_from_values(path, values, include_deferred_content, Some(session_id))?
         }
         _ => return Err("该来源的事件映射不是按行无上下文的".to_string()),
     };
