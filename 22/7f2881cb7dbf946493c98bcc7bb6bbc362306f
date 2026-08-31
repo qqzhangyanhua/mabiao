@@ -1,0 +1,25 @@
+src-tauri/src/cost.rs
+  s_d83e954537395a::t_21056e2a8385be 1,187,197-235
+  s_d83e954537395a::t_afb3339aa54a83 236
+src-tauri/src/aggregate.rs
+  s_d83e954537395a::t_0bd36668eddfc3 6-8,84
+  s_d83e954537395a::t_cebdbcf66a0abb 1,13,97
+src-tauri/src/query.rs
+  s_d83e954537395a::t_d3b2afeb9b2ac2 6,12,19,408,413,416-418,431-433,446-449,471
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "227f2881cb7dbf946493c98bcc7bb6bbc362306f",
+  "prompts": {},
+  "sessions": {
+    "s_d83e954537395a": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a057d3-843b-7712-a147-d888b0b8f146",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
