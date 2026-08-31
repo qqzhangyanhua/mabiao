@@ -1,0 +1,23 @@
+src/lib/conversationEventDisplay.test.ts
+  s_dca124a581c87d::t_716edce34643cc 1-27,29-42,45-69
+  s_dca124a581c87d::t_e009fa1c2fcfaf 28
+  s_dca124a581c87d::t_e0123ed7c4d808 43-44
+src/styles.css
+  s_dca124a581c87d::t_716edce34643cc 5004-5032
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "9cdafbc980531631636f90220b2d48460d322597",
+  "prompts": {},
+  "sessions": {
+    "s_dca124a581c87d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "508b31b2-a173-4d09-bf32-775b920a5ddc",
+        "model": "grok-4.5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
