@@ -1,0 +1,86 @@
+src-tauri/src/conversation/opencode.rs
+  s_659c87236932ed::t_5d0653b3e3ad87 2,4,7,10-11
+  s_659c87236932ed::t_38ffae012df1bb 9
+src-tauri/src/conversation/copilot.rs
+  s_659c87236932ed::t_38ffae012df1bb 5
+  s_659c87236932ed::t_5e31f0a9f9e944 6-9
+src-tauri/src/conversation/dsh.rs
+  s_659c87236932ed::t_5b45e406e8810e 7
+  s_659c87236932ed::t_8540769159c0fd 1
+  s_659c87236932ed::t_38ffae012df1bb 6
+src-tauri/src/conversation/kimi.rs
+  s_659c87236932ed::t_da6e6cef7b6f1b 2
+  s_659c87236932ed::t_38ffae012df1bb 7
+  s_659c87236932ed::t_24c7e22bf8f0ff 8-12
+src-tauri/src/conversation/cursor.rs
+  s_659c87236932ed::t_0a4edd61ddadae 9
+  s_659c87236932ed::t_38ffae012df1bb 8
+src-tauri/src/conversation/qwen.rs
+  s_659c87236932ed::t_38ffae012df1bb 8
+  s_659c87236932ed::t_ce20d3cec75adf 2-3,9
+src-tauri/src/conversation/event_index.rs
+  s_659c87236932ed::t_38ffae012df1bb 241
+src-tauri/src/conversation/line_direct.rs
+  s_659c87236932ed::t_38ffae012df1bb 6
+  s_659c87236932ed::t_a6eedde6f1c437 8-10
+src-tauri/src/conversation.rs
+  s_659c87236932ed::t_5b45e406e8810e 43
+  s_659c87236932ed::t_155a6a734588d0 41,44-50
+  s_659c87236932ed::t_891e46ed365a98 40
+  s_659c87236932ed::t_c0995872dddd97 14-19
+  s_659c87236932ed::t_38ffae012df1bb 42,51
+CONTEXT.md
+  s_0d6c080a60fc81::t_43447e3b537d8a 16-17,39-41
+  s_0d6c080a60fc81::t_04c5045d2ddee4 42
+src-tauri/src/conversation/toolbox.rs
+  s_659c87236932ed::t_34ff19beb480e6 22-30,285-814
+  s_659c87236932ed::t_cd56a069845e8a 223
+  s_659c87236932ed::t_891e46ed365a98 860
+  s_659c87236932ed::t_25ae22e938eb20 19-21
+  s_659c87236932ed::t_20bc4b5d65d2b9 31-33,220-222
+  s_659c87236932ed::t_ee8c5eb9133011 224-226,282-284
+  s_659c87236932ed::t_1ce75e4277ea39 815-817,857-859
+  s_659c87236932ed::t_165dcadd1db9e7 861-863
+src-tauri/src/conversation/pi.rs
+  s_659c87236932ed::t_38ffae012df1bb 5
+  s_659c87236932ed::t_f1987bf4879d2e 1-4
+src-tauri/src/conversation/incremental.rs
+  s_659c87236932ed::t_38ffae012df1bb 56
+src-tauri/src/conversation/gemini.rs
+  s_659c87236932ed::t_38ffae012df1bb 7
+  s_659c87236932ed::t_6b4c5949893c02 1-6
+src-tauri/src/conversation/grok.rs
+  s_659c87236932ed::t_e207692337d2db 2
+  s_659c87236932ed::t_95c71feff0241b 8-11,13
+  s_659c87236932ed::t_38ffae012df1bb 7
+src-tauri/src/conversation/claude.rs
+  s_659c87236932ed::t_38ffae012df1bb 5
+  s_659c87236932ed::t_538661bf0ec988 1-4
+src-tauri/src/conversation/droid.rs
+  s_659c87236932ed::t_38ffae012df1bb 5
+  s_659c87236932ed::t_5b45e406e8810e 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "a3813b5305f87b19512ff62c9c8ebb60b304b0fa",
+  "prompts": {},
+  "sessions": {
+    "s_0d6c080a60fc81": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a056c6-edbc-7381-9893-0cefb0ffed04",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_659c87236932ed": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a056fc-e5ef-7d63-b89e-c33cd310c212",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
