@@ -22,6 +22,7 @@ export type SourceIconId =
   | "opencode"
   | "factory"
   | "pi"
+  | "omp"
   | "dsh"
   | "cursor"
   | "unknown";

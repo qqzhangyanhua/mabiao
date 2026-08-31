@@ -51,6 +51,8 @@
   --tone-codex-fg: #c4b5fd;
   --tone-pi-bg: rgba(34, 211, 238, 0.16);
   --tone-pi-fg: #67e8f9;
+  --tone-omp-bg: rgba(237, 74, 191, 0.18);
+  --tone-omp-fg: #f0abfc;
   --tone-open-bg: rgba(59, 130, 246, 0.18);
   --tone-open-fg: #93c5fd;
   --tone-kimi-bg: rgba(52, 211, 153, 0.16);
@@ -123,6 +125,8 @@
   --tone-codex-fg: #6d28d9;
   --tone-pi-bg: rgba(34, 211, 238, 0.14);
   --tone-pi-fg: #0e7490;
+  --tone-omp-bg: rgba(155, 77, 255, 0.14);
+  --tone-omp-fg: #7e22ce;
   --tone-open-bg: rgba(59, 130, 246, 0.14);
   --tone-open-fg: #1d4ed8;
   --tone-kimi-bg: rgba(52, 211, 153, 0.14);
@@ -2590,6 +2594,10 @@ tr.session-detail-row td {
 .tone-pi {
   background: var(--tone-pi-bg);
   color: var(--tone-pi-fg);
+}
+.tone-omp {
+  background: var(--tone-omp-bg);
+  color: var(--tone-omp-fg);
 }
 .tone-open {
   background: var(--tone-open-bg);

@@ -31,6 +31,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("grok")).toBe("grok");
     expect(resolveSourceIconId("copilot")).toBe("copilot");
     expect(resolveSourceIconId("opencode")).toBe("opencode");
+    expect(resolveSourceIconId("omp")).toBe("omp");
     expect(resolveSourceIconId("factory")).toBe("factory");
   });
 

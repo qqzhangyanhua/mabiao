@@ -80,6 +80,11 @@ const marks: Record<SourceIconId, SourceMark> = {
       </>
     ),
   },
+  omp: {
+    // https://omp.sh/favicon.svg glyph, cropped to fill the 12px slot.
+    viewBox: "14 16 36 40",
+    body: <path d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />,
+  },
   dsh: {
     viewBox: "0 0 24 24",
     body: (

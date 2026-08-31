@@ -239,6 +239,7 @@ export const sourceTone: Record<string, string> = {
   claude: "tone-claude",
   codex: "tone-codex",
   pi: "tone-pi",
+  omp: "tone-omp",
   opencode: "tone-open",
   kimi: "tone-kimi",
   grok: "tone-grok",
