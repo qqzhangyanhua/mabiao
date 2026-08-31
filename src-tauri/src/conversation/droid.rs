@@ -2,7 +2,8 @@ use std::path::Path;
 
 use serde_json::{json, Value};
 
-use super::*;
+use super::toolbox::*;
+use super::{diagnostic_detail, diagnostic_index, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::project::project_from_source_file;
 
 #[cfg(test)]

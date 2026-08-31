@@ -13,8 +13,8 @@ _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记�
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
-把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源 = 往适配器表加一行 + 写一个 Adapter，统计与界面逻辑不受影响。
-_Avoid_: parser、解析器、插件
+把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源 = 往适配器表加一行 + 写一个 Adapter，统计与界面逻辑不受影响。对话记录不走这张表，见「对话记录适配器」。
+_Avoid_: parser、解析器、插件；不要用它指对话正文/事件的解析模块
 
 **Token 口径 (Token Dimension)**：
 token 的分类计量：输入 (input)、输出 (output)、缓存读 (cache read)、缓存写/创建 (cache creation)、推理 (reasoning)、总量 (total)。不同工具暴露的口径不完全一致。
@@ -35,6 +35,10 @@ _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor
 **对话记录 (Conversation Record)**：
 本机会话目录：索引元数据，详情按需读取原文件正文与语义事件。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
 _Avoid_: 消耗记录、Cursor 会话仪表盘、把正文写进缓存
+
+**对话记录适配器 (Conversation Adapter)**：
+把某个 Source 的原始会话文件解析成对话记录（目录行与语义事件）的模块。与把同一来源变成消耗记录的适配器是两回事：各一张表，互不替代。
+_Avoid_: parser、解析器、插件；不要省略「对话记录」只叫适配器（那条特指消耗记录）
 
 **官方额度 (Official Quota)**：
 账号级订阅限额（已用百分比与重置时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 读 globalStorage `state.vscdb`，Grok 读 `~/.grok/auth.json`，Antigravity 先读 macOS 钥匙串再回落客户端本机状态。本机既没凭证、也没历史缓存的账号不占一行。

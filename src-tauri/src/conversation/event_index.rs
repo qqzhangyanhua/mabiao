@@ -238,7 +238,7 @@ pub fn finalize_session_events(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
     ordered.sort_by(|left, right| {
-        super::compare_optional_timestamps(&left.1, &right.1)
+        super::toolbox::compare_optional_timestamps(&left.1, &right.1)
             .then_with(|| left.2.cmp(&right.2))
             .then_with(|| left.3.cmp(&right.3))
             .then_with(|| left.4.cmp(&right.4))

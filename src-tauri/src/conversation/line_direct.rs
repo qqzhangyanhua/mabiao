@@ -3,10 +3,11 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
+use super::toolbox::{attachment_candidates, AttachmentCandidate};
 use super::{
-    attachment_candidates, ensure_attachment_path_allowed, ensure_matching_session, event_index,
-    event_index_ready, load_trusted_session_files, parse_codex_content, parse_conversation_files,
-    prepare_detail, read_source_line, read_source_payload, AttachmentCandidate, AttachmentKind,
+    ensure_attachment_path_allowed, ensure_matching_session, event_index, event_index_ready,
+    load_trusted_session_files, parse_codex_content, parse_conversation_files, prepare_detail,
+    read_source_line, read_source_payload, AttachmentKind,
 };
 use crate::domain::{
     ConversationEvent, ConversationEventContentDto,

@@ -2,7 +2,11 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::*;
+use super::toolbox::*;
+use super::{
+    diagnostic_detail, diagnostic_index, discover_jsonl, ConversationIndexBatch,
+    ConversationIndexIssue,
+};
 
 #[cfg(test)]
 #[path = "copilot_test.rs"]

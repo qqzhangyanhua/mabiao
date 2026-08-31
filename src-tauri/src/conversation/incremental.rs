@@ -53,5 +53,5 @@ pub(crate) fn new_events_precede_existing(
     new_occurred_at
         .into_iter()
         .flatten()
-        .any(|occurred_at| super::compare_timestamps(&occurred_at, existing_max).is_lt())
+        .any(|occurred_at| super::toolbox::compare_timestamps(&occurred_at, existing_max).is_lt())
 }
