@@ -1,14 +1,16 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Datelike, Utc};
 
 use crate::billing_window;
-use crate::cost::{attach_snapshot_candidates, derive_cost, sum_costs, sum_cursor_event_costs};
+use crate::cost::{
+    derive_cost, finish_unpriced_groups, sum_costs, sum_cursor_event_costs, UnpricedGroupAcc,
+};
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewDto,
     PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto,
-    UnpricedReason, UsageRecord, WorkTimelineDto,
+    UsageRecord, WorkTimelineDto,
 };
 
 pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
@@ -79,13 +81,7 @@ pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -
 
 /// 全库未定价诊断。不接筛选，语义与 `query::unpriced_diagnosis` 对齐。
 pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<UnpricedGroupDto> {
-    #[derive(Default)]
-    struct Acc {
-        sources: BTreeSet<String>,
-        total_tokens: i64,
-        record_count: i64,
-    }
-    let mut groups: BTreeMap<(String, String), Acc> = BTreeMap::new();
+    let mut groups: BTreeMap<(String, String), UnpricedGroupAcc> = BTreeMap::new();
     for record in records {
         let derived = derive_cost(record, prices);
         if !derived.unpriced {
@@ -98,30 +94,7 @@ pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<U
         acc.total_tokens += record.total_tokens;
         acc.record_count += 1;
     }
-    let mut rows: Vec<UnpricedGroupDto> = groups
-        .into_iter()
-        .map(|((model, provider), acc)| UnpricedGroupDto {
-            reason: if model.is_empty() {
-                UnpricedReason::StructurallyUnbillable
-            } else {
-                UnpricedReason::Pricable
-            },
-            model,
-            provider,
-            sources: acc.sources.into_iter().collect(),
-            total_tokens: acc.total_tokens,
-            record_count: acc.record_count,
-            candidate: None,
-        })
-        .collect();
-    rows.sort_by(|a, b| {
-        b.total_tokens
-            .cmp(&a.total_tokens)
-            .then_with(|| a.model.cmp(&b.model))
-            .then_with(|| a.provider.cmp(&b.provider))
-    });
-    attach_snapshot_candidates(&mut rows, prices);
-    rows
+    finish_unpriced_groups(groups, prices)
 }
 
 pub fn billing_windows(
