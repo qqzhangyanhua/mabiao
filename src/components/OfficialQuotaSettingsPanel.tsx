@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import {
+  officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
@@ -94,23 +95,13 @@ export function OfficialQuotaSettingsPanel({
       {quota ? (
         <ul className="official-quota-status">
           {quota.rows.map((row) => (
-            <li
-              key={row.provider}
-              className={
-                row.freshness === "official"
-                  ? "tone-ok"
-                  : row.freshness === "stale"
-                    ? "tone-warn"
-                    : "tone-idle"
-              }
-            >
+            <li key={row.provider} className={`tone-${officialQuotaRowTone(row)}`}>
               <strong>
                 <SourceLabel source={row.provider} fallback={row.application} size={14} />
               </strong>
               {row.plan ? <OfficialQuotaPlanMark plan={row.plan} /> : null}
               <QuotaFreshnessMark
-                freshness={row.freshness}
-                capturedAt={row.captured_at}
+                row={row}
                 staleAfterMinutes={quota.stale_after_minutes}
                 nowMs={nowMs}
               />

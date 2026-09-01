@@ -11,7 +11,9 @@ import {
   officialQuotaPlanClass,
   officialQuotaPlanKind,
   officialQuotaRefreshHint,
+  officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
+  officialQuotaStatusLabel,
   officialQuotaUndetectedNote,
 } from "./officialQuotaDisplay";
 
@@ -31,9 +33,9 @@ describe("officialQuotaAgeLabel", () => {
 
 describe("officialQuotaFreshnessTitle", () => {
   it("explains official as a fresh snapshot, not a quota reset", () => {
-    expect(
-      officialQuotaFreshnessTitle("official", "2026-08-23T07:17:00.000Z", 10),
-    ).toContain("10 分钟内视为新鲜");
+    expect(officialQuotaFreshnessTitle("official", "2026-08-23T07:17:00.000Z", 10)).toContain(
+      "10 分钟内视为新鲜",
+    );
   });
 
   it("explains stale as a cache timeout", () => {
@@ -44,6 +46,18 @@ describe("officialQuotaFreshnessTitle", () => {
 
   it("keeps unavailable without a capture clock", () => {
     expect(officialQuotaFreshnessTitle("unavailable", null, 10)).toBe("尚未取到官方额度");
+  });
+
+  it("explains a failed fetch with cached numbers as last success", () => {
+    expect(
+      officialQuotaFreshnessTitle("official", "2026-08-23T07:17:00.000Z", 10, "HTTP 500", true),
+    ).toContain("上次取数失败");
+  });
+
+  it("explains a failed fetch without cache as a hard miss", () => {
+    expect(officialQuotaFreshnessTitle("unavailable", null, 10, "HTTP 500", false)).toBe(
+      "取数失败，暂无可用缓存",
+    );
   });
 });
 
@@ -101,6 +115,48 @@ describe("OFFICIAL_QUOTA_FRESHNESS_STATUS", () => {
       stale: "已过期",
       unavailable: "暂无",
     });
+  });
+});
+
+describe("officialQuotaStatusLabel", () => {
+  it("keeps freshness labels when the last fetch succeeded", () => {
+    expect(officialQuotaStatusLabel({ freshness: "official", error: null, windows: [] })).toBe(
+      "官方",
+    );
+    expect(officialQuotaStatusLabel({ freshness: "stale", error: null, windows: [] })).toBe(
+      "已过期",
+    );
+    expect(officialQuotaStatusLabel({ freshness: "unavailable", error: null, windows: [] })).toBe(
+      "暂无",
+    );
+  });
+
+  it("relabels a failed fetch with cached numbers as last success", () => {
+    expect(
+      officialQuotaStatusLabel({
+        freshness: "official",
+        error: "HTTP 500",
+        windows: { length: 1 },
+      }),
+    ).toBe("上次成功");
+  });
+
+  it("relabels a failed fetch without cache as failure", () => {
+    expect(
+      officialQuotaStatusLabel({ freshness: "official", error: "HTTP 500", windows: [] }),
+    ).toBe("失败");
+  });
+});
+
+describe("officialQuotaRowTone", () => {
+  it("does not keep the official green when the latest fetch failed", () => {
+    expect(officialQuotaRowTone({ freshness: "official", error: "HTTP 500" })).toBe("warn");
+  });
+
+  it("keeps green only for a fresh snapshot without error", () => {
+    expect(officialQuotaRowTone({ freshness: "official", error: null })).toBe("ok");
+    expect(officialQuotaRowTone({ freshness: "stale", error: null })).toBe("warn");
+    expect(officialQuotaRowTone({ freshness: "unavailable", error: null })).toBe("idle");
   });
 });
 

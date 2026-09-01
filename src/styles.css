@@ -3895,6 +3895,19 @@ td.row-actions {
   color: #f59e0b;
 }
 
+.official-quota-row.has-error .official-quota-window strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.official-quota-row.has-error .billing-bar {
+  opacity: 0.45;
+}
+
+.official-quota-row.has-error .official-quota-amount {
+  color: var(--text-faint-2);
+}
+
 .official-quota-windows {
   display: grid;
   gap: 6px;

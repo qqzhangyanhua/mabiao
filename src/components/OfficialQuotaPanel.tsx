@@ -4,7 +4,6 @@ import { useTrayQuotaArrange } from "../hooks/useTrayQuotaArrange";
 import { Icon } from "../icons";
 import { formatClock, formatWindowClock } from "../lib/format";
 import {
-  OFFICIAL_QUOTA_FRESHNESS_STATUS,
   officialQuotaAgeLabel,
   officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
@@ -12,15 +11,12 @@ import {
   officialQuotaNotice,
   officialQuotaPlanClass,
   officialQuotaRefreshHint,
+  officialQuotaRowTone,
+  officialQuotaStatusLabel,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
-import type {
-  OfficialQuotaDto,
-  OfficialQuotaFreshness,
-  OfficialQuotaRow,
-  OfficialQuotaWindow,
-} from "../types";
+import type { OfficialQuotaDto, OfficialQuotaRow, OfficialQuotaWindow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 import type { OfficialQuotaListProps } from "./type";
@@ -140,23 +136,27 @@ export function OfficialQuotaList({
 }
 
 export function QuotaFreshnessMark({
-  freshness,
-  capturedAt,
+  row,
   staleAfterMinutes,
   nowMs,
 }: {
-  freshness: OfficialQuotaFreshness;
-  capturedAt: string | null;
+  row: Pick<OfficialQuotaRow, "freshness" | "captured_at" | "error" | "windows">;
   staleAfterMinutes: number;
   nowMs: number;
 }) {
-  const age = officialQuotaAgeLabel(capturedAt, nowMs);
+  const age = officialQuotaAgeLabel(row.captured_at, nowMs);
   return (
     <em
       className="official-quota-freshness"
-      title={officialQuotaFreshnessTitle(freshness, capturedAt, staleAfterMinutes)}
+      title={officialQuotaFreshnessTitle(
+        row.freshness,
+        row.captured_at,
+        staleAfterMinutes,
+        row.error,
+        row.windows.length > 0,
+      )}
     >
-      <span>{OFFICIAL_QUOTA_FRESHNESS_STATUS[freshness]}</span>
+      <span>{officialQuotaStatusLabel(row)}</span>
       {age ? <span className="official-quota-age">{age}</span> : null}
     </em>
   );
@@ -191,10 +191,11 @@ function QuotaRow({
   onToggle: () => void;
   onPointerDown: (event: PointerEvent<HTMLElement>) => void;
 }) {
-  const tone = row.freshness === "official" ? "ok" : row.freshness === "stale" ? "warn" : "idle";
+  const tone = officialQuotaRowTone(row);
   const rowClass = [
     "official-quota-row",
     `tone-${tone}`,
+    row.error ? "has-error" : "",
     open ? "is-open" : "is-collapsed",
     dragging ? "is-dragging" : "",
     dropTarget ? "is-drop-target" : "",
@@ -238,12 +239,7 @@ function QuotaRow({
           >
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
             {open ? (
-              <QuotaFreshnessMark
-                freshness={row.freshness}
-                capturedAt={row.captured_at}
-                staleAfterMinutes={staleAfterMinutes}
-                nowMs={nowMs}
-              />
+              <QuotaFreshnessMark row={row} staleAfterMinutes={staleAfterMinutes} nowMs={nowMs} />
             ) : (
               <em className="official-quota-summary">{trayQuotaRowSummary(row)}</em>
             )}
@@ -252,12 +248,7 @@ function QuotaRow({
         ) : (
           <div className="official-quota-head">
             <QuotaRowTitle row={row} busy={busy} disabled={disabled} onRefresh={onRefresh} />
-            <QuotaFreshnessMark
-              freshness={row.freshness}
-              capturedAt={row.captured_at}
-              staleAfterMinutes={staleAfterMinutes}
-              nowMs={nowMs}
-            />
+            <QuotaFreshnessMark row={row} staleAfterMinutes={staleAfterMinutes} nowMs={nowMs} />
           </div>
         )}
       </div>

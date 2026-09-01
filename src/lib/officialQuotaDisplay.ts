@@ -1,6 +1,7 @@
 import type {
   OfficialQuotaDto,
   OfficialQuotaFreshness,
+  OfficialQuotaRow,
   OfficialQuotaWindow,
 } from "../types";
 import { formatClock, relativeTime } from "./format";
@@ -11,6 +12,34 @@ export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, str
   stale: "已过期",
   unavailable: "暂无",
 };
+
+export type OfficialQuotaRowTone = "ok" | "warn" | "idle";
+
+/** 徽章文案：取数失败时 freshness 仍可能是 official，不能再标「官方」。 */
+export function officialQuotaStatusLabel(
+  row: Pick<OfficialQuotaRow, "freshness" | "error"> & { windows: { length: number } },
+): string {
+  if (row.error) {
+    return row.windows.length > 0 ? "上次成功" : "失败";
+  }
+  return OFFICIAL_QUOTA_FRESHNESS_STATUS[row.freshness];
+}
+
+/** 行色：有 error 时 freshness=official 也不能走绿。 */
+export function officialQuotaRowTone(
+  row: Pick<OfficialQuotaRow, "freshness" | "error">,
+): OfficialQuotaRowTone {
+  if (row.error) {
+    return "warn";
+  }
+  if (row.freshness === "official") {
+    return "ok";
+  }
+  if (row.freshness === "stale") {
+    return "warn";
+  }
+  return "idle";
+}
 
 /** 认得出符号的币种直接写符号，其余用代码后缀，缺币种就只给数字。 */
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -59,10 +88,7 @@ export function officialQuotaAmountLabel(
   return null;
 }
 
-export function officialQuotaAgeLabel(
-  capturedAt: string | null,
-  now = Date.now(),
-): string | null {
+export function officialQuotaAgeLabel(capturedAt: string | null, now = Date.now()): string | null {
   if (!capturedAt) {
     return null;
   }
@@ -76,8 +102,16 @@ export function officialQuotaFreshnessTitle(
   freshness: OfficialQuotaFreshness,
   capturedAt: string | null,
   staleAfterMinutes: number,
+  error: string | null = null,
+  hasWindows = false,
 ): string {
   const clock = capturedAt ? formatClock(capturedAt) : null;
+  if (error) {
+    if (hasWindows) {
+      return clock ? `上次取数失败，显示 ${clock} 的缓存` : "上次取数失败，显示缓存数字";
+    }
+    return "取数失败，暂无可用缓存";
+  }
   if (freshness === "unavailable") {
     return "尚未取到官方额度";
   }
