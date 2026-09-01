@@ -93,4 +93,9 @@ fn adapter_groups_qwen_sessions_and_uses_stable_message_identity() {
 
     std::fs::write(&path, "{}").unwrap();
     assert!(index(&path).is_err());
+
+    std::fs::write(&path, "[]").unwrap();
+    let empty = index(&path).unwrap();
+    assert!(empty.conversations.is_empty());
+    assert!(empty.diagnostics.is_empty());
 }

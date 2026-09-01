@@ -131,6 +131,23 @@ pub fn is_subagent_transcript(path: &Path) -> bool {
         .any(|component| component.as_os_str() == "subagents")
 }
 
+/// 同一 `session_id` 出现在多条 transcript 时，选更像正式会话的那条。
+/// 子代理路径和 Cursor 的 `empty-window` 副本都不应盖过真实项目里的父 jsonl。
+pub fn prefer_new_cursor_session_path(existing: &str, new: &str) -> bool {
+    cursor_session_path_rank(new) >= cursor_session_path_rank(existing)
+}
+
+fn cursor_session_path_rank(path: &str) -> u8 {
+    let normalized = path.replace('\\', "/");
+    if normalized.split('/').any(|part| part == "subagents") {
+        return 0;
+    }
+    if normalized.split('/').any(|part| part == "empty-window") {
+        return 1;
+    }
+    2
+}
+
 pub fn session_dir_from_transcript(path: &Path) -> Option<PathBuf> {
     let mut dir = path.parent()?.to_path_buf();
     if dir.file_name()?.to_str() == Some("subagents") {

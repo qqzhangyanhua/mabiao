@@ -1202,3 +1202,140 @@ fn summarize_empty_sessions_single_prompt_ratio_is_none() {
         None
     );
 }
+
+fn open_legacy_cursor_session_db() -> rusqlite::Connection {
+    let conn = store::open_memory().unwrap();
+    conn.execute_batch(
+        r#"
+        DROP TABLE cursor_sessions;
+        CREATE TABLE cursor_sessions (
+            session_id TEXT PRIMARY KEY,
+            project TEXT NOT NULL,
+            turn_count INTEGER NOT NULL,
+            success_count INTEGER NOT NULL,
+            error_count INTEGER NOT NULL,
+            aborted_count INTEGER NOT NULL,
+            tool_calls_json TEXT NOT NULL,
+            models_json TEXT NOT NULL DEFAULT '[]',
+            first_seen_at TEXT,
+            last_seen_at TEXT,
+            files_touched INTEGER NOT NULL DEFAULT 0,
+            source_file TEXT NOT NULL UNIQUE,
+            user_prompt_count INTEGER NOT NULL DEFAULT 0,
+            subagent_count INTEGER NOT NULL DEFAULT 0,
+            sources_json TEXT NOT NULL DEFAULT '[]',
+            extensions_json TEXT NOT NULL DEFAULT '{}'
+        );
+        "#,
+    )
+    .unwrap();
+    conn
+}
+
+#[test]
+fn cursor_session_path_rank_prefers_real_parent_over_copies() {
+    assert!(
+        crate::adapters::cursor_session::prefer_new_cursor_session_path(
+            "/.cursor/projects/empty-window/agent-transcripts/s/s.jsonl",
+            "/.cursor/projects/Users-proj/agent-transcripts/s/s.jsonl",
+        )
+    );
+    assert!(
+        !crate::adapters::cursor_session::prefer_new_cursor_session_path(
+            "/.cursor/projects/Users-proj/agent-transcripts/s/s.jsonl",
+            "/.cursor/projects/empty-window/agent-transcripts/s/s.jsonl",
+        )
+    );
+    assert!(
+        crate::adapters::cursor_session::prefer_new_cursor_session_path(
+            "/.cursor/projects/Users-proj/agent-transcripts/p/subagents/s.jsonl",
+            "/.cursor/projects/Users-proj/agent-transcripts/s/s.jsonl",
+        )
+    );
+}
+
+#[test]
+fn cursor_session_duplicate_id_on_legacy_pk_does_not_fail_ingest() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    seed_cursor_transcript(
+        home,
+        "empty-window",
+        "sess-dup",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+    seed_cursor_transcript(
+        home,
+        "Users-real-project",
+        "sess-dup",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+
+    let conn = open_legacy_cursor_session_db();
+    let mut report = crate::domain::IngestReport::default();
+    crate::cursor_session::ingest(&conn, home, &mut report);
+    assert_eq!(report.files_failed, 0, "issues={:?}", report.issues);
+    let sessions = store::load_cursor_sessions(&conn).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].session_id, "sess-dup");
+    assert!(
+        sessions[0].source_file.contains("Users-real-project"),
+        "kept {}",
+        sessions[0].source_file
+    );
+}
+
+#[test]
+fn cursor_session_promoted_parent_replaces_legacy_subagent_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let sub_path = home
+        .join(".cursor/projects/Users-proj/agent-transcripts/parent-sess/subagents/sess-sub.jsonl");
+    std::fs::create_dir_all(sub_path.parent().unwrap()).unwrap();
+    std::fs::write(&sub_path, fixture("cursor-session-transcript.jsonl")).unwrap();
+
+    let conn = open_legacy_cursor_session_db();
+    store::upsert_cursor_session(
+        &conn,
+        &crate::domain::CursorSessionRecord {
+            session_id: "sess-sub".to_string(),
+            project: "/Users/proj".to_string(),
+            turn_count: 1,
+            success_count: 1,
+            error_count: 0,
+            aborted_count: 0,
+            user_prompt_count: 1,
+            subagent_count: 0,
+            tool_calls_json: "{}".to_string(),
+            models_json: "[]".to_string(),
+            sources_json: "[]".to_string(),
+            extensions_json: "{}".to_string(),
+            first_seen_at: None,
+            last_seen_at: None,
+            files_touched: 0,
+            source_file: sub_path.to_string_lossy().to_string(),
+        },
+    )
+    .unwrap();
+
+    seed_cursor_transcript(
+        home,
+        "Users-proj",
+        "sess-sub",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+    let mut report = crate::domain::IngestReport::default();
+    crate::cursor_session::ingest(&conn, home, &mut report);
+    assert_eq!(report.files_failed, 0, "issues={:?}", report.issues);
+    let sessions = store::load_cursor_sessions(&conn).unwrap();
+    let row = sessions
+        .iter()
+        .find(|session| session.session_id == "sess-sub")
+        .unwrap();
+    assert!(
+        row.source_file.ends_with("sess-sub/sess-sub.jsonl"),
+        "kept {}",
+        row.source_file
+    );
+    assert!(!row.source_file.contains("subagents"));
+}

@@ -168,23 +168,31 @@ fn group_unchanged(
         }
     }
 
-    if let Some(parent) = parent {
-        match store::cursor_session_has_source_file(conn, &parent.to_string_lossy()) {
-            Ok(true) => {
-                report.files_skipped += metas.len() as u64;
-                true
-            }
-            Ok(false) => false,
-            Err(error) => {
-                record_issue(report, &parent.to_string_lossy(), &error);
-                *any_failed = true;
-                true
-            }
-        }
-    } else {
+    let Some(parent) = parent else {
         report.files_skipped += metas.len() as u64;
-        true
+        return true;
+    };
+    match session_row_covers_parent(conn, parent) {
+        Ok(true) => {
+            report.files_skipped += metas.len() as u64;
+            true
+        }
+        Ok(false) => false,
+        Err(error) => {
+            record_issue(report, &parent.to_string_lossy(), &error);
+            *any_failed = true;
+            true
+        }
     }
+}
+
+fn session_row_covers_parent(conn: &Connection, parent: &Path) -> Result<bool, String> {
+    let parent_key = parent.to_string_lossy();
+    if store::cursor_session_has_source_file(conn, &parent_key)? {
+        return Ok(true);
+    }
+    let session_id = crate::adapters::project::session_id_from_source_file(&parent_key);
+    store::cursor_session_has_id(conn, &session_id)
 }
 
 fn ingest_group(
@@ -247,6 +255,24 @@ fn ingest_group(
     true
 }
 
+fn persist_cursor_session_row(
+    conn: &Connection,
+    record: &crate::domain::CursorSessionRecord,
+) -> Result<(), String> {
+    if let Some(existing) = store::cursor_session_source_file_for_id(conn, &record.session_id)? {
+        if existing != record.source_file {
+            if !crate::adapters::cursor_session::prefer_new_cursor_session_path(
+                &existing,
+                &record.source_file,
+            ) {
+                return Ok(());
+            }
+            store::delete_cursor_sessions_by_id(conn, &record.session_id)?;
+        }
+    }
+    store::upsert_cursor_session(conn, record)
+}
+
 fn persist_cursor_session_group(
     conn: &Connection,
     record: Option<&crate::domain::CursorSessionRecord>,
@@ -256,7 +282,7 @@ fn persist_cursor_session_group(
         .map_err(|error| error.to_string())?;
     let result = (|| {
         if let Some(record) = record {
-            store::upsert_cursor_session(conn, record)?;
+            persist_cursor_session_row(conn, record)?;
         }
         for (path, mtime_ms, size) in metas {
             store::upsert_cursor_session_file(conn, path, *mtime_ms, *size)?;

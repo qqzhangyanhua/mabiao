@@ -124,6 +124,9 @@ pub(super) fn parse_content(
         }
         let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
         let payload = value.get("payload").unwrap_or(&Value::Null);
+        if session_id.is_empty() && kind.is_empty() {
+            session_id = first_text(&value, &["id"]);
+        }
         match kind {
             "session_meta" => {
                 flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
