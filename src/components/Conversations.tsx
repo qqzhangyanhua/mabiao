@@ -301,6 +301,10 @@ export function Conversations({
         page_size: PAGE_SIZE,
         sources: filter.sources,
         projects: filter.projects,
+        models: filter.models,
+        providers: filter.providers,
+        from: filter.from,
+        to: filter.to,
       },
     })
       .then((result) => {

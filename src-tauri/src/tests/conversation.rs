@@ -1806,6 +1806,90 @@ fn conversation_catalog_filters_by_source_and_project() {
 }
 
 #[test]
+fn conversation_catalog_filters_by_model_provider_and_range() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_codex_conversation(home);
+    let conn = store::open_memory().unwrap();
+    store::insert_records(
+        &conn,
+        &[rec(
+            "2026-08-20T00:01:00Z",
+            Source::Codex,
+            "gpt-5.6-sol",
+            "openai",
+            "/workspace/example-project",
+            "conv-1",
+            10,
+        )],
+    )
+    .unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let by_model = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            models: vec!["gpt-5.6-sol".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_model.total, 1);
+
+    let miss_model = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            models: vec!["claude-sonnet-test".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(miss_model.total, 0);
+
+    let by_provider = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            providers: vec!["openai".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_provider.total, 1);
+
+    let miss_provider = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            providers: vec!["anthropic".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(miss_provider.total, 0);
+
+    let in_range = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            from: Some("2026-08-19T00:00:00Z".into()),
+            to: Some("2026-08-21T00:00:00Z".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(in_range.total, 1);
+
+    let out_of_range = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            from: Some("2026-08-21T00:00:00Z".into()),
+            to: Some("2026-08-22T00:00:00Z".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(out_of_range.total, 0);
+}
+
+#[test]
 fn codex_conversation_refresh_tombstones_deleted_files_and_revives_the_same_session() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

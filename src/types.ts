@@ -378,6 +378,10 @@ export type ConversationQuery = {
   page_size?: number;
   sources?: string[];
   projects?: string[];
+  models?: string[];
+  providers?: string[];
+  from?: string | null;
+  to?: string | null;
 };
 
 export type ConversationSessionRow = {

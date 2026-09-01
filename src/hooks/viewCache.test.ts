@@ -7,7 +7,7 @@ import {
   isViewFresh,
   parseViewHash,
   reconcileLoadedStamps,
-  syncSourceProjectFilters,
+  syncSharedFilters,
   viewStamp,
   views,
   viewsInvalidatedBy,
@@ -93,58 +93,102 @@ describe("filtersEqual", () => {
   });
 });
 
-describe("syncSourceProjectFilters", () => {
-  it("copies project to every view and usage sources to non-conversation views", () => {
+describe("syncSharedFilters", () => {
+  it("copies shared filters to every view and usage sources to non-conversation views", () => {
     const scopes = initialViewScopes();
     scopes.overview = {
-      filter: { ...filter, from: "2026-08-01", to: "2026-08-07", models: ["gpt-5"] },
+      filter: {
+        ...filter,
+        from: "2026-08-01",
+        to: "2026-08-07",
+        models: ["gpt-5"],
+        providers: ["openai"],
+      },
       preset: "7",
     };
     scopes.trend = {
-      filter: { ...filter, sources: ["old"], projects: ["/old"] },
+      filter: { ...filter, sources: ["old"], projects: ["/old"], models: ["old-model"] },
       preset: "all",
     };
 
-    const next = syncSourceProjectFilters(scopes, ["claude"], ["/workspace/app"], "overview");
+    const next = syncSharedFilters(
+      scopes,
+      {
+        ...filter,
+        from: "2026-08-01",
+        to: "2026-08-07",
+        models: ["gpt-5"],
+        providers: ["openai"],
+        sources: ["claude"],
+        projects: ["/workspace/app"],
+      },
+      "7",
+      "overview",
+    );
 
     expect(next.overview.filter).toEqual({
       ...filter,
       from: "2026-08-01",
       to: "2026-08-07",
       models: ["gpt-5"],
+      providers: ["openai"],
       sources: ["claude"],
       projects: ["/workspace/app"],
     });
     expect(next.overview.preset).toBe("7");
-    expect(next.trend.filter.sources).toEqual(["claude"]);
-    expect(next.trend.filter.projects).toEqual(["/workspace/app"]);
+    expect(next.trend.filter).toEqual({
+      ...filter,
+      from: "2026-08-01",
+      to: "2026-08-07",
+      models: ["gpt-5"],
+      providers: ["openai"],
+      sources: ["claude"],
+      projects: ["/workspace/app"],
+    });
+    expect(next.trend.preset).toBe("7");
     expect(next.conversations.filter.sources).toEqual([]);
     expect(next.conversations.filter.projects).toEqual(["/workspace/app"]);
+    expect(next.conversations.filter.models).toEqual(["gpt-5"]);
+    expect(next.conversations.filter.providers).toEqual(["openai"]);
+    expect(next.conversations.preset).toBe("7");
   });
 
   it("keeps usage sources unchanged when the conversation source filter changes", () => {
     const scopes = initialViewScopes();
     scopes.overview = {
-      filter: { ...filter, sources: ["codex"] },
+      filter: { ...filter, sources: ["codex"], models: ["old-model"] },
       preset: "all",
     };
 
-    const next = syncSourceProjectFilters(
+    const next = syncSharedFilters(
       scopes,
-      ["cursor_agent"],
-      ["/workspace/app"],
+      {
+        ...filter,
+        sources: ["cursor_agent"],
+        projects: ["/workspace/app"],
+        models: ["gpt-5"],
+        providers: ["openai"],
+      },
+      "7",
       "conversations",
     );
 
     expect(next.conversations.filter.sources).toEqual(["cursor_agent"]);
     expect(next.conversations.filter.projects).toEqual(["/workspace/app"]);
+    expect(next.conversations.filter.models).toEqual(["gpt-5"]);
+    expect(next.conversations.preset).toBe("7");
     expect(next.overview.filter.sources).toEqual(["codex"]);
     expect(next.overview.filter.projects).toEqual(["/workspace/app"]);
+    expect(next.overview.filter.models).toEqual(["gpt-5"]);
+    expect(next.overview.filter.providers).toEqual(["openai"]);
+    expect(next.overview.preset).toBe("7");
   });
 
-  it("returns the same object when source and project already match", () => {
+  it("returns the same object when shared filters already match", () => {
     const scopes = initialViewScopes();
-    expect(syncSourceProjectFilters(scopes, [], [], "overview")).toBe(scopes);
+    expect(
+      syncSharedFilters(scopes, scopes.overview.filter, scopes.overview.preset, "overview"),
+    ).toBe(scopes);
   });
 });
 

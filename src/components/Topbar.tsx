@@ -83,7 +83,6 @@ export function Topbar({
     view === "instructions" ||
     view === "settings";
   const showSharedDimensionFilters = !hideAllFilters;
-  const showUsageOnlyFilters = showSharedDimensionFilters && view !== "conversations";
   const sourceOptions =
     view === "conversations"
       ? conversationSourceOptions(options.sources)
@@ -105,9 +104,7 @@ export function Topbar({
   const customOpen = preset === "custom";
   const customFrom = draft.key === rangeKey ? draft.from : committedFrom;
   const customTo = draft.key === rangeKey ? draft.to : committedTo;
-  const chips = filterChips(filter).filter(
-    (chip) => showUsageOnlyFilters || chip.kind === "project" || chip.kind === "source",
-  );
+  const chips = filterChips(filter);
 
   function selectPreset(value: string) {
     if (value === "custom") {
@@ -135,21 +132,19 @@ export function Topbar({
         </div>
         {showSharedDimensionFilters ? (
           <div className="topbar-actions">
-            {showUsageOnlyFilters && onRangeBack ? (
+            {onRangeBack ? (
               <RangeBackButton disabled={disabled} onClick={onRangeBack} />
             ) : null}
-            {showUsageOnlyFilters ? (
-              <Select
-                icon="calendar"
-                ariaLabel="时间范围"
-                disabled={disabled}
-                value={customOpen ? "custom" : preset}
-                displayLabel={customOpen ? "自定义区间" : formatRangeLabel(filter, preset)}
-                options={RANGE_OPTIONS}
-                onChange={selectPreset}
-              />
-            ) : null}
-            {showUsageOnlyFilters && customOpen ? (
+            <Select
+              icon="calendar"
+              ariaLabel="时间范围"
+              disabled={disabled}
+              value={customOpen ? "custom" : preset}
+              displayLabel={customOpen ? "自定义区间" : formatRangeLabel(filter, preset)}
+              options={RANGE_OPTIONS}
+              onChange={selectPreset}
+            />
+            {customOpen ? (
               <div className="custom-range">
                 <DatePicker
                   ariaLabel="开始日期"
@@ -202,26 +197,22 @@ export function Topbar({
               disabled={disabled}
               onChange={(sources) => onChange({ ...filter, sources })}
             />
-            {showUsageOnlyFilters ? (
-              <MultiSelect
-                label="全部模型"
-                options={options.models}
-                selected={filter.models}
-                disabled={disabled}
-                renderIcon={(model) => <VendorIcon name={model} size={14} />}
-                onChange={(models) => onChange({ ...filter, models })}
-              />
-            ) : null}
-            {showUsageOnlyFilters ? (
-              <MultiSelect
-                label="全部接口"
-                options={options.providers}
-                selected={filter.providers}
-                disabled={disabled}
-                renderLabel={(name) => `${name}（${providerChannel(name)}）`}
-                onChange={(providers) => onChange({ ...filter, providers })}
-              />
-            ) : null}
+            <MultiSelect
+              label="全部模型"
+              options={options.models}
+              selected={filter.models}
+              disabled={disabled}
+              renderIcon={(model) => <VendorIcon name={model} size={14} />}
+              onChange={(models) => onChange({ ...filter, models })}
+            />
+            <MultiSelect
+              label="全部接口"
+              options={options.providers}
+              selected={filter.providers}
+              disabled={disabled}
+              renderLabel={(name) => `${name}（${providerChannel(name)}）`}
+              onChange={(providers) => onChange({ ...filter, providers })}
+            />
           </div>
         ) : null}
       </div>

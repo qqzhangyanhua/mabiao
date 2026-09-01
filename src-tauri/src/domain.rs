@@ -702,7 +702,7 @@ pub struct SessionPage {
 }
 
 /// 独立“对话记录”目录的分页参数。
-/// 来源 / 项目与用量筛选共用；时间、模型、provider 仍不参与。
+/// 与 Topbar 共用时间 / 模型 / provider / 项目；来源仍与用量筛选隔离。
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConversationQuery {
     #[serde(default)]
@@ -715,6 +715,14 @@ pub struct ConversationQuery {
     pub sources: Vec<String>,
     #[serde(default)]
     pub projects: Vec<String>,
+    #[serde(default)]
+    pub models: Vec<String>,
+    #[serde(default)]
+    pub providers: Vec<String>,
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

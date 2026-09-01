@@ -5,42 +5,35 @@ import {
   sameRange,
   type RangeSnapshot,
 } from "../../lib/rangeHistory";
-import type { View } from "../../types";
 
-export function useRangeHistory(view: View) {
-  const [histories, setHistories] = useState<Partial<Record<View, RangeSnapshot[]>>>({});
+export function useRangeHistory() {
+  const [history, setHistory] = useState<RangeSnapshot[]>([]);
 
-  const canGoBack = (histories[view] ?? []).length > 0;
+  const canGoBack = history.length > 0;
 
-  const pushCurrent = useCallback(
-    (current: RangeSnapshot, next: RangeSnapshot): boolean => {
-      if (sameRange(current, next)) {
-        return false;
-      }
-      setHistories((hist) => ({
-        ...hist,
-        [view]: pushRangeHistory(hist[view] ?? [], current, next),
-      }));
-      return true;
-    },
-    [view],
-  );
+  const pushCurrent = useCallback((current: RangeSnapshot, next: RangeSnapshot): boolean => {
+    if (sameRange(current, next)) {
+      return false;
+    }
+    setHistory((hist) => pushRangeHistory(hist, current, next));
+    return true;
+  }, []);
 
   const pop = useCallback((): RangeSnapshot | null => {
-    const popped = popRangeHistory(histories[view] ?? []);
+    const popped = popRangeHistory(history);
     if (!popped.previous) {
       return null;
     }
-    setHistories((hist) => {
-      const latest = popRangeHistory(hist[view] ?? []);
-      return latest.previous ? { ...hist, [view]: latest.history } : hist;
+    setHistory((hist) => {
+      const latest = popRangeHistory(hist);
+      return latest.previous ? latest.history : hist;
     });
     return popped.previous;
-  }, [histories, view]);
+  }, [history]);
 
   const clear = useCallback(() => {
-    setHistories((hist) => (hist[view]?.length ? { ...hist, [view]: [] } : hist));
-  }, [view]);
+    setHistory((hist) => (hist.length ? [] : hist));
+  }, []);
 
   return useMemo(
     () => ({ canGoBack, pushCurrent, pop, clear }),

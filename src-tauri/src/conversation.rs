@@ -1118,6 +1118,32 @@ fn sql_placeholders(count: usize) -> String {
         .join(", ")
 }
 
+fn catalog_session_start_sql() -> &'static str {
+    "COALESCE(NULLIF(sessions.started_at, ''), (SELECT cs.first_seen_at FROM cursor_sessions cs WHERE sessions.source = 'cursor_agent' AND cs.session_id = sessions.session_id LIMIT 1), '')"
+}
+
+fn catalog_session_end_sql() -> &'static str {
+    "COALESCE(NULLIF(sessions.ended_at, ''), (SELECT COALESCE(NULLIF(cs.last_seen_at, ''), cs.first_seen_at) FROM cursor_sessions cs WHERE sessions.source = 'cursor_agent' AND cs.session_id = sessions.session_id LIMIT 1), '')"
+}
+
+fn push_in_filter(
+    clauses: &mut Vec<String>,
+    params: &mut Vec<rusqlite::types::Value>,
+    column_sql: &str,
+    values: &[String],
+) {
+    if values.is_empty() {
+        return;
+    }
+    clauses.push(format!(
+        "{column_sql} IN ({})",
+        sql_placeholders(values.len())
+    ));
+    for value in values {
+        params.push(rusqlite::types::Value::Text(value.clone()));
+    }
+}
+
 fn catalog_filter_sql(query: &ConversationQuery) -> (String, Vec<rusqlite::types::Value>) {
     let mut clauses = vec!["sessions.is_top_level = 1".to_string()];
     let mut params = Vec::new();
@@ -1135,23 +1161,52 @@ fn catalog_filter_sql(query: &ConversationQuery) -> (String, Vec<rusqlite::types
             params.push(rusqlite::types::Value::Text(pattern.clone()));
         }
     }
-    if !query.sources.is_empty() {
+    push_in_filter(&mut clauses, &mut params, "sessions.source", &query.sources);
+    push_in_filter(
+        &mut clauses,
+        &mut params,
+        "sessions.project",
+        &query.projects,
+    );
+    if !query.models.is_empty() {
+        let placeholders = sql_placeholders(query.models.len());
         clauses.push(format!(
-            "sessions.source IN ({})",
-            sql_placeholders(query.sources.len())
+            "(sessions.model IN ({placeholders}) OR EXISTS (\
+                SELECT 1 FROM cursor_sessions cs, json_each(cs.models_json) AS je \
+                WHERE sessions.source = 'cursor_agent' \
+                  AND cs.session_id = sessions.session_id \
+                  AND je.value IN ({placeholders})\
+            ))"
         ));
-        for source in &query.sources {
-            params.push(rusqlite::types::Value::Text(source.clone()));
+        for _ in 0..2 {
+            for model in &query.models {
+                params.push(rusqlite::types::Value::Text(model.clone()));
+            }
         }
     }
-    if !query.projects.is_empty() {
+    if !query.providers.is_empty() {
         clauses.push(format!(
-            "sessions.project IN ({})",
-            sql_placeholders(query.projects.len())
+            "EXISTS (\
+                SELECT 1 FROM usage_records r \
+                WHERE r.source = sessions.source \
+                  AND r.session_id = sessions.session_id \
+                  AND r.provider IN ({})\
+            )",
+            sql_placeholders(query.providers.len())
         ));
-        for project in &query.projects {
-            params.push(rusqlite::types::Value::Text(project.clone()));
+        for provider in &query.providers {
+            params.push(rusqlite::types::Value::Text(provider.clone()));
         }
+    }
+    if let Some(from) = query.from.as_deref().filter(|value| !value.is_empty()) {
+        let end_at = catalog_session_end_sql();
+        clauses.push(format!("({end_at} != '' AND {end_at} >= ?)"));
+        params.push(rusqlite::types::Value::Text(from.to_string()));
+    }
+    if let Some(to) = query.to.as_deref().filter(|value| !value.is_empty()) {
+        let start_at = catalog_session_start_sql();
+        clauses.push(format!("({start_at} != '' AND {start_at} <= ?)"));
+        params.push(rusqlite::types::Value::Text(to.to_string()));
     }
     (clauses.join(" AND "), params)
 }

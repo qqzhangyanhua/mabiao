@@ -65,11 +65,11 @@ function sameItems(left: string[], right: string[]): boolean {
   return left.every((item) => other.has(item));
 }
 
-/** 项目在各视图间共用。用量来源不覆盖对话记录来源：Cursor Agent 往往没有消耗记录。 */
-export function syncSourceProjectFilters(
+/** Topbar 筛选跨页共用。用量来源不覆盖对话记录来源：Cursor Agent 往往没有消耗记录。 */
+export function syncSharedFilters(
   scopes: Record<View, ViewScope>,
-  sources: string[],
-  projects: string[],
+  filter: Filter,
+  preset: string,
   origin: View,
 ): Record<View, ViewScope> {
   let changed = false;
@@ -79,22 +79,20 @@ export function syncSourceProjectFilters(
     const nextSources =
       view === "conversations"
         ? origin === "conversations"
-          ? sources
+          ? filter.sources
           : scope.filter.sources
         : origin === "conversations"
           ? scope.filter.sources
-          : sources;
-    if (
-      sameItems(scope.filter.sources, nextSources) &&
-      sameItems(scope.filter.projects, projects)
-    ) {
+          : filter.sources;
+    const nextScope: ViewScope = {
+      preset,
+      filter: { ...filter, sources: nextSources },
+    };
+    if (scopesEqual(scope, nextScope)) {
       continue;
     }
     changed = true;
-    next[view] = {
-      ...scope,
-      filter: { ...scope.filter, sources: nextSources, projects },
-    };
+    next[view] = nextScope;
   }
   return changed ? next : scopes;
 }
@@ -176,7 +174,7 @@ export function viewsInvalidatedBy(view: View): View[] {
 }
 
 /**
- * 按「各视图独立筛选」校正缓存戳：
+ * 按本次筛选用过的视图校正缓存戳：
  * - 本次查询筛选用过的视图标为新鲜
  * - 筛选用过且一致的预热页也可以复用
  * - 共享数据被不同筛选覆盖的兄弟页必须失效

@@ -31,7 +31,7 @@ import {
   isViewFresh,
   reconcileLoadedStamps,
   scopesEqual,
-  syncSourceProjectFilters,
+  syncSharedFilters,
   viewFromHash,
   viewsWarmedBy,
   type ViewScope,
@@ -61,7 +61,7 @@ export function useUsageData() {
     pushCurrent: pushRange,
     pop: popRangeHistoryState,
     clear: clearRangeHistory,
-  } = useRangeHistory(view);
+  } = useRangeHistory();
   const [options, setOptions] = useState<FilterOptions>({
     sources: [],
     models: [],
@@ -311,10 +311,7 @@ export function useUsageData() {
     (nextPreset: string, explicitRange?: { from: string | null; to: string | null }) => {
       const range = explicitRange ?? rangeFromPreset(nextPreset);
       const nextFilter = { ...filter, ...range };
-      setViewScopes((current) => ({
-        ...current,
-        [view]: { filter: nextFilter, preset: nextPreset },
-      }));
+      setViewScopes((current) => syncSharedFilters(current, nextFilter, nextPreset, view));
       refreshViews(nextFilter, nextPreset).catch(reportError);
     },
     [filter, view, refreshViews, reportError],
@@ -354,15 +351,7 @@ export function useUsageData() {
   const applyViewFilter = useCallback(
     (target: View, next: Filter) => {
       setViewScopes((current) =>
-        syncSourceProjectFilters(
-          {
-            ...current,
-            [target]: { filter: next, preset: current[target].preset },
-          },
-          next.sources,
-          next.projects,
-          target,
-        ),
+        syncSharedFilters(current, next, current[target].preset, target),
       );
       if (target === view) {
         refreshViews(next).catch(reportError);
