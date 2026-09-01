@@ -1,0 +1,39 @@
+src-tauri/src/tests/cursor_session.rs
+  s_b2fa48109185c8::t_8075d7398d76b2 1205-1335
+  s_b2fa48109185c8::t_1dc2ae12f5a999 1336-1341
+src-tauri/src/store.rs
+  s_b2fa48109185c8::t_213358738670f3 1307-1332
+src-tauri/src/conversation/qwen.rs
+  s_b2fa48109185c8::t_b977e2ca9f1c56 80-82
+src-tauri/src/conversation/codex.rs
+  s_b2fa48109185c8::t_33f8f642ef284e 127-129
+src-tauri/src/cursor_session.rs
+  s_b2fa48109185c8::t_735d8aad350b7b 171,173-185,189-197,258-275,285
+src-tauri/src/adapters/cursor_session.rs
+  s_b2fa48109185c8::t_cb82d1ddb57170 134-150
+src-tauri/src/conversation/codex_test.rs
+  s_b2fa48109185c8::t_4eb97138ee24fc 33-53
+  s_b2fa48109185c8::t_6c1abd253f9784 32
+src-tauri/src/conversation/qwen_test.rs
+  s_b2fa48109185c8::t_c6ee10e3f8113b 96-100
+src-tauri/src/conversation/opencode_test.rs
+  s_b2fa48109185c8::t_22b5d439bd4663 132-203
+src-tauri/src/conversation/opencode.rs
+  s_b2fa48109185c8::t_1a21388844148b 629-642,743
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d67cd5c5583f0bb64d5b06bd7d6ac0899c627a3d",
+  "prompts": {},
+  "sessions": {
+    "s_b2fa48109185c8": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05d25-0139-72b2-abc8-00492670e4f8",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
