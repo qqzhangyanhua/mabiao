@@ -1,0 +1,30 @@
+CONTEXT.md
+  h_4132837b09b7e7 53
+docs/adr/0013-custom-quota-implemented-presets.md
+  h_4132837b09b7e7 40
+src/components/AppearanceSettingsPanel.tsx
+  h_4132837b09b7e7 29,61
+src/components/CursorAccountSettingsPanel.tsx
+  h_4132837b09b7e7 74-75
+src/components/CursorAccountUsagePanel.tsx
+  h_4132837b09b7e7 105-106
+src/components/Settings.tsx
+  h_4132837b09b7e7 32,34,178-191,205,208,220,247
+src/lib/settingsTabs.test.ts
+  h_4132837b09b7e7 9-10,16-19,34-43,46-47,62-67
+src/lib/settingsTabs.ts
+  h_4132837b09b7e7 6,8-15,19-26,28,35,37
+src/lib/type.ts
+  h_4132837b09b7e7 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "403086133d4a305c4cac643fb19ff6ba38e76b9e",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
