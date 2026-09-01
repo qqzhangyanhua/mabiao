@@ -1,0 +1,34 @@
+src-tauri/src/lib.rs
+  s_2dbd43c25cda59::t_fc4c2fcc6e74d4 22
+src-tauri/src/tests/rollup_source.rs
+  s_2dbd43c25cda59::t_c872f70721e1b7 1-56,64-74,84-86,103-104,111-144,151,154-155,158-189,194-213,222-244,247-248,250-275,282-293
+  s_2dbd43c25cda59::t_fec8ca8efa7332 57-61,75-77,79-80,145-148,152-153,190-193,276-281
+  s_2dbd43c25cda59::t_1dda04731b59d5 78,81-83,149-150,156-157,219-220,245-246,249
+  s_2dbd43c25cda59::t_355406f3e51182 62-63
+  s_2dbd43c25cda59::t_4a8ad4adf35546 87-91,94-102,105-110
+  s_2dbd43c25cda59::t_0f79454b5fe1a5 92-93
+  s_2dbd43c25cda59::t_bd94f2ae5b5a35 214-218,221
+src-tauri/src/rollup_source.rs
+  s_2dbd43c25cda59::t_81c9a0d15cbe75 53-60,110,113,118,132
+  s_2dbd43c25cda59::t_7d82ddc564e6eb 4-6,11,20-40,42-52,61-109,111-112,114-117,119-131,133,135-166,168-184
+  s_2dbd43c25cda59::t_fec8ca8efa7332 134,167
+  s_2dbd43c25cda59::t_42ed947c994dc6 1-3,7-10,12-19,41,185
+src-tauri/src/tests/mod.rs
+  s_2dbd43c25cda59::t_41d87a0f5af0a9 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d8f4fcc1259531a06bdb45f224947cf53cfb90af",
+  "prompts": {},
+  "sessions": {
+    "s_2dbd43c25cda59": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05bbb-6f4b-7bd0-be17-0b7e30785df7",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
