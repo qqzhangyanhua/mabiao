@@ -1,0 +1,22 @@
+src/components/Conversations.tsx
+  h_4132837b09b7e7 11-15,448-454,647-648,651-655,671
+src/components/WorkTimeline.tsx
+  h_4132837b09b7e7 4,47-49,80-83
+src/hooks/useUsageData.ts
+  h_4132837b09b7e7 30-31,34,36,96-98,291-292,294-296,301,310,313
+src/hooks/viewCache.test.ts
+  h_4132837b09b7e7 6-8,11,13-14,71-77,83-129
+src/hooks/viewCache.ts
+  h_4132837b09b7e7 1-2,116-185,187-188,197-199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3e14afb6d1ea736d1842274a6308f2261991d64f",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
