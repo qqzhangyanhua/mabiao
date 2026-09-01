@@ -250,7 +250,8 @@ input[type="number"] {
     transition: none !important;
   }
 
-  .conversation-jump.ghost-btn {
+  .conversation-jump.ghost-btn,
+  .live-dot.busy {
     animation: none;
   }
 }
@@ -477,17 +478,32 @@ button {
   background: transparent;
 }
 
+.conn-copy {
+  min-width: 0;
+  flex: 1;
+}
+
 .conn-title {
   font-size: 13px;
+}
+
+.conn-title.busy {
+  color: var(--cyan-fg);
+}
+
+.conn-title.partial {
+  color: var(--orange-fg);
+}
+
+.conn-title.off {
+  color: var(--red-fg);
 }
 
 .conn-sub {
   color: var(--muted);
   font-size: 11px;
-  max-width: 160px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .version {
@@ -508,9 +524,30 @@ button {
   flex: 0 0 auto;
 }
 
+.live-dot.busy {
+  background: var(--cyan);
+  box-shadow: 0 0 0 4px rgb(34 211 238 / 16%);
+  animation: live-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.live-dot.partial {
+  background: var(--orange);
+  box-shadow: 0 0 0 4px rgb(245 158 11 / 16%);
+}
+
 .live-dot.off {
   background: var(--red);
   box-shadow: 0 0 0 4px rgb(251 113 133 / 16%);
+}
+
+@keyframes live-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
 }
 
 .workspace {

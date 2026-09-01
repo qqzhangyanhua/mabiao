@@ -75,6 +75,7 @@ export default function App() {
         view={view}
         busy={data.busy}
         connected={data.connected}
+        partial={Boolean(data.lastIngestReport?.partial_success)}
         status={data.status}
         onNavigate={data.navigate}
       />

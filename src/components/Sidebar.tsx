@@ -49,20 +49,50 @@ const navGroups: { label: string; items: { id: View; icon: IconName }[] }[] = [
   },
 ];
 
+type ConnTone = "ok" | "busy" | "partial" | "off";
+
+const CONN_TITLE: Record<ConnTone, string> = {
+  ok: "连接正常",
+  busy: "正在同步",
+  partial: "部分失败",
+  off: "连接异常",
+};
+
+function connTone(connected: boolean, busy: boolean, partial: boolean): ConnTone {
+  if (!connected) {
+    return "off";
+  }
+  if (busy) {
+    return "busy";
+  }
+  if (partial) {
+    return "partial";
+  }
+  return "ok";
+}
+
+function liveDotClass(tone: ConnTone): string {
+  return tone === "ok" ? "live-dot" : `live-dot ${tone}`;
+}
+
 export function Sidebar({
   view,
   busy,
   connected,
+  partial,
   status,
   onNavigate,
 }: {
   view: View;
   busy: boolean;
   connected: boolean;
+  partial: boolean;
   status: string;
   onNavigate: (view: View) => void;
 }) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const tone = connTone(connected, busy, partial);
+  const toneTitle = CONN_TITLE[tone];
 
   useEffect(() => {
     try {
@@ -119,14 +149,10 @@ export function Sidebar({
       {!collapsed ? (
         <div className="sidebar-foot">
           <div className="conn-card">
-            <span className={connected ? "live-dot" : "live-dot off"} />
-            <div>
-              <div className="conn-title">
-                {connected ? (busy ? "正在同步" : "连接正常") : "连接异常"}
-              </div>
-              <div className="conn-sub" title={status}>
-                {status}
-              </div>
+            <span className={liveDotClass(tone)} aria-hidden="true" />
+            <div className="conn-copy">
+              <div className={`conn-title ${tone}`}>{toneTitle}</div>
+              <div className="conn-sub">{status}</div>
             </div>
           </div>
           <div className="version" title="数字键切页 · R 刷新 · Esc 清空筛选">
@@ -136,8 +162,9 @@ export function Sidebar({
       ) : (
         <div className="sidebar-foot collapsed-foot">
           <span
-            className={connected ? "live-dot" : "live-dot off"}
-            title={connected ? "连接正常" : "连接异常"}
+            className={liveDotClass(tone)}
+            title={`${toneTitle} · ${status}`}
+            aria-label={`${toneTitle}：${status}`}
           />
         </div>
       )}
