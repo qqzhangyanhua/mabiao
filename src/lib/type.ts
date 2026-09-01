@@ -1,7 +1,6 @@
 import type { SeriesPoint } from "../types";
 
-export type SettingsTabId =
-  "general" | "sources" | "display" | "budget" | "backup" | "cursor" | "pricing";
+export type SettingsTabId = "general" | "sources" | "quota" | "pricing" | "cursor";
 
 export type SettingsTab = {
   id: SettingsTabId;

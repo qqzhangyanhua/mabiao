@@ -3,29 +3,38 @@ import type { SettingsTab, SettingsTabId } from "./type";
 export const SETTINGS_UNPRICED_ANCHOR = "settings-unpriced";
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-  { id: "general", label: "通用", anchors: ["settings-appearance"] },
-  { id: "sources", label: "数据源", anchors: ["settings-diagnostics", "settings-conversation-index"] },
-  { id: "display", label: "展示", anchors: ["settings-overview"] },
+  { id: "general", label: "通用", anchors: ["settings-appearance", "settings-overview"] },
   {
-    id: "budget",
-    label: "预算",
-    anchors: ["settings-budget", "settings-official-quota", "settings-custom-quota"],
+    id: "sources",
+    label: "数据",
+    anchors: ["settings-diagnostics", "settings-conversation-index", "settings-backup"],
   },
-  { id: "backup", label: "备份", anchors: ["settings-backup"] },
-  { id: "cursor", label: "Cursor", anchors: ["settings-cursor-account"] },
+  {
+    id: "quota",
+    label: "额度",
+    anchors: ["settings-official-quota", "settings-custom-quota"],
+  },
   {
     id: "pricing",
-    label: "价格",
-    anchors: ["settings-litellm", SETTINGS_UNPRICED_ANCHOR, "settings-presets", "settings-prices"],
+    label: "费用",
+    anchors: [
+      "settings-budget",
+      "settings-litellm",
+      SETTINGS_UNPRICED_ANCHOR,
+      "settings-presets",
+      "settings-prices",
+    ],
   },
+  { id: "cursor", label: "Cursor", anchors: ["settings-cursor-account"] },
 ];
 
 const HASH_ALIASES: Record<string, SettingsTabId> = {
   settings: "general",
   "settings-general": "general",
   "settings-refresh": "general",
+  "settings-display": "general",
   "settings-sources": "sources",
-  "settings-display": "display",
+  "settings-quota": "quota",
   "settings-pricing": "pricing",
 };
 

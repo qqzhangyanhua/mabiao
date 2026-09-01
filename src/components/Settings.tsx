@@ -29,11 +29,9 @@ import type { SettingsTabIcon } from "./type";
 const TAB_ICONS: SettingsTabIcon = {
   general: "monitor",
   sources: "source",
-  display: "overview",
-  budget: "cost",
-  backup: "download",
-  cursor: "cursor",
+  quota: "cost",
   pricing: "tokens",
+  cursor: "cursor",
 };
 
 export function Settings({
@@ -177,12 +175,20 @@ export function Settings({
         className="stack"
       >
         {tab === "general" ? (
-          <AppearanceSettingsPanel
-            themeMode={themeMode}
-            autoRefresh={autoRefresh}
-            onThemeModeChange={onThemeModeChange}
-            onAutoRefreshChange={onAutoRefreshChange}
-          />
+          <>
+            <AppearanceSettingsPanel
+              themeMode={themeMode}
+              autoRefresh={autoRefresh}
+              onThemeModeChange={onThemeModeChange}
+              onAutoRefreshChange={onAutoRefreshChange}
+            />
+            <OverviewLayoutPanel
+              layout={overviewLayout}
+              detectedSources={detectedSources}
+              presentSources={detectedSources}
+              onChange={onOverviewLayoutChange}
+            />
+          </>
         ) : null}
         {tab === "sources" ? (
           <>
@@ -196,19 +202,11 @@ export function Settings({
               onPurgeArchived={onPurgeArchived}
             />
             <ConversationIndexPanel />
+            <BackupPanel onRestored={onSnapshotRefreshed} />
           </>
         ) : null}
-        {tab === "display" ? (
-          <OverviewLayoutPanel
-            layout={overviewLayout}
-            detectedSources={detectedSources}
-            presentSources={detectedSources}
-            onChange={onOverviewLayoutChange}
-          />
-        ) : null}
-        {tab === "budget" ? (
+        {tab === "quota" ? (
           <>
-            <BudgetPanel status={budgetStatus} saving={savingBudget} onSave={onSaveBudget} />
             <OfficialQuotaSettingsPanel
               quota={officialQuota}
               onQuota={onOfficialQuota}
@@ -217,10 +215,9 @@ export function Settings({
             <CustomQuotaProviderPanel onQuota={onOfficialQuota} />
           </>
         ) : null}
-        {tab === "backup" ? <BackupPanel onRestored={onSnapshotRefreshed} /> : null}
-        {tab === "cursor" ? <CursorAccountSettingsPanel /> : null}
         {tab === "pricing" ? (
           <>
+            <BudgetPanel status={budgetStatus} saving={savingBudget} onSave={onSaveBudget} />
             <LiteLlmSnapshotPanel
               onRefreshed={() => {
                 onSnapshotRefreshed();
@@ -247,6 +244,7 @@ export function Settings({
             />
           </>
         ) : null}
+        {tab === "cursor" ? <CursorAccountSettingsPanel /> : null}
       </div>
     </div>
   );

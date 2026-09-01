@@ -6,16 +6,17 @@ describe("tabFromHash", () => {
     expect(tabFromHash("#settings")).toBe("general");
     expect(tabFromHash("settings-appearance")).toBe("general");
     expect(tabFromHash("#settings-refresh")).toBe("general");
+    expect(tabFromHash("#settings-display")).toBe("general");
+    expect(tabFromHash("settings-overview")).toBe("general");
   });
 
   it("keeps existing panel anchors on their grouped tab", () => {
     expect(tabFromHash("#settings-diagnostics")).toBe("sources");
     expect(tabFromHash("#settings-conversation-index")).toBe("sources");
-    expect(tabFromHash("settings-overview")).toBe("display");
-    expect(tabFromHash("#settings-budget")).toBe("budget");
-    expect(tabFromHash("#settings-official-quota")).toBe("budget");
-    expect(tabFromHash("#settings-custom-quota")).toBe("budget");
-    expect(tabFromHash("#settings-backup")).toBe("backup");
+    expect(tabFromHash("#settings-backup")).toBe("sources");
+    expect(tabFromHash("#settings-official-quota")).toBe("quota");
+    expect(tabFromHash("#settings-custom-quota")).toBe("quota");
+    expect(tabFromHash("#settings-budget")).toBe("pricing");
     expect(tabFromHash("#settings-cursor-account")).toBe("cursor");
     expect(tabFromHash("#settings-litellm")).toBe("pricing");
     expect(tabFromHash(`#${SETTINGS_UNPRICED_ANCHOR}`)).toBe("pricing");
@@ -30,10 +31,20 @@ describe("tabFromHash", () => {
 });
 
 describe("hashForTab", () => {
+  it("uses five semantic tabs", () => {
+    expect(SETTINGS_TABS.map((tab) => tab.label)).toEqual([
+      "通用",
+      "数据",
+      "额度",
+      "费用",
+      "Cursor",
+    ]);
+  });
+
   it("writes the first panel anchor for each tab", () => {
     expect(hashForTab("general")).toBe("settings-appearance");
-    expect(hashForTab("budget")).toBe("settings-budget");
-    expect(hashForTab("pricing")).toBe("settings-litellm");
+    expect(hashForTab("quota")).toBe("settings-official-quota");
+    expect(hashForTab("pricing")).toBe("settings-budget");
   });
 
   it("covers every declared tab", () => {
@@ -47,5 +58,11 @@ describe("hashForTab", () => {
     const pricing = SETTINGS_TABS.find((tab) => tab.id === "pricing");
     expect(pricing?.anchors).toContain(SETTINGS_UNPRICED_ANCHOR);
     expect(tabFromHash(SETTINGS_UNPRICED_ANCHOR)).toBe("pricing");
+  });
+
+  it("does not give budget quota and custom providers the same tab", () => {
+    expect(tabFromHash("#settings-budget")).toBe("pricing");
+    expect(tabFromHash("#settings-official-quota")).toBe("quota");
+    expect(tabFromHash("#settings-custom-quota")).toBe("quota");
   });
 });

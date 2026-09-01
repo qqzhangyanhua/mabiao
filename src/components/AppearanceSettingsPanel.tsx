@@ -26,7 +26,7 @@ export function AppearanceSettingsPanel({
       <div className="panel-head">
         <div>
           <h2>通用</h2>
-          <p className="panel-note">外观与自动刷新保存在本机，不写入用量缓存。</p>
+          <p className="panel-note">外观、自动刷新与概览显示保存在本机，不写入用量缓存。</p>
         </div>
       </div>
       <div className="settings-rows">
@@ -58,7 +58,7 @@ export function AppearanceSettingsPanel({
         <div className="settings-row">
           <div className="settings-row-copy">
             <h3>自动刷新</h3>
-            <p>按间隔重新摄取本机数据。关闭后只在手动刷新时更新。</p>
+            <p>按间隔重新摄取本机会话数据。Cursor 账号用量不在此列，需在 Cursor 页手动刷新。</p>
           </div>
           <Select
             ariaLabel="自动刷新间隔"

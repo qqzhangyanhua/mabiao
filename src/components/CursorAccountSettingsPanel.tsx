@@ -71,7 +71,8 @@ export function CursorAccountSettingsPanel() {
           <h2>Cursor 账号用量</h2>
           <p className="panel-note">
             凭证读本机 Cursor 客户端的登录态（只读，不写 Cursor 任何文件），跟着客户端自动续期，
-            不落配置文件。清空只删这张独立缓存表，不触发联网，更不动本机消耗记录。
+            不落配置文件。账号用量不随本机自动摄取更新，要在 Cursor
+            用量页手动刷新。清空只删这张独立缓存表，不触发联网，更不动本机消耗记录。
           </p>
           {status ? (
             <p className="panel-note" role="status">
