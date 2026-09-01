@@ -1304,6 +1304,32 @@ pub fn cursor_session_file_fingerprint(
     .map_err(|e| e.to_string())
 }
 
+pub fn cursor_session_source_file_for_id(
+    conn: &Connection,
+    session_id: &str,
+) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT source_file FROM cursor_sessions WHERE session_id = ?1",
+        params![session_id],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+pub fn cursor_session_has_id(conn: &Connection, session_id: &str) -> Result<bool, String> {
+    Ok(cursor_session_source_file_for_id(conn, session_id)?.is_some())
+}
+
+pub fn delete_cursor_sessions_by_id(conn: &Connection, session_id: &str) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM cursor_sessions WHERE session_id = ?1",
+        params![session_id],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn upsert_cursor_session(
     conn: &Connection,
     record: &CursorSessionRecord,

@@ -626,6 +626,20 @@ fn project_part(
             events.push(event);
             *sequence += 1;
         }
+        "file" => {
+            let mut event = semantic_event(
+                *sequence,
+                EventKind::SystemStatus,
+                timestamp,
+                None,
+                Some("file".to_string()),
+                optional_text(data, &["filename"]),
+                serde_json::json!({"part_id":part.id,"type":"file"}),
+            );
+            set_native_event_id(path, &mut event, "part", &part.id, "file");
+            events.push(event);
+            *sequence += 1;
+        }
         _ => {
             let mut event = unadapted_event(
                 *sequence,
@@ -726,6 +740,7 @@ fn is_known_part_kind(kind: &str) -> bool {
             | "snapshot"
             | "patch"
             | "compaction"
+            | "file"
     )
 }
 

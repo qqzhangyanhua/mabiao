@@ -30,6 +30,28 @@ fn event_view(event: &ConversationEvent) -> (EventKind, Option<&str>, Option<&st
 }
 
 #[test]
+fn adapter_uses_legacy_header_id_when_session_meta_is_missing() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("rollout-legacy.jsonl");
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"id":"9f9688f4-edb6-4e92-9311-5bdf6b508616","timestamp":"2025-09-05T17:07:46.739Z"}"#,
+            "\n",
+            r#"{"type":"message","role":"user","content":[{"type":"input_text","text":"你好"}]}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let batch = index(&path).unwrap();
+    assert_eq!(batch.conversations.len(), 1);
+    assert_eq!(
+        batch.conversations[0].session.session_id,
+        "9f9688f4-edb6-4e92-9311-5bdf6b508616"
+    );
+}
+
+#[test]
 fn adapter_indexes_codex_fixture_into_session_events_and_cursor() {
     let temp = tempfile::tempdir().unwrap();
     let path = write_fixture(temp.path(), "codex-semantic-events.jsonl");

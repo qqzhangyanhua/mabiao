@@ -77,6 +77,9 @@ fn parse_all(
     let records = value
         .as_array()
         .ok_or_else(|| "Qwen logs.json 顶层必须是数组".to_string())?;
+    if records.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut grouped = BTreeMap::<String, Vec<(usize, Value)>>::new();
     let mut diagnostics = Vec::new();
     for (line, record) in records.iter().enumerate() {
