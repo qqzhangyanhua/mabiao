@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
 use crate::billing_window;
@@ -279,145 +279,6 @@ const ROLLUP_UNPRICED_EXPR: &str = "
 const ROLLUP_PRICE_JOINS: &str = "
     LEFT JOIN price_rows pe ON pe.model = d.model AND pe.provider = lower(d.provider)
     LEFT JOIN price_rows pf ON pf.model = d.model AND pf.provider IS NULL";
-
-/// 查询相对预聚合表的走法。
-///
-/// `usage_rollup` 按 UTC 天聚合，装不下任意时刻的边界：前端默认「近 7 天」和托盘
-/// 「今日」给的 `from`/`to` 都带时分秒，按天一刀切会把边界那天整天算进来。
-/// 因此有时间窗时拆成三段——两端边界天走原始表，中间完整 UTC 日走预聚合。
-/// 没有完整中间日（同一天或相邻两天）就整段回退原始表，避免为空的 UNION。
-///
-/// 预聚合未就绪（老库升级 / 旧备份恢复，补建还在后台）时也整段走原始表：慢一点，
-/// 但数字是对的。就绪用显式标记而不是「表非空」——补建期间若发生一次摄取，增量
-/// 重建会往空表里只写进那一两天，表非空了内容却只有零头。
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum RollupMode {
-    Raw,
-    Rollup,
-    Hybrid(TimeSplit),
-}
-
-/// 时间窗切分：`middle_after`/`middle_before` 是预聚合日的开区间；
-/// `start_*` / `end_*` 是两端边界天在原始表上的半开/闭区间。
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TimeSplit {
-    middle_after: Option<String>,
-    middle_before: Option<String>,
-    start_from: Option<String>,
-    start_before: Option<String>,
-    end_from: Option<String>,
-    end_to: Option<String>,
-}
-
-impl TimeSplit {
-    fn has_middle(&self) -> bool {
-        match (&self.middle_after, &self.middle_before) {
-            (Some(after), Some(before)) => {
-                next_utc_day(after).is_some_and(|next| next.as_str() < before.as_str())
-            }
-            (Some(_), None) | (None, Some(_)) => true,
-            (None, None) => false,
-        }
-    }
-}
-
-fn utc_day(iso: &str) -> Option<&str> {
-    let day = iso.get(..10)?;
-    if day.as_bytes().get(4) == Some(&b'-') && day.as_bytes().get(7) == Some(&b'-') {
-        Some(day)
-    } else {
-        None
-    }
-}
-
-fn next_utc_day(day: &str) -> Option<String> {
-    let parsed = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
-    Some((parsed + Duration::days(1)).format("%Y-%m-%d").to_string())
-}
-
-fn time_split(from: Option<&str>, to: Option<&str>) -> Option<TimeSplit> {
-    let from_day = match from {
-        Some(value) => Some(utc_day(value)?.to_string()),
-        None => None,
-    };
-    let to_day = match to {
-        Some(value) => Some(utc_day(value)?.to_string()),
-        None => None,
-    };
-    if from_day.is_none() && to_day.is_none() {
-        return None;
-    }
-    let mut split = TimeSplit {
-        middle_after: from_day.clone(),
-        middle_before: to_day.clone(),
-        start_from: None,
-        start_before: None,
-        end_from: None,
-        end_to: None,
-    };
-    if let (Some(from), Some(day)) = (from, from_day.as_deref()) {
-        split.start_from = Some(from.to_string());
-        split.start_before = Some(format!("{day}~"));
-    }
-    if let (Some(to), Some(day)) = (to, to_day.as_deref()) {
-        split.end_from = Some(day.to_string());
-        split.end_to = Some(to.to_string());
-    }
-    Some(split)
-}
-
-fn rollup_mode(conn: &Connection, filter: &Filter) -> RollupMode {
-    if !crate::store::rollup_is_ready(conn) {
-        return RollupMode::Raw;
-    }
-    if filter.from.is_none() && filter.to.is_none() {
-        return RollupMode::Rollup;
-    }
-    match time_split(filter.from.as_deref(), filter.to.as_deref()) {
-        Some(split) if split.has_middle() => RollupMode::Hybrid(split),
-        _ => RollupMode::Raw,
-    }
-}
-
-/// 维度过滤（不含时间）。`alias` 为表别名（`r` / `d`）。
-fn dimension_clauses(filter: &Filter, alias: &str) -> (Vec<String>, Vec<Value>) {
-    let mut clauses: Vec<String> = Vec::new();
-    let mut params: Vec<Value> = Vec::new();
-    for (column, values) in [
-        ("source", &filter.sources),
-        ("model", &filter.models),
-        ("project", &filter.projects),
-        ("provider", &filter.providers),
-    ] {
-        if values.is_empty() {
-            continue;
-        }
-        clauses.push(format!(
-            "{alias}.{column} IN ({})",
-            placeholders(values.len())
-        ));
-        for value in values {
-            params.push(Value::Text(value.clone()));
-        }
-    }
-    (clauses, params)
-}
-
-/// 预聚合表过滤：维度 + 可选的中间完整日开区间。
-fn rollup_filter_clauses(filter: &Filter, split: Option<&TimeSplit>) -> (Vec<String>, Vec<Value>) {
-    let (mut clauses, mut params) = dimension_clauses(filter, "d");
-    if let Some(split) = split {
-        if let Some(after) = &split.middle_after {
-            clauses.push("d.day > ?".to_string());
-            params.push(Value::Text(after.clone()));
-        }
-        if let Some(before) = &split.middle_before {
-            clauses.push("d.day < ?".to_string());
-            params.push(Value::Text(before.clone()));
-        }
-    }
-    (clauses, params)
-}
 
 pub fn overview(
     conn: &Connection,
@@ -987,222 +848,12 @@ pub fn application_analytics(
     ))
 }
 
-/// 从预聚合表取 Top N 会话。
+/// 在统一子查询上按 `(source, session_id)` 汇总。
 ///
-/// 比原始表那条路少一次回表：`usage_rollup` 的主键里就带着 project / model，
-/// `file_key` 也已按「最晚非空」的形式存好，一次 GROUP BY 就能把展示标签一并算出来。
-///
-/// project / model 的键这里用 `last_at` 现拼——组内 `last_at` 就是该组 `occurred_at`
-/// 的最大值，与逐行版 `MAX(occurred_at || sep || value)` 选出的是同一个值：
-/// 时间大的胜出，时间并列时字典序大的胜出。
-fn top_sessions_from_rollup(
-    conn: &Connection,
-    filter: &Filter,
-    limit: usize,
-) -> Result<Vec<SessionRow>, String> {
-    let (clauses, mut params) = rollup_filter_clauses(filter, None);
-    let project = unwrap_latest_key_sql("project_key");
-    let model = unwrap_latest_key_sql("model_key");
-    let source_file = unwrap_latest_key_sql("file_key");
-    let sql = format!(
-        "SELECT source, session_id, total_tokens, started_at, ended_at, cost, unpriced_count,
-            {project} AS project,
-            {model} AS model,
-            {source_file} AS source_file
-         FROM (
-            SELECT d.source AS source, d.session_id AS session_id,
-                SUM(d.total_tokens) AS total_tokens,
-                MIN(d.first_at) AS started_at,
-                MAX(d.last_at) AS ended_at,
-                SUM({ROLLUP_COST_EXPR}) AS cost,
-                COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0) AS unpriced_count,
-                MAX(CASE WHEN d.project != '' THEN d.last_at || char(31) || d.project END) AS project_key,
-                MAX(CASE WHEN d.model != '' THEN d.last_at || char(31) || d.model END) AS model_key,
-                MAX(d.file_key) AS file_key
-            FROM usage_rollup d
-            {ROLLUP_PRICE_JOINS}
-            {}
-            GROUP BY d.source, d.session_id
-            ORDER BY total_tokens DESC, source ASC, session_id ASC
-            LIMIT ?
-         )",
-        where_sql(&clauses),
-    );
-    params.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
-            Ok(SessionRow {
-                source: row.get(0)?,
-                session_id: row.get(1)?,
-                total_tokens: row.get(2)?,
-                started_at: row.get(3)?,
-                ended_at: row.get(4)?,
-                cost: row.get(5)?,
-                unpriced: row.get::<_, i64>(6)? > 0,
-                project: row.get(7)?,
-                model: row.get(8)?,
-                source_file: row.get(9)?,
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())
-}
-
-pub fn top_sessions(
-    conn: &Connection,
-    filter: &Filter,
-    prices: &PriceTable,
-    limit: usize,
-) -> Result<Vec<SessionRow>, String> {
-    if limit == 0 {
-        return Ok(Vec::new());
-    }
-    install_prices(conn, prices)?;
-    // 有时间窗的 hybrid 会话汇总要跨「中间日 + 边界天」再按会话合并，比直接扫原始表
-    // 复杂且收益有限（会话页本就按索引裁时间窗）；只在无时间窗时走预聚合。
-    if matches!(rollup_mode(conn, filter), RollupMode::Rollup) {
-        return top_sessions_from_rollup(conn, filter, limit);
-    }
-    let (clauses, mut params) = filter_clauses(filter);
-    // 先按 token 取出 Top N。相关子查询不能放进全表 GROUP BY：
-    // 17 万行 × 3 次会话回表会把首屏卡死。
-    let sql = format!(
-        "SELECT r.source, r.session_id,
-            SUM(r.total_tokens),
-            MIN(r.occurred_at),
-            MAX(r.occurred_at),
-            SUM({COST_EXPR}),
-            COALESCE(SUM({UNPRICED_EXPR}), 0)
-        FROM usage_records r
-        {PRICE_JOINS}
-        {}
-        GROUP BY r.source, r.session_id
-        ORDER BY SUM(r.total_tokens) DESC, r.source ASC, r.session_id ASC
-        LIMIT ?",
-        where_sql(&clauses),
-    );
-    params.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let raw = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, i64>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, Option<f64>>(5)?,
-                row.get::<_, i64>(6)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    let mut rows: Vec<SessionRow> = raw
-        .into_iter()
-        .map(
-            |(source, session_id, total_tokens, started_at, ended_at, cost, unpriced_count)| {
-                SessionRow {
-                    session_id,
-                    source,
-                    project: String::new(),
-                    model: String::new(),
-                    total_tokens,
-                    started_at,
-                    ended_at,
-                    source_file: String::new(),
-                    cost,
-                    unpriced: unpriced_count > 0,
-                }
-            },
-        )
-        .collect();
-    hydrate_session_labels(conn, &mut rows)?;
-    Ok(rows)
-}
-
-/// 回表补齐 top N 会话的展示标签（项目 / 模型 / 原始文件）。
-///
-/// 与 `session_rollup_sql` 同一套「一次扫描取最晚非空值」写法：内层 GROUP BY 聚出
-/// `occurred_at || sep || value` 的 MAX，外层再切出值。早先这里用的是三个相关子查询，
-/// 每个会话每列都要把该会话的全部行按 occurred_at 排一遍——首屏 top 8 会话合计 6.2 万行时
-/// 实测 1.03s，换成一次扫描后 304ms。
-fn hydrate_session_labels(conn: &Connection, rows: &mut [SessionRow]) -> Result<(), String> {
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let mut clauses = Vec::with_capacity(rows.len());
-    let mut params: Vec<Value> = Vec::with_capacity(rows.len() * 2);
-    for row in rows.iter() {
-        clauses.push("(r.source = ? AND r.session_id = ?)".to_string());
-        params.push(Value::Text(row.source.clone()));
-        params.push(Value::Text(row.session_id.clone()));
-    }
-    let sql = format!(
-        "SELECT source, session_id, {} AS project, {} AS model, {} AS source_file
-         FROM (
-            SELECT r.source AS source, r.session_id AS session_id,
-                {} AS project_key,
-                {} AS model_key,
-                {} AS file_key
-            FROM usage_records r
-            WHERE {}
-            GROUP BY r.source, r.session_id
-         )",
-        unwrap_latest_key_sql("project_key"),
-        unwrap_latest_key_sql("model_key"),
-        unwrap_latest_key_sql("file_key"),
-        latest_nonempty_key_sql("project"),
-        latest_nonempty_key_sql("model"),
-        latest_nonempty_key_sql("source_file"),
-        clauses.join(" OR "),
-    );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let labels = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    for (source, session_id, project, model, source_file) in labels {
-        if let Some(row) = rows
-            .iter_mut()
-            .find(|row| row.source == source && row.session_id == session_id)
-        {
-            row.project = project;
-            row.model = model;
-            row.source_file = source_file;
-        }
-    }
-    Ok(())
-}
-
-/// 一次扫描取出「最晚非空」键：`MAX(occurred_at || sep || value)` 与
-/// `ORDER BY occurred_at DESC, value DESC LIMIT 1` 同序。
-fn latest_nonempty_key_sql(column: &str) -> String {
-    format!("MAX(CASE WHEN r.{column} != '' THEN r.occurred_at || char(31) || r.{column} END)")
-}
-
-fn unwrap_latest_key_sql(alias: &str) -> String {
-    format!("COALESCE(substr({alias}, instr({alias}, char(31)) + 1), '')")
-}
-
-/// 预聚合表版的会话汇总，输出列与 `session_rollup_sql` 完全一致，
-/// 所以外层的搜索 / 排序 / 分页原样复用，不必为两条路径各写一遍。
-///
-/// project / model 的键用 `last_at` 现拼：组内 `last_at` 就是该组 `occurred_at` 的最大值，
-/// 与逐行版 `MAX(occurred_at || sep || value)` 选出同一个值。`file_key` 建表时已按这个
-/// 形式存好，直接 MAX 即可。
-fn rollup_session_rollup_sql(clauses: &[String], include_cost: bool) -> String {
+/// 切分形态下 UNION ALL 之后再 GROUP BY，跨 partial 边界的同一会话合并成一行。
+/// 展示标签取最晚非空：project / model 用组内 `last_at` 现拼键，`file_key` 建表时
+/// 已按这个形式存好（明细投影也现拼），跨行 MAX 即可。
+fn session_rollup_sql(inner_sql: &str, include_cost: bool, limit_top: bool) -> String {
     let project = unwrap_latest_key_sql("project_key");
     let model = unwrap_latest_key_sql("model_key");
     let source_file = unwrap_latest_key_sql("file_key");
@@ -1219,6 +870,11 @@ fn rollup_session_rollup_sql(clauses: &[String], include_cost: bool) -> String {
             "",
         )
     };
+    let order_limit = if limit_top {
+        "ORDER BY total_tokens DESC, source ASC, session_id ASC\n            LIMIT ?"
+    } else {
+        ""
+    };
     format!(
         "SELECT source, session_id, total_tokens, started_at, ended_at,
             {project} AS project,
@@ -1234,57 +890,65 @@ fn rollup_session_rollup_sql(clauses: &[String], include_cost: bool) -> String {
                 MAX(CASE WHEN d.model != '' THEN d.last_at || char(31) || d.model END) AS model_key,
                 MAX(d.file_key) AS file_key,
                 {cost_select}
-            FROM usage_rollup d
+            FROM ({inner_sql}) d
             {joins}
-            {}
             GROUP BY d.source, d.session_id
-         )",
-        where_sql(clauses),
+            {order_limit}
+         )"
     )
 }
 
-fn session_rollup_sql(clauses: &[String], include_cost: bool) -> String {
-    let project_key = latest_nonempty_key_sql("project");
-    let model_key = latest_nonempty_key_sql("model");
-    let file_key = latest_nonempty_key_sql("source_file");
-    let project = unwrap_latest_key_sql("project_key");
-    let model = unwrap_latest_key_sql("model_key");
-    let source_file = unwrap_latest_key_sql("file_key");
-    let (cost_select, joins) = if include_cost {
-        (
-            format!(
-                "SUM({COST_EXPR}) AS cost, COALESCE(SUM({UNPRICED_EXPR}), 0) AS unpriced_count"
-            ),
-            PRICE_JOINS,
-        )
-    } else {
-        (
-            "CAST(NULL AS REAL) AS cost, 0 AS unpriced_count".to_string(),
-            "",
-        )
-    };
-    format!(
-        "SELECT source, session_id, total_tokens, started_at, ended_at,
-            {project} AS project,
-            {model} AS model,
-            {source_file} AS source_file,
-            cost, unpriced_count
-         FROM (
-            SELECT r.source AS source, r.session_id AS session_id,
-                SUM(r.total_tokens) AS total_tokens,
-                MIN(r.occurred_at) AS started_at,
-                MAX(r.occurred_at) AS ended_at,
-                {project_key} AS project_key,
-                {model_key} AS model_key,
-                {file_key} AS file_key,
-                {cost_select}
-            FROM usage_records r
-            {joins}
-            {}
-            GROUP BY r.source, r.session_id
-         )",
-        where_sql(clauses),
-    )
+pub fn top_sessions(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+    limit: usize,
+) -> Result<Vec<SessionRow>, String> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
+    install_prices(conn, prices)?;
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            None,
+        ),
+        filter,
+    );
+    let sql = session_rollup_sql(&inner.sql, true, true);
+    let mut params = inner.params;
+    params.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(params.iter()), |row| {
+            Ok(SessionRow {
+                source: row.get(0)?,
+                session_id: row.get(1)?,
+                total_tokens: row.get(2)?,
+                started_at: row.get(3)?,
+                ended_at: row.get(4)?,
+                project: row.get(5)?,
+                model: row.get(6)?,
+                source_file: row.get(7)?,
+                cost: row.get(8)?,
+                unpriced: row.get::<_, i64>(9)? > 0,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
+}
+
+/// 一次扫描取出「最晚非空」键：`MAX(occurred_at || sep || value)` 与
+/// `ORDER BY occurred_at DESC, value DESC LIMIT 1` 同序。
+fn latest_nonempty_key_sql(column: &str) -> String {
+    format!("MAX(CASE WHEN r.{column} != '' THEN r.occurred_at || char(31) || r.{column} END)")
+}
+
+fn unwrap_latest_key_sql(alias: &str) -> String {
+    format!("COALESCE(substr({alias}, instr({alias}, char(31)) + 1), '')")
 }
 
 /// 会话列表的分页查询：搜索（session/项目/模型/应用/原始文件）、排序、分页均在 SQL 层完成。
@@ -1298,18 +962,17 @@ pub fn sessions_page(
     if include_cost {
         install_prices(conn, prices)?;
     }
-    // 会话汇总：无时间窗走预聚合；带时间窗（含 hybrid）走原始表，外层搜索/排序/分页无感。
-    let use_rollup = matches!(rollup_mode(conn, &query.filter), RollupMode::Rollup);
-    let (clauses, mut params) = if use_rollup {
-        rollup_filter_clauses(&query.filter, None)
-    } else {
-        filter_clauses(&query.filter)
-    };
-    let sessions_cte = if use_rollup {
-        rollup_session_rollup_sql(&clauses, include_cost)
-    } else {
-        session_rollup_sql(&clauses, include_cost)
-    };
+    let inner = rollup_source(
+        &rollup_plan(
+            query.filter.from.as_deref(),
+            query.filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            None,
+        ),
+        &query.filter,
+    );
+    let sessions_cte = session_rollup_sql(&inner.sql, include_cost, false);
+    let mut params = inner.params;
 
     let search_clause = match query
         .search

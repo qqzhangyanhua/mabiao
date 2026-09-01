@@ -912,3 +912,337 @@ fn application_analytics_runs_on_readonly_connection() {
     let dto = query::application_analytics(&read, &filter, "day").unwrap();
     assert_eq!(dto.summary.session_count, 3);
 }
+
+fn session_window_records() -> Vec<UsageRecord> {
+    let mut records = overview_window_records();
+    // 跨 UTC 日且标签变化：中间一条空标签不得盖住更早的值，次日非空应胜出。
+    let mut early = rec(
+        "2026-08-01T10:30:00Z",
+        Source::Codex,
+        "old-model",
+        "official",
+        "/old-proj",
+        "s-span",
+        10,
+    );
+    early.source_file = "/old-span.jsonl".into();
+    let mut blank = rec(
+        "2026-08-01T12:00:00Z",
+        Source::Codex,
+        "",
+        "official",
+        "",
+        "s-span",
+        5,
+    );
+    blank.source_file = String::new();
+    let mut late = rec(
+        "2026-08-02T10:00:00Z",
+        Source::Codex,
+        "new-model",
+        "official",
+        "/new-proj",
+        "s-span",
+        20,
+    );
+    late.source_file = "/new-span.jsonl".into();
+    records.push(early);
+    records.push(blank);
+    records.push(late);
+    records
+}
+
+fn find_session<'a>(
+    rows: &'a [crate::domain::SessionRow],
+    source: &str,
+    session_id: &str,
+) -> &'a crate::domain::SessionRow {
+    rows.iter()
+        .find(|row| row.source == source && row.session_id == session_id)
+        .unwrap_or_else(|| panic!("缺少会话 {source}/{session_id}"))
+}
+
+fn assert_session_row_eq(
+    sql: &crate::domain::SessionRow,
+    mem: &crate::domain::SessionRow,
+    label: &str,
+) {
+    assert_eq!(sql.source, mem.source, "{label} source");
+    assert_eq!(sql.session_id, mem.session_id, "{label} session_id");
+    assert_eq!(sql.total_tokens, mem.total_tokens, "{label} total_tokens");
+    assert_eq!(sql.started_at, mem.started_at, "{label} started_at");
+    assert_eq!(sql.ended_at, mem.ended_at, "{label} ended_at");
+    assert_eq!(sql.project, mem.project, "{label} project");
+    assert_eq!(sql.model, mem.model, "{label} model");
+    assert_eq!(sql.source_file, mem.source_file, "{label} source_file");
+    assert_eq!(sql.unpriced, mem.unpriced, "{label} unpriced");
+    assert_opt_f64_eq(sql.cost, mem.cost);
+}
+
+fn assert_top_sessions_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    prices: &PriceTable,
+    filter: &Filter,
+    label: &str,
+) -> Vec<crate::domain::SessionRow> {
+    let sql = query::top_sessions(conn, filter, prices, 20).unwrap();
+    let mem = aggregate::top_sessions(records, filter, prices, 20);
+    assert_eq!(sql.len(), mem.len(), "{label} 行数");
+    for (s, m) in sql.iter().zip(mem.iter()) {
+        assert_session_row_eq(s, m, &format!("{label} {}/{}", s.source, s.session_id));
+    }
+    sql
+}
+
+fn assert_sessions_page_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    prices: &PriceTable,
+    filter: &Filter,
+    label: &str,
+) -> crate::domain::SessionPage {
+    let page = query::sessions_page(
+        conn,
+        prices,
+        &SessionQuery {
+            filter: filter.clone(),
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mem = aggregate::top_sessions(records, filter, prices, 20);
+    assert_eq!(page.total as usize, mem.len(), "{label} total");
+    assert_eq!(page.rows.len(), mem.len(), "{label} 行数");
+    assert_eq!(
+        page.total_tokens,
+        mem.iter().map(|row| row.total_tokens).sum::<i64>(),
+        "{label} total_tokens"
+    );
+    let expected_last = mem.iter().map(|row| row.ended_at.as_str()).max();
+    assert_eq!(
+        page.last_ended.as_deref(),
+        expected_last,
+        "{label} last_ended"
+    );
+    for (s, m) in page.rows.iter().zip(mem.iter()) {
+        assert_session_row_eq(s, m, &format!("{label} {}/{}", s.source, s.session_id));
+    }
+    page
+}
+
+/// 四种时间窗 + 跨 partial 边界会话 + 混合原生费用：Top 会话 / 会话列表与内存聚合逐字段一致。
+#[test]
+fn top_sessions_and_sessions_page_match_memory_across_rollup_window_shapes() {
+    let conn = store::open_memory().unwrap();
+    let records = session_window_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+    let prices = diverse_prices();
+
+    let none = Filter::default();
+    let aligned = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-09T00:00:00Z".into()),
+        ..Filter::default()
+    };
+    let split = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let intra_day = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let head_empty = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let windows = [
+        (&none, "无时间窗"),
+        (&aligned, "对齐窗"),
+        (&split, "两端 partial 切分窗"),
+        (&intra_day, "单日内窗"),
+        (&head_empty, "单端 partial 为空"),
+    ];
+
+    for (filter, label) in windows {
+        assert_top_sessions_parity(&conn, &records, &prices, filter, label);
+        assert_sessions_page_parity(&conn, &records, &prices, filter, label);
+    }
+
+    let split_top =
+        assert_top_sessions_parity(&conn, &records, &prices, &split, "切分窗 top_sessions");
+    assert_eq!(
+        split_top.len(),
+        4,
+        "跨 partial 边界的会话必须合并，不得拆成两行"
+    );
+    let s1 = find_session(&split_top, "codex", "s1");
+    assert_eq!(s1.total_tokens, 100 + 80 + 50);
+    assert_eq!(s1.started_at, "2026-08-01T10:00:00Z");
+    assert_eq!(s1.ended_at, "2026-08-02T10:00:00Z");
+    assert_eq!(s1.project, "/proj/a");
+    assert_eq!(s1.model, "gpt-5.1-codex");
+    assert_eq!(s1.source_file, "/s1.jsonl");
+    assert!(!s1.unpriced, "同会话同日混原生费用后整行仍应按价");
+    // priced(0.1085) + 同日 native(0.4) + 次日 native(1.5)
+    assert_opt_f64_eq(s1.cost, Some(2.0085));
+
+    let span = find_session(&split_top, "codex", "s-span");
+    assert_eq!(span.total_tokens, 35);
+    assert_eq!(span.started_at, "2026-08-01T10:30:00Z");
+    assert_eq!(span.ended_at, "2026-08-02T10:00:00Z");
+    assert_eq!(span.project, "/new-proj");
+    assert_eq!(span.model, "new-model");
+    assert_eq!(span.source_file, "/new-span.jsonl");
+
+    let aligned_top =
+        assert_top_sessions_parity(&conn, &records, &prices, &aligned, "对齐窗 top_sessions");
+    let aligned_s1 = find_session(&aligned_top, "codex", "s1");
+    assert_eq!(aligned_s1.total_tokens, 230);
+    assert!(!aligned_s1.unpriced);
+    // 08-01 整天走预聚合：同日 priced + native 按 has_native 拆成两行，外层仍须并回。
+    assert_opt_f64_eq(aligned_s1.cost, Some(2.0085));
+
+    let split_page =
+        assert_sessions_page_parity(&conn, &records, &prices, &split, "切分窗 sessions_page");
+    assert_eq!(split_page.total, 4);
+    assert_eq!(split_page.total_tokens, 300 + 230 + 200 + 35);
+    assert_eq!(
+        find_session(&split_page.rows, "codex", "s1").total_tokens,
+        230
+    );
+    assert_eq!(
+        find_session(&split_page.rows, "codex", "s-span").project,
+        "/new-proj"
+    );
+
+    let by_session = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: split.clone(),
+            sort_by: Some("session".into()),
+            sort_dir: Some("asc".into()),
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let ids: Vec<&str> = by_session
+        .rows
+        .iter()
+        .map(|row| row.session_id.as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        ["s-span", "s1", "s2", "s3"],
+        "排序必须作用在跨边界合并后的行上"
+    );
+    assert_eq!(by_session.total, 4);
+
+    let by_latest = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: split.clone(),
+            search: Some("new-proj".into()),
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_latest.total, 1, "搜索应对合并后的最晚项目");
+    assert_eq!(by_latest.rows[0].session_id, "s-span");
+    assert_eq!(by_latest.rows[0].project, "/new-proj");
+
+    let by_stale = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: split.clone(),
+            search: Some("old-proj".into()),
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        by_stale.total, 0,
+        "已被更晚非空项目盖住的旧标签不得再命中搜索"
+    );
+
+    let page1 = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: split.clone(),
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(2),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(page1.total, 4);
+    assert_eq!(page1.total_tokens, 300 + 230 + 200 + 35);
+    assert_eq!(page1.rows.len(), 2);
+    assert_eq!(page1.rows[0].session_id, "s3");
+    assert_eq!(page1.rows[1].session_id, "s1");
+
+    let intra_top = assert_top_sessions_parity(
+        &conn,
+        &records,
+        &prices,
+        &intra_day,
+        "单日内窗 top_sessions",
+    );
+    assert_eq!(intra_top.len(), 3);
+    let intra_span = find_session(&intra_top, "codex", "s-span");
+    assert_eq!(intra_span.total_tokens, 10);
+    assert_eq!(intra_span.project, "/old-proj");
+    assert_eq!(intra_span.model, "old-model");
+    assert_eq!(intra_span.source_file, "/old-span.jsonl");
+    let intra_s1 = find_session(&intra_top, "codex", "s1");
+    assert_eq!(
+        intra_s1.total_tokens, 100,
+        "12:00 的 native 行应被单日窗裁掉"
+    );
+
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let not_ready_top = assert_top_sessions_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "预聚合未就绪 top_sessions",
+    );
+    assert_eq!(not_ready_top.len(), split_top.len());
+    assert_eq!(
+        find_session(&not_ready_top, "codex", "s1").total_tokens,
+        find_session(&split_top, "codex", "s1").total_tokens
+    );
+    let not_ready_page = assert_sessions_page_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "预聚合未就绪 sessions_page",
+    );
+    assert_eq!(not_ready_page.total, split_page.total);
+    assert_eq!(not_ready_page.total_tokens, split_page.total_tokens);
+}
