@@ -241,16 +241,6 @@ fn where_sql(clauses: &[String]) -> String {
     }
 }
 
-/// 时间桶表达式（hour/day/week/month）。occurred_at 为 ISO 文本，前缀截取即对应粒度。
-fn bucket_expr(grain: &str) -> &'static str {
-    match grain {
-        "hour" => "substr(r.occurred_at, 1, 13)",
-        "week" => "strftime('%G-W%V', substr(r.occurred_at, 1, 10))",
-        "month" => "substr(r.occurred_at, 1, 7)",
-        _ => "substr(r.occurred_at, 1, 10)",
-    }
-}
-
 fn ratio(numerator: i64, denominator: i64) -> Option<f64> {
     if denominator <= 0 {
         None
@@ -425,26 +415,6 @@ fn rollup_filter_clauses(filter: &Filter, split: Option<&TimeSplit>) -> (Vec<Str
             clauses.push("d.day < ?".to_string());
             params.push(Value::Text(before.clone()));
         }
-    }
-    (clauses, params)
-}
-
-/// 原始表边界天过滤：维度 + 两端半开/闭区间（OR）。
-fn boundary_filter_clauses(filter: &Filter, split: &TimeSplit) -> (Vec<String>, Vec<Value>) {
-    let (mut clauses, mut params) = dimension_clauses(filter, "r");
-    let mut bounds: Vec<String> = Vec::new();
-    if let (Some(from), Some(before)) = (&split.start_from, &split.start_before) {
-        bounds.push("(r.occurred_at >= ? AND r.occurred_at < ?)".to_string());
-        params.push(Value::Text(from.clone()));
-        params.push(Value::Text(before.clone()));
-    }
-    if let (Some(day), Some(to)) = (&split.end_from, &split.end_to) {
-        bounds.push("(r.occurred_at >= ? AND r.occurred_at <= ?)".to_string());
-        params.push(Value::Text(day.clone()));
-        params.push(Value::Text(to.clone()));
-    }
-    if !bounds.is_empty() {
-        clauses.push(format!("({})", bounds.join(" OR ")));
     }
     (clauses, params)
 }
@@ -823,25 +793,43 @@ pub fn application_analytics(
     filter: &Filter,
     grain: &str,
 ) -> Result<ApplicationAnalyticsDto, String> {
-    // 这个视图要发四组聚合（总览 / 按来源 / 按时间桶 / 按项目），全走原始表就是把
-    // 同一份数据扫四遍——350 万行时实测 43 秒。预聚合表把每遍的基数压到几万行；
-    // 有时间窗时中间完整 UTC 日仍走预聚合，两端边界天补明细。
-    let (from_sql, alias, bucket, params, where_part) =
-        application_analytics_source(conn, filter, grain);
-    let a = alias.as_str();
-
-    let summary_sql = format!(
-        "SELECT
-            COALESCE(SUM({a}.total_tokens), 0),
-            COALESCE(SUM({a}.input_tokens), 0),
-            COALESCE(SUM({a}.cache_read_tokens), 0),
-            COALESCE(SUM({a}.reasoning_tokens), 0),
-            COUNT(DISTINCT {a}.source || char(31) || {a}.session_id)
-        FROM {from_sql}
-        {where_part}"
+    // 四组聚合先物化同一工厂子查询，切分时明细只扫一遍。
+    // COUNT(DISTINCT session) 在 UNION ALL 之后计算，跨 partial 边界只计一次。
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            Some(grain),
+        ),
+        filter,
     );
+    conn.execute("DROP TABLE IF EXISTS application_analytics_src", [])
+        .map_err(|e| e.to_string())?;
+    conn.execute(
+        &format!(
+            "CREATE TEMP TABLE application_analytics_src AS {}",
+            inner.sql
+        ),
+        params_from_iter(inner.params.iter()),
+    )
+    .map_err(|e| e.to_string())?;
+    // 小时粒度 rollup_plan 已强制纯明细：first_at 即原 occurred_at，可还原小时桶。
+    // 不能回落到预聚合行的 first_at——那是当日最早时刻，会把全天塌进第一个小时。
+    let bucket = match grain {
+        "hour" => "substr(d.first_at, 1, 13)",
+        _ => rollup_bucket_expr(grain).unwrap_or("d.day"),
+    };
+
+    let summary_sql = "SELECT
+            COALESCE(SUM(d.total_tokens), 0),
+            COALESCE(SUM(d.input_tokens), 0),
+            COALESCE(SUM(d.cache_read_tokens), 0),
+            COALESCE(SUM(d.reasoning_tokens), 0),
+            COUNT(DISTINCT d.source || char(31) || d.session_id)
+        FROM application_analytics_src d";
     let (total, input, cache_read, reasoning, session_count) = conn
-        .query_row(&summary_sql, params_from_iter(params.iter()), |row| {
+        .query_row(summary_sql, [], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, i64>(1)?,
@@ -863,20 +851,17 @@ pub fn application_analytics(
         reasoning_share: ratio(reasoning, total),
     };
 
-    let app_sql = format!(
-        "SELECT {a}.source,
-            SUM({a}.total_tokens),
-            SUM({a}.input_tokens),
-            SUM({a}.cache_read_tokens),
-            SUM({a}.reasoning_tokens),
-            COUNT(DISTINCT {a}.session_id)
-        FROM {from_sql}
-        {where_part}
-        GROUP BY {a}.source"
-    );
-    let mut stmt = conn.prepare(&app_sql).map_err(|e| e.to_string())?;
+    let app_sql = "SELECT d.source,
+            SUM(d.total_tokens),
+            SUM(d.input_tokens),
+            SUM(d.cache_read_tokens),
+            SUM(d.reasoning_tokens),
+            COUNT(DISTINCT d.session_id)
+        FROM application_analytics_src d
+        GROUP BY d.source";
+    let mut stmt = conn.prepare(app_sql).map_err(|e| e.to_string())?;
     let app_rows = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, i64>(1)?,
@@ -920,15 +905,14 @@ pub fn application_analytics(
     });
 
     let trend_sql = format!(
-        "SELECT {bucket} AS bucket, {a}.source, SUM({a}.total_tokens)
-        FROM {from_sql}
-        {where_part}
+        "SELECT {bucket} AS bucket, d.source, SUM(d.total_tokens)
+        FROM application_analytics_src d
         GROUP BY 1, 2
         ORDER BY 1, 2"
     );
     let mut stmt = conn.prepare(&trend_sql).map_err(|e| e.to_string())?;
     let trend_rows = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -951,16 +935,13 @@ pub fn application_analytics(
         *point.values.entry(source).or_default() += total;
     }
 
-    let project_sql = format!(
-        "SELECT {a}.project, {a}.source, SUM({a}.total_tokens)
-        FROM {from_sql}
-        {where_part}
+    let project_sql = "SELECT d.project, d.source, SUM(d.total_tokens)
+        FROM application_analytics_src d
         GROUP BY 1, 2
-        ORDER BY 1, 2"
-    );
-    let mut stmt = conn.prepare(&project_sql).map_err(|e| e.to_string())?;
+        ORDER BY 1, 2";
+    let mut stmt = conn.prepare(project_sql).map_err(|e| e.to_string())?;
     let project_rows = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -1004,76 +985,6 @@ pub fn application_analytics(
     Ok(crate::aggregate::attach_cursor_application(
         dto, &events, grain,
     ))
-}
-
-/// `(from_sql, alias, bucket_expr, params, where_sql)`。
-fn application_analytics_source(
-    conn: &Connection,
-    filter: &Filter,
-    grain: &str,
-) -> (String, String, String, Vec<Value>, String) {
-    let mode = rollup_mode(conn, filter);
-    let rollup_ok = rollup_bucket_expr(grain).is_some();
-    match mode {
-        RollupMode::Rollup if rollup_ok => {
-            let (clauses, params) = rollup_filter_clauses(filter, None);
-            (
-                "usage_rollup d".into(),
-                "d".into(),
-                rollup_bucket_expr(grain).unwrap_or("d.day").to_string(),
-                params,
-                where_sql(&clauses),
-            )
-        }
-        RollupMode::Hybrid(split) if rollup_ok => {
-            let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(&split));
-            let (bound_clauses, bound_params) = boundary_filter_clauses(filter, &split);
-            params.extend(bound_params);
-            let from = format!(
-                "(
-                    SELECT d.total_tokens AS total_tokens,
-                        d.input_tokens AS input_tokens,
-                        d.cache_read_tokens AS cache_read_tokens,
-                        d.reasoning_tokens AS reasoning_tokens,
-                        d.source AS source,
-                        d.session_id AS session_id,
-                        d.project AS project,
-                        d.day AS day
-                    FROM usage_rollup d
-                    {middle_where}
-                    UNION ALL
-                    SELECT r.total_tokens,
-                        r.input_tokens,
-                        r.cache_read_tokens,
-                        r.reasoning_tokens,
-                        r.source,
-                        r.session_id,
-                        r.project,
-                        substr(r.occurred_at, 1, 10)
-                    FROM usage_records r
-                    {bound_where}
-                ) a",
-                middle_where = where_sql(&middle_clauses),
-                bound_where = where_sql(&bound_clauses),
-            );
-            let bucket = match grain {
-                "week" => "strftime('%G-W%V', a.day)".to_string(),
-                "month" => "substr(a.day, 1, 7)".to_string(),
-                _ => "a.day".to_string(),
-            };
-            (from, "a".into(), bucket, params, String::new())
-        }
-        _ => {
-            let (clauses, params) = filter_clauses(filter);
-            (
-                "usage_records r".into(),
-                "r".into(),
-                bucket_expr(grain).to_string(),
-                params,
-                where_sql(&clauses),
-            )
-        }
-    }
 }
 
 /// 从预聚合表取 Top N 会话。

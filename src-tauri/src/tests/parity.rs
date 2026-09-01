@@ -728,3 +728,187 @@ fn breakdown_matches_memory_across_rollup_window_shapes() {
             .collect::<Vec<_>>(),
     );
 }
+
+fn assert_application_analytics_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    filter: &Filter,
+    grain: &str,
+    label: &str,
+) -> crate::domain::ApplicationAnalyticsDto {
+    let sql = query::application_analytics(conn, filter, grain).unwrap();
+    let mem = aggregate::application_analytics(records, filter, grain);
+    assert_eq!(sql.summary, mem.summary, "{label} grain={grain} summary");
+    assert_eq!(
+        sql.by_application, mem.by_application,
+        "{label} grain={grain} by_application"
+    );
+    assert_eq!(sql.trend, mem.trend, "{label} grain={grain} trend");
+    assert_eq!(sql.projects, mem.projects, "{label} grain={grain} projects");
+    sql
+}
+
+fn application_session_count(dto: &crate::domain::ApplicationAnalyticsDto, source: &str) -> i64 {
+    dto.by_application
+        .iter()
+        .find(|row| row.source == source)
+        .map(|row| row.metrics.session_count)
+        .unwrap_or(0)
+}
+
+fn application_tokens(dto: &crate::domain::ApplicationAnalyticsDto, source: &str) -> i64 {
+    dto.by_application
+        .iter()
+        .find(|row| row.source == source)
+        .map(|row| row.metrics.total_tokens)
+        .unwrap_or(0)
+}
+
+fn application_trend_tokens(dto: &crate::domain::ApplicationAnalyticsDto, bucket: &str) -> i64 {
+    dto.trend
+        .iter()
+        .find(|point| point.bucket == bucket)
+        .map(|point| point.total_tokens)
+        .unwrap_or(0)
+}
+
+/// 四种时间窗 + 跨 partial 边界会话 + 未就绪：使用统计与内存聚合逐字段一致。
+#[test]
+fn application_analytics_matches_memory_across_rollup_window_shapes() {
+    let conn = store::open_memory().unwrap();
+    let records = trend_window_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+
+    let none = Filter::default();
+    let aligned = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-09T00:00:00Z".into()),
+        ..Filter::default()
+    };
+    let split = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let intra_day = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let head_empty = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let windows = [
+        (&none, "无时间窗"),
+        (&aligned, "对齐窗"),
+        (&split, "两端 partial 切分窗"),
+        (&intra_day, "单日内窗"),
+        (&head_empty, "单端 partial 为空"),
+    ];
+
+    for grain in ["hour", "day", "week", "month"] {
+        for (filter, label) in windows {
+            assert_application_analytics_parity(&conn, &records, filter, grain, label);
+        }
+    }
+
+    let split_sql =
+        assert_application_analytics_parity(&conn, &records, &split, "day", "切分窗 day");
+    // 头部 partial 的 s1 priced+native 与完整天 08-02 的 s1 必须并成一个会话。
+    assert_eq!(split_sql.summary.total_tokens, 100 + 80 + 50 + 200 + 300);
+    assert_eq!(
+        split_sql.summary.session_count, 3,
+        "跨 partial 边界的 s1 只计一次，加上 s2 / s3"
+    );
+    assert_eq!(application_tokens(&split_sql, "codex"), 100 + 80 + 50);
+    assert_eq!(
+        application_session_count(&split_sql, "codex"),
+        1,
+        "codex 跨 partial 边界的 s1 不得拆成两次"
+    );
+    assert_eq!(application_tokens(&split_sql, "claude"), 200);
+    assert_eq!(application_session_count(&split_sql, "claude"), 1);
+    assert_eq!(application_tokens(&split_sql, "pi"), 300);
+    assert_eq!(split_sql.by_application.len(), 3);
+    assert_eq!(split_sql.trend.len(), 3);
+    assert_eq!(split_sql.trend[0].bucket, "2026-08-01");
+    assert_eq!(split_sql.trend[0].total_tokens, 100 + 80 + 200);
+    assert_eq!(split_sql.trend[0].values["codex"], 100 + 80);
+    assert_eq!(split_sql.trend[0].values["claude"], 200);
+    assert_eq!(split_sql.trend[1].bucket, "2026-08-02");
+    assert_eq!(split_sql.trend[1].total_tokens, 50);
+    assert_eq!(split_sql.projects[0].project, "/proj/a");
+    assert_eq!(split_sql.projects[0].total_tokens, 100 + 80 + 200 + 50);
+    assert_eq!(split_sql.projects[0].values["codex"], 100 + 80 + 50);
+
+    let intra_sql =
+        assert_application_analytics_parity(&conn, &records, &intra_day, "day", "单日内窗 day");
+    assert_eq!(intra_sql.summary.total_tokens, 100 + 200);
+    assert_eq!(intra_sql.summary.session_count, 2);
+    assert_eq!(intra_sql.by_application.len(), 2);
+
+    let aligned_sql =
+        assert_application_analytics_parity(&conn, &records, &aligned, "day", "对齐窗 day");
+    assert_eq!(
+        aligned_sql.summary.total_tokens,
+        15 + 100 + 80 + 50 + 200 + 300
+    );
+    assert_eq!(aligned_sql.summary.session_count, 3, "s1 跨天仍只计一次");
+
+    let hour_none =
+        assert_application_analytics_parity(&conn, &records, &none, "hour", "无时间窗 hour");
+    assert_eq!(application_trend_tokens(&hour_none, "2026-08-01T08"), 15);
+    assert_eq!(application_trend_tokens(&hour_none, "2026-08-01T10"), 100);
+    assert_eq!(application_trend_tokens(&hour_none, "2026-08-01T12"), 80);
+    assert!(
+        hour_none
+            .trend
+            .iter()
+            .all(|point| point.bucket.contains('T')),
+        "小时粒度桶必须带时刻，不能塌成 UTC 日"
+    );
+
+    let hour_split =
+        assert_application_analytics_parity(&conn, &records, &split, "hour", "切分窗 hour");
+    assert_eq!(
+        application_trend_tokens(&hour_split, "2026-08-01T08"),
+        0,
+        "09:00 之前应裁掉，且不得并进 10:00 桶"
+    );
+    assert_eq!(application_trend_tokens(&hour_split, "2026-08-01T10"), 100);
+    assert_eq!(application_trend_tokens(&hour_split, "2026-08-01T11"), 200);
+    assert_eq!(application_trend_tokens(&hour_split, "2026-08-01T12"), 80);
+
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let not_ready =
+        assert_application_analytics_parity(&conn, &records, &split, "day", "预聚合未就绪 day");
+    assert_eq!(not_ready.summary, split_sql.summary);
+    assert_eq!(not_ready.by_application, split_sql.by_application);
+    assert_eq!(not_ready.trend, split_sql.trend);
+    assert_eq!(not_ready.projects, split_sql.projects);
+}
+
+/// 查询走只读连接（lock_read），切分窗也必须能算出结果。
+#[test]
+fn application_analytics_runs_on_readonly_connection() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("usage.sqlite");
+    let path = path.to_str().unwrap();
+    let write = store::open_db(path).unwrap();
+    store::insert_records(&write, &diverse_records()).unwrap();
+    store::rebuild_rollup(&write).unwrap();
+    drop(write);
+
+    let read = store::open_readonly(path).unwrap();
+    let filter = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let dto = query::application_analytics(&read, &filter, "day").unwrap();
+    assert_eq!(dto.summary.session_count, 3);
+}
