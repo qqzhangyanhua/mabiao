@@ -728,6 +728,7 @@ export type CursorSessionSummaryDto = {
   subagent_count: number;
   error_rate: number | null;
   average_turns: number | null;
+  single_prompt_ratio: number | null;
   average_tools_per_turn: number | null;
   write_read_ratio: number | null;
   active_project_count: number;

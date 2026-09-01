@@ -14,6 +14,7 @@ import {
 import {
   formatClock,
   formatCompact,
+  formatPercent,
   formatRatio,
   formatTokens,
   projectLabel,
@@ -49,6 +50,7 @@ function emptySummary(): CursorSessionSummaryDto {
     subagent_count: 0,
     error_rate: null,
     average_turns: null,
+    single_prompt_ratio: null,
     average_tools_per_turn: null,
     write_read_ratio: null,
     active_project_count: 0,
@@ -167,6 +169,13 @@ export function CursorSessionPanel({
           tone="blue"
           label="场均轮次"
           value={data.average_turns == null ? "—" : formatRatio(data.average_turns)}
+        />
+        <KpiCard
+          icon="sessions"
+          tone="purple"
+          label="单轮会话占比"
+          value={formatPercent(data.single_prompt_ratio)}
+          hint="一问一答就结束的会话占比，不等于成功"
         />
         <KpiCard
           icon="source"
