@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Icon } from "../icons";
+import { consumeEscape } from "../lib/escapeShortcut";
 import { Button } from "./ui/Button";
 
 export function ConversationImageDialog({
@@ -27,7 +28,7 @@ export function ConversationImageDialog({
     focusable()[0]?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
+      if (consumeEscape(event)) {
         onClose();
         return;
       }
@@ -50,9 +51,9 @@ export function ConversationImageDialog({
         first.focus();
       }
     }
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       previousFocus?.focus();
     };
   }, [onClose]);

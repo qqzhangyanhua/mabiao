@@ -28,12 +28,17 @@ export function useKeyboardShortcuts({
         return;
       }
       if (event.key === "r" || event.key === "R") {
-        event.preventDefault();
-        onRefresh();
+        if (!event.defaultPrevented) {
+          event.preventDefault();
+          onRefresh();
+        }
         return;
       }
       if (event.key === "Escape") {
-        onClearFilters();
+        // 浮层（捕获）和对话详情会先消费 Escape。
+        if (!event.defaultPrevented) {
+          onClearFilters();
+        }
         return;
       }
       const next = viewForShortcutKey(event.key);

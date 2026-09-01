@@ -33,6 +33,7 @@ import {
   shouldRequestConversationDetail,
   transitionConversationNavigation,
 } from "../lib/conversationNavigation";
+import { consumeEscape, consumeRefreshShortcut } from "../lib/escapeShortcut";
 import { humanStatus } from "../lib/format";
 import type {
   ConversationAgentLink,
@@ -707,6 +708,29 @@ export function Conversations({
     unseenCountRef.current = 0;
     setUnseenCount(0);
   }
+
+  const onDetailEscapeRef = useRef(closeDetail);
+  onDetailEscapeRef.current = navigation.frames.length > 1 ? backToParent : closeDetail;
+
+  useEffect(() => {
+    if (!selectedKey) {
+      return;
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey || event.defaultPrevented) {
+        return;
+      }
+      if (consumeRefreshShortcut(event)) {
+        return;
+      }
+      if (!consumeEscape(event)) {
+        return;
+      }
+      onDetailEscapeRef.current();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedKey]);
 
   function setDetailTab(tab: ConversationDetailTab) {
     setNavigation((current) => transitionConversationNavigation(current, { type: "set_tab", tab }));

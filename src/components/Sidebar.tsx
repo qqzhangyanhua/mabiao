@@ -125,7 +125,7 @@ export function Sidebar({
               <div className="conn-sub">{status}</div>
             </div>
           </div>
-          <div className="version" title={`${shortcutLegend()} · R 刷新 · Esc 清空筛选`}>
+          <div className="version" title={`${shortcutLegend()} · R 刷新 · Esc 关浮层 / 返回目录 / 清空筛选`}>
             版本 {__APP_VERSION__} · R 刷新 / {shortcutRangeLabel()} 切页
           </div>
         </div>
