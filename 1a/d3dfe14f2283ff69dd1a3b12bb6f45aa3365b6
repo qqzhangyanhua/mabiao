@@ -1,0 +1,67 @@
+CONTEXT.md
+  s_fc1eef2d571fa4::t_5159a2139f672a 44
+src-tauri/src/tests/custom_quota/rows.rs
+  s_fc1eef2d571fa4::t_f3be1f44186de7 194-198
+src-tauri/src/tests/quota_exhaust.rs
+  s_fc1eef2d571fa4::t_a3f09d92ae67f7 3-45
+  s_fc1eef2d571fa4::t_1f816724b86a65 185-186
+  s_fc1eef2d571fa4::t_90819e1cfd98ad 1
+  s_fc1eef2d571fa4::t_b9e403b21aaf73 2
+  s_fc1eef2d571fa4::t_f49c72184c0f41 46-48,182-184
+  s_fc1eef2d571fa4::t_391f259fb49849 187-189
+src/lib/trayQuotaLayout.test.ts
+  s_fc1eef2d571fa4::t_7dde5f73bd8268 124,134
+README.md
+  s_fc1eef2d571fa4::t_60f98592d4dadb 44
+src/lib/officialQuotaDisplay.test.ts
+  s_fc1eef2d571fa4::t_fbb222c735438d 4,10,184-216
+  s_fc1eef2d571fa4::t_749c7a14196b2c 217-218
+src-tauri/src/store.rs
+  s_fc1eef2d571fa4::t_a3f09d92ae67f7 1186-1187,1227-1228
+  s_fc1eef2d571fa4::t_b2bad8f243eee6 1184-1185,1189-1192,1197-1208,1214-1226,1229-1242,1265-1279,1284-1285,1288-1294,1303-1315,1323-1333,1339-1340,1343-1364
+  s_fc1eef2d571fa4::t_585144c90e145f 273-275,281-282
+src-tauri/src/tests/mod.rs
+  s_fc1eef2d571fa4::t_1dfa7a3027e5b6 43
+src-tauri/src/official_quota/mod.rs
+  s_fc1eef2d571fa4::t_c77db7cd38d3c4 13,181-182,185,187-194,200,203,205,207,253-254
+src/lib/officialQuotaDisplay.ts
+  s_fc1eef2d571fa4::t_54c2b20ad45727 6,8,68-111,116-117
+  s_fc1eef2d571fa4::t_8bd1a1b3581084 112-115
+src/styles.css
+  s_fc1eef2d571fa4::t_3628bc51b7168b 3954-3955,4163-4169,4195-4200
+  s_fc1eef2d571fa4::t_860f953b400689 4201
+src-tauri/src/official_quota/exhaust.rs
+  s_fc1eef2d571fa4::t_f2f7eb3a66e88a 124-127
+  s_fc1eef2d571fa4::t_3e5437b930d3d3 1-123,128-144
+src-tauri/src/tests/official_quota.rs
+  s_fc1eef2d571fa4::t_a3f09d92ae67f7 296
+  s_fc1eef2d571fa4::t_d032fa7b05aca8 85-86,128-129,274,278-279,284,287,291-292,297,306-307
+src-tauri/src/domain.rs
+  s_fc1eef2d571fa4::t_4be19bf03fa177 234-252,280-282
+src/types.ts
+  s_fc1eef2d571fa4::t_38df9c2565fe71 84-91,102-103
+docs/adr/0008-official-quota-dimension.md
+  s_fc1eef2d571fa4::t_27dc130e24fac7 28
+src/components/OfficialQuotaPanel.tsx
+  s_fc1eef2d571fa4::t_17be7b916e5dcb 350
+  s_fc1eef2d571fa4::t_3ecb4b36aa1b15 7,11,358,360-363,383-386
+  s_fc1eef2d571fa4::t_dce3e2fd70f429 387
+README.en.md
+  s_fc1eef2d571fa4::t_4a3ab3f7763a50 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1ad3dfe14f2283ff69dd1a3b12bb6f45aa3365b6",
+  "prompts": {},
+  "sessions": {
+    "s_fc1eef2d571fa4": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05d64-ae23-7be1-9bf9-eb7f8d55e221",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
