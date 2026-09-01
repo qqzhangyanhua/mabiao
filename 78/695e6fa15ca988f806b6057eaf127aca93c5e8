@@ -1,0 +1,25 @@
+src-tauri/src/tests/parity.rs
+  s_31aa72f2ceddf6::t_03c900ca429228 244,260,288-289
+  s_31aa72f2ceddf6::t_5934437f1244f2 214-217,228-231
+  s_31aa72f2ceddf6::t_09256ac126f829 179-213,218-227,232-243,245-259,261-287,290-309
+src-tauri/src/query.rs
+  s_31aa72f2ceddf6::t_de963f620c1dcd 21-22
+  s_31aa72f2ceddf6::t_ac42032a0cd0ea 458,480,482
+  s_31aa72f2ceddf6::t_bc0cddd81d8b59 459-479,481
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "78695e6fa15ca988f806b6057eaf127aca93c5e8",
+  "prompts": {},
+  "sessions": {
+    "s_31aa72f2ceddf6": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05be6-d655-7a20-9068-0a17fbdf265b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
