@@ -728,10 +728,10 @@ pub fn trend(
 
 fn breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
     match dimension {
-        "application" | "source" => Ok("r.source"),
-        "model" => Ok("r.model"),
-        "provider" => Ok("r.provider"),
-        "project" => Ok("r.project"),
+        "application" | "source" => Ok("d.source"),
+        "model" => Ok("d.model"),
+        "provider" => Ok("d.provider"),
+        "project" => Ok("d.project"),
         _ => Err(format!("不支持的统计维度：{dimension}")),
     }
 }
@@ -748,17 +748,6 @@ fn display_name(raw: &str, dimension: &str) -> String {
     }
 }
 
-/// 预聚合表上的分组维度。与 `breakdown_name_expr` 一一对应，只是别名换成 `d`。
-fn rollup_breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
-    match dimension {
-        "application" | "source" => Ok("d.source"),
-        "model" => Ok("d.model"),
-        "provider" => Ok("d.provider"),
-        "project" => Ok("d.project"),
-        _ => Err(format!("不支持的统计维度：{dimension}")),
-    }
-}
-
 pub fn breakdown(
     conn: &Connection,
     filter: &Filter,
@@ -766,48 +755,29 @@ pub fn breakdown(
     dimension: &str,
 ) -> Result<Vec<NamedAmount>, String> {
     install_prices(conn, prices)?;
-    let (sql, params) = match rollup_mode(conn, filter) {
-        RollupMode::Rollup => {
-            let name_expr = rollup_breakdown_name_expr(dimension)?;
-            let (clauses, params) = rollup_filter_clauses(filter, None);
-            (
-                format!(
-                    "SELECT {name_expr} AS name,
-                        SUM(d.total_tokens),
-                        SUM({ROLLUP_COST_EXPR}),
-                        COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
-                    FROM usage_rollup d
-                    {ROLLUP_PRICE_JOINS}
-                    {}
-                    GROUP BY 1",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-        RollupMode::Hybrid(split) => breakdown_hybrid_sql(filter, &split, dimension)?,
-        RollupMode::Raw => {
-            let name_expr = breakdown_name_expr(dimension)?;
-            let (clauses, params) = filter_clauses(filter);
-            (
-                format!(
-                    "SELECT {name_expr} AS name,
-                        SUM(r.total_tokens),
-                        SUM({COST_EXPR}),
-                        COALESCE(SUM({UNPRICED_EXPR}), 0)
-                    FROM usage_records r
-                    {PRICE_JOINS}
-                    {}
-                    GROUP BY 1",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-    };
+    let name_expr = breakdown_name_expr(dimension)?;
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            None,
+        ),
+        filter,
+    );
+    let sql = format!(
+        "SELECT {name_expr} AS name,
+            SUM(d.total_tokens),
+            SUM({ROLLUP_COST_EXPR}),
+            COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
+        FROM ({}) d
+        {ROLLUP_PRICE_JOINS}
+        GROUP BY 1",
+        inner.sql,
+    );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let raw = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map(params_from_iter(inner.params.iter()), |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, i64>(1)?,
@@ -846,45 +816,6 @@ pub fn breakdown(
         ));
     }
     Ok(rows)
-}
-
-fn breakdown_hybrid_sql(
-    filter: &Filter,
-    split: &TimeSplit,
-    dimension: &str,
-) -> Result<(String, Vec<Value>), String> {
-    let rollup_name = rollup_breakdown_name_expr(dimension)?;
-    let raw_name = breakdown_name_expr(dimension)?;
-    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
-    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
-    params.extend(bound_params);
-    let sql = format!(
-        "SELECT name,
-            SUM(total_tokens),
-            SUM(cost),
-            COALESCE(SUM(unpriced), 0)
-        FROM (
-            SELECT {rollup_name} AS name,
-                d.total_tokens AS total_tokens,
-                {ROLLUP_COST_EXPR} AS cost,
-                {ROLLUP_UNPRICED_EXPR} AS unpriced
-            FROM usage_rollup d
-            {ROLLUP_PRICE_JOINS}
-            {middle_where}
-            UNION ALL
-            SELECT {raw_name},
-                r.total_tokens,
-                {COST_EXPR},
-                {UNPRICED_EXPR}
-            FROM usage_records r
-            {PRICE_JOINS}
-            {bound_where}
-        )
-        GROUP BY 1",
-        middle_where = where_sql(&middle_clauses),
-        bound_where = where_sql(&bound_clauses),
-    );
-    Ok((sql, params))
 }
 
 pub fn application_analytics(

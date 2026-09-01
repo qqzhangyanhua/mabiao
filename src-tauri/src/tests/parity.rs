@@ -512,3 +512,219 @@ fn trend_matches_memory_across_rollup_window_shapes() {
     assert_eq!(point_tokens(&hour_not_ready, "2026-08-01T10"), 100);
     assert_eq!(point_tokens(&hour_not_ready, "2026-08-01T12"), 80);
 }
+
+fn breakdown_key(record: &UsageRecord, dim: &str) -> String {
+    match dim {
+        "source" => record.source.as_str().to_string(),
+        "model" => record.model.clone(),
+        "provider" => record.provider.clone(),
+        "project" => record.project.clone(),
+        _ => unreachable!("未知分布维度：{dim}"),
+    }
+}
+
+fn assert_breakdown_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    prices: &PriceTable,
+    filter: &Filter,
+    dim: &str,
+    label: &str,
+) -> Vec<crate::domain::NamedAmount> {
+    let sql = query::breakdown(conn, filter, prices, dim).unwrap();
+    let mem = aggregate::by_name(records, filter, prices, |record| breakdown_key(record, dim));
+    assert_eq!(sql.len(), mem.len(), "{label} dim={dim} 行数");
+    for (s, m) in sql.iter().zip(mem.iter()) {
+        assert_eq!(s.name, m.name, "{label} dim={dim} name");
+        assert_eq!(
+            s.total_tokens, m.total_tokens,
+            "{label} dim={dim} {} total_tokens",
+            s.name
+        );
+        assert!(
+            (s.share - m.share).abs() < 1e-9,
+            "{label} dim={dim} {} share {} vs {}",
+            s.name,
+            s.share,
+            m.share
+        );
+        assert_eq!(
+            s.unpriced, m.unpriced,
+            "{label} dim={dim} {} unpriced",
+            s.name
+        );
+        match (s.cost, m.cost) {
+            (Some(x), Some(y)) => {
+                assert!(
+                    (x - y).abs() < 1e-9,
+                    "{label} dim={dim} {} cost {x} vs {y}",
+                    s.name
+                )
+            }
+            (None, None) => {}
+            (x, y) => panic!(
+                "{label} dim={dim} {} cost Option 不一致：{x:?} vs {y:?}",
+                s.name
+            ),
+        }
+    }
+    sql
+}
+
+fn named_tokens(rows: &[crate::domain::NamedAmount], name: &str) -> i64 {
+    rows.iter()
+        .find(|row| row.name == name)
+        .map(|row| row.total_tokens)
+        .unwrap_or(0)
+}
+
+/// 四种时间窗 × 四个分布维度 + 单端 partial / 未就绪：与内存聚合逐字段一致。
+#[test]
+fn breakdown_matches_memory_across_rollup_window_shapes() {
+    let conn = store::open_memory().unwrap();
+    let records = overview_window_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+    let prices = diverse_prices();
+
+    let none = Filter::default();
+    let aligned = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-09T00:00:00Z".into()),
+        ..Filter::default()
+    };
+    let split = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let intra_day = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let head_empty = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let windows = [
+        (&none, "无时间窗"),
+        (&aligned, "对齐窗"),
+        (&split, "两端 partial 切分窗"),
+        (&intra_day, "单日内窗"),
+        (&head_empty, "单端 partial 为空"),
+    ];
+    let dims = ["source", "model", "provider", "project"];
+
+    for dim in dims {
+        for (filter, label) in windows {
+            assert_breakdown_parity(
+                &conn,
+                &records,
+                &prices,
+                filter,
+                dim,
+                &format!("{label} dim={dim}"),
+            );
+        }
+    }
+
+    let split_source =
+        assert_breakdown_parity(&conn, &records, &prices, &split, "source", "切分窗 source");
+    // 头部 partial 的 s1 priced+native 与完整天 08-02 的 s1 必须并进同一来源。
+    assert_eq!(named_tokens(&split_source, "pi"), 300);
+    assert_eq!(named_tokens(&split_source, "codex"), 100 + 80 + 50);
+    assert_eq!(named_tokens(&split_source, "claude"), 200);
+    assert_eq!(split_source.len(), 3);
+
+    let split_model =
+        assert_breakdown_parity(&conn, &records, &prices, &split, "model", "切分窗 model");
+    assert_eq!(named_tokens(&split_model, "gpt-5.5"), 300);
+    assert_eq!(named_tokens(&split_model, "gpt-5.1-codex"), 100 + 80 + 50);
+    assert_eq!(named_tokens(&split_model, "claude-sonnet-5"), 200);
+    let mixed = split_model
+        .iter()
+        .find(|row| row.name == "gpt-5.1-codex")
+        .expect("切分窗应有 gpt-5.1-codex");
+    // priced(0.1085) + 同日 native(0.4) + 次日 native(1.5)
+    assert!(
+        (mixed.cost.unwrap() - 2.0085).abs() < 1e-9,
+        "同会话同日混原生费用：got {:?}",
+        mixed.cost
+    );
+    assert!(!mixed.unpriced);
+
+    let split_provider = assert_breakdown_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "provider",
+        "切分窗 provider",
+    );
+    assert_eq!(named_tokens(&split_provider, "subapi"), 300);
+    assert_eq!(named_tokens(&split_provider, "official"), 100 + 80 + 50);
+    assert_eq!(named_tokens(&split_provider, "anthropic"), 200);
+
+    let split_project = assert_breakdown_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "project",
+        "切分窗 project",
+    );
+    assert_eq!(named_tokens(&split_project, "/proj/a"), 100 + 80 + 200 + 50);
+    assert_eq!(named_tokens(&split_project, "/proj/b"), 300);
+
+    let intra_source = assert_breakdown_parity(
+        &conn,
+        &records,
+        &prices,
+        &intra_day,
+        "source",
+        "单日内窗 source",
+    );
+    assert_eq!(intra_source.len(), 2);
+    assert_eq!(named_tokens(&intra_source, "claude"), 200);
+    assert_eq!(named_tokens(&intra_source, "codex"), 100);
+
+    let none_model =
+        assert_breakdown_parity(&conn, &records, &prices, &none, "model", "无时间窗 model");
+    assert!(
+        none_model
+            .iter()
+            .find(|row| row.name == "unknown-model")
+            .is_some_and(|row| row.unpriced),
+        "unknown-model 应标未定价"
+    );
+    assert!(
+        none_model
+            .iter()
+            .find(|row| row.name == "（未标注）")
+            .is_some_and(|row| row.unpriced),
+        "空模型应标未定价"
+    );
+
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let not_ready = assert_breakdown_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "source",
+        "预聚合未就绪 source",
+    );
+    assert_eq!(
+        not_ready
+            .iter()
+            .map(|row| (row.name.as_str(), row.total_tokens))
+            .collect::<Vec<_>>(),
+        split_source
+            .iter()
+            .map(|row| (row.name.as_str(), row.total_tokens))
+            .collect::<Vec<_>>(),
+    );
+}
