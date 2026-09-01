@@ -233,9 +233,8 @@ input[type="number"] {
   background: transparent;
 }
 
-*,
-*::before,
-*::after {
+button,
+input {
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -3737,11 +3736,7 @@ td.row-actions {
   border: 1px solid rgba(168, 172, 180, 0.42);
   background-color: #121214;
   background-image:
-    repeating-linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.05) 0 1px,
-      transparent 1px 2px
-    ),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 2px),
     linear-gradient(180deg, #3a3a3e 0%, #1a1a1d 46%, #0b0b0d 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.22),
@@ -3779,7 +3774,8 @@ td.row-actions {
 .official-quota-plan.is-flagship .official-quota-plan-label {
   background-image: linear-gradient(180deg, #fff6d2 0%, #f0d070 34%, #d4a84a 62%, #9a6c18 100%);
   color: var(--plan-flagship-fg);
-  filter: drop-shadow(0 -0.5px 0 rgba(255, 244, 210, 0.35)) drop-shadow(0 1px 0 rgba(40, 24, 0, 0.82));
+  filter: drop-shadow(0 -0.5px 0 rgba(255, 244, 210, 0.35))
+    drop-shadow(0 1px 0 rgba(40, 24, 0, 0.82));
 }
 
 .official-quota-plan.is-flagship::after {
@@ -3813,7 +3809,8 @@ td.row-actions {
 .official-quota-plan.is-bronze .official-quota-plan-label {
   background-image: linear-gradient(180deg, #f6dfc4 0%, #d4a06a 34%, #b06a38 62%, #6e3c16 100%);
   color: var(--plan-bronze-fg);
-  filter: drop-shadow(0 -0.5px 0 rgba(255, 228, 196, 0.28)) drop-shadow(0 1px 0 rgba(48, 20, 0, 0.82));
+  filter: drop-shadow(0 -0.5px 0 rgba(255, 228, 196, 0.28))
+    drop-shadow(0 1px 0 rgba(48, 20, 0, 0.82));
 }
 
 .official-quota-plan.is-free {
@@ -4615,10 +4612,16 @@ td.row-actions {
   height: clamp(280px, 56vh, 680px);
   padding: 0 12px;
   overflow-y: auto;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+}
+
+.conversation-timeline-spacer {
+  width: 100%;
+  pointer-events: none;
 }
 
 .conversation-events-view > .conversation-timeline {
