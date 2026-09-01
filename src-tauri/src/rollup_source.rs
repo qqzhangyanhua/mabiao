@@ -136,7 +136,7 @@ fn push_partial_bound(
     params.push(Value::Text(range.to.clone()));
 }
 
-fn dimension_clauses(filter: &Filter, alias: &str) -> (Vec<String>, Vec<Value>) {
+pub(crate) fn dimension_clauses(filter: &Filter, alias: &str) -> (Vec<String>, Vec<Value>) {
     let mut clauses = Vec::new();
     let mut params = Vec::new();
     for (column, values) in [

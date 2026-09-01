@@ -2,6 +2,9 @@
 //! GROUP BY / 过滤，只返回聚合结果。费用通过临时价格表 `price_rows` LEFT JOIN 计算，
 //! 与 `cost::derive_cost` 保持同一语义（native_cost 优先，其次 model+provider 匹配，
 //! 再次 model 且 provider 为 NULL 的兜底，都没有则标记 unpriced；model/provider 大小写不敏感）。
+//!
+//! 高频聚合走统一子查询工厂：时间窗按 UTC 天切分，中间整天用 `usage_rollup`，
+//! 两端 partial 用明细补差。无时间窗时整段走预聚合；小时粒度无法从日级还原，仍走明细。
 
 use std::collections::BTreeMap;
 
@@ -18,7 +21,7 @@ use crate::domain::{
     SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UnpricedGroupDto,
     UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
 };
-use crate::rollup_source::rollup_source;
+use crate::rollup_source::{dimension_clauses, rollup_source};
 use crate::rollup_split::rollup_plan;
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
@@ -108,7 +111,7 @@ fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(), String> 
     Ok(())
 }
 
-/// Filter → (WHERE 子句片段列表, 参数)。所有列都加 `r.` 前缀（表别名 r）。
+/// Filter → (WHERE 子句片段列表, 参数)。时间条件加在明细表 `r.` 上，维度过滤与工厂共用。
 fn filter_clauses(filter: &Filter) -> (Vec<String>, Vec<Value>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
@@ -120,47 +123,10 @@ fn filter_clauses(filter: &Filter) -> (Vec<String>, Vec<Value>) {
         clauses.push("r.occurred_at <= ?".to_string());
         params.push(Value::Text(to.clone()));
     }
-    if !filter.sources.is_empty() {
-        clauses.push(format!(
-            "r.source IN ({})",
-            placeholders(filter.sources.len())
-        ));
-        for s in &filter.sources {
-            params.push(Value::Text(s.clone()));
-        }
-    }
-    if !filter.models.is_empty() {
-        clauses.push(format!(
-            "r.model IN ({})",
-            placeholders(filter.models.len())
-        ));
-        for m in &filter.models {
-            params.push(Value::Text(m.clone()));
-        }
-    }
-    if !filter.projects.is_empty() {
-        clauses.push(format!(
-            "r.project IN ({})",
-            placeholders(filter.projects.len())
-        ));
-        for p in &filter.projects {
-            params.push(Value::Text(p.clone()));
-        }
-    }
-    if !filter.providers.is_empty() {
-        clauses.push(format!(
-            "r.provider IN ({})",
-            placeholders(filter.providers.len())
-        ));
-        for p in &filter.providers {
-            params.push(Value::Text(p.clone()));
-        }
-    }
+    let (dim_clauses, dim_params) = dimension_clauses(filter, "r");
+    clauses.extend(dim_clauses);
+    params.extend(dim_params);
     (clauses, params)
-}
-
-fn placeholders(n: usize) -> String {
-    std::iter::repeat_n("?", n).collect::<Vec<_>>().join(", ")
 }
 
 pub(crate) struct SessionUsageTotals {
@@ -486,13 +452,17 @@ pub fn billing_windows(
     ))
 }
 
-/// 预聚合表的时间桶。表按 UTC 天聚合，比天更细的粒度取不出来，只能回原始表。
-fn rollup_bucket_expr(grain: &str) -> Option<&'static str> {
+/// 统一行结构上的时间桶。
+///
+/// 小时桶用 `first_at`：`rollup_plan` 对 hour 强制纯明细，`first_at` 即原 `occurred_at`。
+/// 不能用预聚合行的 `first_at`——那是当日最早时刻，会把全天塌进第一个小时。
+/// 日及以上用 `d.day`（预聚合行和明细投影都有这一列）。
+fn bucket_expr(grain: &str) -> &'static str {
     match grain {
-        "hour" => None,
-        "week" => Some("strftime('%G-W%V', d.day)"),
-        "month" => Some("substr(d.day, 1, 7)"),
-        _ => Some("d.day"),
+        "hour" => "substr(d.first_at, 1, 13)",
+        "week" => "strftime('%G-W%V', d.day)",
+        "month" => "substr(d.day, 1, 7)",
+        _ => "d.day",
     }
 }
 
@@ -512,12 +482,7 @@ pub fn trend(
         ),
         filter,
     );
-    // 小时粒度 rollup_plan 已强制纯明细：first_at 即原 occurred_at，可还原小时桶。
-    // 不能回落到预聚合行的 first_at——那是当日最早时刻，会把全天塌进第一个小时。
-    let bucket = match grain {
-        "hour" => "substr(d.first_at, 1, 13)",
-        _ => rollup_bucket_expr(grain).unwrap_or("d.day"),
-    };
+    let bucket = bucket_expr(grain);
     let sql = format!(
         "SELECT {bucket} AS bucket,
             SUM(d.total_tokens),
@@ -675,12 +640,7 @@ pub fn application_analytics(
         params_from_iter(inner.params.iter()),
     )
     .map_err(|e| e.to_string())?;
-    // 小时粒度 rollup_plan 已强制纯明细：first_at 即原 occurred_at，可还原小时桶。
-    // 不能回落到预聚合行的 first_at——那是当日最早时刻，会把全天塌进第一个小时。
-    let bucket = match grain {
-        "hour" => "substr(d.first_at, 1, 13)",
-        _ => rollup_bucket_expr(grain).unwrap_or("d.day"),
-    };
+    let bucket = bucket_expr(grain);
 
     let summary_sql = "SELECT
             COALESCE(SUM(d.total_tokens), 0),

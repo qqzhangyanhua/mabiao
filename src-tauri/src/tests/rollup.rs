@@ -670,9 +670,8 @@ fn rollup_application_analytics_matches_raw_table() {
     }
 }
 
-/// 默认「近 7 天」这类带时分秒的窗口：中间完整 UTC 日走预聚合，两端边界走明细，
-/// 结果必须与整段扫原始表一致。这是把 can_use_rollup 从「有 from/to 就禁用」
-/// 改成 hybrid 之后最重要的回归。
+/// 默认「近 7 天」这类带时分秒的窗口：中间完整 UTC 日走预聚合，两端 partial 走明细，
+/// 结果必须与整段扫原始表一致。
 #[test]
 fn hybrid_time_window_matches_raw_table() {
     let conn = prepared();
