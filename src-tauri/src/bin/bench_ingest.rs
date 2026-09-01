@@ -40,9 +40,7 @@ fn run_verify_stuck() -> Result<(), String> {
 
     let before_version = store::cached_adapter_version(&conn, &target.path)?;
     let before_count = store::record_count_for_file(&conn, &target.path)?;
-    println!(
-        "# verify-stuck\nbefore version={before_version:?} records={before_count}"
-    );
+    println!("# verify-stuck\nbefore version={before_version:?} records={before_count}");
 
     let (report, timings) = ingest::ingest_all_timed(&conn, &home)?;
     let after_version = store::cached_adapter_version(&conn, &target.path)?;
@@ -173,12 +171,7 @@ fn run_micro() -> Result<(), String> {
     let offset = (target.size as u64).saturating_sub(256 * 1024);
     let rss2 = rss_mb();
     let started = Instant::now();
-    let suffix = conversation::codex_index_suffix_for_bench(
-        path,
-        offset,
-        0,
-        &target.session_id,
-    );
+    let suffix = conversation::codex_index_suffix_for_bench(path, offset, 0, &target.session_id);
     let suffix_ms = started.elapsed().as_millis();
     match suffix {
         Ok(events) => println!(
@@ -254,7 +247,10 @@ fn run() -> Result<(), String> {
     let scenarios = [
         ("warm-skip", Scenario::WarmSkip),
         ("dirty-usage", Scenario::DirtyUsage),
-        ("incremental-conversation", Scenario::IncrementalConversation),
+        (
+            "incremental-conversation",
+            Scenario::IncrementalConversation,
+        ),
         ("dirty-conversation", Scenario::DirtyConversation),
         ("dirty-both", Scenario::DirtyBoth),
     ];
@@ -284,7 +280,7 @@ fn run() -> Result<(), String> {
         if let Ok(Some(row)) = target_file_row(&conn, &target) {
             println!(
                 "  target_after: size={} offset={} max_seq={:?} events={}",
-                row.0, row.1, row.2, row.3
+                row.size, row.offset, row.max_seq, row.events
             );
         }
         println!();
@@ -352,13 +348,8 @@ fn clone_db(src_path: &Path, dest: &Path) -> Result<(), String> {
     }
     println!(
         "## clone {} → {} ({:.1}s)",
-        src_path
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("?"),
-        dest.file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("?"),
+        src_path.file_name().and_then(|s| s.to_str()).unwrap_or("?"),
+        dest.file_name().and_then(|s| s.to_str()).unwrap_or("?"),
         started.elapsed().as_secs_f64()
     );
     Ok(())
@@ -453,10 +444,17 @@ fn apply_scenario(
     }
 }
 
+struct IndexedFileRow {
+    size: i64,
+    offset: i64,
+    max_seq: Option<i64>,
+    events: i64,
+}
+
 fn target_file_row(
     conn: &Connection,
     target: &TargetFile,
-) -> Result<Option<(i64, i64, Option<i64>, i64)>, String> {
+) -> Result<Option<IndexedFileRow>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT source_file_size, indexed_byte_offset, max_sequence,
@@ -471,12 +469,12 @@ fn target_file_row(
         .query(params![target.session_id])
         .map_err(|e| e.to_string())?;
     if let Some(row) = rows.next().map_err(|e| e.to_string())? {
-        Ok(Some((
-            row.get(0).map_err(|e| e.to_string())?,
-            row.get(1).map_err(|e| e.to_string())?,
-            row.get(2).map_err(|e| e.to_string())?,
-            row.get(3).map_err(|e| e.to_string())?,
-        )))
+        Ok(Some(IndexedFileRow {
+            size: row.get(0).map_err(|e| e.to_string())?,
+            offset: row.get(1).map_err(|e| e.to_string())?,
+            max_seq: row.get(2).map_err(|e| e.to_string())?,
+            events: row.get(3).map_err(|e| e.to_string())?,
+        }))
     } else {
         Ok(None)
     }

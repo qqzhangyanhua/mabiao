@@ -41,21 +41,20 @@ export function emptyViewScope(): ViewScope {
 
 export function initialViewScopes(): Record<View, ViewScope> {
   const seed = emptyViewScope();
-  return Object.fromEntries(
-    views.map((view) => [
-      view,
-      {
-        preset: seed.preset,
-        filter: {
-          ...seed.filter,
-          sources: [],
-          models: [],
-          projects: [],
-          providers: [],
-        },
+  const scopes = {} as Record<View, ViewScope>;
+  for (const view of views) {
+    scopes[view] = {
+      preset: seed.preset,
+      filter: {
+        ...seed.filter,
+        sources: [],
+        models: [],
+        projects: [],
+        providers: [],
       },
-    ]),
-  ) as Record<View, ViewScope>;
+    };
+  }
+  return scopes;
 }
 
 function sameItems(left: string[], right: string[]): boolean {
