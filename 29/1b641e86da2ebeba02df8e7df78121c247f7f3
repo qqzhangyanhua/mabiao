@@ -1,0 +1,18 @@
+src/App.tsx
+  h_4132837b09b7e7 78
+src/components/Sidebar.tsx
+  h_4132837b09b7e7 52-77,82,89,94-95,152-155,165-167
+src/styles.css
+  h_4132837b09b7e7 253-254,481-485,490-501,505-506,527-537,543-552
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "291b641e86da2ebeba02df8e7df78121c247f7f3",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
