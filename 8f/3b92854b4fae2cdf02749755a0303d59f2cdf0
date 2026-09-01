@@ -1,0 +1,25 @@
+src-tauri/src/store.rs
+  s_25db34b44acdbe::t_524fce1e9f2e41 96-97
+src-tauri/src/tests/rollup.rs
+  s_25db34b44acdbe::t_4f5618e542d989 673-674
+src-tauri/src/rollup_source.rs
+  s_25db34b44acdbe::t_2f5592a14fa77c 139
+src-tauri/src/query.rs
+  s_25db34b44acdbe::t_f2834890481032 5-7,24,114,126-128,455-460,462-465,485,643
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8f3b92854b4fae2cdf02749755a0303d59f2cdf0",
+  "prompts": {},
+  "sessions": {
+    "s_25db34b44acdbe": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05c6c-2ad8-7ad1-8283-4c4c7405cbd5",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
