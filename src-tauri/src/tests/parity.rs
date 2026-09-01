@@ -307,3 +307,208 @@ fn overview_matches_memory_across_rollup_window_shapes() {
     assert_eq!(not_ready.total_tokens, split_sql.total_tokens);
     assert_eq!(not_ready.session_count, split_sql.session_count);
 }
+
+fn trend_window_records() -> Vec<UsageRecord> {
+    let mut records = overview_window_records();
+    // 同日更早一小时：切分窗 / 单日窗应从 09:00 裁掉，小时桶不能并进 10:00。
+    records.push(rec(
+        "2026-08-01T08:00:00Z",
+        Source::Codex,
+        "gpt-5.1-codex",
+        "official",
+        "/proj/a",
+        "s1",
+        15,
+    ));
+    records
+}
+
+fn assert_trend_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    prices: &PriceTable,
+    filter: &Filter,
+    grain: &str,
+    label: &str,
+) -> Vec<crate::domain::SeriesPoint> {
+    let sql = query::trend(conn, filter, prices, grain).unwrap();
+    let mem = aggregate::trend(records, filter, prices, grain);
+    assert_eq!(sql.len(), mem.len(), "{label} 桶数");
+    for (s, m) in sql.iter().zip(mem.iter()) {
+        assert_eq!(s.bucket, m.bucket, "{label} bucket");
+        assert_eq!(
+            s.total_tokens, m.total_tokens,
+            "{label} {} total_tokens",
+            s.bucket
+        );
+        assert_eq!(
+            s.input_tokens, m.input_tokens,
+            "{label} {} input_tokens",
+            s.bucket
+        );
+        assert_eq!(
+            s.output_tokens, m.output_tokens,
+            "{label} {} output_tokens",
+            s.bucket
+        );
+        assert_eq!(
+            s.cache_read_tokens, m.cache_read_tokens,
+            "{label} {} cache_read_tokens",
+            s.bucket
+        );
+        assert_eq!(
+            s.cache_creation_tokens, m.cache_creation_tokens,
+            "{label} {} cache_creation_tokens",
+            s.bucket
+        );
+        assert_eq!(
+            s.reasoning_tokens, m.reasoning_tokens,
+            "{label} {} reasoning_tokens",
+            s.bucket
+        );
+        match (s.cost, m.cost) {
+            (Some(x), Some(y)) => {
+                assert!((x - y).abs() < 1e-9, "{label} {} cost {x} vs {y}", s.bucket)
+            }
+            (None, None) => {}
+            (x, y) => panic!("{label} {} cost Option 不一致：{x:?} vs {y:?}", s.bucket),
+        }
+    }
+    sql
+}
+
+fn point_tokens(points: &[crate::domain::SeriesPoint], bucket: &str) -> i64 {
+    points
+        .iter()
+        .find(|point| point.bucket == bucket)
+        .map(|point| point.total_tokens)
+        .unwrap_or(0)
+}
+
+/// 四种时间窗 × 四种粒度 + 单端 partial / 未就绪：趋势与内存聚合逐字段一致；小时桶不得塌成天。
+#[test]
+fn trend_matches_memory_across_rollup_window_shapes() {
+    let conn = store::open_memory().unwrap();
+    let records = trend_window_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+    let prices = diverse_prices();
+
+    let none = Filter::default();
+    let aligned = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-09T00:00:00Z".into()),
+        ..Filter::default()
+    };
+    let split = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let intra_day = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let head_empty = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let windows = [
+        (&none, "无时间窗"),
+        (&aligned, "对齐窗"),
+        (&split, "两端 partial 切分窗"),
+        (&intra_day, "单日内窗"),
+        (&head_empty, "单端 partial 为空"),
+    ];
+
+    for grain in ["hour", "day", "week", "month"] {
+        for (filter, label) in windows {
+            assert_trend_parity(
+                &conn,
+                &records,
+                &prices,
+                filter,
+                grain,
+                &format!("{label} grain={grain}"),
+            );
+        }
+    }
+
+    let hour_none = assert_trend_parity(&conn, &records, &prices, &none, "hour", "无时间窗 hour");
+    assert_eq!(point_tokens(&hour_none, "2026-08-01T08"), 15);
+    assert_eq!(point_tokens(&hour_none, "2026-08-01T10"), 100);
+    assert_eq!(point_tokens(&hour_none, "2026-08-01T11"), 200);
+    assert_eq!(point_tokens(&hour_none, "2026-08-01T12"), 80);
+    assert!(
+        hour_none.iter().all(|point| point.bucket.contains('T')),
+        "小时粒度桶必须带时刻，不能塌成 UTC 日"
+    );
+
+    let hour_split = assert_trend_parity(&conn, &records, &prices, &split, "hour", "切分窗 hour");
+    assert_eq!(
+        point_tokens(&hour_split, "2026-08-01T08"),
+        0,
+        "09:00 之前应裁掉"
+    );
+    assert_eq!(point_tokens(&hour_split, "2026-08-01T10"), 100);
+    assert_eq!(point_tokens(&hour_split, "2026-08-01T11"), 200);
+    assert_eq!(point_tokens(&hour_split, "2026-08-01T12"), 80);
+    assert_eq!(point_tokens(&hour_split, "2026-08-02T10"), 50);
+    assert_eq!(point_tokens(&hour_split, "2026-08-08T10"), 300);
+
+    let hour_intra = assert_trend_parity(
+        &conn,
+        &records,
+        &prices,
+        &intra_day,
+        "hour",
+        "单日内窗 hour",
+    );
+    assert_eq!(hour_intra.len(), 2);
+    assert_eq!(hour_intra[0].bucket, "2026-08-01T10");
+    assert_eq!(hour_intra[0].total_tokens, 100);
+    assert_eq!(hour_intra[1].bucket, "2026-08-01T11");
+    assert_eq!(hour_intra[1].total_tokens, 200);
+
+    let day_aligned = assert_trend_parity(&conn, &records, &prices, &aligned, "day", "对齐窗 day");
+    assert_eq!(
+        day_aligned
+            .iter()
+            .map(|point| point.bucket.as_str())
+            .collect::<Vec<_>>(),
+        ["2026-08-01", "2026-08-02", "2026-08-08"]
+    );
+    // 08-01：08:00(15)+priced(100)+native(80)+claude(200)
+    assert_eq!(day_aligned[0].total_tokens, 15 + 100 + 80 + 200);
+    assert_eq!(day_aligned[1].total_tokens, 50);
+    assert_eq!(day_aligned[2].total_tokens, 300);
+
+    let split_sql = assert_trend_parity(&conn, &records, &prices, &split, "day", "切分窗 day");
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let not_ready =
+        assert_trend_parity(&conn, &records, &prices, &split, "day", "预聚合未就绪 day");
+    assert_eq!(
+        not_ready
+            .iter()
+            .map(|point| (point.bucket.as_str(), point.total_tokens))
+            .collect::<Vec<_>>(),
+        split_sql
+            .iter()
+            .map(|point| (point.bucket.as_str(), point.total_tokens))
+            .collect::<Vec<_>>(),
+    );
+    let hour_not_ready = assert_trend_parity(
+        &conn,
+        &records,
+        &prices,
+        &split,
+        "hour",
+        "预聚合未就绪 hour",
+    );
+    assert_eq!(point_tokens(&hour_not_ready, "2026-08-01T08"), 0);
+    assert_eq!(point_tokens(&hour_not_ready, "2026-08-01T10"), 100);
+    assert_eq!(point_tokens(&hour_not_ready, "2026-08-01T12"), 80);
+}

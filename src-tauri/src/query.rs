@@ -672,64 +672,39 @@ pub fn trend(
     grain: &str,
 ) -> Result<Vec<SeriesPoint>, String> {
     install_prices(conn, prices)?;
-    let mode = rollup_mode(conn, filter);
-    let rollup_bucket = match &mode {
-        RollupMode::Rollup | RollupMode::Hybrid(_) => rollup_bucket_expr(grain),
-        RollupMode::Raw => None,
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            Some(grain),
+        ),
+        filter,
+    );
+    // 小时粒度 rollup_plan 已强制纯明细：first_at 即原 occurred_at，可还原小时桶。
+    // 不能回落到预聚合行的 first_at——那是当日最早时刻，会把全天塌进第一个小时。
+    let bucket = match grain {
+        "hour" => "substr(d.first_at, 1, 13)",
+        _ => rollup_bucket_expr(grain).unwrap_or("d.day"),
     };
-    let (sql, params) = match (mode, rollup_bucket) {
-        (RollupMode::Rollup, Some(bucket)) => {
-            let (clauses, params) = rollup_filter_clauses(filter, None);
-            (
-                format!(
-                    "SELECT {bucket} AS bucket,
-                        SUM(d.total_tokens),
-                        SUM(d.input_tokens),
-                        SUM(d.output_tokens),
-                        SUM(d.cache_read_tokens),
-                        SUM(d.cache_creation_tokens),
-                        SUM(d.reasoning_tokens),
-                        SUM({ROLLUP_COST_EXPR})
-                    FROM usage_rollup d
-                    {ROLLUP_PRICE_JOINS}
-                    {}
-                    GROUP BY 1
-                    ORDER BY 1",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-        (RollupMode::Hybrid(split), Some(bucket)) => {
-            trend_hybrid_sql(filter, &split, bucket, grain)
-        }
-        _ => {
-            let bucket = bucket_expr(grain);
-            let (clauses, params) = filter_clauses(filter);
-            (
-                format!(
-                    "SELECT {bucket} AS bucket,
-                        SUM(r.total_tokens),
-                        SUM(r.input_tokens),
-                        SUM(r.output_tokens),
-                        SUM(r.cache_read_tokens),
-                        SUM(r.cache_creation_tokens),
-                        SUM(r.reasoning_tokens),
-                        SUM({COST_EXPR})
-                    FROM usage_records r
-                    {PRICE_JOINS}
-                    {}
-                    GROUP BY 1
-                    ORDER BY 1",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-    };
+    let sql = format!(
+        "SELECT {bucket} AS bucket,
+            SUM(d.total_tokens),
+            SUM(d.input_tokens),
+            SUM(d.output_tokens),
+            SUM(d.cache_read_tokens),
+            SUM(d.cache_creation_tokens),
+            SUM(d.reasoning_tokens),
+            SUM({ROLLUP_COST_EXPR})
+        FROM ({}) d
+        {ROLLUP_PRICE_JOINS}
+        GROUP BY 1
+        ORDER BY 1",
+        inner.sql,
+    );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params_from_iter(params.iter()), |row| {
+        .query_map(params_from_iter(inner.params.iter()), |row| {
             Ok(SeriesPoint {
                 bucket: row.get(0)?,
                 total_tokens: row.get(1)?,
@@ -749,58 +724,6 @@ pub fn trend(
     Ok(crate::aggregate::attach_cursor_trend(
         points, &events, prices, grain,
     ))
-}
-
-fn trend_hybrid_sql(
-    filter: &Filter,
-    split: &TimeSplit,
-    rollup_bucket: &str,
-    grain: &str,
-) -> (String, Vec<Value>) {
-    let raw_bucket = bucket_expr(grain);
-    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
-    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
-    params.extend(bound_params);
-    let sql = format!(
-        "SELECT bucket,
-            SUM(total_tokens),
-            SUM(input_tokens),
-            SUM(output_tokens),
-            SUM(cache_read_tokens),
-            SUM(cache_creation_tokens),
-            SUM(reasoning_tokens),
-            SUM(cost)
-        FROM (
-            SELECT {rollup_bucket} AS bucket,
-                d.total_tokens AS total_tokens,
-                d.input_tokens AS input_tokens,
-                d.output_tokens AS output_tokens,
-                d.cache_read_tokens AS cache_read_tokens,
-                d.cache_creation_tokens AS cache_creation_tokens,
-                d.reasoning_tokens AS reasoning_tokens,
-                {ROLLUP_COST_EXPR} AS cost
-            FROM usage_rollup d
-            {ROLLUP_PRICE_JOINS}
-            {middle_where}
-            UNION ALL
-            SELECT {raw_bucket},
-                r.total_tokens,
-                r.input_tokens,
-                r.output_tokens,
-                r.cache_read_tokens,
-                r.cache_creation_tokens,
-                r.reasoning_tokens,
-                {COST_EXPR}
-            FROM usage_records r
-            {PRICE_JOINS}
-            {bound_where}
-        )
-        GROUP BY 1
-        ORDER BY 1",
-        middle_where = where_sql(&middle_clauses),
-        bound_where = where_sql(&bound_clauses),
-    );
-    (sql, params)
 }
 
 fn breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
