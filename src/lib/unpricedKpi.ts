@@ -13,3 +13,19 @@ export function unpricedKpiLink(count: number): UnpricedKpiLink | null {
     actionLabel: "查看全库诊断",
   };
 }
+
+export type CostEstimateKpiLink = {
+  hint: string;
+  actionLabel?: string;
+};
+
+/** 概览总费用是估算。未定价时卡片可点进全库诊断；已定价只解释口径。 */
+export function costEstimateKpiLink(unpriced: boolean): CostEstimateKpiLink {
+  if (!unpriced) {
+    return { hint: "按价目估算，非官方账单" };
+  }
+  return {
+    hint: "按价目估算；部分模型单价未配置，数字可能偏低",
+    actionLabel: "查看全库诊断",
+  };
+}

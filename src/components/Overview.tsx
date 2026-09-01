@@ -24,6 +24,7 @@ import { OverviewLayoutBar } from "./OverviewLayoutBar";
 import { OverviewTrend } from "./OverviewTrend";
 import { WeeklyWindows } from "./WeeklyWindows";
 import { deltaPct, formatClock, formatCompact, formatDelta, formatUsd } from "../lib/format";
+import { costEstimateKpiLink } from "../lib/unpricedKpi";
 import type {
   BillingWindowsDto,
   Grain,
@@ -85,6 +86,7 @@ export const Overview = memo(function Overview({
   detectedSources,
   onOfficialQuota,
   onQuotaError,
+  onOpenUnpricedDiagnosis,
 }: {
   overview: OverviewDto | null;
   billingWindows: BillingWindowsDto | null;
@@ -115,11 +117,17 @@ export const Overview = memo(function Overview({
   detectedSources: string[];
   onOfficialQuota: (value: OfficialQuotaDto) => void;
   onQuotaError: (error: unknown) => void;
+  onOpenUnpricedDiagnosis?: () => void;
 }) {
   const data = overview ?? emptyOverview;
   const palette = chartPalette(theme);
   const days = periodDays(preset, grain, trend.length);
   const dailyAvg = data.total_tokens / days;
+  const costLink = costEstimateKpiLink(data.unpriced);
+  const costDiagnosis =
+    costLink.actionLabel != null && onOpenUnpricedDiagnosis != null
+      ? onOpenUnpricedDiagnosis
+      : undefined;
   const last = trend[trend.length - 1];
   const rate = last ? Math.round(last.total_tokens / BUCKET_MINUTES[grain]) : 0;
   const spark = trend.map((point) => point.total_tokens);
@@ -217,8 +225,11 @@ export const Overview = memo(function Overview({
             tone="orange"
             label="总费用估算"
             value={formatUsd(data.cost, data.unpriced)}
-            delta={costDelta}
+            delta={costDiagnosis ? null : costDelta}
             spark={trend.map((point) => point.cost ?? 0)}
+            hint={costLink.hint}
+            actionLabel={costDiagnosis ? costLink.actionLabel : undefined}
+            onClick={costDiagnosis}
           />
           <KpiCard
             icon="daily"

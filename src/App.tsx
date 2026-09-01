@@ -126,6 +126,7 @@ export default function App() {
                     theme={theme}
                     onGrain={data.setGrain}
                     onOpenConversations={() => data.openConversations()}
+                    onOpenUnpricedDiagnosis={data.openUnpricedDiagnosis}
                     onOpenCursor={() => data.navigate("cursor")}
                     onProjectClick={(project) =>
                       data.applyFilter({ ...data.filter, projects: [project] })
