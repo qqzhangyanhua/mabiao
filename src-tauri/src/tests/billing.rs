@@ -301,3 +301,23 @@ fn weekly_window_prices_cursor_models_by_litellm_signature() {
     );
     assert_eq!(cursor.total_tokens, 3_000_280);
 }
+
+#[test]
+fn billing_windows_lookback_predicate_uses_occurred_at_index() {
+    let conn = store::open_memory().unwrap();
+    let plan: Vec<String> = conn
+        .prepare(
+            "EXPLAIN QUERY PLAN SELECT r.occurred_at FROM usage_records r \
+             WHERE r.occurred_at >= ?1",
+        )
+        .unwrap()
+        .query_map(["2026-08-03"], |row| row.get(3))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        plan.iter()
+            .any(|detail| detail.contains("USING") && detail.contains("INDEX")),
+        "billing_windows lookback must use an occurred_at index, query plan: {plan:?}"
+    );
+}

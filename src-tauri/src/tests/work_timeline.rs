@@ -593,3 +593,24 @@ fn query_work_timeline_includes_cursor_sessions() {
     assert_eq!(segment.model, "grok-4.6");
     assert_eq!(segment.project, "/proj/cursor");
 }
+
+#[test]
+fn work_timeline_date_range_uses_occurred_at_index() {
+    let conn = crate::store::open_memory().unwrap();
+    let plan: Vec<String> = conn
+        .prepare(
+            "EXPLAIN QUERY PLAN SELECT r.source, r.session_id FROM usage_records r \
+             WHERE r.occurred_at >= ?1 AND r.occurred_at < ?2 \
+             GROUP BY r.source, r.session_id",
+        )
+        .unwrap()
+        .query_map(["2026-08-14", "2026-08-16~"], |row| row.get(3))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert!(
+        plan.iter()
+            .any(|detail| detail.contains("USING") && detail.contains("INDEX")),
+        "work_timeline date range must use an occurred_at index, query plan: {plan:?}"
+    );
+}

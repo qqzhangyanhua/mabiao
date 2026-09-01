@@ -12,7 +12,7 @@ use crate::billing_window::parse_occurred_at;
 use crate::domain::{UsageRecord, WorkSegment, WorkSessionSpan, WorkTimelineDto};
 
 /// 给 SQL 层用的宽口径日期边界（前一天 ~ 后一天），覆盖本地时区可能造成的 ±1 天偏移；
-/// 精确裁剪仍在 `build` 里按本地日历日判定，这里只是避免全表扫描的粗筛。
+/// 精确裁剪仍在 `assemble` 里按本地日历日判定，这里只是避免全表扫描的粗筛。
 pub fn broad_date_bounds(day: &str) -> Option<(String, String)> {
     let date = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
     Some((
@@ -21,16 +21,31 @@ pub fn broad_date_bounds(day: &str) -> Option<(String, String)> {
     ))
 }
 
-struct SessionAcc {
-    source: String,
-    session_id: String,
-    project: String,
-    project_at: Option<String>,
-    model: String,
-    model_at: Option<String>,
-    start: DateTime<Utc>,
-    end: DateTime<Utc>,
-    day_tokens: i64,
+/// 本地日历日对应的 UTC 半开区间，格式 `YYYY-MM-DDTHH:MM:SS`（无时区后缀），
+/// 供 SQL 与 `occurred_at` 做前缀安全的字典序比较：`>= start AND < end`。
+pub(crate) fn local_day_sql_bounds(day: &str) -> Option<(String, String)> {
+    let date = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
+    let midnight = date.and_hms_opt(0, 0, 0)?;
+    let start = local_midnight_to_utc(midnight);
+    let end = start + Duration::days(1);
+    Some((sql_ts(start), sql_ts(end)))
+}
+
+fn sql_ts(timestamp: DateTime<Utc>) -> String {
+    timestamp.format("%Y-%m-%dT%H:%M:%S").to_string()
+}
+
+pub(crate) struct SessionAcc {
+    pub source: String,
+    pub session_id: String,
+    pub project: String,
+    pub project_at: Option<String>,
+    pub model: String,
+    pub model_at: Option<String>,
+    pub start: DateTime<Utc>,
+    pub end: DateTime<Utc>,
+    pub day_tokens: i64,
+    pub day_turns: i64,
 }
 
 /// 构建单日工作时间线。`records` 只需覆盖到各会话在 `day` 附近的记录（调用方可用
@@ -50,15 +65,11 @@ pub fn build(records: &[UsageRecord], extra: &[WorkSessionSpan], day: &str) -> W
     let day_end = day_start + Duration::days(1);
 
     let mut sessions: BTreeMap<(String, String), SessionAcc> = BTreeMap::new();
-    let mut turn_count: i64 = 0;
     for record in records {
         let Some(at) = parse_occurred_at(&record.occurred_at) else {
             continue;
         };
         let in_day = at >= day_start && at < day_end;
-        if in_day {
-            turn_count += 1;
-        }
         let key = (
             record.source.as_str().to_string(),
             record.session_id.clone(),
@@ -73,6 +84,7 @@ pub fn build(records: &[UsageRecord], extra: &[WorkSessionSpan], day: &str) -> W
             start: at,
             end: at,
             day_tokens: 0,
+            day_turns: 0,
         });
         if at < entry.start {
             entry.start = at;
@@ -94,12 +106,32 @@ pub fn build(records: &[UsageRecord], extra: &[WorkSessionSpan], day: &str) -> W
         );
         if in_day {
             entry.day_tokens += record.total_tokens;
+            entry.day_turns += 1;
         }
     }
+    assemble(sessions, extra, day)
+}
+
+/// SQL 路径按会话聚合后走这里，与内存路径共用裁剪和强度指标。
+pub(crate) fn assemble(
+    mut sessions: BTreeMap<(String, String), SessionAcc>,
+    extra: &[WorkSessionSpan],
+    day: &str,
+) -> WorkTimelineDto {
+    let Some(date) = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok() else {
+        return WorkTimelineDto::empty(day);
+    };
+    let Some(midnight) = date.and_hms_opt(0, 0, 0) else {
+        return WorkTimelineDto::empty(day);
+    };
+    let day_start = local_midnight_to_utc(midnight);
+    let day_end = day_start + Duration::days(1);
 
     for span in extra {
         merge_span(&mut sessions, span);
     }
+
+    let turn_count: i64 = sessions.values().map(|acc| acc.day_turns).sum();
 
     // 裁剪到当天的区间（UTC 时刻），用于强度指标计算与片段输出。
     let mut clipped: Vec<(DateTime<Utc>, DateTime<Utc>)> = Vec::new();
@@ -127,18 +159,11 @@ pub fn build(records: &[UsageRecord], extra: &[WorkSessionSpan], day: &str) -> W
             .cmp(&b.start)
             .then_with(|| a.session_id.cmp(&b.session_id))
     });
-    // clipped 与 segments 同序，后续指标按 segments 顺序消费即可。
 
     let total_tokens: i64 = segments.iter().map(|segment| segment.total_tokens).sum();
     let segment_count = segments.len() as i64;
-
-    // 累计 AI 执行时长 = Σ(裁剪后区间长度)，以分钟计。
     let ai_exec_minutes: f64 = clipped.iter().map(|(s, e)| minutes_between(*s, *e)).sum();
-
-    // 峰值并行 = 任意时刻同时进行的会话数最大值（扫描线：进入 +1，离开 -1，端点含起不含止）。
     let peak_parallel: i64 = peak_parallel_sweep(&clipped);
-
-    // 并行强度 = 累计执行时长 ÷ 会话区间并集时长；无重叠为 1.0x；空日为 None。
     let parallel_intensity: Option<f64> = parallel_intensity(&clipped, ai_exec_minutes);
 
     WorkTimelineDto {
@@ -173,6 +198,7 @@ fn merge_span(sessions: &mut BTreeMap<(String, String), SessionAcc>, span: &Work
         start,
         end,
         day_tokens: 0,
+        day_turns: 0,
     });
     if start < entry.start {
         entry.start = start;

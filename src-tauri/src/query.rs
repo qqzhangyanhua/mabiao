@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, params_from_iter, types::Value, Connection, Row};
+use rusqlite::{params, params_from_iter, types::Value, Connection};
 
 use crate::billing_window;
 use crate::cost::{finish_unpriced_groups, UnpricedGroupAcc};
@@ -16,7 +16,7 @@ use crate::domain::{
     CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
     InstructionUsageSummary, NamedAmount, OverviewDto, PriceTable, ProjectApplicationRow,
     SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UnpricedGroupDto,
-    UsageCallPage, UsageCallRow, UsageRecord, WorkSessionSpan, WorkTimelineDto,
+    UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
 };
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
@@ -486,46 +486,13 @@ pub fn lifetime_cost(
         .map_err(|e| e.to_string())
 }
 
-/// `billing_windows` 与 `work_timeline` 宽口径拉取共用的列清单，列序与 `usage_record_from_row` 一一对应。
-const USAGE_RECORD_COLUMNS: &str =
-    "r.occurred_at, r.source, r.model, r.provider, r.project, r.session_id, r.source_file,
-    r.input_tokens, r.output_tokens, r.cache_read_tokens, r.cache_creation_tokens,
-    r.reasoning_tokens, r.total_tokens, r.native_cost";
-
-/// 把 `USAGE_RECORD_COLUMNS` 那 14 列（固定列序）映射回 `UsageRecord`。
-fn usage_record_from_row(row: &Row) -> rusqlite::Result<UsageRecord> {
-    let source_value: String = row.get(1)?;
-    let source = Source::parse(&source_value).ok_or_else(|| {
-        rusqlite::Error::FromSqlConversionFailure(
-            1,
-            rusqlite::types::Type::Text,
-            format!("未知来源：{source_value}").into(),
-        )
-    })?;
-    Ok(UsageRecord {
-        occurred_at: row.get(0)?,
-        source,
-        model: row.get(2)?,
-        provider: row.get(3)?,
-        project: row.get(4)?,
-        session_id: row.get(5)?,
-        source_file: row.get(6)?,
-        input_tokens: row.get(7)?,
-        output_tokens: row.get(8)?,
-        cache_read_tokens: row.get(9)?,
-        cache_creation_tokens: row.get(10)?,
-        reasoning_tokens: row.get(11)?,
-        total_tokens: row.get(12)?,
-        native_cost: row.get(13)?,
-    })
-}
-
 pub fn billing_windows(
     conn: &Connection,
     filter: &Filter,
     prices: &PriceTable,
     now: DateTime<Utc>,
 ) -> Result<BillingWindowsDto, String> {
+    install_prices(conn, prices)?;
     let scoped = Filter {
         from: None,
         to: None,
@@ -535,23 +502,50 @@ pub fn billing_windows(
         providers: filter.providers.clone(),
     };
     let (mut clauses, mut params) = filter_clauses(&scoped);
-    clauses.push("substr(r.occurred_at, 1, 10) >= ?".to_string());
+    // 日期前缀比较能走 idx_usage_occurred；substr(occurred_at) 会废掉索引。
+    clauses.push("r.occurred_at >= ?".to_string());
     params.push(Value::Text(billing_window::lookback_date(now)));
     let sql = format!(
-        "SELECT {USAGE_RECORD_COLUMNS}
+        "SELECT
+            r.occurred_at, r.source, r.session_id,
+            r.input_tokens, r.output_tokens, r.cache_read_tokens,
+            r.cache_creation_tokens, r.reasoning_tokens, r.total_tokens,
+            {COST_EXPR}, {UNPRICED_EXPR}
         FROM usage_records r
-        {}
-        ORDER BY r.occurred_at",
+        {PRICE_JOINS}
+        {}",
         where_sql(&clauses),
     );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params_from_iter(params.iter()), usage_record_from_row)
+        .query_map(params_from_iter(params.iter()), |row| {
+            let source_value: String = row.get(1)?;
+            let source = Source::parse(&source_value).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    format!("未知来源：{source_value}").into(),
+                )
+            })?;
+            Ok(billing_window::BillingEvent {
+                occurred_at: row.get(0)?,
+                source,
+                session_id: row.get(2)?,
+                input_tokens: row.get(3)?,
+                output_tokens: row.get(4)?,
+                cache_read_tokens: row.get(5)?,
+                cache_creation_tokens: row.get(6)?,
+                reasoning_tokens: row.get(7)?,
+                total_tokens: row.get(8)?,
+                cost: row.get(9)?,
+                unpriced: row.get::<_, i64>(10)? > 0,
+            })
+        })
         .map_err(|e| e.to_string())?;
-    let records = rows
+    let events = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    let dto = billing_window::summarize(&records, prices, now);
+    let dto = billing_window::summarize_events(&events, now);
     let cursor_events = cursor_account::events_for_weekly_window(conn, filter)?;
     Ok(billing_window::attach_cursor_weekly(
         dto,
@@ -1549,28 +1543,87 @@ pub fn usage_calls_page(
     Ok(UsageCallPage { rows, total })
 }
 
-/// 单日工作时间线：宽口径拉取 `day` 前后各一天的记录（覆盖本地时区可能造成的偏移），
-/// 再并入重叠的 Cursor 本机会话区间。精确裁剪与聚合交给 `crate::work_timeline::build`，
-/// 与内存路径共用同一份逻辑，由 `tests/parity.rs` 保证两条路径结果一致。
+/// 单日工作时间线：按会话在 SQL 里聚成区间，WHERE 用 ISO 前缀范围走索引。
+/// 宽口径覆盖 `day` 前后各一天（本地时区 ±1），精确裁剪交给 `assemble`。
 pub fn work_timeline(conn: &Connection, day: &str) -> Result<WorkTimelineDto, String> {
     let Some((from, to)) = crate::work_timeline::broad_date_bounds(day) else {
         return Ok(WorkTimelineDto::empty(day));
     };
+    let Some((day_start, day_end)) = crate::work_timeline::local_day_sql_bounds(day) else {
+        return Ok(WorkTimelineDto::empty(day));
+    };
+    let to_end = billing_window::iso_day_end(&to);
+    let project_key = latest_nonempty_key_sql("project");
+    let model_key = latest_nonempty_key_sql("model");
     let sql = format!(
-        "SELECT {USAGE_RECORD_COLUMNS}
+        "SELECT
+            r.source,
+            r.session_id,
+            MIN(r.occurred_at),
+            MAX(r.occurred_at),
+            {project_key},
+            {model_key},
+            COALESCE(SUM(CASE WHEN r.occurred_at >= ?3 AND r.occurred_at < ?4 THEN r.total_tokens ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN r.occurred_at >= ?3 AND r.occurred_at < ?4 THEN 1 ELSE 0 END), 0)
         FROM usage_records r
-        WHERE substr(r.occurred_at, 1, 10) >= ?1 AND substr(r.occurred_at, 1, 10) <= ?2
-        ORDER BY r.occurred_at"
+        WHERE r.occurred_at >= ?1 AND r.occurred_at < ?2
+        GROUP BY r.source, r.session_id"
     );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![from, to], usage_record_from_row)
+        .query_map(params![from, to_end, day_start, day_end], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+            ))
+        })
         .map_err(|e| e.to_string())?;
-    let records = rows
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
+    let mut sessions = BTreeMap::new();
+    for row in rows {
+        let (source, session_id, start_at, end_at, project_key, model_key, day_tokens, day_turns) =
+            row.map_err(|e| e.to_string())?;
+        let Some(start) = billing_window::parse_occurred_at(&start_at) else {
+            continue;
+        };
+        let Some(end) = billing_window::parse_occurred_at(&end_at) else {
+            continue;
+        };
+        let (project, project_at) = split_latest_key(project_key);
+        let (model, model_at) = split_latest_key(model_key);
+        sessions.insert(
+            (source.clone(), session_id.clone()),
+            crate::work_timeline::SessionAcc {
+                source,
+                session_id,
+                project,
+                project_at,
+                model,
+                model_at,
+                start,
+                end,
+                day_tokens,
+                day_turns,
+            },
+        );
+    }
     let extra = work_session_spans(conn, &from, &to)?;
-    Ok(crate::work_timeline::build(&records, &extra, day))
+    Ok(crate::work_timeline::assemble(sessions, &extra, day))
+}
+
+fn split_latest_key(raw: Option<String>) -> (String, Option<String>) {
+    let Some(raw) = raw.filter(|value| !value.is_empty()) else {
+        return (String::new(), None);
+    };
+    match raw.split_once('\u{1f}') {
+        Some((at, value)) => (value.to_string(), Some(at.to_string())),
+        None => (String::new(), None),
+    }
 }
 
 /// 宽口径拉取与 `[from, to]` 日期串有交集的 Cursor 本机会话，转成时间线补充区间。
@@ -1580,6 +1633,7 @@ pub(crate) fn work_session_spans(
     from: &str,
     to: &str,
 ) -> Result<Vec<WorkSessionSpan>, String> {
+    let to_end = billing_window::iso_day_end(to);
     let mut stmt = conn
         .prepare(
             r#"
@@ -1587,13 +1641,13 @@ pub(crate) fn work_session_spans(
             FROM cursor_sessions
             WHERE first_seen_at IS NOT NULL AND first_seen_at != ''
               AND last_seen_at IS NOT NULL AND last_seen_at != ''
-              AND substr(first_seen_at, 1, 10) <= ?2
-              AND substr(last_seen_at, 1, 10) >= ?1
+              AND first_seen_at < ?2
+              AND last_seen_at >= ?1
             "#,
         )
         .map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![from, to], |row| {
+        .query_map(params![from, to_end], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
