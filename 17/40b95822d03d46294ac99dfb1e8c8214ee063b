@@ -1,0 +1,28 @@
+src-tauri/src/tests/parity.rs
+  s_007c9fb66163ba::t_e632dce391fc8d 915-1081,1087-1105,1114-1117,1122-1125,1152-1205,1213-1219,1224-1226,1234-1237,1245-1248
+  s_007c9fb66163ba::t_e6043f22adfff7 1082-1086,1118-1121,1206-1212,1220-1223,1227-1233,1238-1244
+  s_007c9fb66163ba::t_a88c400892d50e 1106-1113,1126-1151
+src-tauri/src/query.rs
+  s_007c9fb66163ba::t_97f896c1edd6d7 8
+  s_007c9fb66163ba::t_ec7705e2a934b3 932-936
+  s_007c9fb66163ba::t_436cd2c289edc1 851,853-855,860-872,878-879,882-883,891-894,897-898,911-918,921,965-973,975
+  s_007c9fb66163ba::t_6dffd38a9e6772 856,873-877,896,920,974
+  s_007c9fb66163ba::t_4c1cea89f109ce 929-931
+  s_007c9fb66163ba::t_3688972029f164 937
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1740b95822d03d46294ac99dfb1e8c8214ee063b",
+  "prompts": {},
+  "sessions": {
+    "s_007c9fb66163ba": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05c52-2a17-7463-bb2f-33b2c8a60ae2",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
