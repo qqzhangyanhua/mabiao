@@ -124,14 +124,24 @@ fn price_table() -> PriceTable {
     }
 }
 
-/// 覆盖全部数据的时间范围。带上 from/to 就会绕开预聚合表走原始表，
-/// 范围又足够宽，两条路径应当给出一样的结果。
+/// 覆盖全部数据的时间范围。带上 from/to 会走「中间日预聚合 + 边界明细」；
+/// 范围又足够宽，边界天没有数据，结果应与无时间窗的纯预聚合路径一致。
 fn full_range() -> Filter {
     Filter {
         from: Some("2000-01-01T00:00:00Z".into()),
         to: Some("2100-01-01T00:00:00Z".into()),
         ..Filter::default()
     }
+}
+
+/// 强制走原始表：清掉就绪位。用于对照 hybrid / 纯预聚合路径。
+fn with_rollup_disabled<T>(conn: &rusqlite::Connection, f: impl FnOnce() -> T) -> T {
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let out = f();
+    conn.execute("UPDATE rollup_state SET ready = 1 WHERE id = 1", [])
+        .unwrap();
+    out
 }
 
 /// 费用比对要留容差：预聚合是「token 先求和再乘单价」，原始表是「每行乘完再相加」，
@@ -658,4 +668,83 @@ fn rollup_application_analytics_matches_raw_table() {
             "grain={grain} 按项目不一致"
         );
     }
+}
+
+/// 默认「近 7 天」这类带时分秒的窗口：中间完整 UTC 日走预聚合，两端边界走明细，
+/// 结果必须与整段扫原始表一致。这是把 can_use_rollup 从「有 from/to 就禁用」
+/// 改成 hybrid 之后最重要的回归。
+#[test]
+fn hybrid_time_window_matches_raw_table() {
+    let conn = prepared();
+    let prices = price_table();
+    // 窗盖住 08-01 中午 → 08-04 下午：08-02、08-03 是完整中间日；两端是半日。
+    let filter = Filter {
+        from: Some("2026-08-01T12:00:00Z".into()),
+        to: Some("2026-08-04T14:00:00Z".into()),
+        ..Filter::default()
+    };
+
+    let via_hybrid = query::overview(&conn, &filter, &prices).unwrap();
+    let via_raw = with_rollup_disabled(&conn, || query::overview(&conn, &filter, &prices).unwrap());
+    assert_overview_eq(&via_hybrid, &via_raw);
+
+    // 跨天的 s1：08-01 11:00 落在窗外，08-02 09:00 在中间日——会话仍应算到。
+    // 08-01 10:00 native 也在窗外。窗内应有：priced 被切掉后的 next_day(250) +
+    // unpriced(450) + mixed(740) + s4 的 10/20（15:00 的 30 在 14:00 之后被切掉）。
+    assert_eq!(via_hybrid.total_tokens, 250 + 450 + 740 + 10 + 20);
+    assert_eq!(via_hybrid.session_count, 4); // s1, s2, s3, s4
+
+    for grain in ["day", "week", "month"] {
+        let hybrid = query::trend(&conn, &filter, &prices, grain).unwrap();
+        let raw = with_rollup_disabled(&conn, || {
+            query::trend(&conn, &filter, &prices, grain).unwrap()
+        });
+        assert_eq!(hybrid.len(), raw.len(), "grain={grain}");
+        for (a, b) in hybrid.iter().zip(raw.iter()) {
+            assert_eq!(a.total_tokens, b.total_tokens, "grain={grain} {}", a.bucket);
+            assert!(
+                cost_close(a.cost, b.cost),
+                "grain={grain} {} cost",
+                a.bucket
+            );
+        }
+    }
+
+    for dimension in ["source", "model", "project"] {
+        let hybrid = query::breakdown(&conn, &filter, &prices, dimension).unwrap();
+        let raw = with_rollup_disabled(&conn, || {
+            query::breakdown(&conn, &filter, &prices, dimension).unwrap()
+        });
+        assert_eq!(hybrid.len(), raw.len(), "dimension={dimension}");
+        for (a, b) in hybrid.iter().zip(raw.iter()) {
+            assert_eq!(a.total_tokens, b.total_tokens, "{dimension} {}", a.name);
+        }
+    }
+
+    let hybrid_aa = query::application_analytics(&conn, &filter, "day").unwrap();
+    let raw_aa = with_rollup_disabled(&conn, || {
+        query::application_analytics(&conn, &filter, "day").unwrap()
+    });
+    assert_eq!(hybrid_aa.summary, raw_aa.summary);
+    assert_eq!(hybrid_aa.by_application, raw_aa.by_application);
+    assert_eq!(hybrid_aa.trend, raw_aa.trend);
+    assert_eq!(hybrid_aa.projects, raw_aa.projects);
+}
+
+/// 起止落在同一 UTC 日时没有完整中间日，应整段回退原始表；数字仍要对。
+#[test]
+fn same_utc_day_window_falls_back_to_raw_and_stays_correct() {
+    let conn = prepared();
+    let prices = price_table();
+    let filter = Filter {
+        from: Some("2026-08-01T10:30:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let via = query::overview(&conn, &filter, &prices).unwrap();
+    let via_raw = with_rollup_disabled(&conn, || query::overview(&conn, &filter, &prices).unwrap());
+    assert_overview_eq(&via, &via_raw);
+    // 只剩 11:00 那条 priced（1000）；10:00 native 在 from 之前。
+    assert_eq!(via.total_tokens, 1000);
+    assert_eq!(via.session_count, 1);
 }

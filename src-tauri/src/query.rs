@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
 use crate::billing_window;
@@ -288,29 +288,107 @@ const ROLLUP_PRICE_JOINS: &str = "
     LEFT JOIN price_rows pe ON pe.model = d.model AND pe.provider = lower(d.provider)
     LEFT JOIN price_rows pf ON pf.model = d.model AND pf.provider IS NULL";
 
-/// 能否用预聚合表。
+/// 查询相对预聚合表的走法。
 ///
-/// 两个条件：
+/// `usage_rollup` 按 UTC 天聚合，装不下任意时刻的边界：前端默认「近 7 天」和托盘
+/// 「今日」给的 `from`/`to` 都带时分秒，按天一刀切会把边界那天整天算进来。
+/// 因此有时间窗时拆成三段——两端边界天走原始表，中间完整 UTC 日走预聚合。
+/// 没有完整中间日（同一天或相邻两天）就整段回退原始表，避免为空的 UNION。
 ///
-/// 1. 没有时间范围。`usage_rollup` 按 UTC 天聚合，装不下任意时刻的边界——前端给的
-///    `from`/`to` 是「此刻往前 7 天」「本地午夜转 UTC」这类带时分秒的值，按天过滤会把
-///    边界那天整天算进来。与其做容易错的边界修正，不如划清界限：带时间范围就走原始表。
-///    这个划分正好落在痛点上，没有时间范围（首屏默认的「全部」）才是要扫全表的那种查询。
-///
-/// 2. 预聚合表已就绪。老库刚升级或从旧备份恢复时它还没建起来，补建又要十几秒，
-///    这段时间回退到原始表：慢一点，但数字是对的。
-///    就绪用显式标记而不是「表非空」——补建期间若发生一次摄取，增量重建会往空表里只写进
-///    那一两天，表非空了内容却只有零头，照着它算就会静默少掉全部历史。
-fn can_use_rollup(conn: &Connection, filter: &Filter) -> bool {
-    if filter.from.is_some() || filter.to.is_some() {
-        return false;
-    }
-    crate::store::rollup_is_ready(conn)
+/// 预聚合未就绪（老库升级 / 旧备份恢复，补建还在后台）时也整段走原始表：慢一点，
+/// 但数字是对的。就绪用显式标记而不是「表非空」——补建期间若发生一次摄取，增量
+/// 重建会往空表里只写进那一两天，表非空了内容却只有零头。
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RollupMode {
+    Raw,
+    Rollup,
+    Hybrid(TimeSplit),
 }
 
-/// 预聚合表的维度过滤。列名与 `usage_records` 同名，只是别名换成 `d`；
-/// 时间条件不在这里处理，调用前 `can_use_rollup` 已经保证没有。
-fn rollup_filter_clauses(filter: &Filter) -> (Vec<String>, Vec<Value>) {
+/// 时间窗切分：`middle_after`/`middle_before` 是预聚合日的开区间；
+/// `start_*` / `end_*` 是两端边界天在原始表上的半开/闭区间。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TimeSplit {
+    middle_after: Option<String>,
+    middle_before: Option<String>,
+    start_from: Option<String>,
+    start_before: Option<String>,
+    end_from: Option<String>,
+    end_to: Option<String>,
+}
+
+impl TimeSplit {
+    fn has_middle(&self) -> bool {
+        match (&self.middle_after, &self.middle_before) {
+            (Some(after), Some(before)) => {
+                next_utc_day(after).is_some_and(|next| next.as_str() < before.as_str())
+            }
+            (Some(_), None) | (None, Some(_)) => true,
+            (None, None) => false,
+        }
+    }
+}
+
+fn utc_day(iso: &str) -> Option<&str> {
+    let day = iso.get(..10)?;
+    if day.as_bytes().get(4) == Some(&b'-') && day.as_bytes().get(7) == Some(&b'-') {
+        Some(day)
+    } else {
+        None
+    }
+}
+
+fn next_utc_day(day: &str) -> Option<String> {
+    let parsed = NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()?;
+    Some((parsed + Duration::days(1)).format("%Y-%m-%d").to_string())
+}
+
+fn time_split(from: Option<&str>, to: Option<&str>) -> Option<TimeSplit> {
+    let from_day = match from {
+        Some(value) => Some(utc_day(value)?.to_string()),
+        None => None,
+    };
+    let to_day = match to {
+        Some(value) => Some(utc_day(value)?.to_string()),
+        None => None,
+    };
+    if from_day.is_none() && to_day.is_none() {
+        return None;
+    }
+    let mut split = TimeSplit {
+        middle_after: from_day.clone(),
+        middle_before: to_day.clone(),
+        start_from: None,
+        start_before: None,
+        end_from: None,
+        end_to: None,
+    };
+    if let (Some(from), Some(day)) = (from, from_day.as_deref()) {
+        split.start_from = Some(from.to_string());
+        split.start_before = Some(format!("{day}~"));
+    }
+    if let (Some(to), Some(day)) = (to, to_day.as_deref()) {
+        split.end_from = Some(day.to_string());
+        split.end_to = Some(to.to_string());
+    }
+    Some(split)
+}
+
+fn rollup_mode(conn: &Connection, filter: &Filter) -> RollupMode {
+    if !crate::store::rollup_is_ready(conn) {
+        return RollupMode::Raw;
+    }
+    if filter.from.is_none() && filter.to.is_none() {
+        return RollupMode::Rollup;
+    }
+    match time_split(filter.from.as_deref(), filter.to.as_deref()) {
+        Some(split) if split.has_middle() => RollupMode::Hybrid(split),
+        _ => RollupMode::Raw,
+    }
+}
+
+/// 维度过滤（不含时间）。`alias` 为表别名（`r` / `d`）。
+fn dimension_clauses(filter: &Filter, alias: &str) -> (Vec<String>, Vec<Value>) {
     let mut clauses: Vec<String> = Vec::new();
     let mut params: Vec<Value> = Vec::new();
     for (column, values) in [
@@ -322,10 +400,49 @@ fn rollup_filter_clauses(filter: &Filter) -> (Vec<String>, Vec<Value>) {
         if values.is_empty() {
             continue;
         }
-        clauses.push(format!("d.{column} IN ({})", placeholders(values.len())));
+        clauses.push(format!(
+            "{alias}.{column} IN ({})",
+            placeholders(values.len())
+        ));
         for value in values {
             params.push(Value::Text(value.clone()));
         }
+    }
+    (clauses, params)
+}
+
+/// 预聚合表过滤：维度 + 可选的中间完整日开区间。
+fn rollup_filter_clauses(filter: &Filter, split: Option<&TimeSplit>) -> (Vec<String>, Vec<Value>) {
+    let (mut clauses, mut params) = dimension_clauses(filter, "d");
+    if let Some(split) = split {
+        if let Some(after) = &split.middle_after {
+            clauses.push("d.day > ?".to_string());
+            params.push(Value::Text(after.clone()));
+        }
+        if let Some(before) = &split.middle_before {
+            clauses.push("d.day < ?".to_string());
+            params.push(Value::Text(before.clone()));
+        }
+    }
+    (clauses, params)
+}
+
+/// 原始表边界天过滤：维度 + 两端半开/闭区间（OR）。
+fn boundary_filter_clauses(filter: &Filter, split: &TimeSplit) -> (Vec<String>, Vec<Value>) {
+    let (mut clauses, mut params) = dimension_clauses(filter, "r");
+    let mut bounds: Vec<String> = Vec::new();
+    if let (Some(from), Some(before)) = (&split.start_from, &split.start_before) {
+        bounds.push("(r.occurred_at >= ? AND r.occurred_at < ?)".to_string());
+        params.push(Value::Text(from.clone()));
+        params.push(Value::Text(before.clone()));
+    }
+    if let (Some(day), Some(to)) = (&split.end_from, &split.end_to) {
+        bounds.push("(r.occurred_at >= ? AND r.occurred_at <= ?)".to_string());
+        params.push(Value::Text(day.clone()));
+        params.push(Value::Text(to.clone()));
+    }
+    if !bounds.is_empty() {
+        clauses.push(format!("({})", bounds.join(" OR ")));
     }
     (clauses, params)
 }
@@ -336,48 +453,52 @@ pub fn overview(
     prices: &PriceTable,
 ) -> Result<OverviewDto, String> {
     install_prices(conn, prices)?;
-    let (sql, params) = if can_use_rollup(conn, filter) {
-        let (clauses, params) = rollup_filter_clauses(filter);
-        (
-            format!(
-                "SELECT
-                    COALESCE(SUM(d.total_tokens), 0),
-                    COALESCE(SUM(d.input_tokens), 0),
-                    COALESCE(SUM(d.output_tokens), 0),
-                    COALESCE(SUM(d.cache_read_tokens), 0),
-                    COALESCE(SUM(d.cache_creation_tokens), 0),
-                    COALESCE(SUM(d.reasoning_tokens), 0),
-                    COUNT(DISTINCT d.source || char(31) || d.session_id),
-                    SUM({ROLLUP_COST_EXPR}),
-                    COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
-                FROM usage_rollup d
-                {ROLLUP_PRICE_JOINS}
-                {}",
-                where_sql(&clauses),
-            ),
-            params,
-        )
-    } else {
-        let (clauses, params) = filter_clauses(filter);
-        (
-            format!(
-                "SELECT
-                    COALESCE(SUM(r.total_tokens), 0),
-                    COALESCE(SUM(r.input_tokens), 0),
-                    COALESCE(SUM(r.output_tokens), 0),
-                    COALESCE(SUM(r.cache_read_tokens), 0),
-                    COALESCE(SUM(r.cache_creation_tokens), 0),
-                    COALESCE(SUM(r.reasoning_tokens), 0),
-                    COUNT(DISTINCT r.source || char(31) || r.session_id),
-                    SUM({COST_EXPR}),
-                    COALESCE(SUM({UNPRICED_EXPR}), 0)
-                FROM usage_records r
-                {PRICE_JOINS}
-                {}",
-                where_sql(&clauses),
-            ),
-            params,
-        )
+    let (sql, params) = match rollup_mode(conn, filter) {
+        RollupMode::Rollup => {
+            let (clauses, params) = rollup_filter_clauses(filter, None);
+            (
+                format!(
+                    "SELECT
+                        COALESCE(SUM(d.total_tokens), 0),
+                        COALESCE(SUM(d.input_tokens), 0),
+                        COALESCE(SUM(d.output_tokens), 0),
+                        COALESCE(SUM(d.cache_read_tokens), 0),
+                        COALESCE(SUM(d.cache_creation_tokens), 0),
+                        COALESCE(SUM(d.reasoning_tokens), 0),
+                        COUNT(DISTINCT d.source || char(31) || d.session_id),
+                        SUM({ROLLUP_COST_EXPR}),
+                        COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
+                    FROM usage_rollup d
+                    {ROLLUP_PRICE_JOINS}
+                    {}",
+                    where_sql(&clauses),
+                ),
+                params,
+            )
+        }
+        RollupMode::Hybrid(split) => overview_hybrid_sql(filter, &split),
+        RollupMode::Raw => {
+            let (clauses, params) = filter_clauses(filter);
+            (
+                format!(
+                    "SELECT
+                        COALESCE(SUM(r.total_tokens), 0),
+                        COALESCE(SUM(r.input_tokens), 0),
+                        COALESCE(SUM(r.output_tokens), 0),
+                        COALESCE(SUM(r.cache_read_tokens), 0),
+                        COALESCE(SUM(r.cache_creation_tokens), 0),
+                        COALESCE(SUM(r.reasoning_tokens), 0),
+                        COUNT(DISTINCT r.source || char(31) || r.session_id),
+                        SUM({COST_EXPR}),
+                        COALESCE(SUM({UNPRICED_EXPR}), 0)
+                    FROM usage_records r
+                    {PRICE_JOINS}
+                    {}",
+                    where_sql(&clauses),
+                ),
+                params,
+            )
+        }
     };
     conn.query_row(&sql, params_from_iter(params.iter()), |row| {
         Ok(OverviewDto {
@@ -393,6 +514,56 @@ pub fn overview(
         })
     })
     .map_err(|e| e.to_string())
+}
+
+fn overview_hybrid_sql(filter: &Filter, split: &TimeSplit) -> (String, Vec<Value>) {
+    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
+    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
+    params.extend(bound_params);
+    let sql = format!(
+        "SELECT
+            COALESCE(SUM(total_tokens), 0),
+            COALESCE(SUM(input_tokens), 0),
+            COALESCE(SUM(output_tokens), 0),
+            COALESCE(SUM(cache_read_tokens), 0),
+            COALESCE(SUM(cache_creation_tokens), 0),
+            COALESCE(SUM(reasoning_tokens), 0),
+            COUNT(DISTINCT source || char(31) || session_id),
+            SUM(cost),
+            COALESCE(SUM(unpriced), 0)
+        FROM (
+            SELECT d.total_tokens AS total_tokens,
+                d.input_tokens AS input_tokens,
+                d.output_tokens AS output_tokens,
+                d.cache_read_tokens AS cache_read_tokens,
+                d.cache_creation_tokens AS cache_creation_tokens,
+                d.reasoning_tokens AS reasoning_tokens,
+                d.source AS source,
+                d.session_id AS session_id,
+                {ROLLUP_COST_EXPR} AS cost,
+                {ROLLUP_UNPRICED_EXPR} AS unpriced
+            FROM usage_rollup d
+            {ROLLUP_PRICE_JOINS}
+            {middle_where}
+            UNION ALL
+            SELECT r.total_tokens,
+                r.input_tokens,
+                r.output_tokens,
+                r.cache_read_tokens,
+                r.cache_creation_tokens,
+                r.reasoning_tokens,
+                r.source,
+                r.session_id,
+                {COST_EXPR},
+                {UNPRICED_EXPR}
+            FROM usage_records r
+            {PRICE_JOINS}
+            {bound_where}
+        )",
+        middle_where = where_sql(&middle_clauses),
+        bound_where = where_sql(&bound_clauses),
+    );
+    (sql, params)
 }
 
 /// 全库未定价诊断：按 `(模型, provider)` 归组，不接筛选。
@@ -572,12 +743,14 @@ pub fn trend(
     grain: &str,
 ) -> Result<Vec<SeriesPoint>, String> {
     install_prices(conn, prices)?;
-    let rollup_bucket = can_use_rollup(conn, filter)
-        .then(|| rollup_bucket_expr(grain))
-        .flatten();
-    let (sql, params) = match rollup_bucket {
-        Some(bucket) => {
-            let (clauses, params) = rollup_filter_clauses(filter);
+    let mode = rollup_mode(conn, filter);
+    let rollup_bucket = match &mode {
+        RollupMode::Rollup | RollupMode::Hybrid(_) => rollup_bucket_expr(grain),
+        RollupMode::Raw => None,
+    };
+    let (sql, params) = match (mode, rollup_bucket) {
+        (RollupMode::Rollup, Some(bucket)) => {
+            let (clauses, params) = rollup_filter_clauses(filter, None);
             (
                 format!(
                     "SELECT {bucket} AS bucket,
@@ -598,7 +771,10 @@ pub fn trend(
                 params,
             )
         }
-        None => {
+        (RollupMode::Hybrid(split), Some(bucket)) => {
+            trend_hybrid_sql(filter, &split, bucket, grain)
+        }
+        _ => {
             let bucket = bucket_expr(grain);
             let (clauses, params) = filter_clauses(filter);
             (
@@ -646,6 +822,58 @@ pub fn trend(
     ))
 }
 
+fn trend_hybrid_sql(
+    filter: &Filter,
+    split: &TimeSplit,
+    rollup_bucket: &str,
+    grain: &str,
+) -> (String, Vec<Value>) {
+    let raw_bucket = bucket_expr(grain);
+    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
+    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
+    params.extend(bound_params);
+    let sql = format!(
+        "SELECT bucket,
+            SUM(total_tokens),
+            SUM(input_tokens),
+            SUM(output_tokens),
+            SUM(cache_read_tokens),
+            SUM(cache_creation_tokens),
+            SUM(reasoning_tokens),
+            SUM(cost)
+        FROM (
+            SELECT {rollup_bucket} AS bucket,
+                d.total_tokens AS total_tokens,
+                d.input_tokens AS input_tokens,
+                d.output_tokens AS output_tokens,
+                d.cache_read_tokens AS cache_read_tokens,
+                d.cache_creation_tokens AS cache_creation_tokens,
+                d.reasoning_tokens AS reasoning_tokens,
+                {ROLLUP_COST_EXPR} AS cost
+            FROM usage_rollup d
+            {ROLLUP_PRICE_JOINS}
+            {middle_where}
+            UNION ALL
+            SELECT {raw_bucket},
+                r.total_tokens,
+                r.input_tokens,
+                r.output_tokens,
+                r.cache_read_tokens,
+                r.cache_creation_tokens,
+                r.reasoning_tokens,
+                {COST_EXPR}
+            FROM usage_records r
+            {PRICE_JOINS}
+            {bound_where}
+        )
+        GROUP BY 1
+        ORDER BY 1",
+        middle_where = where_sql(&middle_clauses),
+        bound_where = where_sql(&bound_clauses),
+    );
+    (sql, params)
+}
+
 fn breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
     match dimension {
         "application" | "source" => Ok("r.source"),
@@ -686,40 +914,44 @@ pub fn breakdown(
     dimension: &str,
 ) -> Result<Vec<NamedAmount>, String> {
     install_prices(conn, prices)?;
-    let (sql, params) = if can_use_rollup(conn, filter) {
-        let name_expr = rollup_breakdown_name_expr(dimension)?;
-        let (clauses, params) = rollup_filter_clauses(filter);
-        (
-            format!(
-                "SELECT {name_expr} AS name,
-                    SUM(d.total_tokens),
-                    SUM({ROLLUP_COST_EXPR}),
-                    COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
-                FROM usage_rollup d
-                {ROLLUP_PRICE_JOINS}
-                {}
-                GROUP BY 1",
-                where_sql(&clauses),
-            ),
-            params,
-        )
-    } else {
-        let name_expr = breakdown_name_expr(dimension)?;
-        let (clauses, params) = filter_clauses(filter);
-        (
-            format!(
-                "SELECT {name_expr} AS name,
-                    SUM(r.total_tokens),
-                    SUM({COST_EXPR}),
-                    COALESCE(SUM({UNPRICED_EXPR}), 0)
-                FROM usage_records r
-                {PRICE_JOINS}
-                {}
-                GROUP BY 1",
-                where_sql(&clauses),
-            ),
-            params,
-        )
+    let (sql, params) = match rollup_mode(conn, filter) {
+        RollupMode::Rollup => {
+            let name_expr = rollup_breakdown_name_expr(dimension)?;
+            let (clauses, params) = rollup_filter_clauses(filter, None);
+            (
+                format!(
+                    "SELECT {name_expr} AS name,
+                        SUM(d.total_tokens),
+                        SUM({ROLLUP_COST_EXPR}),
+                        COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
+                    FROM usage_rollup d
+                    {ROLLUP_PRICE_JOINS}
+                    {}
+                    GROUP BY 1",
+                    where_sql(&clauses),
+                ),
+                params,
+            )
+        }
+        RollupMode::Hybrid(split) => breakdown_hybrid_sql(filter, &split, dimension)?,
+        RollupMode::Raw => {
+            let name_expr = breakdown_name_expr(dimension)?;
+            let (clauses, params) = filter_clauses(filter);
+            (
+                format!(
+                    "SELECT {name_expr} AS name,
+                        SUM(r.total_tokens),
+                        SUM({COST_EXPR}),
+                        COALESCE(SUM({UNPRICED_EXPR}), 0)
+                    FROM usage_records r
+                    {PRICE_JOINS}
+                    {}
+                    GROUP BY 1",
+                    where_sql(&clauses),
+                ),
+                params,
+            )
+        }
     };
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let raw = stmt
@@ -764,31 +996,56 @@ pub fn breakdown(
     Ok(rows)
 }
 
+fn breakdown_hybrid_sql(
+    filter: &Filter,
+    split: &TimeSplit,
+    dimension: &str,
+) -> Result<(String, Vec<Value>), String> {
+    let rollup_name = rollup_breakdown_name_expr(dimension)?;
+    let raw_name = breakdown_name_expr(dimension)?;
+    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
+    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
+    params.extend(bound_params);
+    let sql = format!(
+        "SELECT name,
+            SUM(total_tokens),
+            SUM(cost),
+            COALESCE(SUM(unpriced), 0)
+        FROM (
+            SELECT {rollup_name} AS name,
+                d.total_tokens AS total_tokens,
+                {ROLLUP_COST_EXPR} AS cost,
+                {ROLLUP_UNPRICED_EXPR} AS unpriced
+            FROM usage_rollup d
+            {ROLLUP_PRICE_JOINS}
+            {middle_where}
+            UNION ALL
+            SELECT {raw_name},
+                r.total_tokens,
+                {COST_EXPR},
+                {UNPRICED_EXPR}
+            FROM usage_records r
+            {PRICE_JOINS}
+            {bound_where}
+        )
+        GROUP BY 1",
+        middle_where = where_sql(&middle_clauses),
+        bound_where = where_sql(&bound_clauses),
+    );
+    Ok((sql, params))
+}
+
 pub fn application_analytics(
     conn: &Connection,
     filter: &Filter,
     grain: &str,
 ) -> Result<ApplicationAnalyticsDto, String> {
     // 这个视图要发四组聚合（总览 / 按来源 / 按时间桶 / 按项目），全走原始表就是把
-    // 同一份数据扫四遍——350 万行时实测 43 秒。预聚合表把每遍的基数压到几万行。
-    let use_rollup = can_use_rollup(conn, filter) && rollup_bucket_expr(grain).is_some();
-    let (table, alias) = if use_rollup {
-        ("usage_rollup", "d")
-    } else {
-        ("usage_records", "r")
-    };
-    let (clauses, params) = if use_rollup {
-        rollup_filter_clauses(filter)
-    } else {
-        filter_clauses(filter)
-    };
-    let where_sql = where_sql(&clauses);
-    let bucket = if use_rollup {
-        rollup_bucket_expr(grain).unwrap_or("d.day").to_string()
-    } else {
-        bucket_expr(grain).to_string()
-    };
-    let a = alias;
+    // 同一份数据扫四遍——350 万行时实测 43 秒。预聚合表把每遍的基数压到几万行；
+    // 有时间窗时中间完整 UTC 日仍走预聚合，两端边界天补明细。
+    let (from_sql, alias, bucket, params, where_part) =
+        application_analytics_source(conn, filter, grain);
+    let a = alias.as_str();
 
     let summary_sql = format!(
         "SELECT
@@ -797,8 +1054,8 @@ pub fn application_analytics(
             COALESCE(SUM({a}.cache_read_tokens), 0),
             COALESCE(SUM({a}.reasoning_tokens), 0),
             COUNT(DISTINCT {a}.source || char(31) || {a}.session_id)
-        FROM {table} {a}
-        {where_sql}"
+        FROM {from_sql}
+        {where_part}"
     );
     let (total, input, cache_read, reasoning, session_count) = conn
         .query_row(&summary_sql, params_from_iter(params.iter()), |row| {
@@ -830,8 +1087,8 @@ pub fn application_analytics(
             SUM({a}.cache_read_tokens),
             SUM({a}.reasoning_tokens),
             COUNT(DISTINCT {a}.session_id)
-        FROM {table} {a}
-        {where_sql}
+        FROM {from_sql}
+        {where_part}
         GROUP BY {a}.source"
     );
     let mut stmt = conn.prepare(&app_sql).map_err(|e| e.to_string())?;
@@ -881,8 +1138,8 @@ pub fn application_analytics(
 
     let trend_sql = format!(
         "SELECT {bucket} AS bucket, {a}.source, SUM({a}.total_tokens)
-        FROM {table} {a}
-        {where_sql}
+        FROM {from_sql}
+        {where_part}
         GROUP BY 1, 2
         ORDER BY 1, 2"
     );
@@ -913,8 +1170,8 @@ pub fn application_analytics(
 
     let project_sql = format!(
         "SELECT {a}.project, {a}.source, SUM({a}.total_tokens)
-        FROM {table} {a}
-        {where_sql}
+        FROM {from_sql}
+        {where_part}
         GROUP BY 1, 2
         ORDER BY 1, 2"
     );
@@ -966,6 +1223,76 @@ pub fn application_analytics(
     ))
 }
 
+/// `(from_sql, alias, bucket_expr, params, where_sql)`。
+fn application_analytics_source(
+    conn: &Connection,
+    filter: &Filter,
+    grain: &str,
+) -> (String, String, String, Vec<Value>, String) {
+    let mode = rollup_mode(conn, filter);
+    let rollup_ok = rollup_bucket_expr(grain).is_some();
+    match mode {
+        RollupMode::Rollup if rollup_ok => {
+            let (clauses, params) = rollup_filter_clauses(filter, None);
+            (
+                "usage_rollup d".into(),
+                "d".into(),
+                rollup_bucket_expr(grain).unwrap_or("d.day").to_string(),
+                params,
+                where_sql(&clauses),
+            )
+        }
+        RollupMode::Hybrid(split) if rollup_ok => {
+            let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(&split));
+            let (bound_clauses, bound_params) = boundary_filter_clauses(filter, &split);
+            params.extend(bound_params);
+            let from = format!(
+                "(
+                    SELECT d.total_tokens AS total_tokens,
+                        d.input_tokens AS input_tokens,
+                        d.cache_read_tokens AS cache_read_tokens,
+                        d.reasoning_tokens AS reasoning_tokens,
+                        d.source AS source,
+                        d.session_id AS session_id,
+                        d.project AS project,
+                        d.day AS day
+                    FROM usage_rollup d
+                    {middle_where}
+                    UNION ALL
+                    SELECT r.total_tokens,
+                        r.input_tokens,
+                        r.cache_read_tokens,
+                        r.reasoning_tokens,
+                        r.source,
+                        r.session_id,
+                        r.project,
+                        substr(r.occurred_at, 1, 10)
+                    FROM usage_records r
+                    {bound_where}
+                ) a",
+                middle_where = where_sql(&middle_clauses),
+                bound_where = where_sql(&bound_clauses),
+            );
+            let bucket = match grain {
+                "week" => "strftime('%G-W%V', a.day)".to_string(),
+                "month" => "substr(a.day, 1, 7)".to_string(),
+                _ => "a.day".to_string(),
+            };
+            (from, "a".into(), bucket, params, String::new())
+        }
+        _ => {
+            let (clauses, params) = filter_clauses(filter);
+            (
+                "usage_records r".into(),
+                "r".into(),
+                bucket_expr(grain).to_string(),
+                params,
+                where_sql(&clauses),
+            )
+        }
+    }
+}
+
 /// 从预聚合表取 Top N 会话。
 ///
 /// 比原始表那条路少一次回表：`usage_rollup` 的主键里就带着 project / model，
@@ -979,7 +1306,7 @@ fn top_sessions_from_rollup(
     filter: &Filter,
     limit: usize,
 ) -> Result<Vec<SessionRow>, String> {
-    let (clauses, mut params) = rollup_filter_clauses(filter);
+    let (clauses, mut params) = rollup_filter_clauses(filter, None);
     let project = unwrap_latest_key_sql("project_key");
     let model = unwrap_latest_key_sql("model_key");
     let source_file = unwrap_latest_key_sql("file_key");
@@ -1039,7 +1366,9 @@ pub fn top_sessions(
         return Ok(Vec::new());
     }
     install_prices(conn, prices)?;
-    if can_use_rollup(conn, filter) {
+    // 有时间窗的 hybrid 会话汇总要跨「中间日 + 边界天」再按会话合并，比直接扫原始表
+    // 复杂且收益有限（会话页本就按索引裁时间窗）；只在无时间窗时走预聚合。
+    if matches!(rollup_mode(conn, filter), RollupMode::Rollup) {
         return top_sessions_from_rollup(conn, filter, limit);
     }
     let (clauses, mut params) = filter_clauses(filter);
@@ -1275,10 +1604,10 @@ pub fn sessions_page(
     if include_cost {
         install_prices(conn, prices)?;
     }
-    // 会话汇总来自哪张表由这里决定，外层的搜索 / 排序 / 分页对此无感。
-    let use_rollup = can_use_rollup(conn, &query.filter);
+    // 会话汇总：无时间窗走预聚合；带时间窗（含 hybrid）走原始表，外层搜索/排序/分页无感。
+    let use_rollup = matches!(rollup_mode(conn, &query.filter), RollupMode::Rollup);
     let (clauses, mut params) = if use_rollup {
-        rollup_filter_clauses(&query.filter)
+        rollup_filter_clauses(&query.filter, None)
     } else {
         filter_clauses(&query.filter)
     };
