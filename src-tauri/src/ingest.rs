@@ -231,6 +231,7 @@ fn list_watched_inputs(
 }
 
 /// 供测试直接注入路径覆盖表，绕开真实进程环境变量（并行跑测试改真实环境变量不安全）。
+#[cfg(test)]
 pub(crate) fn ingest_all_with_overrides(
     conn: &Connection,
     home: &Path,

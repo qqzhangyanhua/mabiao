@@ -124,7 +124,10 @@ fn ingest_allows_record_count_drop_when_adapter_version_is_stale() {
     );
     extra.source_file = source_file.clone();
     store::insert_records(&conn, &[extra]).unwrap();
-    assert_eq!(store::record_count_for_file(&conn, &source_file).unwrap(), 3);
+    assert_eq!(
+        store::record_count_for_file(&conn, &source_file).unwrap(),
+        3
+    );
     conn.execute(
         "UPDATE ingested_files SET adapter_version = ?1 WHERE path = ?2",
         rusqlite::params![store::ADAPTER_VERSION - 1, source_file],
