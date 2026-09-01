@@ -23,7 +23,15 @@ import { OverviewDetail } from "./OverviewDetail";
 import { OverviewLayoutBar } from "./OverviewLayoutBar";
 import { OverviewTrend } from "./OverviewTrend";
 import { WeeklyWindows } from "./WeeklyWindows";
-import { deltaPct, formatClock, formatCompact, formatDelta, formatUsd } from "../lib/format";
+import {
+  cacheHitRate,
+  deltaPct,
+  formatClock,
+  formatCompact,
+  formatDelta,
+  formatPercent,
+  formatUsd,
+} from "../lib/format";
 import { costEstimateKpiLink } from "../lib/unpricedKpi";
 import type {
   BillingWindowsDto,
@@ -167,6 +175,9 @@ export const Overview = memo(function Overview({
   const tokenDelta = formatDelta(deltaPct(data.total_tokens, previous?.total_tokens ?? null));
   const costDelta =
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
+  const cacheHitRateLabel = formatPercent(
+    cacheHitRate(data.cache_read_tokens, data.input_tokens),
+  );
 
   if (!overview) {
     return (
@@ -368,7 +379,7 @@ export const Overview = memo(function Overview({
               {formatCompact(data.cache_read_tokens + data.cache_creation_tokens)} /{" "}
               {formatCompact(data.reasoning_tokens)}
             </strong>
-            <em>读+写 / 推理 Token</em>
+            <em>读+写 / 推理 Token · 命中率 {cacheHitRateLabel}</em>
           </div>
           <div className="stat-block">
             <span className="muted">Token 速率（估算）</span>

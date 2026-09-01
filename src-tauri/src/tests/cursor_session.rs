@@ -1139,3 +1139,66 @@ fn cursor_account_events_page_orders_newest_first() {
     .unwrap();
     assert_eq!(asc.rows.last().unwrap().occurred_at, later);
 }
+
+fn session_with_prompts(
+    session_id: &str,
+    user_prompt_count: i64,
+) -> crate::domain::CursorSessionRecord {
+    crate::domain::CursorSessionRecord {
+        session_id: session_id.into(),
+        project: "/tmp/demo".into(),
+        turn_count: user_prompt_count.max(1),
+        success_count: user_prompt_count.max(1),
+        error_count: 0,
+        aborted_count: 0,
+        user_prompt_count,
+        subagent_count: 0,
+        tool_calls_json: "{}".into(),
+        models_json: "[]".into(),
+        sources_json: "[]".into(),
+        extensions_json: "{}".into(),
+        first_seen_at: None,
+        last_seen_at: None,
+        files_touched: 0,
+        source_file: format!("/tmp/{session_id}.jsonl"),
+    }
+}
+
+#[test]
+fn summarize_all_single_prompt_sessions_ratio_is_one() {
+    let summary = crate::cursor_session::summarize_cursor_sessions(&[
+        session_with_prompts("s1", 1),
+        session_with_prompts("s2", 1),
+    ]);
+    assert_eq!(summary.single_prompt_ratio, Some(1.0));
+}
+
+#[test]
+fn summarize_all_multi_prompt_sessions_ratio_is_zero() {
+    let summary = crate::cursor_session::summarize_cursor_sessions(&[
+        session_with_prompts("s1", 2),
+        session_with_prompts("s2", 4),
+    ]);
+    assert_eq!(summary.single_prompt_ratio, Some(0.0));
+}
+
+#[test]
+fn summarize_mixed_prompt_sessions_ratio_is_session_share() {
+    let summary = crate::cursor_session::summarize_cursor_sessions(&[
+        session_with_prompts("single", 1),
+        session_with_prompts("multi", 3),
+    ]);
+    assert_eq!(summary.single_prompt_ratio, Some(0.5));
+}
+
+#[test]
+fn summarize_empty_sessions_single_prompt_ratio_is_none() {
+    assert_eq!(
+        crate::cursor_session::summarize_cursor_sessions(&[]).single_prompt_ratio,
+        None
+    );
+    assert_eq!(
+        crate::domain::CursorSessionSummaryDto::empty().single_prompt_ratio,
+        None
+    );
+}

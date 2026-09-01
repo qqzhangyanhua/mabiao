@@ -50,6 +50,15 @@ pub fn summarize_cursor_sessions(sessions: &[CursorSessionRecord]) -> CursorSess
     } else {
         None
     };
+    let single_prompt_count = sessions
+        .iter()
+        .filter(|session| session.user_prompt_count == 1)
+        .count();
+    let single_prompt_ratio = if session_count > 0 {
+        Some(single_prompt_count as f64 / session_count as f64)
+    } else {
+        None
+    };
 
     let mut projects: BTreeMap<String, ProjectAgg> = BTreeMap::new();
     let mut daily: BTreeMap<String, (i64, i64)> = BTreeMap::new();
@@ -219,6 +228,7 @@ pub fn summarize_cursor_sessions(sessions: &[CursorSessionRecord]) -> CursorSess
         subagent_count,
         error_rate,
         average_turns,
+        single_prompt_ratio,
         average_tools_per_turn,
         write_read_ratio,
         active_project_count,

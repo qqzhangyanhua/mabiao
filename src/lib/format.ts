@@ -183,6 +183,22 @@ export function formatRatio(value: number | null, digits = 1): string {
   return value.toFixed(digits);
 }
 
+/** 与使用统计页 `cache_hit_rate` 同口径：cache_read / (input + cache_read)。分母为 0 时为 null。 */
+export function cacheHitRate(cacheReadTokens: number, inputTokens: number): number | null {
+  const denominator = inputTokens + cacheReadTokens;
+  if (denominator <= 0) {
+    return null;
+  }
+  return cacheReadTokens / denominator;
+}
+
+export function formatPercent(value: number | null): string {
+  if (value == null || Number.isNaN(value)) {
+    return "—";
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 export function formatBytes(n: number): string {
   return `${n.toLocaleString("zh-CN")} B`;
 }

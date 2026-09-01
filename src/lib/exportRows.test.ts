@@ -216,6 +216,7 @@ describe("cursor export tables", () => {
       subagent_count: 1,
       error_rate: 0,
       average_turns: 2.5,
+      single_prompt_ratio: 0.5,
       average_tools_per_turn: 1.8,
       write_read_ratio: 0.4,
       active_project_count: 1,
