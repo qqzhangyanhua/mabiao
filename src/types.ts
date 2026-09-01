@@ -81,6 +81,14 @@ export type BillingWindowsDto = {
 
 export type OfficialQuotaFreshness = "official" | "stale" | "unavailable";
 
+export type QuotaExhaustKind = "hits" | "will_not_hit" | "exhausted";
+
+export type QuotaExhaustDto = {
+  kind: QuotaExhaustKind;
+  /** 预计打满时刻。hits 才有。 */
+  at: string | null;
+};
+
 export type OfficialQuotaWindow = {
   kind: string;
   label: string;
@@ -91,6 +99,8 @@ export type OfficialQuotaWindow = {
   limit_amount: number | null;
   /** ISO 4217 代码，例如 USD。取不到时为 null，只显示数字。 */
   currency: string | null;
+  /** 按最近两次官方快照估计的撞线。不是官方给出的时间。 */
+  exhaust: QuotaExhaustDto | null;
 };
 
 export type OfficialQuotaRow = {

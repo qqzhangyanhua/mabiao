@@ -3951,7 +3951,8 @@ td.row-actions {
   flex-wrap: wrap;
 }
 
-.official-quota-window > .official-quota-amount {
+.official-quota-window > .official-quota-amount,
+.official-quota-window > .official-quota-exhaust {
   flex: 0 0 100%;
   font-variant-numeric: tabular-nums;
 }
@@ -4159,6 +4160,13 @@ td.row-actions {
   align-items: center;
 }
 
+.tray-quota-app .official-quota-window.has-exhaust {
+  grid-template-areas:
+    "label percent"
+    "bar reset"
+    "eta eta";
+}
+
 .tray-quota-app .official-quota-window > span:first-child {
   grid-area: label;
   flex: unset;
@@ -4182,6 +4190,13 @@ td.row-actions {
   flex: none;
   max-width: none;
   text-align: right;
+}
+
+.tray-quota-app .official-quota-window > .official-quota-exhaust {
+  grid-area: eta;
+  flex: none;
+  max-width: none;
+  text-align: left;
 }
 
 .budget-status {

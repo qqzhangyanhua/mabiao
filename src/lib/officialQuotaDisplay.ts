@@ -3,8 +3,9 @@ import type {
   OfficialQuotaFreshness,
   OfficialQuotaRow,
   OfficialQuotaWindow,
+  QuotaExhaustDto,
 } from "../types";
-import { formatClock, relativeTime } from "./format";
+import { formatClock, formatWindowClock, relativeTime } from "./format";
 import { officialQuotaProviderLabel } from "./overviewLayout";
 
 export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, string> = {
@@ -62,6 +63,56 @@ export function formatQuotaAmount(value: number, currency: string | null): strin
   }
   const symbol = CURRENCY_SYMBOLS[currency.toUpperCase()];
   return symbol ? `${symbol}${text}` : `${text} ${currency.toUpperCase()}`;
+}
+
+export const OFFICIAL_QUOTA_EXHAUST_TITLE =
+  "按最近两次官方快照估计，不是官方给出的时间";
+
+export function officialQuotaExhaustLabel(
+  exhaust: QuotaExhaustDto | null | undefined,
+  nowMs = Date.now(),
+  compact = false,
+): string | null {
+  if (!exhaust) {
+    return null;
+  }
+  if (exhaust.kind === "exhausted") {
+    return "已打满";
+  }
+  if (exhaust.kind === "will_not_hit") {
+    return "本窗估计打不满";
+  }
+  if (!exhaust.at) {
+    return null;
+  }
+  const at = Date.parse(exhaust.at);
+  if (Number.isNaN(at)) {
+    return null;
+  }
+  if (at <= nowMs) {
+    return "预计已撞线";
+  }
+  return `预计 ${formatExhaustClock(exhaust.at, nowMs, compact)} 撞线`;
+}
+
+function formatExhaustClock(iso: string, nowMs: number, compact: boolean): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) {
+    return iso;
+  }
+  const now = new Date(nowMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const sameDay =
+    at.getFullYear() === now.getFullYear() &&
+    at.getMonth() === now.getMonth() &&
+    at.getDate() === now.getDate();
+  if (sameDay) {
+    return `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  }
+  if (compact) {
+    return formatWindowClock(iso);
+  }
+  return `${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
 
 /**

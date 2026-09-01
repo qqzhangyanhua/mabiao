@@ -41,7 +41,7 @@ Dimensions, default paths, and limits: [`CONTEXT.md`](CONTEXT.md).
 - **Overview and breakdowns**: trends by hour / day / week / month; split by source, model, provider, project, and session; export CSV / JSON; save charts as images
 - **Work timeline**: lay sessions out as daily segments — duration, turns, and how much you ran in parallel
 - **Conversation records**: read local bodies and the event stream on demand (prompt / thought / tool / reply); export Markdown / JSON
-- **Quotas stay separate**: local 5-hour / 7-day estimate windows (not official caps) vs **official quota**. Nine built-in accounts — Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin — each with its plan label; Settings also accepts custom providers. The menubar shows today's spend and the tightest official percentage
+- **Quotas stay separate**: local 5-hour / 7-day estimate windows (not official caps) vs **official quota**. Nine built-in accounts — Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin — each with its plan label; Settings also accepts custom providers. Official quota rows can estimate time-to-100% from two consecutive snapshots (not the local 5-hour burn). The menubar shows today's spend and the tightest official percentage
 - **Global instructions**: lists the user-written instructions each source actually loads, kept out of token KPIs
 - **Cursor code volume**: editor AI line counts are a separate dimension, not mixed into token KPIs
 - **Local cache**: sqlite backup / restore / per-source rebuild; records stay archived (and counted) after source files rotate away

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { OfficialQuotaDto } from "../types";
 import {
+  OFFICIAL_QUOTA_EXHAUST_TITLE,
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   formatQuotaAmount,
   officialQuotaAgeLabel,
   officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
+  officialQuotaExhaustLabel,
   officialQuotaFreshnessTitle,
   officialQuotaNotice,
   officialQuotaPlanClass,
@@ -176,6 +178,41 @@ describe("formatQuotaAmount", () => {
 
   it("drops the cents once the number is large enough not to need them", () => {
     expect(formatQuotaAmount(1234.56, "USD")).toBe("$1,235");
+  });
+});
+
+describe("officialQuotaExhaustLabel", () => {
+  const now = Date.parse("2026-09-01T12:18:00.000Z");
+
+  it("returns null when there is no estimate yet", () => {
+    expect(officialQuotaExhaustLabel(null, now)).toBeNull();
+  });
+
+  it("labels a full window without a clock", () => {
+    expect(officialQuotaExhaustLabel({ kind: "exhausted", at: null }, now)).toBe("已打满");
+  });
+
+  it("labels a rate that misses the reset as an estimate, not a clock", () => {
+    expect(officialQuotaExhaustLabel({ kind: "will_not_hit", at: null }, now)).toBe(
+      "本窗估计打不满",
+    );
+  });
+
+  it("labels a future hit as 预计撞线", () => {
+    expect(
+      officialQuotaExhaustLabel({ kind: "hits", at: "2026-09-01T12:50:00.000Z" }, now),
+    ).toMatch(/^预计 .+ 撞线$/);
+  });
+
+  it("labels a past hit as already due", () => {
+    expect(
+      officialQuotaExhaustLabel({ kind: "hits", at: "2026-09-01T12:10:00.000Z" }, now),
+    ).toBe("预计已撞线");
+  });
+
+  it("keeps the disclaimer off the progress bar copy", () => {
+    expect(OFFICIAL_QUOTA_EXHAUST_TITLE).toContain("估计");
+    expect(OFFICIAL_QUOTA_EXHAUST_TITLE).toContain("不是官方给出的时间");
   });
 });
 

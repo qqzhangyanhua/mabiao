@@ -40,6 +40,7 @@ mod paths;
 mod query;
 mod quota_alerts;
 mod quota_backoff;
+mod quota_exhaust;
 mod qwen_copilot_conversation;
 mod read_pool;
 mod rollup;

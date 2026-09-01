@@ -191,10 +191,11 @@ fn quota_windows_cached_before_the_amount_fields_still_deserialize() {
     let row = db::load_official_quota_row(&conn, "claude")
         .unwrap()
         .unwrap();
-    assert_eq!(row.0[0].used_percent, Some(40.0));
-    assert_eq!(row.0[0].used_amount, None);
-    assert_eq!(row.0[0].limit_amount, None);
-    assert_eq!(row.0[0].currency, None);
+    assert_eq!(row.windows[0].used_percent, Some(40.0));
+    assert_eq!(row.windows[0].used_amount, None);
+    assert_eq!(row.windows[0].limit_amount, None);
+    assert_eq!(row.windows[0].currency, None);
+    assert_eq!(row.windows[0].exhaust, None);
 }
 
 fn quota_dto(rows: Vec<OfficialQuotaRow>) -> OfficialQuotaDto {

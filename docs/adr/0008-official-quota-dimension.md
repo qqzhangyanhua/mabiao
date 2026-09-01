@@ -25,3 +25,4 @@ Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消�
 - Codex 依赖本机 CLI；进程不在或超时不影响 Claude / Cursor / Grok。
 - Grok 依赖本机 `grok login` 写入的会话凭证；文件缺失、过期或仅有 API key 时该行 `unavailable`，不影响另外三路。Grok 限额接口与消耗记录摄取分开，结构变更时保留上次正确缓存。
 - 80% / 100% 告警按 `provider + window_kind + resets_at` 去重，`stale` 不弹，与月度预算分开开关。
+- 预计撞线只由连续两次官方快照的百分比（或金额）差计算，文案写成估计；禁止把本机 5 小时燃烧叠进官方进度条。尚未凑齐两拍、或间隔不足一分钟时不显示。

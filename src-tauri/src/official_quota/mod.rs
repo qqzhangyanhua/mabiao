@@ -10,6 +10,7 @@ pub mod custom;
 pub mod detect;
 pub mod devin;
 pub mod droid;
+pub(crate) mod exhaust;
 pub mod fetch;
 pub mod grok;
 pub(crate) mod grok_grpc;
@@ -177,25 +178,33 @@ fn load_row_by_id(
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     match store::load_official_quota_row(conn, id) {
-        Ok(Some((windows, captured_at, error, plan))) => {
-            let freshness = if windows.is_empty() && captured_at.is_empty() {
+        Ok(Some(stored)) => {
+            let freshness = if stored.windows.is_empty() && stored.captured_at.is_empty() {
                 OfficialQuotaFreshness::Unavailable
             } else {
-                freshness(&captured_at, now)
+                freshness(&stored.captured_at, now)
             };
+            let mut windows = stored.windows;
+            exhaust::attach(
+                &mut windows,
+                &stored.captured_at,
+                &stored.prev_windows,
+                stored.prev_captured_at.as_deref(),
+                now,
+            );
             OfficialQuotaRow {
                 provider: id.to_string(),
                 application: display_name.to_string(),
                 windows,
                 freshness,
-                captured_at: if captured_at.is_empty() {
+                captured_at: if stored.captured_at.is_empty() {
                     None
                 } else {
-                    Some(captured_at)
+                    Some(stored.captured_at)
                 },
-                error,
+                error: stored.error,
                 todo: None,
-                plan,
+                plan: stored.plan,
             }
         }
         Ok(None) => empty_row(id, display_name, None),
@@ -241,8 +250,8 @@ pub fn sync_claude_capture(conn: &Connection) -> Result<bool, String> {
     }
     let cached = store::load_official_quota_row(conn, OfficialQuotaProvider::Claude.as_str())?;
     let file_stamp = claude::file_captured_at(&path)?;
-    if let Some((_, captured_at, _, _)) = &cached {
-        if !captured_at.is_empty() && captured_at == &file_stamp {
+    if let Some(cached) = &cached {
+        if !cached.captured_at.is_empty() && cached.captured_at == file_stamp {
             return Ok(false);
         }
     }

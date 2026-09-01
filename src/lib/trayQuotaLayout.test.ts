@@ -121,6 +121,7 @@ describe("trayQuotaRowSummary", () => {
             used_amount: null,
             limit_amount: null,
             currency: null,
+            exhaust: null,
           },
           {
             kind: "b",
@@ -130,6 +131,7 @@ describe("trayQuotaRowSummary", () => {
             used_amount: null,
             limit_amount: null,
             currency: null,
+            exhaust: null,
           },
         ],
         error: null,

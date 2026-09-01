@@ -82,8 +82,8 @@ fn official_quota_keeps_last_plan_when_refresh_omits_it() {
     let row = store::load_official_quota_row(&conn, "cursor")
         .unwrap()
         .unwrap();
-    assert_eq!(row.0[0].used_percent, Some(20.0));
-    assert_eq!(row.3.as_deref(), Some("Pro"));
+    assert_eq!(row.windows[0].used_percent, Some(20.0));
+    assert_eq!(row.plan.as_deref(), Some("Pro"));
     let dto = official_quota::load_dto(
         &conn,
         &crate::domain::OfficialQuotaConfig::default(),
@@ -125,8 +125,8 @@ fn official_quota_keeps_last_good_windows_on_fetch_failure() {
     let row = store::load_official_quota_row(&conn, "claude")
         .unwrap()
         .unwrap();
-    assert_eq!(row.0[0].used_percent, Some(40.0));
-    assert_eq!(row.2.as_deref(), Some("解析失败"));
+    assert_eq!(row.windows[0].used_percent, Some(40.0));
+    assert_eq!(row.error.as_deref(), Some("解析失败"));
 }
 
 #[test]
@@ -271,30 +271,30 @@ fn apply_fetch_results_isolates_provider_failures() {
     let claude = store::load_official_quota_row(&conn, "claude")
         .unwrap()
         .unwrap();
-    assert_eq!(claude.0[0].used_percent, Some(10.0));
+    assert_eq!(claude.windows[0].used_percent, Some(10.0));
     let codex = store::load_official_quota_row(&conn, "codex")
         .unwrap()
         .unwrap();
-    assert_eq!(codex.2.as_deref(), Some("Codex 不可用"));
-    assert!(codex.0.is_empty());
+    assert_eq!(codex.error.as_deref(), Some("Codex 不可用"));
+    assert!(codex.windows.is_empty());
     let grok = store::load_official_quota_row(&conn, "grok")
         .unwrap()
         .unwrap();
     assert_eq!(
-        grok.2.as_deref(),
+        grok.error.as_deref(),
         Some("尚未登录 Grok CLI，请先运行 grok login")
     );
-    assert!(grok.0.is_empty());
+    assert!(grok.windows.is_empty());
     let droid = store::load_official_quota_row(&conn, "droid")
         .unwrap()
         .unwrap();
-    assert_eq!(droid.2.as_deref(), Some("尚未登录 Droid"));
-    assert!(droid.0.is_empty());
+    assert_eq!(droid.error.as_deref(), Some("尚未登录 Droid"));
+    assert!(droid.windows.is_empty());
     let antigravity = store::load_official_quota_row(&conn, "antigravity")
         .unwrap()
         .unwrap();
-    assert_eq!(antigravity.2.as_deref(), Some("尚未登录 Antigravity"));
-    assert!(antigravity.0.is_empty());
+    assert_eq!(antigravity.error.as_deref(), Some("尚未登录 Antigravity"));
+    assert!(antigravity.windows.is_empty());
     for (provider, message) in [
         ("opencode", "尚未登录 OpenCode Zen"),
         ("copilot", "未找到 GitHub Copilot 登录态"),
@@ -303,8 +303,8 @@ fn apply_fetch_results_isolates_provider_failures() {
         let row = store::load_official_quota_row(&conn, provider)
             .unwrap()
             .unwrap();
-        assert_eq!(row.2.as_deref(), Some(message));
-        assert!(row.0.is_empty());
+        assert_eq!(row.error.as_deref(), Some(message));
+        assert!(row.windows.is_empty());
     }
 }
 

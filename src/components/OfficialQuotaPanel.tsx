@@ -4,9 +4,11 @@ import { useTrayQuotaArrange } from "../hooks/useTrayQuotaArrange";
 import { Icon } from "../icons";
 import { formatClock, formatWindowClock } from "../lib/format";
 import {
+  OFFICIAL_QUOTA_EXHAUST_TITLE,
   officialQuotaAgeLabel,
   officialQuotaAmountLabel,
   officialQuotaEmptyCopy,
+  officialQuotaExhaustLabel,
   officialQuotaFreshnessTitle,
   officialQuotaNotice,
   officialQuotaPlanClass,
@@ -345,6 +347,7 @@ export function OfficialQuotaWindows({
   windows: OfficialQuotaWindow[];
   compactReset?: boolean;
 }) {
+  const nowMs = useTickingNow();
   return (
     <div className="official-quota-windows">
       {windows.map((window) => {
@@ -352,8 +355,12 @@ export function OfficialQuotaWindows({
         // 金额与百分比可以并存：有上限时进度条旁边补一行钱，
         // 只有余额时那一行就是这个窗口的全部内容。
         const amount = officialQuotaAmountLabel(window);
+        const exhaust = officialQuotaExhaustLabel(window.exhaust, nowMs, compactReset);
         return (
-          <div className="official-quota-window" key={window.kind}>
+          <div
+            className={exhaust ? "official-quota-window has-exhaust" : "official-quota-window"}
+            key={window.kind}
+          >
             <span title={window.label}>{window.label}</span>
             <strong>{percent == null ? (amount ?? "—") : `${percent.toFixed(0)}%`}</strong>
             {/* 没有百分比就不画条：一根空条读起来是「用了 0%」，而事实是「不知道上限」。 */}
@@ -372,6 +379,11 @@ export function OfficialQuotaWindows({
             </span>
             {percent != null && amount ? (
               <span className="muted official-quota-amount">{amount}</span>
+            ) : null}
+            {exhaust ? (
+              <span className="muted official-quota-exhaust" title={OFFICIAL_QUOTA_EXHAUST_TITLE}>
+                {exhaust}
+              </span>
             ) : null}
           </div>
         );

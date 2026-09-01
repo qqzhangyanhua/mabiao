@@ -231,6 +231,25 @@ pub enum OfficialQuotaFreshness {
     Unavailable,
 }
 
+/// 按连续两次官方快照估计何时打满。不是官方给出的时间。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum QuotaExhaustKind {
+    /// 按当前速度会在 `at` 打满。
+    Hits,
+    /// 有速率，但打满时刻晚于本窗重置。
+    WillNotHit,
+    /// 快照已经 ≥ 100%。
+    Exhausted,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QuotaExhaustDto {
+    pub kind: QuotaExhaustKind,
+    /// 预计打满时刻（RFC3339）。`hits` 才有。
+    pub at: Option<String>,
+}
+
 /// 「官方额度」里的一条窗口。
 ///
 /// 约定：所有构造点以 `..Default::default()` 收尾，这样 #81 新增金额口径字段时
@@ -258,6 +277,9 @@ pub struct OfficialQuotaWindow {
     /// ISO 4217 代码，例如 `USD`。取不到时留空，界面只显示数字。
     #[serde(default)]
     pub currency: Option<String>,
+    /// 按最近两次官方快照估计的撞线。读 DTO 时现算，不作为官方快照的一部分写入。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exhaust: Option<QuotaExhaustDto>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
