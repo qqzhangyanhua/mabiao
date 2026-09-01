@@ -1,0 +1,26 @@
+src-tauri/src/tests/ingest.rs
+  s_b1f1774c79dfaf::t_9d78d4a543604b 127-130
+src-tauri/src/ingest.rs
+  s_b1f1774c79dfaf::t_1997ba94b0ccf7 234
+src/hooks/viewCache.ts
+  s_b1f1774c79dfaf::t_bb34d1a718fbbe 44-53,55-57
+src-tauri/src/bin/bench_ingest.rs
+  s_b1f1774c79dfaf::t_9d78d4a543604b 43,174,250-253,351-352
+  s_b1f1774c79dfaf::t_8854315bdbb86a 283,447-453,457,472-477
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "db70df2be2ebe70981802ac8aa933bc0a11cc996",
+  "prompts": {},
+  "sessions": {
+    "s_b1f1774c79dfaf": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05cc9-3c18-7a02-b7f8-3ccb305a8842",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
