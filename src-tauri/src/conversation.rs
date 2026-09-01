@@ -526,6 +526,31 @@ pub fn refresh_codex(
     refresh_source_in_roots(conn, Source::Codex, &roots)
 }
 
+/// 本机 bench 用：只跑 Codex 对话整文件 index，返回事件数。
+pub fn codex_index_for_bench(path: &Path) -> Result<usize, String> {
+    match codex::index(path) {
+        Ok(batch) => Ok(batch
+            .conversations
+            .iter()
+            .map(|conversation| conversation.events.len())
+            .sum()),
+        Err(issue) => Err(issue.message),
+    }
+}
+
+/// 本机 bench 用：只跑 Codex 对话后缀 index，返回新事件数。
+pub fn codex_index_suffix_for_bench(
+    path: &Path,
+    byte_offset: u64,
+    start_line: u32,
+    expected_session_id: &str,
+) -> Result<usize, String> {
+    match codex::index_suffix(path, byte_offset, start_line, expected_session_id) {
+        Ok(parsed) => Ok(parsed.events.len()),
+        Err(issue) => Err(issue.message),
+    }
+}
+
 pub(crate) fn refresh_source_in_roots(
     conn: &Connection,
     source: Source,

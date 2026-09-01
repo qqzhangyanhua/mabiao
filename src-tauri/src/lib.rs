@@ -19,6 +19,8 @@ pub mod net;
 pub mod official_quota;
 pub mod paths;
 pub mod query;
+pub mod rollup_source;
+pub mod rollup_split;
 pub mod store;
 pub mod tray;
 pub mod tray_popup;

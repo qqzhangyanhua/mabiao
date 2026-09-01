@@ -43,6 +43,8 @@ mod quota_backoff;
 mod qwen_copilot_conversation;
 mod read_pool;
 mod rollup;
+mod rollup_source;
+mod rollup_split;
 mod store;
 mod tray_popup;
 mod work_timeline;

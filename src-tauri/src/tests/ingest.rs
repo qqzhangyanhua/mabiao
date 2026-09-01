@@ -99,6 +99,56 @@ fn ingest_keeps_last_good_records_when_valid_jsonl_loses_usage_events() {
 }
 
 #[test]
+fn ingest_allows_record_count_drop_when_adapter_version_is_stale() {
+    // ADAPTER_VERSION 升级后新适配器可能产出更少记录；条数下降保护只防截断，
+    // 不该挡住版本升级触发的合法覆盖，否则会每轮重解析却永远卡在旧 version。
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let session_dir = home.join(".codex/sessions");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    let path = session_dir.join("one.jsonl");
+    std::fs::write(&path, fixture("codex.jsonl")).unwrap();
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(store::load_all(&conn).unwrap().len(), 2);
+
+    let source_file = path.to_string_lossy().to_string();
+    let mut extra = rec(
+        "2025-11-18T16:35:00Z",
+        Source::Codex,
+        "gpt-5.1-codex",
+        "codex",
+        "legacy-extra",
+        "legacy-session",
+        2,
+    );
+    extra.source_file = source_file.clone();
+    store::insert_records(&conn, &[extra]).unwrap();
+    assert_eq!(store::record_count_for_file(&conn, &source_file).unwrap(), 3);
+    conn.execute(
+        "UPDATE ingested_files SET adapter_version = ?1 WHERE path = ?2",
+        rusqlite::params![store::ADAPTER_VERSION - 1, source_file],
+    )
+    .unwrap();
+
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(report.files_failed, 0, "issues={:?}", report.issues);
+    assert_eq!(report.files_parsed, 1);
+    assert_eq!(store::load_all(&conn).unwrap().len(), 2);
+    let cached = store::cached_ingested_files(&conn).unwrap();
+    let row = cached
+        .iter()
+        .find(|row| row.path == source_file)
+        .expect("ingested file row");
+    assert_eq!(row.adapter_version, store::ADAPTER_VERSION);
+
+    let second = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(second.files_skipped, 1);
+    assert_eq!(second.files_parsed, 0);
+    assert_eq!(second.files_failed, 0);
+}
+
+#[test]
 fn ingest_keeps_last_good_records_when_changed_file_has_no_usage_records() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();

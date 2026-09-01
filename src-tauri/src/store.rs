@@ -93,7 +93,8 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         -- a full scan + occurred_at index-only scan.
         CREATE INDEX IF NOT EXISTS idx_usage_source_occurred ON usage_records(source, occurred_at);
 
-        -- 按天预聚合，给不带时间过滤的全量查询用（首屏默认就是「全部」）。
+        -- 按 UTC 天预聚合。时间窗切成中间完整 UTC 天 + 两端 partial：整天走这张表，
+        -- 两端补差走明细。无时间窗时整段走这张表；小时粒度无法从日级还原，仍走明细。
         --
         -- 键里带 session_id 看着反直觉，实测却几乎不涨行数：一个会话通常落在同一天、
         -- 用同一个模型和项目。17 万行原始记录聚成 943 行（不含 session）或 3031 行
@@ -722,6 +723,16 @@ pub fn record_count_for_file(conn: &Connection, source_file: &str) -> Result<u64
         |row| row.get::<_, i64>(0),
     )
     .map(|count| count as u64)
+    .map_err(|e| e.to_string())
+}
+
+pub fn cached_adapter_version(conn: &Connection, path: &str) -> Result<Option<i64>, String> {
+    conn.query_row(
+        "SELECT adapter_version FROM ingested_files WHERE path = ?1",
+        params![path],
+        |row| row.get(0),
+    )
+    .optional()
     .map_err(|e| e.to_string())
 }
 
