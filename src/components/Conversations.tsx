@@ -8,6 +8,11 @@ import {
   type UIEvent,
 } from "react";
 import { Icon } from "../icons";
+import {
+  conversationFocusToRestore,
+  hashForConversation,
+  replaceLocationHash,
+} from "../hooks/viewCache";
 import { conversationKey } from "../lib/conversationCache";
 import {
   conversationJumpBehavior,
@@ -440,6 +445,13 @@ export function Conversations({
     selectedSource,
   ]);
 
+  useEffect(() => {
+    if (!selectedSource || !selectedSessionId) {
+      return;
+    }
+    replaceLocationHash(hashForConversation(selectedSource, selectedSessionId));
+  }, [selectedSource, selectedSessionId]);
+
   const syncTimelineEdge = useCallback((timeline: HTMLElement) => {
     const nextAtTop =
       isNearConversationTop(timeline) && !windowEdgesRef.current.hasMoreBefore;
@@ -632,12 +644,15 @@ export function Conversations({
   );
 
   useEffect(() => {
-    if (!focus) {
+    const restore = conversationFocusToRestore(focus ?? null, window.location.hash);
+    if (!restore) {
       return;
     }
-    const source = focus.source;
-    const sessionId = focus.session_id;
-    onFocusConsumed?.();
+    const source = restore.source;
+    const sessionId = restore.session_id;
+    if (focus) {
+      onFocusConsumed?.();
+    }
     invoke<ConversationDetailDto>("get_conversation_detail", {
       source,
       sessionId,
@@ -653,6 +668,7 @@ export function Conversations({
   }, [focus, loadDetail, onError, onFocusConsumed]);
 
   function closeDetail() {
+    replaceLocationHash("conversations");
     setNavigation((current) => transitionConversationNavigation(current, { type: "close" }));
     detailGenerations.current.clear();
     observedDetailRevisions.current.clear();

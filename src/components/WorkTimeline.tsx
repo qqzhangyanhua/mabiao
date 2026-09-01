@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons";
+import { hashForWorktime, parseWorktimeDay, replaceLocationHash } from "../hooks/viewCache";
 import { parseDateValue, toDateValue } from "../lib/calendar";
 import {
   sourceLabel,
@@ -43,7 +44,9 @@ export function WorkTimeline({
 }: {
   onSessionClick?: (session: { id: string; source: string }) => void;
 }) {
-  const [day, setDay] = useState(() => toDateValue(new Date()));
+  const [day, setDay] = useState(
+    () => parseWorktimeDay(window.location.hash) ?? toDateValue(new Date()),
+  );
   const [data, setData] = useState<WorkTimelineDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +75,10 @@ export function WorkTimeline({
           setLoading(false);
         }
       });
+  }, [day]);
+
+  useEffect(() => {
+    replaceLocationHash(hashForWorktime(day));
   }, [day]);
 
   const segments = data?.segments ?? [];

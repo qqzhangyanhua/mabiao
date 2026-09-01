@@ -27,9 +27,13 @@ import type {
   ConversationFocus,
 } from "../types";
 import {
+  hashBelongsToView,
+  hashForConversation,
   initialViewScopes,
   isViewFresh,
+  parseConversationFocus,
   reconcileLoadedStamps,
+  replaceLocationHash,
   scopesEqual,
   syncSharedFilters,
   viewFromHash,
@@ -89,7 +93,9 @@ export function useUsageData() {
   const [hydratedViews, setHydratedViews] = useState<Set<View>>(() => new Set());
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [sessionsRevision, setSessionsRevision] = useState(0);
-  const [conversationFocus, setConversationFocus] = useState<ConversationFocus | null>(null);
+  const [conversationFocus, setConversationFocus] = useState<ConversationFocus | null>(
+    () => parseConversationFocus(window.location.hash),
+  );
   const [prices, setPrices] = useState<PriceTable>({ prices: [] });
   const [budgetStatus, setBudgetStatus] = useState<BudgetStatusDto | null>(null);
   const [savingBudget, setSavingBudget] = useState(false);
@@ -282,14 +288,17 @@ export function useUsageData() {
   }, [grain]);
 
   const openConversations = useCallback((session?: { id: string; source: string }) => {
-    setConversationFocus(conversationFocusFromSession(session));
+    const focus = conversationFocusFromSession(session);
+    setConversationFocus(focus);
     setView("conversations");
-    window.history.replaceState(null, "", "#conversations");
+    replaceLocationHash(
+      focus ? hashForConversation(focus.source, focus.session_id) : "conversations",
+    );
   }, []);
 
   const openUnpricedDiagnosis = useCallback(() => {
     setView("settings");
-    window.history.replaceState(null, "", `#${SETTINGS_UNPRICED_ANCHOR}`);
+    replaceLocationHash(SETTINGS_UNPRICED_ANCHOR);
   }, []);
 
   const clearConversationFocus = useCallback(() => {
@@ -298,13 +307,10 @@ export function useUsageData() {
 
   const navigate = useCallback((next: View) => {
     setView(next);
-    const current = window.location.hash.replace(/^#/, "");
-    if (next === "settings" && (current === "settings" || current.startsWith("settings-"))) {
+    if (hashBelongsToView(window.location.hash, next)) {
       return;
     }
-    if (current !== next) {
-      window.history.replaceState(null, "", `#${next}`);
-    }
+    replaceLocationHash(next);
   }, []);
 
   const applyScope = useCallback(

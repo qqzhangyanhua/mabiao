@@ -3,9 +3,15 @@ import type { Filter, View } from "../types";
 import {
   emptyViewScope,
   filtersEqual,
+  hashBelongsToView,
+  hashForConversation,
+  hashForWorktime,
   initialViewScopes,
   isViewFresh,
+  parseConversationFocus,
   parseViewHash,
+  parseWorktimeDay,
+  conversationFocusToRestore,
   reconcileLoadedStamps,
   syncSharedFilters,
   viewStamp,
@@ -62,8 +68,62 @@ describe("parseViewHash", () => {
     expect(parseViewHash("#settings-unpriced")).toBe("settings");
   });
 
+  it("keeps conversation session and worktime day hashes on their views", () => {
+    expect(parseViewHash("#conversations/claude/abc")).toBe("conversations");
+    expect(parseViewHash("conversations/cursor_agent/sess%2F1")).toBe("conversations");
+    expect(parseViewHash("#worktime/2026-08-22")).toBe("worktime");
+    expect(parseViewHash("worktime/2026-08-22")).toBe("worktime");
+  });
+
   it("falls back to overview for unknown hashes", () => {
     expect(parseViewHash("#nope")).toBe("overview");
+  });
+});
+
+describe("conversation and worktime hashes", () => {
+  it("round-trips a conversation session", () => {
+    const hash = hashForConversation("claude", "sess-1");
+    expect(hash).toBe("conversations/claude/sess-1");
+    expect(parseConversationFocus(`#${hash}`)).toEqual({
+      source: "claude",
+      session_id: "sess-1",
+    });
+  });
+
+  it("encodes slashes in session ids", () => {
+    const hash = hashForConversation("cursor_agent", "a/b");
+    expect(hash).toBe("conversations/cursor_agent/a%2Fb");
+    expect(parseConversationFocus(hash)).toEqual({
+      source: "cursor_agent",
+      session_id: "a/b",
+    });
+  });
+
+  it("ignores incomplete conversation hashes", () => {
+    expect(parseConversationFocus("#conversations")).toBeNull();
+    expect(parseConversationFocus("#conversations/claude")).toBeNull();
+    expect(parseConversationFocus("#conversations/claude/")).toBeNull();
+  });
+
+  it("round-trips a worktime day", () => {
+    expect(hashForWorktime("2026-08-22")).toBe("worktime/2026-08-22");
+    expect(parseWorktimeDay("#worktime/2026-08-22")).toBe("2026-08-22");
+    expect(parseWorktimeDay("#worktime")).toBeNull();
+    expect(parseWorktimeDay("#worktime/2026-13-01")).toBeNull();
+  });
+
+  it("treats nested hashes as belonging to the current view", () => {
+    expect(hashBelongsToView("#conversations/claude/abc", "conversations")).toBe(true);
+    expect(hashBelongsToView("#worktime/2026-08-22", "worktime")).toBe(true);
+    expect(hashBelongsToView("#settings-budget", "settings")).toBe(true);
+    expect(hashBelongsToView("#overview", "conversations")).toBe(false);
+  });
+
+  it("restores a conversation session from hash after live focus was consumed", () => {
+    expect(conversationFocusToRestore(null, "#conversations/claude/abc")).toEqual({
+      source: "claude",
+      session_id: "abc",
+    });
   });
 });
 
