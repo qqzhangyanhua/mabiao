@@ -1,0 +1,31 @@
+src-tauri/src/tests/cursor_session.rs
+  s_62c468651a457b::t_61dd9e67585736 1142,1147-1204
+  s_62c468651a457b::t_db04253578d8ed 1143-1146
+src/lib/exportRows.test.ts
+  s_62c468651a457b::t_9a71c7fa90229b 219
+src-tauri/src/cursor_session_query.rs
+  s_62c468651a457b::t_305077eb625db2 53-61,231
+src-tauri/src/domain.rs
+  s_62c468651a457b::t_f162ad64dfe67a 1454,1478
+src/components/CursorSessionPanel.tsx
+  s_62c468651a457b::t_87835aeb675a2f 17,53,172-173,175-178
+  s_62c468651a457b::t_c02dbf2ea03090 174
+src/types.ts
+  s_62c468651a457b::t_214e37a0390c2d 731
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "60e34080648b180ee9e72c7648e9527167f0c61b",
+  "prompts": {},
+  "sessions": {
+    "s_62c468651a457b": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a05cfb-36de-7a81-8cf1-a89e03fbba71",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
