@@ -176,3 +176,134 @@ fn sql_queries_match_in_memory_aggregates() {
         );
     }
 }
+
+/// 同会话同日混有原生费用与无原生费用：预聚合按 has_native 拆成两行，外层求和仍须对上。
+fn mixed_native_same_day() -> UsageRecord {
+    let mut extra = rec(
+        "2026-08-01T12:00:00Z",
+        Source::Codex,
+        "gpt-5.1-codex",
+        "official",
+        "/proj/a",
+        "s1",
+        80,
+    );
+    extra.input_tokens = 80;
+    extra.native_cost = Some(0.4);
+    extra
+}
+
+fn overview_window_records() -> Vec<UsageRecord> {
+    let mut records = diverse_records();
+    records.push(mixed_native_same_day());
+    records
+}
+
+fn assert_overview_parity(
+    conn: &rusqlite::Connection,
+    records: &[UsageRecord],
+    prices: &PriceTable,
+    filter: &Filter,
+    label: &str,
+) -> crate::domain::OverviewDto {
+    let sql = query::overview(conn, filter, prices).unwrap();
+    let mem = aggregate::overview(records, filter, prices);
+    assert_eq!(sql.total_tokens, mem.total_tokens, "{label} total_tokens");
+    assert_eq!(sql.input_tokens, mem.input_tokens, "{label} input_tokens");
+    assert_eq!(
+        sql.output_tokens, mem.output_tokens,
+        "{label} output_tokens"
+    );
+    assert_eq!(
+        sql.cache_read_tokens, mem.cache_read_tokens,
+        "{label} cache_read_tokens"
+    );
+    assert_eq!(
+        sql.cache_creation_tokens, mem.cache_creation_tokens,
+        "{label} cache_creation_tokens"
+    );
+    assert_eq!(
+        sql.reasoning_tokens, mem.reasoning_tokens,
+        "{label} reasoning_tokens"
+    );
+    assert_eq!(
+        sql.session_count, mem.session_count,
+        "{label} session_count"
+    );
+    assert_eq!(sql.unpriced, mem.unpriced, "{label} unpriced");
+    match (sql.cost, mem.cost) {
+        (Some(x), Some(y)) => {
+            assert!((x - y).abs() < 1e-9, "{label} cost {x} vs {y}")
+        }
+        (None, None) => {}
+        (x, y) => panic!("{label} cost Option 不一致：{x:?} vs {y:?}"),
+    }
+    sql
+}
+
+/// 四种时间窗 + 未就绪：概览 SQL 与内存聚合逐字段一致。
+#[test]
+fn overview_matches_memory_across_rollup_window_shapes() {
+    let conn = store::open_memory().unwrap();
+    let records = overview_window_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+    let prices = diverse_prices();
+
+    let none = Filter::default();
+    let aligned = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-09T00:00:00Z".into()),
+        ..Filter::default()
+    };
+    let split = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+    let intra_day = Filter {
+        from: Some("2026-08-01T09:00:00Z".into()),
+        to: Some("2026-08-01T11:30:00Z".into()),
+        ..Filter::default()
+    };
+    let head_empty = Filter {
+        from: Some("2026-08-01T00:00:00Z".into()),
+        to: Some("2026-08-08T12:00:00Z".into()),
+        ..Filter::default()
+    };
+
+    let none_sql = assert_overview_parity(&conn, &records, &prices, &none, "无时间窗");
+    assert!(
+        none_sql.unpriced,
+        "全库含 unknown-model / 空模型，应标未定价"
+    );
+
+    let aligned_sql = assert_overview_parity(&conn, &records, &prices, &aligned, "对齐窗");
+    // 08-01 priced(100)+native(80) + 08-02 native(50) + claude(200) + 08-08(300)
+    assert_eq!(aligned_sql.total_tokens, 100 + 80 + 50 + 200 + 300);
+    assert_eq!(aligned_sql.session_count, 3, "s1 跨天仍只计一次");
+    assert!(!aligned_sql.unpriced);
+
+    let split_sql = assert_overview_parity(&conn, &records, &prices, &split, "两端 partial 切分窗");
+    // 头部 partial 含 s1 同日 priced(10:00)+native(12:00)；08-02 在完整天，须合并成一个会话。
+    assert_eq!(split_sql.total_tokens, 100 + 80 + 200 + 50 + 300);
+    assert_eq!(
+        split_sql.session_count, 3,
+        "跨 partial 边界的 s1 只计一次，加上 s2 / s3"
+    );
+
+    let intra_sql = assert_overview_parity(&conn, &records, &prices, &intra_day, "单日内窗");
+    assert_eq!(intra_sql.total_tokens, 100 + 200);
+    assert_eq!(intra_sql.session_count, 2);
+
+    let head_empty_sql =
+        assert_overview_parity(&conn, &records, &prices, &head_empty, "单端 partial 为空");
+    assert_eq!(head_empty_sql.total_tokens, 100 + 80 + 50 + 200 + 300);
+    assert_eq!(head_empty_sql.session_count, 3);
+
+    conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+        .unwrap();
+    let not_ready = assert_overview_parity(&conn, &records, &prices, &split, "预聚合未就绪");
+    assert_eq!(not_ready.total_tokens, split_sql.total_tokens);
+    assert_eq!(not_ready.session_count, split_sql.session_count);
+}

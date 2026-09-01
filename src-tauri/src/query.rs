@@ -18,6 +18,8 @@ use crate::domain::{
     SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UnpricedGroupDto,
     UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
 };
+use crate::rollup_source::rollup_source;
+use crate::rollup_split::rollup_plan;
 
 /// 费用表达式（每行）：native_cost 优先，否则加权价格，否则 NULL（未定价）。
 const COST_EXPR: &str = "
@@ -453,54 +455,31 @@ pub fn overview(
     prices: &PriceTable,
 ) -> Result<OverviewDto, String> {
     install_prices(conn, prices)?;
-    let (sql, params) = match rollup_mode(conn, filter) {
-        RollupMode::Rollup => {
-            let (clauses, params) = rollup_filter_clauses(filter, None);
-            (
-                format!(
-                    "SELECT
-                        COALESCE(SUM(d.total_tokens), 0),
-                        COALESCE(SUM(d.input_tokens), 0),
-                        COALESCE(SUM(d.output_tokens), 0),
-                        COALESCE(SUM(d.cache_read_tokens), 0),
-                        COALESCE(SUM(d.cache_creation_tokens), 0),
-                        COALESCE(SUM(d.reasoning_tokens), 0),
-                        COUNT(DISTINCT d.source || char(31) || d.session_id),
-                        SUM({ROLLUP_COST_EXPR}),
-                        COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
-                    FROM usage_rollup d
-                    {ROLLUP_PRICE_JOINS}
-                    {}",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-        RollupMode::Hybrid(split) => overview_hybrid_sql(filter, &split),
-        RollupMode::Raw => {
-            let (clauses, params) = filter_clauses(filter);
-            (
-                format!(
-                    "SELECT
-                        COALESCE(SUM(r.total_tokens), 0),
-                        COALESCE(SUM(r.input_tokens), 0),
-                        COALESCE(SUM(r.output_tokens), 0),
-                        COALESCE(SUM(r.cache_read_tokens), 0),
-                        COALESCE(SUM(r.cache_creation_tokens), 0),
-                        COALESCE(SUM(r.reasoning_tokens), 0),
-                        COUNT(DISTINCT r.source || char(31) || r.session_id),
-                        SUM({COST_EXPR}),
-                        COALESCE(SUM({UNPRICED_EXPR}), 0)
-                    FROM usage_records r
-                    {PRICE_JOINS}
-                    {}",
-                    where_sql(&clauses),
-                ),
-                params,
-            )
-        }
-    };
-    conn.query_row(&sql, params_from_iter(params.iter()), |row| {
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            None,
+        ),
+        filter,
+    );
+    let sql = format!(
+        "SELECT
+            COALESCE(SUM(d.total_tokens), 0),
+            COALESCE(SUM(d.input_tokens), 0),
+            COALESCE(SUM(d.output_tokens), 0),
+            COALESCE(SUM(d.cache_read_tokens), 0),
+            COALESCE(SUM(d.cache_creation_tokens), 0),
+            COALESCE(SUM(d.reasoning_tokens), 0),
+            COUNT(DISTINCT d.source || char(31) || d.session_id),
+            SUM({ROLLUP_COST_EXPR}),
+            COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
+        FROM ({}) d
+        {ROLLUP_PRICE_JOINS}",
+        inner.sql,
+    );
+    conn.query_row(&sql, params_from_iter(inner.params.iter()), |row| {
         Ok(OverviewDto {
             total_tokens: row.get(0)?,
             input_tokens: row.get(1)?,
@@ -514,56 +493,6 @@ pub fn overview(
         })
     })
     .map_err(|e| e.to_string())
-}
-
-fn overview_hybrid_sql(filter: &Filter, split: &TimeSplit) -> (String, Vec<Value>) {
-    let (middle_clauses, mut params) = rollup_filter_clauses(filter, Some(split));
-    let (bound_clauses, bound_params) = boundary_filter_clauses(filter, split);
-    params.extend(bound_params);
-    let sql = format!(
-        "SELECT
-            COALESCE(SUM(total_tokens), 0),
-            COALESCE(SUM(input_tokens), 0),
-            COALESCE(SUM(output_tokens), 0),
-            COALESCE(SUM(cache_read_tokens), 0),
-            COALESCE(SUM(cache_creation_tokens), 0),
-            COALESCE(SUM(reasoning_tokens), 0),
-            COUNT(DISTINCT source || char(31) || session_id),
-            SUM(cost),
-            COALESCE(SUM(unpriced), 0)
-        FROM (
-            SELECT d.total_tokens AS total_tokens,
-                d.input_tokens AS input_tokens,
-                d.output_tokens AS output_tokens,
-                d.cache_read_tokens AS cache_read_tokens,
-                d.cache_creation_tokens AS cache_creation_tokens,
-                d.reasoning_tokens AS reasoning_tokens,
-                d.source AS source,
-                d.session_id AS session_id,
-                {ROLLUP_COST_EXPR} AS cost,
-                {ROLLUP_UNPRICED_EXPR} AS unpriced
-            FROM usage_rollup d
-            {ROLLUP_PRICE_JOINS}
-            {middle_where}
-            UNION ALL
-            SELECT r.total_tokens,
-                r.input_tokens,
-                r.output_tokens,
-                r.cache_read_tokens,
-                r.cache_creation_tokens,
-                r.reasoning_tokens,
-                r.source,
-                r.session_id,
-                {COST_EXPR},
-                {UNPRICED_EXPR}
-            FROM usage_records r
-            {PRICE_JOINS}
-            {bound_where}
-        )",
-        middle_where = where_sql(&middle_clauses),
-        bound_where = where_sql(&bound_clauses),
-    );
-    (sql, params)
 }
 
 /// 全库未定价诊断：按 `(模型, provider)` 归组，不接筛选。
