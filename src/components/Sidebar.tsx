@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Icon, type IconName } from "../icons";
+import { Icon } from "../icons";
+import { NAV_GROUPS, shortcutKeyForView, shortcutLegend, shortcutRangeLabel } from "../lib/nav";
 import { navLabel, viewTitle } from "../lib/viewTitle";
 import type { View } from "../types";
 import appIcon from "../../src-tauri/icons/icon.png";
@@ -15,39 +16,6 @@ function loadCollapsed(): boolean {
     return false;
   }
 }
-
-const navGroups: { label: string; items: { id: View; icon: IconName }[] }[] = [
-  {
-    label: "用量",
-    items: [
-      { id: "overview", icon: "overview" },
-      { id: "trend", icon: "trend" },
-      { id: "model", icon: "model" },
-      { id: "project", icon: "project" },
-      { id: "application", icon: "source" },
-      { id: "provider", icon: "provider" },
-      { id: "worktime", icon: "clock" },
-    ],
-  },
-  {
-    label: "对话",
-    items: [{ id: "conversations", icon: "chat" }],
-  },
-  {
-    label: "Cursor",
-    items: [
-      { id: "cursor", icon: "cursor" },
-      { id: "cursor-sessions", icon: "sessions" },
-    ],
-  },
-  {
-    label: "系统",
-    items: [
-      { id: "instructions", icon: "instruction" },
-      { id: "settings", icon: "settings" },
-    ],
-  },
-];
 
 type ConnTone = "ok" | "busy" | "partial" | "off";
 
@@ -115,17 +83,19 @@ export function Sidebar({
         </div>
       </div>
       <nav className="nav">
-        {navGroups.map((group) => (
+        {NAV_GROUPS.map((group) => (
           <div className="nav-group" key={group.label}>
             <div className={collapsed ? "sr-only" : "nav-group-label"}>{group.label}</div>
             {group.items.map((item) => {
               const label = navLabel(item.id);
+              const digit = shortcutKeyForView(item.id);
               return (
                 <button
                   key={item.id}
                   className={view === item.id ? "nav-btn active" : "nav-btn"}
                   onClick={() => onNavigate(item.id)}
-                  title={collapsed ? label : undefined}
+                  title={collapsed ? (digit ? `${label} · ${digit}` : label) : undefined}
+                  aria-keyshortcuts={digit ?? undefined}
                 >
                   <Icon name={item.icon} size={16} />
                   <span className={collapsed ? "sr-only" : undefined}>{label}</span>
@@ -155,8 +125,8 @@ export function Sidebar({
               <div className="conn-sub">{status}</div>
             </div>
           </div>
-          <div className="version" title="数字键切页 · R 刷新 · Esc 清空筛选">
-            版本 {__APP_VERSION__} · 快捷键 R / 1-0
+          <div className="version" title={`${shortcutLegend()} · R 刷新 · Esc 清空筛选`}>
+            版本 {__APP_VERSION__} · R 刷新 / {shortcutRangeLabel()} 切页
           </div>
         </div>
       ) : (

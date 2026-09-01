@@ -1,18 +1,6 @@
 import { useEffect } from "react";
+import { viewForShortcutKey } from "../lib/nav";
 import type { View } from "../types";
-
-const SHORTCUT_VIEWS: View[] = [
-  "overview",
-  "trend",
-  "conversations",
-  "model",
-  "project",
-  "application",
-  "provider",
-  "cursor",
-  "cursor-sessions",
-  "settings",
-];
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -48,8 +36,7 @@ export function useKeyboardShortcuts({
         onClearFilters();
         return;
       }
-      const index = event.key === "0" ? 9 : Number(event.key) - 1;
-      const next = Number.isInteger(index) ? SHORTCUT_VIEWS[index] : undefined;
+      const next = viewForShortcutKey(event.key);
       if (next) {
         event.preventDefault();
         onNavigate(next);
