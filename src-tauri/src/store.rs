@@ -725,6 +725,16 @@ pub fn record_count_for_file(conn: &Connection, source_file: &str) -> Result<u64
     .map_err(|e| e.to_string())
 }
 
+pub fn cached_adapter_version(conn: &Connection, path: &str) -> Result<Option<i64>, String> {
+    conn.query_row(
+        "SELECT adapter_version FROM ingested_files WHERE path = ?1",
+        params![path],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
 pub fn delete_records_for_file(conn: &Connection, source_file: &str) -> Result<u64, String> {
     conn.execute(
         "DELETE FROM usage_records WHERE source_file = ?1",

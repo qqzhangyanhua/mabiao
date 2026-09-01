@@ -13,7 +13,7 @@ pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> 
     ingest::resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions")
 }
 
-pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
     parse_streaming_jsonl(path, parse_codex_jsonl)
 }
 

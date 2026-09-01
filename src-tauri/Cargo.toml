@@ -23,6 +23,10 @@ path = "src/bin/probe.rs"
 name = "litellm_snapshot"
 path = "src/bin/litellm_snapshot.rs"
 
+[[bin]]
+name = "bench_ingest"
+path = "src/bin/bench_ingest.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

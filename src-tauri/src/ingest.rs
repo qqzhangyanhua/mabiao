@@ -1,7 +1,7 @@
 //! 可信摄取：发现、比指纹、解析、验证、落库、对账、同步预聚合。
 //!
 //! 各来源的扫描目录、发现规则、辅助指纹、解析与展示文案由适配器表提供。
-//! 本模块只负责缓存命中、失败不覆盖、追加型日志截断检测、删除对账与预聚合同步。
+//! 本模块只负责缓存命中、失败不覆盖、追加型日志截断检测（当前 adapter_version 下）、删除对账与预聚合同步。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -85,7 +85,26 @@ pub(crate) fn source_scan_dirs_with(
 }
 
 pub fn ingest_all(conn: &Connection, home: &Path) -> Result<IngestReport, String> {
-    ingest_all_with_overrides(conn, home, &env_overrides())
+    ingest_all_timed(conn, home).map(|(report, _)| report)
+}
+
+/// 本机性能探测用：与 [`ingest_all`] 同路径，额外回报各阶段耗时。
+#[derive(Debug, Default, Clone)]
+pub struct IngestPhaseTimings {
+    pub remove_unknown_ms: u128,
+    pub usage_ms: u128,
+    pub cursor_ms: u128,
+    pub conversation_ms: u128,
+    pub rollup_ms: u128,
+    pub commit_ms: u128,
+    pub total_ms: u128,
+}
+
+pub fn ingest_all_timed(
+    conn: &Connection,
+    home: &Path,
+) -> Result<(IngestReport, IngestPhaseTimings), String> {
+    ingest_all_with_overrides_timed(conn, home, &env_overrides())
 }
 
 /// 与 ingest 使用同一套 cache fingerprint（主文件 metadata + sidecar）。
@@ -217,16 +236,37 @@ pub(crate) fn ingest_all_with_overrides(
     home: &Path,
     overrides: &PathOverrides,
 ) -> Result<IngestReport, String> {
+    ingest_all_with_overrides_timed(conn, home, overrides).map(|(report, _)| report)
+}
+
+fn ingest_all_with_overrides_timed(
+    conn: &Connection,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<(IngestReport, IngestPhaseTimings), String> {
+    let total_started = std::time::Instant::now();
+    let mut timings = IngestPhaseTimings::default();
     let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+
+    let started = std::time::Instant::now();
     let removed_unknown = store::remove_unknown_sources(&transaction)?;
-    let mut report = ingest_all_inner(&transaction, home, overrides)?;
+    timings.remove_unknown_ms = started.elapsed().as_millis();
+
+    let mut report = ingest_all_inner(&transaction, home, overrides, &mut timings)?;
     report.records_removed += removed_unknown;
     // 清理未知来源是整表 DELETE，定位不到具体是哪几天，只能整张重来。罕见路径。
     report.rollup_full_rebuild = removed_unknown > 0;
     report.partial_success = report.files_failed > 0 || !report.conversation_issues.is_empty();
+
+    let started = std::time::Instant::now();
     sync_rollup(&transaction, &report)?;
+    timings.rollup_ms = started.elapsed().as_millis();
+
+    let started = std::time::Instant::now();
     transaction.commit().map_err(|e| e.to_string())?;
-    Ok(report)
+    timings.commit_ms = started.elapsed().as_millis();
+    timings.total_ms = total_started.elapsed().as_millis();
+    Ok((report, timings))
 }
 
 /// 把预聚合表同步到本轮摄取的结果。
@@ -379,10 +419,19 @@ fn ingest_all_inner(
     conn: &Connection,
     home: &Path,
     overrides: &PathOverrides,
+    timings: &mut IngestPhaseTimings,
 ) -> Result<IngestReport, String> {
     let mut report = IngestReport::default();
+
+    let started = std::time::Instant::now();
     ingest_all_sources(conn, home, overrides, &mut report)?;
+    timings.usage_ms = started.elapsed().as_millis();
+
+    let started = std::time::Instant::now();
     cursor_session::ingest(conn, home, &mut report);
+    timings.cursor_ms = started.elapsed().as_millis();
+
+    let started = std::time::Instant::now();
     refresh_conversation_catalog(
         conn,
         home,
@@ -390,6 +439,8 @@ fn ingest_all_inner(
         crate::conversation::CONVERSATION_SOURCES,
         &mut report,
     );
+    timings.conversation_ms = started.elapsed().as_millis();
+
     report.partial_success = report.partial_success || !report.conversation_issues.is_empty();
     Ok(report)
 }
@@ -469,7 +520,13 @@ fn ingest_one_prepared(
         }
     };
     let previous_count = store::record_count_for_file(conn, &loc)?;
-    if previous_count > 0 && records.len() < previous_count as usize && is_append_log_source(source)
+    // 追加型日志条数下降通常是截断；但 ADAPTER_VERSION 升级后新适配器合法产出更少
+    // 记录时必须放行，否则会每轮重解析却永远写不进新 version（本机 Codex 巨文件即此）。
+    let cached_adapter_version = store::cached_adapter_version(conn, &loc)?;
+    if previous_count > 0
+        && records.len() < previous_count as usize
+        && is_append_log_source(source)
+        && cached_adapter_version == Some(store::ADAPTER_VERSION)
     {
         record_failure(
             report,
@@ -523,7 +580,7 @@ pub(crate) fn validate_jsonl(content: &str) -> Result<(), String> {
 /// `validate_jsonl` 的磁盘流式版本：按行读取校验，不把整份文件读进内存。
 /// 供流式 jsonl 适配器使用；只读一遍磁盘（内容随后交给适配器再读一遍，
 /// 这时文件通常已经在 OS page cache 里，重复读盘的代价远小于把整份文件留在内存里）。
-pub(crate) fn validate_jsonl_file(path: &Path) -> Result<(), String> {
+pub fn validate_jsonl_file(path: &Path) -> Result<(), String> {
     let file = fs::File::open(path).map_err(|error| error.to_string())?;
     for (index, line) in BufReader::new(file).lines().enumerate() {
         let line = line.map_err(|error| format!("第 {} 行读取失败：{error}", index + 1))?;
