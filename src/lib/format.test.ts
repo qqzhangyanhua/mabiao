@@ -8,6 +8,7 @@ import {
   customRangeFilter,
   deltaPct,
   filterWithCallRange,
+  cacheHitRate,
   formatBytes,
   formatClock,
   formatCompact,
@@ -15,6 +16,7 @@ import {
   formatDelta,
   formatDuration,
   formatHoursMinutes,
+  formatPercent,
   formatRangeLabel,
   formatRatio,
   formatTokens,
@@ -231,6 +233,25 @@ describe("formatRatio", () => {
 
   it("keeps one decimal by default", () => {
     expect(formatRatio(2.56)).toBe("2.6");
+  });
+});
+
+describe("cacheHitRate", () => {
+  it("is cache_read over input plus cache_read", () => {
+    expect(cacheHitRate(130, 220)).toBeCloseTo(130 / 350);
+    expect(cacheHitRate(0, 100)).toBe(0);
+  });
+
+  it("is null when input and cache read are both zero", () => {
+    expect(cacheHitRate(0, 0)).toBeNull();
+  });
+});
+
+describe("formatPercent", () => {
+  it("shows a dash for null and one decimal otherwise", () => {
+    expect(formatPercent(null)).toBe("—");
+    expect(formatPercent(0)).toBe("0.0%");
+    expect(formatPercent(130 / 350)).toBe("37.1%");
   });
 });
 
