@@ -1,0 +1,20 @@
+src/App.tsx
+  h_4132837b09b7e7 129
+src/components/Overview.tsx
+  h_4132837b09b7e7 27,89,120,126-130,228,230-232
+src/lib/unpricedKpi.test.ts
+  h_4132837b09b7e7 2,17-30
+src/lib/unpricedKpi.ts
+  h_4132837b09b7e7 16-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6004bcbd2f0a25205e449870026d6018436dab9b",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
