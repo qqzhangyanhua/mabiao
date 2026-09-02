@@ -231,7 +231,7 @@ export const Overview = memo(function Overview({
         />
       ) : null}
       {showKpi ? (
-        <section className="kpi-row">
+        <section className="kpi-row is-compact">
           <KpiCard
             icon="tokens"
             tone="purple"

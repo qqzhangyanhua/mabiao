@@ -946,6 +946,54 @@ input[type="checkbox"] {
   gap: 12px;
 }
 
+/* 概览页 KPI 略收一档，其它页的卡片保持原尺寸。 */
+.kpi-row.is-compact {
+  gap: 10px;
+}
+
+.kpi-row.is-compact .kpi {
+  padding: 7px 12px 5px;
+  min-height: 76px;
+  border-radius: 12px;
+}
+
+.kpi-row.is-compact .kpi-top {
+  gap: 6px;
+  font-size: 11px;
+}
+
+.kpi-row.is-compact .kpi-ico {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.kpi-row.is-compact .kpi-ico svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kpi-row.is-compact .kpi-value {
+  margin-top: 4px;
+  font-size: 20px;
+}
+
+.kpi-row.is-compact .kpi-hint,
+.kpi-row.is-compact .kpi-detail {
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.kpi-row.is-compact .kpi-action,
+.kpi-row.is-compact .delta {
+  font-size: 11px;
+}
+
+.kpi-row.is-compact .spark {
+  width: 88px;
+  height: 24px;
+}
+
 .kpi,
 .panel {
   position: relative;
@@ -6036,6 +6084,11 @@ td.row-actions {
   .kpi {
     min-height: 80px;
     padding: 8px 12px 6px;
+  }
+
+  .kpi-row.is-compact .kpi {
+    min-height: 66px;
+    padding: 6px 10px 4px;
   }
 
   .dash-mid,
