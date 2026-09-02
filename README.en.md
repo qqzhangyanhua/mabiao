@@ -57,7 +57,7 @@ Dimensions, default paths, and limits: [`CONTEXT.md`](CONTEXT.md).
 
 ## Install
 
-GitHub Actions attaches installers to [Releases](https://github.com/qqzhangyanhua/mabiao/releases). The current public release is **[v0.1.2](https://github.com/qqzhangyanhua/mabiao/releases/tag/v0.1.2)**.
+GitHub Actions attaches installers to [Releases](https://github.com/qqzhangyanhua/mabiao/releases). The current public release is **[v0.1.3](https://github.com/qqzhangyanhua/mabiao/releases/tag/v0.1.3)**.
 
 | Platform | Artifact |
 |------|------|

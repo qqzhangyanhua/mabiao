@@ -57,7 +57,7 @@
 
 ## 下载安装
 
-安装包由 GitHub Actions 打好后挂在 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。当前公开版是 **[v0.1.2](https://github.com/qqzhangyanhua/mabiao/releases/tag/v0.1.2)**。
+安装包由 GitHub Actions 打好后挂在 [Releases](https://github.com/qqzhangyanhua/mabiao/releases)。当前公开版是 **[v0.1.3](https://github.com/qqzhangyanhua/mabiao/releases/tag/v0.1.3)**。
 
 | 平台 | 产物 |
 |------|------|
