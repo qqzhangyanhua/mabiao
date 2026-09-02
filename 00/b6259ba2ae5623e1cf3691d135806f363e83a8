@@ -1,0 +1,23 @@
+src/styles.css
+  s_a88e6ee7518b1d::t_87826c2231ee98 4060-4064
+src/components/CustomQuotaProviderPanel.tsx
+  s_a88e6ee7518b1d::t_15539850820af8 69-71,91,127,170-173,198-199,201-210,215-240,242,244
+  s_a88e6ee7518b1d::t_173f5ae72d95f8 200,211-214,243
+  s_a88e6ee7518b1d::t_b3ff9a1367d354 256-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "00b6259ba2ae5623e1cf3691d135806f363e83a8",
+  "prompts": {},
+  "sessions": {
+    "s_a88e6ee7518b1d": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0603c-8796-7900-9d62-57090837506b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
