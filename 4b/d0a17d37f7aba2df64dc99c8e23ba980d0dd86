@@ -1,0 +1,35 @@
+src/components/ActivityHeatmap.tsx
+  s_2b1d7888a1bc65::t_4e34e9ed7040f2 24,90,92
+src/hooks/viewCache.test.ts
+  s_2b1d7888a1bc65::t_78ac39bda17f87 116-119
+  s_2b1d7888a1bc65::t_054b64cb6395a2 21
+  s_2b1d7888a1bc65::t_8e72e4157b045c 120-121
+src/hooks/useUsageData.ts
+  s_2b1d7888a1bc65::t_3262be17e78cfe 41
+  s_2b1d7888a1bc65::t_2a3f064c6f243f 300-308,439
+src/components/WorkTimeline.tsx
+  s_2b1d7888a1bc65::t_356823e004f912 43,46,50
+src/components/Overview.tsx
+  s_2b1d7888a1bc65::t_b41bf86c7ffe18 89,121,342,348
+src/hooks/viewCache.ts
+  s_2b1d7888a1bc65::t_977f76f198a64e 171-175
+src/App.tsx
+  s_2b1d7888a1bc65::t_605c3b796af5e5 11,221
+  s_2b1d7888a1bc65::t_59720a71aa5979 136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4bd0a17d37f7aba2df64dc99c8e23ba980d0dd86",
+  "prompts": {},
+  "sessions": {
+    "s_2b1d7888a1bc65": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06052-f4b8-79e2-8ee6-51d59ee10fcf",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
