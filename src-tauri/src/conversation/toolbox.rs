@@ -563,7 +563,16 @@ pub(crate) fn response_semantic_event(
             occurred_at,
             Some(EventActor::Assistant),
             None,
-            optional_text(payload, &["summary", "text", "content"]),
+            reasoning_text(payload),
+            payload.clone(),
+        )),
+        "ghost_snapshot" => Some(semantic_event(
+            sequence,
+            EventKind::SystemStatus,
+            occurred_at,
+            None,
+            Some("ghost_snapshot".to_string()),
+            None,
             payload.clone(),
         )),
         "developer" | "system" => None,
@@ -628,6 +637,15 @@ pub(crate) fn event_msg_semantic_event(
             optional_text(payload, &["explanation", "message", "text"]),
             payload.clone(),
         ),
+        "todo_state" => semantic_event(
+            sequence,
+            EventKind::Plan,
+            occurred_at,
+            Some(EventActor::Assistant),
+            Some("todo_state".to_string()),
+            todo_state_text(payload),
+            payload.clone(),
+        ),
         "error" | "stream_error" => semantic_event(
             sequence,
             EventKind::Error,
@@ -637,19 +655,109 @@ pub(crate) fn event_msg_semantic_event(
             optional_text(payload, &["message", "error"]),
             payload.clone(),
         ),
-        "task_started" | "task_complete" | "turn_aborted" | "context_compacted" | "warning" => {
-            semantic_event(
-                sequence,
-                EventKind::SystemStatus,
-                occurred_at,
-                None,
-                Some(kind.to_string()),
-                optional_text(payload, &["message", "reason", "text"]),
-                payload.clone(),
-            )
-        }
+        kind if is_lifecycle_kind(kind) => semantic_event(
+            sequence,
+            EventKind::SystemStatus,
+            occurred_at,
+            None,
+            Some(lifecycle_event_name(kind, payload)),
+            lifecycle_status_text(kind, payload),
+            payload.clone(),
+        ),
         _ => unadapted_event(sequence, occurred_at, kind, payload.clone()),
     }
+}
+
+fn is_lifecycle_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "task_started"
+            | "task_complete"
+            | "turn_aborted"
+            | "context_compacted"
+            | "warning"
+            | "thinking_level_change"
+            | "title"
+            | "title_change"
+            | "credential_pin"
+            | "session_init"
+            | "reset_boundary"
+            | "ttsr_injection"
+            | "session_start"
+            | "compaction_state"
+            | "compacted"
+            | "session_info"
+            | "compaction"
+            | "branch_summary"
+            | "custom"
+            | "custom_message"
+    )
+}
+
+fn lifecycle_event_name(kind: &str, payload: &Value) -> String {
+    payload
+        .get("customType")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(kind)
+        .to_string()
+}
+
+fn lifecycle_status_text(kind: &str, payload: &Value) -> Option<String> {
+    match kind {
+        "thinking_level_change" => optional_text(payload, &["thinkingLevel", "thinking_level"]),
+        "title" | "title_change" | "session_start" => optional_text(payload, &["title"]),
+        "credential_pin" => optional_text(payload, &["provider"]),
+        "ttsr_injection" => payload
+            .get("injectedRules")
+            .and_then(Value::as_array)
+            .map(|rules| {
+                rules
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .filter(|text| !text.is_empty()),
+        "custom_message" => optional_text(payload, &["content", "text", "message"]),
+        "custom" => payload
+            .get("data")
+            .and_then(|data| optional_text(data, &["reason", "kind", "intent", "message"]))
+            .or_else(|| optional_text(payload, &["reason", "message"])),
+        _ => optional_text(
+            payload,
+            &["message", "reason", "text", "summary", "explanation"],
+        ),
+    }
+}
+
+fn reasoning_text(payload: &Value) -> Option<String> {
+    optional_text(payload, &["text", "content"]).or_else(|| {
+        let text = content_text(payload.get("summary").unwrap_or(&Value::Null));
+        (!text.is_empty()).then_some(text)
+    })
+}
+
+fn todo_state_text(payload: &Value) -> Option<String> {
+    let todos = payload
+        .pointer("/todos/todos")
+        .or_else(|| payload.get("todos"))
+        .and_then(Value::as_array)?;
+    let lines = todos
+        .iter()
+        .filter_map(|todo| todo.get("content").and_then(Value::as_str))
+        .filter(|content| !content.is_empty())
+        .collect::<Vec<_>>();
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
+}
+
+pub(crate) fn is_duplicate_tool_execution_start(value: &Value) -> bool {
+    value.get("type").and_then(Value::as_str) == Some("custom")
+        && value.get("customType").and_then(Value::as_str) == Some("tool_execution_start")
 }
 
 pub(crate) fn unadapted_event(

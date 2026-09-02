@@ -230,6 +230,67 @@ fn adapter_indexes_codex_suffix_stops_before_incomplete_trailing_line() {
 }
 
 #[test]
+fn adapter_maps_legacy_response_items_and_skips_internal_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("legacy.jsonl");
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"id":"legacy-1","timestamp":"2025-09-05T17:07:46.739Z"}"#,
+            "\n",
+            r#"{"record_type":"state"}"#,
+            "\n",
+            r#"{"type":"message","timestamp":"2025-09-05T17:07:47Z","role":"user","content":[{"type":"input_text","text":"列出文件"}]}"#,
+            "\n",
+            r#"{"type":"function_call","timestamp":"2025-09-05T17:07:48Z","name":"shell","arguments":"{\"command\":[\"ls\"]}","call_id":"call-legacy"}"#,
+            "\n",
+            r#"{"type":"function_call_output","timestamp":"2025-09-05T17:07:49Z","call_id":"call-legacy","output":"src"}"#,
+            "\n",
+            r#"{"type":"reasoning","timestamp":"2025-09-05T17:07:50Z","summary":[{"type":"summary_text","text":"先看目录"}]}"#,
+            "\n",
+            r#"{"type":"compacted","timestamp":"2025-09-05T17:08:00Z","payload":{"message":"handoff"}}"#,
+            "\n",
+            r#"{"type":"response_item","timestamp":"2025-09-05T17:08:01Z","payload":{"type":"ghost_snapshot","ghost_commit":{"id":"abc"}}}"#,
+            "\n",
+            r#"{"type":"future_event","payload":{"secret":"keep-unadapted"}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let parsed = &index(&path).unwrap().conversations[0];
+    assert_eq!(parsed.session.session_id, "legacy-1");
+    assert_eq!(parsed.session.title, "列出文件");
+    let kinds = parsed
+        .events
+        .iter()
+        .map(|event| {
+            (
+                event.kind.as_str(),
+                event.name.as_deref(),
+                event.text.as_deref(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kinds,
+        vec![
+            ("message", None, Some("列出文件")),
+            ("tool_call", Some("shell"), Some("{\"command\":[\"ls\"]}")),
+            ("tool_result", None, Some("src")),
+            ("plan", None, Some("先看目录")),
+            ("system_status", Some("compacted"), None),
+            ("system_status", Some("ghost_snapshot"), None),
+            ("unadapted", Some("future_event"), None),
+        ]
+    );
+    assert!(parsed
+        .events
+        .iter()
+        .all(|event| event.name.as_deref() != Some("unknown")));
+}
+
+#[test]
 fn adapter_index_rejects_missing_codex_session_id() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("missing-id.jsonl");

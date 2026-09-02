@@ -36,6 +36,7 @@ fn parse(
     let mut messages = Vec::new();
     let mut events = Vec::new();
     let mut diagnostics = Vec::new();
+    let mut title = String::new();
     let mut model = String::new();
     let mut started_at = String::new();
     let mut ended_at = String::new();
@@ -89,13 +90,44 @@ fn parse(
         }
 
         match raw_kind {
-            "system" | "session" => {
+            "system" | "session" | "session_start" => {
+                if raw_kind == "session_start" {
+                    let next_title = first_text(&value, &["title"]);
+                    if !next_title.is_empty() {
+                        title = next_title;
+                    }
+                }
                 events.push(semantic_event(
                     sequence,
                     EventKind::SystemStatus,
                     &occurred_at,
                     None,
-                    Some("session_status".to_string()),
+                    Some(if raw_kind == "session_start" {
+                        "session_started".to_string()
+                    } else {
+                        "session_status".to_string()
+                    }),
+                    optional_text(&value, &["title"]),
+                    structural_details(line, &value),
+                ));
+                sequence += 1;
+            }
+            "todo_state" => {
+                events.push(event_msg_semantic_event(
+                    sequence,
+                    &occurred_at,
+                    "todo_state",
+                    &value,
+                ));
+                sequence += 1;
+            }
+            "compaction_state" => {
+                events.push(semantic_event(
+                    sequence,
+                    EventKind::SystemStatus,
+                    &occurred_at,
+                    None,
+                    Some("compaction_state".to_string()),
                     None,
                     structural_details(line, &value),
                 ));
@@ -124,7 +156,7 @@ fn parse(
         Source::Factory,
         path,
         session_id,
-        String::new(),
+        title,
         project_from_source_file(&path.to_string_lossy()),
         model,
         started_at,

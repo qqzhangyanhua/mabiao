@@ -4,6 +4,10 @@ use serde_json::Value;
 
 use super::toolbox::*;
 
+#[cfg(test)]
+#[path = "omp_test.rs"]
+mod tests;
+
 pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
@@ -31,6 +35,7 @@ pub(super) fn parse_from_values(
     session_hint: Option<&str>,
 ) -> Result<ParsedConversation, String> {
     let mut session_id = String::new();
+    let mut title = String::new();
     let mut project = String::new();
     let mut model = String::new();
     let mut started_at = String::new();
@@ -146,6 +151,14 @@ pub(super) fn parse_from_values(
                     value.clone(),
                 ));
             }
+            kind @ ("title" | "title_change") => {
+                let next_title = first_text(&value, &["title"]);
+                if !next_title.is_empty() {
+                    title = next_title;
+                }
+                events.push(event_msg_semantic_event(index, &timestamp, kind, &value));
+            }
+            "custom" if is_duplicate_tool_execution_start(&value) => {}
             kind => events.push(event_msg_semantic_event(index, &timestamp, kind, &value)),
         }
     }
@@ -177,7 +190,7 @@ pub(super) fn parse_from_values(
         Source::Omp,
         path,
         session_id,
-        String::new(),
+        title,
         project,
         model,
         started_at,

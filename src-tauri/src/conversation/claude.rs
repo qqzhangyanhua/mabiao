@@ -4,6 +4,10 @@ use serde_json::Value;
 
 use super::toolbox::*;
 
+#[cfg(test)]
+#[path = "claude_test.rs"]
+mod tests;
+
 pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
@@ -94,12 +98,13 @@ pub(super) fn parse_from_values(
                         &normalize_tool_result_details(item),
                         include_deferred_content,
                     )),
-                    "thinking" => events.push(semantic_event(
+                    "thinking" | "redacted_thinking" => events.push(semantic_event(
                         *index,
                         EventKind::Plan,
                         &timestamp,
                         Some(EventActor::Assistant),
-                        None,
+                        (item.get("type").and_then(Value::as_str) == Some("redacted_thinking"))
+                            .then(|| "redacted_thinking".to_string()),
                         optional_text(item, &["thinking", "text"]),
                         item.clone(),
                     )),

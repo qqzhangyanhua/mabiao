@@ -375,7 +375,7 @@ fn adapter_version_stats(conn: &Connection) -> Result<(i64, i64), String> {
         .map_err(|e| e.to_string())?;
     let conversation = conn
         .query_row(
-            "SELECT COUNT(*) FROM conversation_session_files WHERE adapter_version != 0 AND adapter_version != 11",
+            "SELECT COUNT(*) FROM conversation_session_files WHERE adapter_version != 0 AND adapter_version != 12",
             [],
             |row| row.get(0),
         )

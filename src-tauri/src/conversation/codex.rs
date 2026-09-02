@@ -165,14 +165,44 @@ pub(super) fn parse_content(
             }
             "response_item" => {
                 flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-                if let Some(message) = response_message(payload, &timestamp) {
-                    events.push(message_event(line, &message, payload.clone()));
-                    response_messages.push(message);
-                } else if let Some(event) =
-                    response_semantic_event(line, &timestamp, payload, include_deferred_content)
-                {
-                    events.push(event);
-                }
+                project_codex_response_payload(
+                    line,
+                    &timestamp,
+                    payload,
+                    include_deferred_content,
+                    &mut response_messages,
+                    &mut events,
+                );
+            }
+            "message"
+            | "function_call"
+            | "function_call_output"
+            | "reasoning"
+            | "custom_tool_call"
+            | "custom_tool_call_output"
+            | "web_search_call"
+            | "local_shell_call" => {
+                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
+                project_codex_response_payload(
+                    line,
+                    &timestamp,
+                    &value,
+                    include_deferred_content,
+                    &mut response_messages,
+                    &mut events,
+                );
+            }
+            "compacted" => {
+                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
+                events.push(semantic_event(
+                    line,
+                    EventKind::SystemStatus,
+                    &timestamp,
+                    None,
+                    Some("compacted".to_string()),
+                    None,
+                    payload.clone(),
+                ));
             }
             "event_msg" => {
                 let event_kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
@@ -197,6 +227,9 @@ pub(super) fn parse_content(
                         }
                     }
                 }
+            }
+            "" => {
+                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
             }
             _ => {
                 flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
@@ -314,5 +347,23 @@ fn next_line_index(content: &str) -> u32 {
         newlines
     } else {
         newlines + 1
+    }
+}
+
+fn project_codex_response_payload(
+    line: usize,
+    timestamp: &str,
+    payload: &Value,
+    include_deferred_content: bool,
+    response_messages: &mut Vec<ConversationMessage>,
+    events: &mut Vec<ConversationEvent>,
+) {
+    if let Some(message) = response_message(payload, timestamp) {
+        events.push(message_event(line, &message, payload.clone()));
+        response_messages.push(message);
+    } else if let Some(event) =
+        response_semantic_event(line, timestamp, payload, include_deferred_content)
+    {
+        events.push(event);
     }
 }
