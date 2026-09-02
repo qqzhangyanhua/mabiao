@@ -1,13 +1,7 @@
 import type { OverviewCostBreakdown, OverviewCostSources } from "../types";
+import { formatUsdAmount } from "./format";
 
 const ZERO = 5e-5;
-
-export function formatUsdAmount(n: number): string {
-  if (Math.abs(n) >= 0.01) {
-    return `$${n.toFixed(2)}`;
-  }
-  return `$${n.toFixed(4)}`;
-}
 
 function skipAmount(n: number | null): n is number {
   return n != null && Math.abs(n) >= ZERO;

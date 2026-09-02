@@ -75,7 +75,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
 const DETAIL_READ_ATTEMPTS: usize = 3;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 13;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 14;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -1253,17 +1253,23 @@ fn catalog_tool_event_predicate(query: &ConversationQuery) -> Option<String> {
     }
     let mut parts = Vec::new();
     if query.tool_failed {
-        parts.push("e.kind = 'error' AND e.actor = 'tool'".to_string());
+        // 失败的 tool_result 在 ingest 时记成 kind=error / actor=tool；
+        // 事件表没有 is_error 列，目录不能靠 kind=tool_result 判断失败。
+        parts.push(catalog_tool_failure_sql().to_string());
     } else {
-        parts.push(
-            "(e.kind IN ('tool_call', 'tool_result') OR (e.kind = 'error' AND e.actor = 'tool'))"
-                .to_string(),
-        );
+        parts.push(format!(
+            "(e.kind IN ('tool_call', 'tool_result') OR {})",
+            catalog_tool_failure_sql()
+        ));
     }
     if names > 0 {
         parts.push(format!("e.name IN ({})", sql_placeholders(names)));
     }
     Some(parts.join(" AND "))
+}
+
+fn catalog_tool_failure_sql() -> &'static str {
+    "e.kind = 'error' AND e.actor = 'tool'"
 }
 
 pub fn catalog_tool_names(

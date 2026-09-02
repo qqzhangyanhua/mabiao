@@ -173,9 +173,9 @@ fn parse(
             ("tool_call_update", _) => {
                 let status = optional_text(update, &["status"]).unwrap_or_default();
                 let details = normalize_grok_tool_result(update);
-                if !content_text(update.get("content").unwrap_or(&Value::Null)).is_empty()
-                    && matches!(status.as_str(), "completed" | "failed")
-                {
+                let has_output =
+                    !content_text(update.get("content").unwrap_or(&Value::Null)).is_empty();
+                if status.as_str() == "failed" || (has_output && status.as_str() == "completed") {
                     events.push(tool_result_event(
                         sequence,
                         &occurred_at,

@@ -8,6 +8,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from "react";
+import { humanStatus } from "../../lib/format";
 import type {
   ApplicationAnalyticsDto,
   BillingWindowsDto,
@@ -51,6 +52,7 @@ export function useCursorAccountRefresh({
 }: Args) {
   const [autoRefresh, setAutoRefresh] = useState(loadCursorAccountAutoRefresh);
   const [revision, setRevision] = useState(0);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const inflight = useRef<Promise<void> | null>(null);
   const filterRef = useRef(filter);
   const viewRef = useRef(view);
@@ -137,6 +139,10 @@ export function useCursorAccountRefresh({
       try {
         await invoke<CursorAccountUsageDto>("refresh_cursor_account_usage");
         await reloadSurfaces();
+        setRefreshError(null);
+      } catch (error) {
+        setRefreshError(humanStatus(error));
+        throw error;
       } finally {
         inflight.current = null;
       }
@@ -162,7 +168,9 @@ export function useCursorAccountRefresh({
       return;
     }
     const id = window.setInterval(() => {
-      refreshRef.current().catch(() => undefined);
+      refreshRef.current().catch((error: unknown) => {
+        setRefreshError(humanStatus(error));
+      });
     }, CURSOR_ACCOUNT_AUTO_REFRESH_MINUTES * 60_000);
     return () => window.clearInterval(id);
   }, [autoRefresh]);
@@ -171,9 +179,11 @@ export function useCursorAccountRefresh({
     const wasEnabled = wasEnabledRef.current;
     wasEnabledRef.current = autoRefresh;
     if (autoRefresh && !wasEnabled) {
-      refreshRef.current().catch(() => undefined);
+      refreshRef.current().catch((error: unknown) => {
+        setRefreshError(humanStatus(error));
+      });
     }
   }, [autoRefresh]);
 
-  return { autoRefresh, setAutoRefresh, revision, refresh };
+  return { autoRefresh, setAutoRefresh, revision, refresh, refreshError };
 }

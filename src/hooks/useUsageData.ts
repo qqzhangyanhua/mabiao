@@ -227,6 +227,7 @@ export function useUsageData() {
     setAutoRefresh: setCursorAccountAutoRefresh,
     revision: cursorAccountRevision,
     refresh: refreshCursorAccount,
+    refreshError: cursorAccountRefreshError,
   } = useCursorAccountRefresh({
     filter,
     view,
@@ -413,6 +414,7 @@ export function useUsageData() {
     cursorAccountAutoRefresh,
     setCursorAccountAutoRefresh,
     cursorAccountRevision,
+    cursorAccountRefreshError,
     refreshCursorAccount,
     previous,
     trend,

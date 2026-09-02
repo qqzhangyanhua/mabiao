@@ -65,3 +65,19 @@ fn adapter_maps_failed_tool_result_as_error_with_tool_name() {
         .iter()
         .all(|event| event.kind != EventKind::ToolResult));
 }
+
+#[test]
+fn tool_payload_failed_covers_status_error_and_is_error_flag() {
+    assert!(tool_payload_failed(
+        &serde_json::json!({ "is_error": true })
+    ));
+    assert!(tool_payload_failed(
+        &serde_json::json!({ "status": "error" })
+    ));
+    assert!(tool_payload_failed(
+        &serde_json::json!({ "status": "failed" })
+    ));
+    assert!(!tool_payload_failed(
+        &serde_json::json!({ "status": "completed" })
+    ));
+}

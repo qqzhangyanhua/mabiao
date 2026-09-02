@@ -21,6 +21,7 @@ import {
   formatRatio,
   formatTokens,
   formatUsd,
+  formatUsdAmount,
   formatWindowClock,
   previousFilter,
   projectLabel,
@@ -69,6 +70,14 @@ describe("formatUsd", () => {
     expect(formatUsd(null, true)).toBe("—");
     expect(formatUsd(null, false)).toBe("$0.00");
     expect(formatUsd(1.5, false)).toBe("$1.50");
+  });
+});
+
+describe("formatUsdAmount", () => {
+  it("uses 2 decimals at a cent and above, 4 below", () => {
+    expect(formatUsdAmount(1.5)).toBe("$1.50");
+    expect(formatUsdAmount(0.02)).toBe("$0.02");
+    expect(formatUsdAmount(0.0031)).toBe("$0.0031");
   });
 });
 

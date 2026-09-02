@@ -35,11 +35,13 @@ export function CursorAccountUsagePanel({
   theme,
   autoRefresh,
   revision,
+  autoRefreshError = null,
   onRefresh,
 }: {
   theme: ResolvedTheme;
   autoRefresh: boolean;
   revision: number;
+  autoRefreshError?: string | null;
   onRefresh: () => Promise<void>;
 }) {
   const [usage, setUsage] = useState<CursorAccountUsageDto | null>(null);
@@ -83,6 +85,7 @@ export function CursorAccountUsagePanel({
     }
   }
 
+  const panelError = error ?? autoRefreshError;
   const data = usage ?? emptyUsage();
   const asOf = formatClock(data.as_of);
   const showEmpty = data.event_count === 0 && data.total_tokens === 0;
@@ -123,9 +126,9 @@ export function CursorAccountUsagePanel({
             {busy ? "刷新中…" : "刷新"}
           </Button>
         </div>
-        {error ? (
+        {panelError ? (
           <p className="panel-note snapshot-error" role="alert">
-            {error}
+            {panelError}
           </p>
         ) : null}
       </section>

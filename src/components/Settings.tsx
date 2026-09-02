@@ -48,6 +48,7 @@ export function Settings({
   themeMode,
   autoRefresh,
   cursorAccountAutoRefresh,
+  cursorAccountRefreshError,
   onChange,
   onSave,
   onRebuild,
@@ -75,6 +76,7 @@ export function Settings({
   themeMode: ThemeMode;
   autoRefresh: string;
   cursorAccountAutoRefresh: boolean;
+  cursorAccountRefreshError: string | null;
   onChange: (prices: PriceTable) => void;
   onSave: () => void | Promise<void>;
   onRebuild: (source: string | null) => void;
@@ -253,6 +255,7 @@ export function Settings({
         {tab === "cursor" ? (
           <CursorAccountSettingsPanel
             autoRefresh={cursorAccountAutoRefresh}
+            autoRefreshError={cursorAccountRefreshError}
             onAutoRefreshChange={onCursorAccountAutoRefreshChange}
           />
         ) : null}

@@ -40,6 +40,14 @@ export function formatUsd(n: number | null, unpriced: boolean): string {
   return `$${n.toFixed(2)}`;
 }
 
+/** 金额本身：满 1 分用两位，否则四位。不处理 null / 未配置。 */
+export function formatUsdAmount(n: number): string {
+  if (Math.abs(n) >= 0.01) {
+    return `$${n.toFixed(2)}`;
+  }
+  return `$${n.toFixed(4)}`;
+}
+
 export function formatCost(n: number | null, unpriced: boolean): string {
   if (unpriced && n == null) {
     return "—";

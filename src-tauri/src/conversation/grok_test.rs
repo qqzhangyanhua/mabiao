@@ -224,3 +224,62 @@ fn adapter_maps_high_frequency_lifecycle_kinds() {
         .iter()
         .any(|issue| issue.message.contains("future_update")));
 }
+
+fn write_grok_session(temp: &Path, session_id: &str, updates: &str) -> PathBuf {
+    let root = temp.join("grok/sessions/project").join(session_id);
+    std::fs::create_dir_all(&root).unwrap();
+    let path = root.join("updates.jsonl");
+    std::fs::write(&path, updates).unwrap();
+    std::fs::write(root.join("summary.json"), "{}").unwrap();
+    path
+}
+
+#[test]
+fn adapter_maps_failed_tool_call_update_with_content_as_error() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = write_grok_session(
+        temp.path(),
+        "grok-tool-fail",
+        concat!(
+            r#"{"timestamp":1787100000,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call","title":"Read","toolCallId":"call-1"}}}"#,
+            "\n",
+            r#"{"timestamp":1787100001,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"call-1","status":"failed","content":[{"type":"content","content":{"type":"text","text":"not found"}}]}}}"#,
+            "\n",
+        ),
+    );
+    let (parsed, _) = parse(&path, false).unwrap();
+    let failed = parsed
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::Error)
+        .unwrap();
+    assert_eq!(failed.actor, Some(EventActor::Tool));
+    assert_eq!(failed.name.as_deref(), Some("Read"));
+    assert!(parsed
+        .events
+        .iter()
+        .all(|event| event.kind != EventKind::ToolResult));
+}
+
+#[test]
+fn adapter_maps_failed_tool_call_update_without_content_as_error() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = write_grok_session(
+        temp.path(),
+        "grok-tool-fail-empty",
+        concat!(
+            r#"{"timestamp":1787100000,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call","title":"ListDir","toolCallId":"call-2"}}}"#,
+            "\n",
+            r#"{"timestamp":1787100001,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call_update","toolCallId":"call-2","status":"failed","rawOutput":{"error":"not found"}}}}"#,
+            "\n",
+        ),
+    );
+    let (parsed, _) = parse(&path, false).unwrap();
+    let failed = parsed
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::Error)
+        .unwrap();
+    assert_eq!(failed.actor, Some(EventActor::Tool));
+    assert_eq!(failed.name.as_deref(), Some("ListDir"));
+}

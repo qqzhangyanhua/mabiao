@@ -886,7 +886,10 @@ pub(crate) fn tool_payload_failed(payload: &Value) -> bool {
     if payload.get("success").and_then(Value::as_bool) == Some(false) {
         return true;
     }
-    if payload.get("status").and_then(Value::as_str) == Some("failed") {
+    if matches!(
+        payload.get("status").and_then(Value::as_str),
+        Some("failed" | "error" | "errored")
+    ) {
         return true;
     }
     if json_i64(payload, "exit_code").is_some_and(|code| code != 0) {

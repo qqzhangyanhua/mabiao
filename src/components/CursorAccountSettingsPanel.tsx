@@ -28,9 +28,11 @@ function describeCredential(status: CursorCredentialStatus): string {
 
 export function CursorAccountSettingsPanel({
   autoRefresh,
+  autoRefreshError = null,
   onAutoRefreshChange,
 }: {
   autoRefresh: boolean;
+  autoRefreshError?: string | null;
   onAutoRefreshChange: (value: boolean) => void;
 }) {
   const [status, setStatus] = useState<CursorCredentialStatus | null>(null);
@@ -116,9 +118,9 @@ export function CursorAccountSettingsPanel({
           {message}
         </p>
       ) : null}
-      {error ? (
+      {error || autoRefreshError ? (
         <p className="panel-note snapshot-error" role="alert">
-          {error}
+          {error ?? autoRefreshError}
         </p>
       ) : null}
     </section>

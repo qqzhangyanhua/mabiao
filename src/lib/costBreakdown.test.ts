@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatCostBucketLine,
-  formatCostSourceLine,
-  formatUsdAmount,
-} from "./costBreakdown";
-
-describe("formatUsdAmount", () => {
-  it("uses 2 decimals at a cent and above, 4 below", () => {
-    expect(formatUsdAmount(1.5)).toBe("$1.50");
-    expect(formatUsdAmount(0.02)).toBe("$0.02");
-    expect(formatUsdAmount(0.0031)).toBe("$0.0031");
-  });
-});
+import { formatCostBucketLine, formatCostSourceLine } from "./costBreakdown";
 
 describe("formatCostBucketLine", () => {
   it("keeps native as an unsplittable lump and lists priced buckets", () => {

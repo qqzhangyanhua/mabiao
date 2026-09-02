@@ -1981,6 +1981,26 @@ fn conversation_catalog_filters_by_tool_name_and_failure() {
     assert_eq!(failed.total, 1);
     assert_eq!(failed.rows[0].session_id, "fail-1");
 
+    let fail_kinds: Vec<(String, Option<String>)> = conn
+        .prepare(
+            "SELECT kind, actor FROM conversation_events WHERE session_id = 'fail-1' ORDER BY sequence",
+        )
+        .unwrap()
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(
+        fail_kinds
+            .iter()
+            .any(|(kind, actor)| kind == "error" && actor.as_deref() == Some("tool")),
+        "真实 Claude tool_result is_error 必须记成 kind=error/actor=tool，否则目录「工具失败」会漏：{fail_kinds:?}"
+    );
+    assert!(
+        fail_kinds.iter().all(|(kind, _)| kind != "tool_result"),
+        "失败 tool_result 不得原样进索引：{fail_kinds:?}"
+    );
+
     let failed_read = crate::conversation::sessions_page(
         &conn,
         &crate::domain::ConversationQuery {

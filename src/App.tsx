@@ -193,6 +193,7 @@ export default function App() {
                       theme={theme}
                       autoRefresh={data.cursorAccountAutoRefresh}
                       revision={data.cursorAccountRevision}
+                      autoRefreshError={data.cursorAccountRefreshError}
                       onRefresh={data.refreshCursorAccount}
                     />
                     <LazyCursorPanel
@@ -262,6 +263,7 @@ export default function App() {
                     themeMode={themeMode}
                     autoRefresh={data.autoRefresh}
                     cursorAccountAutoRefresh={data.cursorAccountAutoRefresh}
+                    cursorAccountRefreshError={data.cursorAccountRefreshError}
                     onThemeModeChange={setThemeMode}
                     onAutoRefreshChange={data.setAutoRefresh}
                     onCursorAccountAutoRefreshChange={data.setCursorAccountAutoRefresh}
