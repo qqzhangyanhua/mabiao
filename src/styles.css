@@ -1083,44 +1083,53 @@ button.kpi {
 
 /* 概览页卡片略收紧：只作用于 .dash，避免趋势 / 拆分 / 时间线等共用 .kpi 一起变矮。 */
 .dash .kpi-row {
-  gap: 10px;
+  gap: 8px;
 }
 
 .dash .kpi {
-  padding: 7px 12px 6px;
-  min-height: 80px;
+  padding: 6px 10px 5px;
+  min-height: 72px;
 }
 
 .dash .kpi-ico {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
 }
 
 .dash .kpi-top {
-  gap: 6px;
+  gap: 5px;
 }
 
 .dash .kpi-value {
-  margin-top: 4px;
-  font-size: 22px;
+  margin-top: 3px;
+  font-size: 20px;
 }
 
 .dash .spark {
-  width: 96px;
-  height: 28px;
+  width: 88px;
+  height: 24px;
 }
 
 .dash .status-bar {
-  gap: 10px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 6px 12px;
 }
 
 .dash .stat-block {
-  gap: 3px;
+  gap: 2px;
 }
 
 .dash .stat-block strong {
-  font-size: 16px;
+  font-size: 15px;
+}
+
+.dash .cursor-overview-metrics {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dash .cursor-overview-metric strong {
+  font-size: 15px;
 }
 
 .live-tag {
@@ -6082,8 +6091,8 @@ td.row-actions {
   }
 
   .dash .kpi {
-    min-height: 72px;
-    padding: 6px 10px 5px;
+    min-height: 64px;
+    padding: 5px 8px 4px;
   }
 
   .dash-mid,
