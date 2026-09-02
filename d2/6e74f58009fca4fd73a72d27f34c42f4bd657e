@@ -1,0 +1,83 @@
+src/lib/format.ts
+  s_1dfe87be9d0be8::t_81340e31618ae7 210-217
+src-tauri/src/tests/low_cache_hit.rs
+  s_1dfe87be9d0be8::t_aa861ab97ea127 25,27,33,35,37-39,87-88,98,100,102-104,134-135,142,150-151,154,156,158-171,176,178,180,184,186-207,209-211,213,216-217,220-222,228
+  s_1dfe87be9d0be8::t_92821d245fb4a6 22-24
+  s_1dfe87be9d0be8::t_9319674cfeb117 26
+  s_1dfe87be9d0be8::t_b27eb8f1a73035 28-32
+  s_1dfe87be9d0be8::t_dd13c8be397292 34
+  s_1dfe87be9d0be8::t_d55d63eb0344fa 36
+  s_1dfe87be9d0be8::t_0ecbddc25ccc5b 40-42,84-86
+  s_1dfe87be9d0be8::t_326dcd74ee1f6e 89-91,95-97
+  s_1dfe87be9d0be8::t_2c40fcf76d308e 99
+  s_1dfe87be9d0be8::t_6c8817e97fdb64 101
+  s_1dfe87be9d0be8::t_11018874747198 105-107,131-133
+  s_1dfe87be9d0be8::t_f74c8bff3b08bf 136-141
+  s_1dfe87be9d0be8::t_89e13d884fd021 143-145,147-149
+  s_1dfe87be9d0be8::t_30405edd061bc4 152-153
+  s_1dfe87be9d0be8::t_649eaf7886f9b6 155
+  s_1dfe87be9d0be8::t_4c673c92c16463 157
+  s_1dfe87be9d0be8::t_bee5036c3cf42e 172-175
+  s_1dfe87be9d0be8::t_59e50b08bc10e6 177
+  s_1dfe87be9d0be8::t_d5e6ea8a486c47 179
+  s_1dfe87be9d0be8::t_caa5ccb81474ad 181-183
+  s_1dfe87be9d0be8::t_a21322891ad8c0 185
+  s_1dfe87be9d0be8::t_06cda60aa9d69b 208
+  s_1dfe87be9d0be8::t_dbbcb881f2826d 212
+  s_1dfe87be9d0be8::t_b8bb36da1005bc 214-215
+  s_1dfe87be9d0be8::t_412e6e9819644c 218-219
+  s_1dfe87be9d0be8::t_9e243a6fc2c6fd 223-227
+src-tauri/src/aggregate.rs
+  s_1dfe87be9d0be8::t_d3dc3230dcdbea 10-13,374,380,389,486,496,506-510
+src/App.tsx
+  s_1dfe87be9d0be8::t_4de1ab75ea86d8 172
+  s_1dfe87be9d0be8::t_74fa6c08c4873c 164-167
+src-tauri/src/query.rs
+  s_1dfe87be9d0be8::t_ce9129432ae769 878-966
+  s_1dfe87be9d0be8::t_45c479e63e27c1 18-23,712,716,724,731,744,759,768,776
+src/components/ApplicationAnalytics.tsx
+  s_1dfe87be9d0be8::t_843946b9686d09 320-322
+  s_1dfe87be9d0be8::t_14f516742e0bbb 1,13,17,43-46,52-55,58-59,80-81,145-146,169-182,196-203
+  s_1dfe87be9d0be8::t_2eeb44e72bb217 5-11
+  s_1dfe87be9d0be8::t_969f6bd12c90f4 275-319,323-326
+  s_1dfe87be9d0be8::t_4de1ab75ea86d8 113-117
+  s_1dfe87be9d0be8::t_d0078d233b6b73 204
+src-tauri/src/lib.rs
+  s_1dfe87be9d0be8::t_4a1b927fdef072 50
+  s_1dfe87be9d0be8::t_7543ca33c154d6 52-54
+  s_1dfe87be9d0be8::t_971054ec5b0f0c 51,285-305,1489
+src-tauri/src/tests/mod.rs
+  s_1dfe87be9d0be8::t_a7271cd654c256 33
+src/lib/format.test.ts
+  s_1dfe87be9d0be8::t_c34d869130f13d 13,268-273
+  s_1dfe87be9d0be8::t_0b435d42d0bd16 274-276
+src/types.ts
+  s_1dfe87be9d0be8::t_4de1ab75ea86d8 161,481,549,707
+  s_1dfe87be9d0be8::t_1fb4b443b31733 383-402
+src/lib/lowCacheHit.ts
+  s_1dfe87be9d0be8::t_4de1ab75ea86d8 1-28
+src-tauri/src/tests/adapters.rs
+  s_1dfe87be9d0be8::t_c19d26b93c2185 699-716
+  s_1dfe87be9d0be8::t_f90a9dbf97b0a7 698
+src-tauri/src/domain.rs
+  s_1dfe87be9d0be8::t_18b2d310926946 674-689,719-741
+  s_1dfe87be9d0be8::t_813d6915d3a7b9 742
+src/lib/lowCacheHit.test.ts
+  s_1dfe87be9d0be8::t_4de1ab75ea86d8 1-19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d26e74f58009fca4fd73a72d27f34c42f4bd657e",
+  "prompts": {},
+  "sessions": {
+    "s_1dfe87be9d0be8": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0614a-cc1e-7b31-bbeb-21365d6bf58f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
