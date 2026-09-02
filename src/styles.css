@@ -1081,8 +1081,10 @@ button.kpi {
   height: 32px;
 }
 
-/* 概览页卡片略收紧：只作用于 .dash，避免趋势 / 拆分 / 时间线等共用 .kpi 一起变矮。 */
+/* 概览页卡片略收紧：只作用于 .dash，避免趋势 / 拆分 / 时间线等共用 .kpi 一起变矮。
+   高度由费用卡 hint + 文档流里的 spark 撑开，再用 stretch 把整行拉齐；min-height 不是上限。 */
 .dash .kpi-row {
+  align-items: start;
   gap: 8px;
 }
 
@@ -1105,9 +1107,41 @@ button.kpi {
   font-size: 20px;
 }
 
-.dash .spark {
-  width: 88px;
-  height: 24px;
+.dash .kpi-hint {
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 76px;
+}
+
+.dash .kpi-detail {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.dash .kpi-detail p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash .kpi-foot {
+  margin-top: 2px;
+  min-height: 14px;
+  padding-right: 76px;
+}
+
+.dash .kpi .spark {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 72px;
+  height: 18px;
+  pointer-events: none;
 }
 
 .dash .status-bar {
