@@ -4057,6 +4057,11 @@ td.row-actions {
   margin-left: auto;
 }
 
+.custom-quota-summary > .panel-note {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
 .custom-quota-item.is-off .custom-quota-summary {
   opacity: 0.72;
 }

@@ -66,6 +66,9 @@ export function CustomQuotaProviderPanel({
   const [draft, setDraft] = useState<CustomQuotaDraft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // WKWebView（Tauri macOS）没实现 JS confirm，window.confirm 会立刻返回 false，
+  // 点删除看起来什么都没发生。确认改成列表上的第二步。
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     void invoke<CustomQuotaPanelDto>("list_custom_quota_providers")
@@ -85,6 +88,7 @@ export function CustomQuotaProviderPanel({
       const next = await action();
       setPanel(next);
       setDraft(null);
+      setPendingDeleteId(null);
       const id = refreshId?.() ?? null;
       // 取数失败不抛错——错误会写进那一行里，用人话显示出来。
       onQuota(
@@ -120,10 +124,7 @@ export function CustomQuotaProviderPanel({
     );
   }
 
-  function remove(id: string, name: string) {
-    if (!window.confirm(`删除「${name}」？首页那一行会一起消失，密钥也会被清掉。`)) {
-      return;
-    }
+  function remove(id: string) {
     void run(() => invoke<CustomQuotaPanelDto>("delete_custom_quota_provider", { id }));
   }
 
@@ -166,7 +167,10 @@ export function CustomQuotaProviderPanel({
           <Button
             variant="accent"
             disabled={busy || draft != null}
-            onClick={() => setDraft({ ...BLANK_CUSTOM_QUOTA_DRAFT })}
+            onClick={() => {
+              setPendingDeleteId(null);
+              setDraft({ ...BLANK_CUSTOM_QUOTA_DRAFT });
+            }}
           >
             新增
           </Button>
@@ -191,33 +195,53 @@ export function CustomQuotaProviderPanel({
               <code>{provider.base_url}</code>
               <span className="muted">{provider.secret_mask ?? "未配置密钥，请重新填写"}</span>
               <div className="row-actions">
-                <button
-                  type="button"
-                  className={["custom-quota-switch", provider.enabled ? "is-on" : "is-off"].join(
-                    " ",
-                  )}
-                  role="switch"
-                  aria-checked={provider.enabled}
-                  aria-label={`启用「${provider.name}」`}
-                  disabled={busy || draft != null}
-                  onClick={() => toggleEnabled(provider)}
-                >
-                  {provider.enabled ? "已启用" : "已停用"}
-                </button>
-                <Button
-                  disabled={busy || draft != null}
-                  onClick={() => setDraft(draftFrom(provider))}
-                >
-                  编辑
-                </Button>
-                <Button
-                  variant="danger"
-                  disabled={busy || draft != null}
-                  onClick={() => remove(provider.id, provider.name)}
-                >
-                  删除
-                </Button>
+                {pendingDeleteId === provider.id ? (
+                  <>
+                    <Button variant="danger" disabled={busy} onClick={() => remove(provider.id)}>
+                      确认删除
+                    </Button>
+                    <Button disabled={busy} onClick={() => setPendingDeleteId(null)}>
+                      取消
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className={[
+                        "custom-quota-switch",
+                        provider.enabled ? "is-on" : "is-off",
+                      ].join(" ")}
+                      role="switch"
+                      aria-checked={provider.enabled}
+                      aria-label={`启用「${provider.name}」`}
+                      disabled={busy || draft != null}
+                      onClick={() => toggleEnabled(provider)}
+                    >
+                      {provider.enabled ? "已启用" : "已停用"}
+                    </button>
+                    <Button
+                      disabled={busy || draft != null}
+                      onClick={() => {
+                        setPendingDeleteId(null);
+                        setDraft(draftFrom(provider));
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Button
+                      variant="danger"
+                      disabled={busy || draft != null}
+                      onClick={() => setPendingDeleteId(provider.id)}
+                    >
+                      删除
+                    </Button>
+                  </>
+                )}
               </div>
+              {pendingDeleteId === provider.id ? (
+                <p className="panel-note tone-warn">首页那一行会一起消失，密钥也会被清掉。</p>
+              ) : null}
             </div>
           </li>
         ))}
@@ -229,7 +253,10 @@ export function CustomQuotaProviderPanel({
           presets={panel.presets}
           busy={busy}
           onChange={setDraft}
-          onCancel={() => setDraft(null)}
+          onCancel={() => {
+            setPendingDeleteId(null);
+            setDraft(null);
+          }}
           onSubmit={() => save(draft)}
         />
       ) : null}
