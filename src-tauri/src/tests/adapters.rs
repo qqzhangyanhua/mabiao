@@ -696,6 +696,25 @@ fn application_efficiency_returns_none_when_ratio_denominators_are_zero() {
 }
 
 #[test]
+fn application_efficiency_does_not_treat_missing_cache_as_zero_percent() {
+    let mut record = rec(
+        "2026-08-01T10:00:00Z",
+        Source::Codex,
+        "gpt-5.1-codex",
+        "official",
+        "/proj/a",
+        "no-cache",
+        100,
+    );
+    record.input_tokens = 100;
+    record.cache_read_tokens = 0;
+    record.cache_creation_tokens = 0;
+    let analytics = aggregate::application_analytics(&[record], &Filter::default(), "day");
+    assert_eq!(analytics.summary.cache_hit_rate, None);
+    assert_eq!(analytics.by_application[0].metrics.cache_hit_rate, None);
+}
+
+#[test]
 fn factory_adapter_root_settings_have_empty_project() {
     let records = factory::parse_factory_settings(
         &fixture("factory.settings.json"),

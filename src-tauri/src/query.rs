@@ -15,11 +15,12 @@ use crate::billing_window;
 use crate::cost::{finish_unpriced_groups, UnpricedGroupAcc};
 use crate::cursor_account;
 use crate::domain::{
-    ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
-    CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
-    InstructionUsageSummary, NamedAmount, OverviewCostBreakdown, OverviewCostSources, OverviewDto,
-    PriceTable, ProjectApplicationRow, SeriesPoint, SessionPage, SessionQuery, SessionRow, Source,
-    TurnRow, UnpricedGroupDto, UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
+    cache_hit_rate, ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint,
+    BillingWindowsDto, CostSource, EfficiencyMetrics, Filter, FilterOptions,
+    InstructionSourceUsage, InstructionUsageSummary, LowCacheHitSessionRow, LowCacheHitSessionsDto,
+    NamedAmount, OverviewCostBreakdown, OverviewCostSources, OverviewDto, PriceTable,
+    ProjectApplicationRow, SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow,
+    UnpricedGroupDto, UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
 };
 use crate::rollup_source::{dimension_clauses, rollup_source};
 use crate::rollup_split::rollup_plan;
@@ -708,10 +709,11 @@ pub fn application_analytics(
             COALESCE(SUM(d.total_tokens), 0),
             COALESCE(SUM(d.input_tokens), 0),
             COALESCE(SUM(d.cache_read_tokens), 0),
+            COALESCE(SUM(d.cache_creation_tokens), 0),
             COALESCE(SUM(d.reasoning_tokens), 0),
             COUNT(DISTINCT d.source || char(31) || d.session_id)
         FROM application_analytics_src d";
-    let (total, input, cache_read, reasoning, session_count) = conn
+    let (total, input, cache_read, cache_creation, reasoning, session_count) = conn
         .query_row(summary_sql, [], |row| {
             Ok((
                 row.get::<_, i64>(0)?,
@@ -719,13 +721,14 @@ pub fn application_analytics(
                 row.get::<_, i64>(2)?,
                 row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
             ))
         })
         .map_err(|e| e.to_string())?;
     let summary = EfficiencyMetrics {
         total_tokens: total,
         session_count,
-        cache_hit_rate: ratio(cache_read, input + cache_read),
+        cache_hit_rate: cache_hit_rate(cache_read, cache_creation, input),
         average_session_tokens: if session_count == 0 {
             None
         } else {
@@ -738,6 +741,7 @@ pub fn application_analytics(
             SUM(d.total_tokens),
             SUM(d.input_tokens),
             SUM(d.cache_read_tokens),
+            SUM(d.cache_creation_tokens),
             SUM(d.reasoning_tokens),
             COUNT(DISTINCT d.session_id)
         FROM application_analytics_src d
@@ -752,6 +756,7 @@ pub fn application_analytics(
                 row.get::<_, i64>(3)?,
                 row.get::<_, i64>(4)?,
                 row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })
         .map_err(|e| e.to_string())?
@@ -760,7 +765,7 @@ pub fn application_analytics(
     let mut by_application: Vec<ApplicationEfficiency> = app_rows
         .into_iter()
         .filter_map(
-            |(source, total, input, cache_read, reasoning, session_count)| {
+            |(source, total, input, cache_read, cache_creation, reasoning, session_count)| {
                 let parsed = Source::parse(&source)?;
                 Some(ApplicationEfficiency {
                     source,
@@ -768,7 +773,7 @@ pub fn application_analytics(
                     metrics: EfficiencyMetrics {
                         total_tokens: total,
                         session_count,
-                        cache_hit_rate: ratio(cache_read, input + cache_read),
+                        cache_hit_rate: cache_hit_rate(cache_read, cache_creation, input),
                         average_session_tokens: if session_count == 0 {
                             None
                         } else {
@@ -868,6 +873,95 @@ pub fn application_analytics(
     Ok(crate::aggregate::attach_cursor_application(
         dto, &events, grain,
     ))
+}
+
+const MAX_LOW_CACHE_HIT_SESSIONS: usize = 100;
+
+/// 某一来源命中率最低的 N 条会话。只在该来源内排序，不跨来源排名。
+///
+/// 没有缓存读/写的来源 `computable = false`，不把 0% 当成命中率。
+/// Cursor 账号用量不是本机会话，不能下钻。
+pub fn low_cache_hit_sessions(
+    conn: &Connection,
+    filter: &Filter,
+    source: &str,
+    limit: usize,
+) -> Result<LowCacheHitSessionsDto, String> {
+    let limit = limit.clamp(1, MAX_LOW_CACHE_HIT_SESSIONS);
+    if source == billing_window::CURSOR_WEEKLY_SOURCE || Source::parse(source).is_none() {
+        return Ok(LowCacheHitSessionsDto {
+            source: source.to_string(),
+            computable: false,
+            rows: Vec::new(),
+        });
+    }
+
+    let mut scoped = filter.clone();
+    scoped.sources = vec![source.to_string()];
+    let inner = rollup_source(
+        &rollup_plan(
+            scoped.from.as_deref(),
+            scoped.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            None,
+        ),
+        &scoped,
+    );
+    let project = unwrap_latest_key_sql("project_key");
+    let model = unwrap_latest_key_sql("model_key");
+    let sql = format!(
+        "SELECT session_id, source, input_tokens, cache_read_tokens, cache_creation_tokens,
+                total_tokens, started_at, ended_at, {project} AS project, {model} AS model,
+                cache_hit_rate
+         FROM (
+            SELECT d.session_id AS session_id,
+                d.source AS source,
+                SUM(d.input_tokens) AS input_tokens,
+                SUM(d.cache_read_tokens) AS cache_read_tokens,
+                SUM(d.cache_creation_tokens) AS cache_creation_tokens,
+                SUM(d.total_tokens) AS total_tokens,
+                MIN(d.first_at) AS started_at,
+                MAX(d.last_at) AS ended_at,
+                MAX(CASE WHEN d.project != '' THEN d.last_at || char(31) || d.project END) AS project_key,
+                MAX(CASE WHEN d.model != '' THEN d.last_at || char(31) || d.model END) AS model_key,
+                CAST(SUM(d.cache_read_tokens) AS REAL)
+                    / (SUM(d.input_tokens) + SUM(d.cache_read_tokens)) AS cache_hit_rate
+            FROM ({inner_sql}) d
+            GROUP BY d.source, d.session_id
+            HAVING (SUM(d.cache_read_tokens) > 0 OR SUM(d.cache_creation_tokens) > 0)
+               AND (SUM(d.input_tokens) + SUM(d.cache_read_tokens) > 0)
+         )
+         ORDER BY cache_hit_rate ASC, total_tokens DESC, session_id ASC
+         LIMIT ?",
+        inner_sql = inner.sql
+    );
+    let mut params = inner.params;
+    params.push(Value::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(params.iter()), |row| {
+            Ok(LowCacheHitSessionRow {
+                session_id: row.get(0)?,
+                source: row.get(1)?,
+                input_tokens: row.get(2)?,
+                cache_read_tokens: row.get(3)?,
+                cache_creation_tokens: row.get(4)?,
+                total_tokens: row.get(5)?,
+                started_at: row.get(6)?,
+                ended_at: row.get(7)?,
+                project: row.get(8)?,
+                model: row.get(9)?,
+                cache_hit_rate: row.get(10)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(LowCacheHitSessionsDto {
+        source: source.to_string(),
+        computable: !rows.is_empty(),
+        rows,
+    })
 }
 
 /// 在统一子查询上按 `(source, session_id)` 汇总。

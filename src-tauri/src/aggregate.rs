@@ -7,10 +7,10 @@ use crate::cost::{
     derive_cost, finish_unpriced_groups, overview_costs, sum_cursor_event_costs, UnpricedGroupAcc,
 };
 use crate::domain::{
-    ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
-    CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewCostBreakdown,
-    OverviewCostSources, OverviewDto, PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow,
-    TurnRow, UnpricedGroupDto, UsageRecord, WorkTimelineDto,
+    cache_hit_rate, ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint,
+    BillingWindowsDto, CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount,
+    OverviewCostBreakdown, OverviewCostSources, OverviewDto, PriceTable, ProjectApplicationRow,
+    SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto, UsageRecord, WorkTimelineDto,
 };
 
 pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
@@ -371,11 +371,13 @@ pub fn attach_cursor_application(
     let mut total_tokens = 0i64;
     let mut input_tokens = 0i64;
     let mut cache_read_tokens = 0i64;
+    let mut cache_creation_tokens = 0i64;
     let reasoning_tokens = 0i64;
     for event in events {
         total_tokens += event.total_tokens();
         input_tokens += event.input_tokens;
         cache_read_tokens += event.cache_read_tokens;
+        cache_creation_tokens += event.cache_creation_tokens;
     }
     let session_count = events.len() as i64;
     dto.by_application.push(ApplicationEfficiency {
@@ -384,7 +386,7 @@ pub fn attach_cursor_application(
         metrics: EfficiencyMetrics {
             total_tokens,
             session_count,
-            cache_hit_rate: ratio(cache_read_tokens, input_tokens + cache_read_tokens),
+            cache_hit_rate: cache_hit_rate(cache_read_tokens, cache_creation_tokens, input_tokens),
             average_session_tokens: if session_count == 0 {
                 None
             } else {
@@ -481,6 +483,7 @@ struct EfficiencyAcc {
     total_tokens: i64,
     input_tokens: i64,
     cache_read_tokens: i64,
+    cache_creation_tokens: i64,
     reasoning_tokens: i64,
     sessions: std::collections::BTreeSet<(String, String)>,
 }
@@ -490,17 +493,21 @@ impl EfficiencyAcc {
         self.total_tokens += record.total_tokens;
         self.input_tokens += record.input_tokens;
         self.cache_read_tokens += record.cache_read_tokens;
+        self.cache_creation_tokens += record.cache_creation_tokens;
         self.reasoning_tokens += record.reasoning_tokens;
         self.sessions.insert(session);
     }
 
     fn finish(self) -> EfficiencyMetrics {
         let session_count = self.sessions.len() as i64;
-        let cache_context = self.input_tokens + self.cache_read_tokens;
         EfficiencyMetrics {
             total_tokens: self.total_tokens,
             session_count,
-            cache_hit_rate: ratio(self.cache_read_tokens, cache_context),
+            cache_hit_rate: cache_hit_rate(
+                self.cache_read_tokens,
+                self.cache_creation_tokens,
+                self.input_tokens,
+            ),
             average_session_tokens: if session_count == 0 {
                 None
             } else {

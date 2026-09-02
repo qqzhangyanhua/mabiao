@@ -158,10 +158,7 @@ export type OfficialQuotaHookDto = {
 };
 
 export type InstructionLoadStatus =
-  | "loaded"
-  | "present_unloaded"
-  | "locally_invisible"
-  | "not_created";
+  "loaded" | "present_unloaded" | "locally_invisible" | "not_created";
 
 export type InstructionEvidence = "verified" | "inferred" | "no_mechanism";
 
@@ -383,6 +380,26 @@ export type ApplicationAnalyticsDto = {
   projects: ProjectApplicationRow[];
 };
 
+export type LowCacheHitSessionRow = {
+  session_id: string;
+  source: string;
+  project: string;
+  model: string;
+  input_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  total_tokens: number;
+  cache_hit_rate: number | null;
+  started_at: string;
+  ended_at: string;
+};
+
+export type LowCacheHitSessionsDto = {
+  source: string;
+  computable: boolean;
+  rows: LowCacheHitSessionRow[];
+};
+
 export type SessionRow = {
   session_id: string;
   source: string;
@@ -461,10 +478,7 @@ export type ConversationEventKind =
 export type ConversationEventActor = "user" | "assistant" | "tool";
 
 export type ConversationEventCapabilityStatus =
-  | "complete"
-  | "missing_timestamp"
-  | "unadapted"
-  | "unadapted_missing_timestamp";
+  "complete" | "missing_timestamp" | "unadapted" | "unadapted_missing_timestamp";
 
 export type ConversationEventContentStatus = "complete" | "deferred";
 
@@ -532,11 +546,7 @@ export type ConversationUsageRecord = {
 };
 
 export type ConversationAgentLinkStatus =
-  | "linked"
-  | "missing_source"
-  | "unresolved"
-  | "conflict"
-  | "cycle";
+  "linked" | "missing_source" | "unresolved" | "conflict" | "cycle";
 
 export type ConversationAgentCapabilityStatus = "complete" | "partial" | "unavailable";
 
@@ -694,14 +704,7 @@ export type CursorAccountUsageDto = {
 };
 
 export type CursorSessionSortKey =
-  | "session"
-  | "project"
-  | "model"
-  | "turns"
-  | "errors"
-  | "tools"
-  | "files"
-  | "time";
+  "session" | "project" | "model" | "turns" | "errors" | "tools" | "files" | "time";
 
 export type CursorSessionListRow = {
   session_id: string;

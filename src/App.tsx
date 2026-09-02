@@ -161,13 +161,15 @@ export default function App() {
                     grain={data.grain}
                     setGrain={data.setGrain}
                     theme={theme}
+                    filter={data.filter}
+                    revision={String(data.sessionsRevision)}
+                    onOpenConversation={(session) => data.openConversations(session)}
+                    onError={data.reportError}
                   />
                 ) : null}
                 {["model", "provider", "project"].includes(view) ? (
                   <LazyBreakdown
-                    title={
-                      view === "model" ? "按模型" : view === "provider" ? "按接口" : "按项目"
-                    }
+                    title={view === "model" ? "按模型" : view === "provider" ? "按接口" : "按项目"}
                     icon={view === "model" ? "model" : view === "provider" ? "provider" : "project"}
                     rows={data.breakdown}
                     showProviderChannel={view === "provider"}

@@ -207,6 +207,14 @@ export function formatPercent(value: number | null): string {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+/** 来源页命中率：没有缓存口径时显示「无法计算」，不要 0%。 */
+export function formatCacheHitRate(value: number | null): string {
+  if (value == null || Number.isNaN(value)) {
+    return "无法计算";
+  }
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 export function formatBytes(n: number): string {
   return `${n.toLocaleString("zh-CN")} B`;
 }

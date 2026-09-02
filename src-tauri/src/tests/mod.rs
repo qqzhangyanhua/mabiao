@@ -30,6 +30,7 @@ mod grok_quota;
 mod ingest;
 mod instructions;
 mod kimi_grok_conversation;
+mod low_cache_hit;
 mod misc;
 mod net;
 mod official_quota;

@@ -1,19 +1,22 @@
-import { memo, useMemo, type CSSProperties } from "react";
+import { memo, useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { Icon } from "../icons";
 import { applicationStackedTrendOption, modelPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
-import { formatCompact, formatTokens, projectLabel } from "../lib/format";
+import {
+  formatCacheHitRate,
+  formatCompact,
+  formatPercent,
+  formatTokens,
+  projectLabel,
+} from "../lib/format";
 import { applicationEfficiencyTable, applicationProjectMatrixTable } from "../lib/exportRows";
-import type { ApplicationAnalyticsDto, Grain } from "../types";
+import type { ApplicationAnalyticsDto, Filter, Grain } from "../types";
 import { EmptyState } from "./EmptyState";
 import { ExportButton } from "./ExportButton";
 import { ExportableChart } from "./ExportableChart";
+import { LowCacheHitSessions } from "./LowCacheHitSessions";
 import { SourceLabel } from "./SourceIcon";
 import { GrainSwitch } from "./ui/GrainSwitch";
-
-function formatPercent(value: number | null): string {
-  return value == null ? "—" : `${(value * 100).toFixed(1)}%`;
-}
 
 function formatAverage(value: number | null): string {
   return value == null ? "—" : formatCompact(Math.round(value));
@@ -37,13 +40,23 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
   grain,
   setGrain,
   theme,
+  filter,
+  revision,
+  onOpenConversation,
+  onError,
 }: {
   analytics: ApplicationAnalyticsDto | null;
   grain: Grain;
   setGrain: (grain: Grain) => void;
   theme: ResolvedTheme;
+  filter: Filter;
+  revision: string;
+  onOpenConversation?: (session: { id: string; source: string }) => void;
+  onError?: (error: unknown) => void;
 }) {
   const data = analytics ?? emptyAnalytics;
+  const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const selected = data.by_application.find((row) => row.source === selectedSource) ?? null;
   const option = useMemo(
     () => applicationStackedTrendOption(data.trend, data.by_application, theme),
     [data.trend, data.by_application, theme],
@@ -64,8 +77,8 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           <span className="efficiency-label">
             <Icon name="tokens" size={14} /> 缓存命中率
           </span>
-          <strong>{formatPercent(data.summary.cache_hit_rate)}</strong>
-          <small>缓存读 ÷（输入 + 缓存读），近似口径</small>
+          <strong>{formatCacheHitRate(data.summary.cache_hit_rate)}</strong>
+          <small>缓存读 ÷（输入 + 缓存读），近似口径；无缓存口径显示无法计算</small>
         </article>
         <article className="efficiency-card tone-cyan">
           <span className="efficiency-label">
@@ -97,7 +110,11 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           <>
             <div className="application-trend-legend" role="list">
               {data.by_application.map((application, index) => (
-                <span key={application.source} className="application-trend-legend-item" role="listitem">
+                <span
+                  key={application.source}
+                  className="application-trend-legend-item"
+                  role="listitem"
+                >
                   <span
                     className="application-trend-swatch"
                     style={{ background: modelPalette[index % modelPalette.length] }}
@@ -125,7 +142,8 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           <div>
             <h2>来源效率明细</h2>
             <p className="panel-note">
-              按来源比较缓存复用、单会话规模与推理开销。Cursor 会话数按账号事件计。
+              按来源比较缓存复用、单会话规模与推理开销。点一行查看该来源命中率最低的会话。Cursor
+              会话数按账号事件计，不能下钻到对话记录。
             </p>
           </div>
           <ExportButton
@@ -148,18 +166,20 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
             </thead>
             <tbody>
               {data.by_application.map((row) => (
-                <tr key={row.source}>
-                  <td>
-                    <strong>
-                      <SourceLabel source={row.source} fallback={row.application} />
-                    </strong>
-                  </td>
-                  <td>{formatTokens(row.metrics.total_tokens)}</td>
-                  <td>{formatTokens(row.metrics.session_count)}</td>
-                  <td>{formatAverage(row.metrics.average_session_tokens)}</td>
-                  <td>{formatPercent(row.metrics.cache_hit_rate)}</td>
-                  <td>{formatPercent(row.metrics.reasoning_share)}</td>
-                </tr>
+                <EfficiencyRow
+                  key={row.source}
+                  source={row.source}
+                  application={row.application}
+                  totalTokens={row.metrics.total_tokens}
+                  sessionCount={row.metrics.session_count}
+                  averageSessionTokens={row.metrics.average_session_tokens}
+                  cacheHitRate={row.metrics.cache_hit_rate}
+                  reasoningShare={row.metrics.reasoning_share}
+                  selected={selectedSource === row.source}
+                  onSelect={() =>
+                    setSelectedSource((current) => (current === row.source ? null : row.source))
+                  }
+                />
               ))}
               {data.by_application.length === 0 ? (
                 <tr>
@@ -172,6 +192,15 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
           </table>
         </div>
       </section>
+
+      <LowCacheHitSessions
+        filter={filter}
+        source={selected?.source ?? selectedSource}
+        application={selected?.application ?? null}
+        revision={revision}
+        onOpenConversation={onOpenConversation}
+        onError={onError}
+      />
 
       <section className="panel">
         <div className="panel-head">
@@ -243,3 +272,55 @@ export const ApplicationAnalytics = memo(function ApplicationAnalytics({
     </div>
   );
 });
+
+function EfficiencyRow({
+  source,
+  application,
+  totalTokens,
+  sessionCount,
+  averageSessionTokens,
+  cacheHitRate,
+  reasoningShare,
+  selected,
+  onSelect,
+}: {
+  source: string;
+  application: string;
+  totalTokens: number;
+  sessionCount: number;
+  averageSessionTokens: number | null;
+  cacheHitRate: number | null;
+  reasoningShare: number | null;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      onSelect();
+    }
+  };
+  return (
+    <tr
+      className={selected ? "clickable selected" : "clickable"}
+      tabIndex={0}
+      aria-selected={selected}
+      title="查看该来源命中率最低的会话"
+      onClick={onSelect}
+      onKeyDown={onKeyDown}
+    >
+      <td>
+        <strong>
+          <SourceLabel source={source} fallback={application} />
+        </strong>
+      </td>
+      <td>{formatTokens(totalTokens)}</td>
+      <td>{formatTokens(sessionCount)}</td>
+      <td>{formatAverage(averageSessionTokens)}</td>
+      <td className={cacheHitRate == null ? "muted" : undefined}>
+        {formatCacheHitRate(cacheHitRate)}
+      </td>
+      <td>{formatPercent(reasoningShare)}</td>
+    </tr>
+  );
+}

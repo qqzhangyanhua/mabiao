@@ -47,11 +47,11 @@ use crate::domain::{
     ConversationExportFormat, ConversationIndexProgressDto, ConversationPage, ConversationQuery,
     ConversationUsagePage, CursorAccountEventPage, CursorAccountEventQuery, CursorAccountUsageDto,
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
-    FilterOptions, GlobalInstructionDto, IngestReport, NamedAmount, OfficialQuotaConfig,
-    OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto, OfficialQuotaRow, OverviewDto,
-    PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint, SessionRow, Source,
-    SourceDiagnostic, UnpricedGroupDto, UsageCallPage, WorkTimelineDto, WriteUserFileRequest,
-    WriteUserFileResult,
+    FilterOptions, GlobalInstructionDto, IngestReport, LowCacheHitSessionsDto, NamedAmount,
+    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto,
+    OfficialQuotaRow, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
+    SessionRow, Source, SourceDiagnostic, UnpricedGroupDto, UsageCallPage, WorkTimelineDto,
+    WriteUserFileRequest, WriteUserFileResult,
 };
 use crate::official_quota::QuotaTarget;
 
@@ -277,6 +277,27 @@ async fn get_application_analytics(
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         query::application_analytics(&conn, &filter, &grain)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_low_cache_hit_sessions(
+    app: tauri::AppHandle,
+    filter: Filter,
+    source: String,
+    limit: Option<u32>,
+) -> Result<LowCacheHitSessionsDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        query::low_cache_hit_sessions(
+            &conn,
+            &filter,
+            &source,
+            usize::try_from(limit.unwrap_or(20)).unwrap_or(20),
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1465,6 +1486,7 @@ pub fn run() {
             get_billing_windows,
             get_trend,
             get_application_analytics,
+            get_low_cache_hit_sessions,
             get_breakdown,
             get_usage_calls_page,
             get_top_sessions,

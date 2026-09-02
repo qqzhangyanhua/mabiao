@@ -10,6 +10,7 @@ import {
   filterWithCallRange,
   cacheHitRate,
   formatBytes,
+  formatCacheHitRate,
   formatClock,
   formatCompact,
   formatCost,
@@ -261,6 +262,15 @@ describe("formatPercent", () => {
     expect(formatPercent(null)).toBe("—");
     expect(formatPercent(0)).toBe("0.0%");
     expect(formatPercent(130 / 350)).toBe("37.1%");
+  });
+});
+
+describe("formatCacheHitRate", () => {
+  it("shows 无法计算 for missing cache metrics instead of 0%", () => {
+    expect(formatCacheHitRate(null)).toBe("无法计算");
+    expect(formatCacheHitRate(Number.NaN)).toBe("无法计算");
+    expect(formatCacheHitRate(0)).toBe("0.0%");
+    expect(formatCacheHitRate(0.2)).toBe("20.0%");
   });
 });
 
