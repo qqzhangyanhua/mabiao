@@ -28,6 +28,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | OMP | ✅ | ✅ | Native `cost.total`; subagent tokens roll into the parent session |
 | opencode | ✅ | ✅ | |
 | grok | ✅ | ✅ | |
+| Hermes | ✅ | ✅ | Native `actual_cost_usd` |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |
 | Factory / droid | ✅ | ❌ | Session totals, no model name |
 | Cursor | ⚠️ | ❌ | Code volume + account usage (reads the local client's login state) |

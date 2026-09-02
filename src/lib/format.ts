@@ -101,6 +101,7 @@ const sourceNames: Record<string, string> = {
   cursor: "Cursor",
   cursor_agent: "Cursor Agent",
   copilot: "GitHub Copilot CLI",
+  hermes: "Hermes",
   antigravity: "Antigravity",
   devin: "Devin",
 };

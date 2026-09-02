@@ -251,5 +251,6 @@ export const sourceTone: Record<string, string> = {
   cursor: "tone-cursor",
   cursor_agent: "tone-cursor",
   copilot: "tone-copilot",
+  hermes: "tone-hermes",
   antigravity: "tone-gemini",
 };

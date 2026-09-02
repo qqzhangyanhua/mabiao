@@ -24,6 +24,7 @@
 | Factory/droid | `FACTORY_SESSIONS_DIR` | `~/.factory/sessions` |
 | cursor-agent | `CURSOR_AGENT_USAGE_DIR` | token 包装默认 `~/.cursor-agent-usage`（可选）。会话与 IDE 共用 `~/.cursor/chats`、`~/.cursor/projects`，不由此变量改 |
 | GitHub Copilot CLI | `COPILOT_HOME` | `~/.copilot`（扫 `session-state/`） |
+| Hermes | `HERMES_HOME` | `~/.hermes`（扫 `state.db`） |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（目前只有 Claude Code 的 XDG 双路径）在显式设置对应环境变量后也不再自动附加。
 

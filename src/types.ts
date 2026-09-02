@@ -870,8 +870,25 @@ export type IngestIssue = {
   line?: number | null;
 };
 
+/** 消耗记录来源 slug，与 `domain.rs::Source::as_str` 对齐。 */
+export type UsageSource =
+  | "codex"
+  | "claude"
+  | "pi"
+  | "omp"
+  | "opencode"
+  | "kimi"
+  | "dsh"
+  | "gemini"
+  | "grok"
+  | "qwen"
+  | "factory"
+  | "cursor_agent"
+  | "copilot"
+  | "hermes";
+
 export type SourceIngestReport = {
-  source: string;
+  source: UsageSource;
   detected: boolean;
   files_seen: number;
   files_parsed: number;

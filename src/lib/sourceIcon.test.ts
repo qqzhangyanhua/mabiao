@@ -16,6 +16,7 @@ const KNOWN_SOURCES = [
   "cursor",
   "cursor_agent",
   "copilot",
+  "hermes",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -33,6 +34,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("opencode")).toBe("opencode");
     expect(resolveSourceIconId("omp")).toBe("omp");
     expect(resolveSourceIconId("factory")).toBe("factory");
+    expect(resolveSourceIconId("hermes")).toBe("hermes");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {

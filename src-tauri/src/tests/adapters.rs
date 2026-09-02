@@ -540,6 +540,7 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::CursorAgent.application_name(), "Cursor Agent");
     assert_eq!(Source::Omp.application_name(), "OMP");
     assert_eq!(Source::Copilot.application_name(), "GitHub Copilot CLI");
+    assert_eq!(Source::Hermes.application_name(), "Hermes");
 }
 
 #[test]
@@ -859,4 +860,183 @@ fn load_code_volume_reads_sqlite_without_writing_usage() {
     assert_eq!(volume.by_branch.len(), 1);
     assert_eq!(volume.by_branch[0].name, "main");
     assert!((volume.ai_percentage.unwrap() - 20.51282051282051).abs() < 1e-9);
+}
+
+fn parse_default_hermes() -> (tempfile::TempDir, Vec<UsageRecord>) {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_default_hermes_home(dir.path());
+    let records = hermes::parse(&db, db.parent().unwrap()).unwrap();
+    (dir, records)
+}
+
+fn hermes_row<'a>(records: &'a [UsageRecord], session_id: &str, model: &str) -> &'a UsageRecord {
+    records
+        .iter()
+        .find(|record| record.session_id == session_id && record.model == model)
+        .unwrap_or_else(|| panic!("missing {session_id}/{model}"))
+}
+
+#[test]
+fn hermes_adapter_maps_session_model_usage_row_to_record() {
+    let (_dir, records) = parse_default_hermes();
+    let row = hermes_row(&records, "sess-multi", "gpt-5.6");
+    assert_eq!(row.source, Source::Hermes);
+    assert_eq!(row.occurred_at, "2026-04-05T08:00:00+00:00");
+    assert_eq!(row.model, "gpt-5.6");
+    assert_eq!(row.provider, "custom");
+    assert_eq!(row.project, "/Users/dev/app");
+    assert_eq!(row.session_id, "sess-multi");
+    assert!(
+        row.source_file.ends_with(".hermes/state.db"),
+        "{}",
+        row.source_file
+    );
+    assert_eq!(row.input_tokens, 100);
+    assert_eq!(row.output_tokens, 20);
+    assert_eq!(row.cache_read_tokens, 10);
+    assert_eq!(row.cache_creation_tokens, 5);
+    assert_eq!(row.reasoning_tokens, 2);
+    assert_eq!(row.total_tokens, 137);
+}
+
+#[test]
+fn hermes_adapter_uses_actual_cost_when_cost_source_present() {
+    let (_dir, records) = parse_default_hermes();
+    let row = hermes_row(&records, "sess-multi", "gpt-5.6");
+    assert!((row.native_cost.unwrap() - 0.0123).abs() < 1e-9);
+}
+
+#[test]
+fn hermes_adapter_leaves_native_cost_none_when_cost_source_is_none() {
+    let (_dir, records) = parse_default_hermes();
+    let row = hermes_row(&records, "sess-multi", "claude-sonnet-5");
+    assert_eq!(row.native_cost, None);
+    assert_eq!(row.input_tokens, 50);
+    assert_eq!(row.output_tokens, 10);
+}
+
+#[test]
+fn hermes_adapter_splits_multi_model_session_into_multiple_records() {
+    let (_dir, records) = parse_default_hermes();
+    let models: Vec<&str> = records
+        .iter()
+        .filter(|record| record.session_id == "sess-multi")
+        .map(|record| record.model.as_str())
+        .collect();
+    assert_eq!(models.len(), 2);
+    assert!(models.contains(&"gpt-5.6"));
+    assert!(models.contains(&"claude-sonnet-5"));
+    assert_eq!(records.len(), 3);
+}
+
+#[test]
+fn hermes_adapter_keeps_same_model_rows_split_by_billing_key() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_hermes_state_db(
+        &dir.path().join(".hermes/state.db"),
+        &[HermesSessionRow {
+            id: "sess-same".into(),
+            started_at: 1_775_376_000.0,
+            cwd: "/Users/dev/app".into(),
+            git_repo_root: String::new(),
+        }],
+        &[
+            HermesModelUsageRow {
+                session_id: "sess-same".into(),
+                model: "gpt-5.6".into(),
+                billing_provider: "custom".into(),
+                billing_base_url: "https://example.test/v1".into(),
+                billing_mode: String::new(),
+                task: String::new(),
+                input_tokens: 10,
+                output_tokens: 2,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+                reasoning_tokens: 0,
+                actual_cost_usd: 0.01,
+                cost_source: Some("actual".into()),
+            },
+            HermesModelUsageRow {
+                session_id: "sess-same".into(),
+                model: "gpt-5.6".into(),
+                billing_provider: "custom".into(),
+                billing_base_url: "https://example.test/v1".into(),
+                billing_mode: String::new(),
+                task: "title_generation".into(),
+                input_tokens: 3,
+                output_tokens: 1,
+                cache_read_tokens: 0,
+                cache_write_tokens: 0,
+                reasoning_tokens: 0,
+                actual_cost_usd: 0.0,
+                cost_source: Some("none".into()),
+            },
+        ],
+    );
+    let records = hermes::parse(&db, db.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.input_tokens)
+            .sum::<i64>(),
+        13
+    );
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        16
+    );
+}
+
+#[test]
+fn hermes_adapter_falls_back_to_git_repo_root_when_cwd_empty() {
+    let (_dir, records) = parse_default_hermes();
+    let row = hermes_row(&records, "sess-repo", "gpt-5.6");
+    assert_eq!(row.project, "/Users/dev/other");
+    assert_eq!(row.occurred_at, "2026-04-06T08:00:00+00:00");
+}
+
+#[test]
+fn hermes_adapter_returns_empty_when_state_db_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let found = hermes::discover(&[dir.path().to_path_buf()]).unwrap();
+    assert!(found.is_empty());
+}
+
+#[test]
+fn hermes_adapter_readonly_parse_does_not_change_wal_sidecar() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_default_hermes_home(dir.path());
+    let writer = rusqlite::Connection::open(&db).unwrap();
+    writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+    writer
+        .execute(
+            "UPDATE sessions SET cwd = cwd || '' WHERE id = 'sess-multi'",
+            [],
+        )
+        .unwrap();
+    assert!(PathBuf::from(format!("{}-wal", db.to_string_lossy())).exists());
+    let before = hermes::sidecar_fingerprint(&db, &[]);
+    hermes::parse(&db, db.parent().unwrap()).unwrap();
+    let after = hermes::sidecar_fingerprint(&db, &[]);
+    assert_eq!(before, after);
+}
+
+#[test]
+fn hermes_adapter_fingerprint_covers_wal_and_shm() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_default_hermes_home(dir.path());
+    let missing = hermes::sidecar_fingerprint(&db, &[]);
+
+    std::fs::write(format!("{}-wal", db.to_string_lossy()), b"wal").unwrap();
+    let with_wal = hermes::sidecar_fingerprint(&db, &[]);
+    assert_ne!(with_wal, missing);
+
+    std::fs::write(format!("{}-shm", db.to_string_lossy()), b"shm").unwrap();
+    let with_wal_and_shm = hermes::sidecar_fingerprint(&db, &[]);
+    assert_ne!(with_wal_and_shm, with_wal);
+    assert_ne!(with_wal_and_shm, missing);
 }
