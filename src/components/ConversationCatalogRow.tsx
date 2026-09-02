@@ -8,10 +8,17 @@ import {
   conversationStatusLabel,
 } from "../lib/conversationDisplay";
 import { formatCost, formatTokens, projectLabel } from "../lib/format";
+import { HighlightedSnippet } from "../lib/highlightMatch";
 import { SourceLabel } from "./SourceIcon";
 import type { ConversationCatalogRowProps } from "./type";
 
-export function ConversationCatalogRow({ row, maxTotal, onOpen }: ConversationCatalogRowProps) {
+export function ConversationCatalogRow({
+  row,
+  maxTotal,
+  searching = false,
+  highlightQuery = "",
+  onOpen,
+}: ConversationCatalogRowProps) {
   const rangeTitle = conversationRangeTitle(row);
   return (
     <tr
@@ -30,6 +37,13 @@ export function ConversationCatalogRow({ row, maxTotal, onOpen }: ConversationCa
         <div className="conversation-title-cell">
           <strong>{row.title}</strong>
           <span className="mono">{row.session_id}</span>
+          {row.match_field === "body" && row.match_snippet ? (
+            <HighlightedSnippet
+              className="conversation-match-snippet"
+              text={row.match_snippet}
+              query={highlightQuery}
+            />
+          ) : null}
         </div>
       </td>
       <td>
@@ -72,6 +86,9 @@ export function ConversationCatalogRow({ row, maxTotal, onOpen }: ConversationCa
               {conversationFileUnavailableLabel(row.source)}
             </span>
           )}
+          {searching && row.event_index_ready === false ? (
+            <span className="conversation-index-pending">正文索引未就绪，当前只搜标题</span>
+          ) : null}
         </div>
       </td>
     </tr>

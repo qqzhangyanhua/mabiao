@@ -4394,6 +4394,42 @@ td.row-actions {
   white-space: nowrap;
 }
 
+.conversation-match-snippet {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-match-snippet mark,
+.conversation-event-match-snippet mark {
+  padding: 0 1px;
+  color: inherit;
+  background: rgba(250, 204, 21, 0.45);
+}
+
+.conversation-index-pending {
+  color: var(--orange-fg);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conversation-index-progress {
+  margin: 0 0 10px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.conversation-catalog-group-row td {
+  padding: 12px 8px 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
 .conversation-capabilities {
   display: flex;
   flex-wrap: wrap;
@@ -4840,6 +4876,22 @@ td.row-actions {
   gap: 8px 20px;
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.conversation-event-hit {
+  margin: 0 -8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  background: rgba(250, 204, 21, 0.1);
+  outline: 1px solid rgba(250, 204, 21, 0.4);
+  outline-offset: 0;
+}
+
+.conversation-event-match-snippet {
+  margin: 0 0 6px;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .conversation-agent-link {

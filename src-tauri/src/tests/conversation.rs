@@ -1680,7 +1680,10 @@ fn codex_conversation_catalog_indexes_and_loads_messages_without_caching_body() 
     assert!(row.file_available);
 
     let detail = crate::conversation::load_parsed_detail(&conn, home, "codex", "conv-1").unwrap();
-    assert_eq!(detail.session, *row);
+    assert!(row.event_index_ready);
+    let mut catalog = row.clone();
+    catalog.event_index_ready = false;
+    assert_eq!(detail.session, catalog);
     let messages = message_events(&detail);
     assert_eq!(messages.len(), 3);
     assert_eq!(
@@ -1705,7 +1708,7 @@ fn codex_conversation_catalog_indexes_and_loads_messages_without_caching_body() 
 }
 
 #[test]
-fn codex_conversation_catalog_searches_only_indexed_metadata() {
+fn codex_conversation_catalog_searches_metadata_and_body() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
     seed_codex_conversation(home);
@@ -1731,9 +1734,14 @@ fn codex_conversation_catalog_searches_only_indexed_metadata() {
         )
         .unwrap();
         assert_eq!(page.total, 1, "search should match: {search}");
+        assert_eq!(
+            page.rows[0].match_field,
+            Some(crate::domain::ConversationMatchField::Title),
+            "metadata hit should rank as title: {search}"
+        );
     }
 
-    let missing = crate::conversation::sessions_page(
+    let body = crate::conversation::sessions_page(
         &conn,
         &crate::domain::ConversationQuery {
             search: Some("我先检查现有实现".to_string()),
@@ -1741,7 +1749,16 @@ fn codex_conversation_catalog_searches_only_indexed_metadata() {
         },
     )
     .unwrap();
-    assert_eq!(missing.total, 0, "正文不应进入元数据搜索索引");
+    assert_eq!(body.total, 1, "正文应进入全文索引");
+    assert_eq!(
+        body.rows[0].match_field,
+        Some(crate::domain::ConversationMatchField::Body)
+    );
+    assert!(body.rows[0].match_event_id.is_some());
+    assert!(body.rows[0]
+        .match_snippet
+        .as_deref()
+        .is_some_and(|snippet| snippet.contains("我先检查现有实现")));
 }
 
 #[test]
@@ -2018,13 +2035,9 @@ fn conversation_adapter_version_change_defers_reparse_to_backfill() {
         crate::conversation::sessions_page(&conn, &crate::domain::ConversationQuery::default())
             .unwrap();
     assert_eq!(page.rows[0].title, "cached-title");
-    assert_eq!(
-        crate::conversation::event_index_progress(&conn).unwrap(),
-        crate::domain::ConversationIndexProgressDto {
-            indexed: 0,
-            total: 1,
-        }
-    );
+    let progress = crate::conversation::event_index_progress(&conn).unwrap();
+    assert_eq!(progress.indexed, 0);
+    assert_eq!(progress.total, 1);
 
     crate::conversation::backfill_event_index(&conn, home).unwrap();
     let page =

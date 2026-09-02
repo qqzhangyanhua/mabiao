@@ -14,6 +14,7 @@ import {
   prettyDetails,
 } from "../lib/conversationEventDisplay";
 import { formatClock } from "../lib/format";
+import { HighlightedSnippet } from "../lib/highlightMatch";
 import { dataUrlToBlob } from "../lib/objectUrl";
 import { useKeyedAsyncLoad } from "../lib/useKeyedAsyncLoad";
 import type {
@@ -32,11 +33,17 @@ export function ConversationEventItem({
   event,
   source,
   sessionId,
+  highlighted = false,
+  highlightQuery = null,
+  highlightSnippet = null,
   onEventContentLoaded,
 }: {
   event: ConversationEvent;
   source: string;
   sessionId: string;
+  highlighted?: boolean;
+  highlightQuery?: string | null;
+  highlightSnippet?: string | null;
   onEventContentLoaded: (content: ConversationEventContentDto) => void;
 }) {
   const {
@@ -185,10 +192,17 @@ export function ConversationEventItem({
     event.kind === "error" ||
     event.kind === "tool_result";
   const isDeferred = event.content_status === "deferred";
+  const eventClass = [
+    "conversation-event",
+    `event-${event.kind.replaceAll("_", "-")}`,
+    highlighted ? "conversation-event-hit" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <>
-      <article className={`conversation-event event-${event.kind.replaceAll("_", "-")}`}>
+      <article className={eventClass}>
         <header className="conversation-event-meta">
           <strong>{label}</strong>
           {event.occurred_at ? (
@@ -198,6 +212,12 @@ export function ConversationEventItem({
           )}
         </header>
         <div className="conversation-event-content">
+          {highlighted && highlightSnippet ? (
+            <p className="conversation-event-match-snippet">
+              命中：
+              <HighlightedSnippet text={highlightSnippet} query={highlightQuery ?? ""} />
+            </p>
+          ) : null}
           {event.kind === "unadapted" ? (
             <span className="conversation-unadapted-state">尚未适配</span>
           ) : showCapabilityStatus ? (
@@ -208,14 +228,28 @@ export function ConversationEventItem({
           {event.actor || event.name ? (
             <div className="conversation-event-identity">
               {event.actor ? <span>{actorLabel(event.actor)}</span> : null}
-              {event.name ? <code>{event.name}</code> : null}
+              {event.name ? (
+                <code>
+                  {highlighted && highlightQuery ? (
+                    <HighlightedSnippet text={event.name} query={highlightQuery} />
+                  ) : (
+                    event.name
+                  )}
+                </code>
+              ) : null}
             </div>
           ) : null}
           {event.text ? (
             usesMarkdown ? (
               <ConversationMarkdown markdown={event.text} />
             ) : (
-              <pre className="conversation-event-text conversation-event-command">{event.text}</pre>
+              <pre className="conversation-event-text conversation-event-command">
+                {highlighted && highlightQuery ? (
+                  <HighlightedSnippet text={event.text} query={highlightQuery} />
+                ) : (
+                  event.text
+                )}
+              </pre>
             )
           ) : null}
           {isDeferred ? (

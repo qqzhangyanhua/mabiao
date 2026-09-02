@@ -436,7 +436,67 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         "#,
     )
     .map_err(|e| e.to_string())?;
+    ensure_conversation_events_fts(conn)?;
     migrate_lowercase_model(conn)
+}
+
+fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+        params![name],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
+}
+
+/// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再 rebuild。
+/// trigram 按子串匹配，对应原先目录 LIKE 的「关键字」预期；短于 3 个字符的查询只走标题。
+fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), String> {
+    let existed = table_exists(conn, "conversation_events_fts")?;
+    conn.execute_batch(
+        r#"
+        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_events_fts USING fts5(
+            text,
+            name,
+            content='conversation_events',
+            content_rowid='rowid',
+            tokenize='trigram'
+        );
+        CREATE TRIGGER IF NOT EXISTS conversation_events_ai AFTER INSERT ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(rowid, text, name)
+            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+        END;
+        CREATE TRIGGER IF NOT EXISTS conversation_events_ad AFTER DELETE ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+        END;
+        CREATE TRIGGER IF NOT EXISTS conversation_events_au AFTER UPDATE ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+            INSERT INTO conversation_events_fts(rowid, text, name)
+            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+        END;
+        "#,
+    )
+    .map_err(|e| e.to_string())?;
+    if existed {
+        return Ok(());
+    }
+    let has_events: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM conversation_events LIMIT 1)",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    if has_events {
+        conn.execute(
+            "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild')",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 /// `insert_records` 从此保证写入的 `model` 是小写，价格 JOIN 才能直接比较列值。

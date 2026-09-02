@@ -27,7 +27,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 | 摄取缓存 | `cargo test ingest` | tempfile 模拟 home，不读真实 `~/.*` |
 | Cursor 会话/账号 | `cargo test cursor` | transcript / 账号 JSON fixture |
 | 官方额度 | `cargo test quota` | 各家响应 fixture、退避、告警去重、自定义提供商 |
-| 对话记录 | `cargo test conversation` | 事件索引、增量、分页、各来源正文解析 |
+| 对话记录 | `cargo test conversation` | 事件索引、增量、分页、正文 FTS、各来源正文解析 |
 | 全局指令 | `cargo test instructions` | 加载判定、冲突、体检、白名单写入 |
 | 备份 / 恢复 | `cargo test backup` | 往返、拒绝坏包、legacy 包兼容 |
 | 构建 | `pnpm build` | 类型检查 + chunk 拆分 |
@@ -79,9 +79,9 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ### 修改对话记录 / 事件索引
 
-1. 正文与事件按需读原文件，**不写进缓存**；索引只存元数据
-2. 跑 `cargo test conversation`（含增量与回填）
-3. 对照 `docs/adr/0011-conversation-event-index.md`
+1. 事件 `text`/`name` 进 `conversation_events`（ADR 0011），目录搜索走 FTS 派生表（ADR 0014）。`details` 仍按需读原文件、不进索引。正文不进备份、不上传
+2. 跑 `cargo test conversation`（含增量、回填与正文搜索）
+3. 对照 `docs/adr/0011-conversation-event-index.md`、`0014-conversation-body-search.md`
 
 ## 领域词汇（简述）
 
@@ -90,7 +90,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 - **代码量 (Code Volume)**：Cursor 行数统计，与 token 严格分区
 - **官方额度 (Official Quota)**：账号级订阅限额，成员含内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户登记的**自定义提供商**，不进总览 token KPI
 - **Cursor 会话**：agent-transcripts 行为统计，不进总览 token KPI
-- **对话记录 (Conversation Record)**：索引存元数据，正文与事件流按需读原文件，不进缓存、不进 token KPI
+- **对话记录 (Conversation Record)**：目录元数据 + 事件正文索引（可搜提问/回复/工具名与输出）；不进备份、不进 token KPI
 - **全局指令 (Global Instruction)**：某个 Source 真正会跨项目加载的用户手写指令，不进 token KPI；避免用「规则 / 记忆」
 - **工作时间线 (Work Timeline)**：单日会话区间铺开，不是又一份 token KPI
 

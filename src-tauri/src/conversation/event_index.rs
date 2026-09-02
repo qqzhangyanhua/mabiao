@@ -452,6 +452,18 @@ pub fn indexed_events_page(
                 limit: Some(limit),
             },
         )?,
+        ConversationEventAnchor::Around { sequence } => query_events(
+            conn,
+            EventQuery {
+                source,
+                session_id,
+                generation,
+                extra_predicate: "sequence >= ?4",
+                bound: Some(*sequence),
+                order_by: "sequence ASC",
+                limit: Some(limit),
+            },
+        )?,
     };
     if events.is_empty() {
         return empty_page_flags(conn, source, session_id, generation, anchor);
@@ -696,6 +708,24 @@ fn empty_page_flags(
                 *sequence,
             )?,
             false,
+        ),
+        ConversationEventAnchor::Around { sequence } => (
+            sequence_exists(
+                conn,
+                source,
+                session_id,
+                generation,
+                "sequence < ?4",
+                *sequence,
+            )?,
+            sequence_exists(
+                conn,
+                source,
+                session_id,
+                generation,
+                "sequence >= ?4",
+                *sequence,
+            )?,
         ),
     };
     Ok(ConversationEventPage {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   advanceConversationEventWindow,
   applyConversationEventPage,
+  aroundPageAnchor,
   emptyConversationEventWindow,
   firstPageAnchor,
   latestPageAnchor,
@@ -24,6 +25,7 @@ describe("latestPageAnchor / firstPageAnchor", () => {
   it("打开会话锚定最新一页，跳到开头命中索引第一页", () => {
     expect(latestPageAnchor()).toEqual({ type: "last" });
     expect(firstPageAnchor()).toEqual({ type: "first" });
+    expect(aroundPageAnchor(4)).toEqual({ type: "around", sequence: 4 });
   });
 });
 

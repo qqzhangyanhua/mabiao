@@ -35,6 +35,8 @@ import {
 } from "../lib/conversationNavigation";
 import { consumeEscape, consumeRefreshShortcut } from "../lib/escapeShortcut";
 import { humanStatus } from "../lib/format";
+import { CATALOG_PAGE_SIZE } from "../lib/conversationCatalogItems";
+import { useConversationIndexProgress } from "../lib/useConversationIndexProgress";
 import type {
   ConversationAgentLink,
   ConversationDetailDto,
@@ -44,7 +46,7 @@ import type {
   ConversationSessionRow,
   Filter,
 } from "../types";
-import { ConversationCatalogRow } from "./ConversationCatalogRow";
+import { ConversationCatalog } from "./ConversationCatalog";
 import { ConversationDetailHead } from "./ConversationDetailHead";
 import { ConversationJumpBar } from "./ConversationJumpBar";
 import {
@@ -54,16 +56,11 @@ import {
 import { ConversationUsageTable } from "./ConversationUsageTable";
 import { CursorSessionDetail } from "./CursorSessionDetail";
 import { EmptyState } from "./EmptyState";
-import { LoadingOverlay } from "./LoadingOverlay";
-import { Pagination } from "./Pagination";
-import { Spinner } from "./Spinner";
 import type { ConversationExportFormat } from "./type";
 import { Button } from "./ui/Button";
-import { SearchField } from "./ui/Field";
 import { Segmented } from "./ui/Segmented";
-import { SESSION_ENTRY_COPY } from "../lib/sessionEntryCopy";
 
-const PAGE_SIZE = 20;
+
 
 type ConversationDetailRequestIntent = {
   session: ConversationSessionRow;
@@ -136,6 +133,13 @@ export function Conversations({
   const [exportFormat, setExportFormat] = useState<ConversationExportFormat | null>(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [exportError, setExportError] = useState(false);
+  const indexProgress = useConversationIndexProgress(revision);
+  const [matchFocus, setMatchFocus] = useState<{
+    eventId: string;
+    sequence: number;
+    snippet: string | null;
+    query: string;
+  } | null>(null);
   const catalogGeneration = useRef(0);
   const detailGenerations = useRef(new Map<string, number>());
   const detailRequestGates = useRef(
@@ -304,7 +308,7 @@ export function Conversations({
       query: {
         search: search || null,
         page,
-        page_size: PAGE_SIZE,
+        page_size: CATALOG_PAGE_SIZE,
         sources: filter.sources,
         projects: filter.projects,
         models: filter.models,
@@ -624,6 +628,19 @@ export function Conversations({
 
   const loadDetail = useCallback(
     (session: ConversationSessionRow) => {
+      const eventId = session.match_event_id;
+      const sequence = session.match_sequence;
+      const bodyHit = session.match_field === "body" && Boolean(eventId) && sequence != null;
+      setMatchFocus(
+        bodyHit && eventId && sequence != null
+          ? {
+              eventId,
+              sequence,
+              snippet: session.match_snippet ?? null,
+              query: search,
+            }
+          : null,
+      );
       setNavigation((current) =>
         transitionConversationNavigation(current, { type: "open_root", session }),
       );
@@ -631,8 +648,12 @@ export function Conversations({
       setExportStatus(null);
       setExportError(false);
       savedTimelineScrollTopRef.current = 0;
-      wasAtBottomRef.current = true;
-      pendingScrollRef.current = true;
+      wasAtBottomRef.current = !bodyHit;
+      pendingScrollRef.current = !bodyHit;
+      if (bodyHit) {
+        setAtBottom(false);
+        setAtTop(false);
+      }
       jumpTokenRef.current += 1;
       jumpingRef.current = false;
       window.clearTimeout(jumpTimerRef.current);
@@ -641,7 +662,7 @@ export function Conversations({
       windowEdgesRef.current = { hasMoreBefore: false, hasMoreAfter: false };
       fetchDetail(session);
     },
-    [fetchDetail],
+    [fetchDetail, search],
   );
 
   useEffect(() => {
@@ -694,6 +715,7 @@ export function Conversations({
     setExportFormat(null);
     setExportStatus(null);
     setExportError(false);
+    setMatchFocus(null);
   }
 
   function backToParent() {
@@ -765,6 +787,7 @@ export function Conversations({
     unseenCountRef.current = 0;
     setUnseenCount(0);
     windowEdgesRef.current = { hasMoreBefore: false, hasMoreAfter: false };
+    setMatchFocus(null);
     fetchDetail(link.session);
   }
 
@@ -898,7 +921,7 @@ export function Conversations({
                   </div>
                 ) : null}
                 <ConversationTimeline
-                  key={`${session.source}:${session.session_id}`}
+                  key={`${session.source}:${session.session_id}:${matchFocus?.eventId ?? ""}`}
                   source={session.source}
                   sessionId={session.session_id}
                   revision={detail.revision}
@@ -906,6 +929,10 @@ export function Conversations({
                   agentLinks={detail.agent_relations.children}
                   expandedRelationshipIds={currentFrame?.expanded_relationship_ids ?? []}
                   followLatest={atBottom}
+                  initialSequence={matchFocus?.sequence ?? null}
+                  highlightEventId={matchFocus?.eventId ?? null}
+                  highlightQuery={matchFocus?.query ?? null}
+                  highlightSnippet={matchFocus?.snippet ?? null}
                   onToggleChild={toggleChild}
                   onOpenChild={openChild}
                   timelineRef={timelineRef}
@@ -929,91 +956,18 @@ export function Conversations({
     );
   }
 
-  const { rows, total } = pageData;
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const maxTotal = Math.max(1, ...rows.map((row) => row.total_tokens));
-
   return (
-    <section className="panel conversation-catalog">
-      <div className="panel-head conversation-catalog-head">
-        <div>
-          <h2>本地会话目录</h2>
-          <p className="panel-note">{SESSION_ENTRY_COPY.conversationCatalogNote}</p>
-        </div>
-        <SearchField
-          value={searchInput}
-          onChange={setSearchInput}
-          placeholder="搜索标题、来源、项目、模型、ID 或时间"
-          ariaLabel="搜索对话记录"
-        />
-        <span className="muted conversation-total">
-          共 {total} 条
-          {catalogLoading ? (
-            <span className="inline-loading">
-              <Spinner size={12} />
-              加载中…
-            </span>
-          ) : null}
-        </span>
-      </div>
-
-      {catalogError && rows.length === 0 ? (
-        <div role="alert">
-          <EmptyState
-            icon="alertTriangle"
-            tone="warn"
-            title="无法加载对话目录"
-            hint={catalogError}
-          />
-        </div>
-      ) : (
-        <LoadingOverlay
-          active={catalogLoading && rows.length > 0}
-          className="table-scroll conversation-table-scroll"
-        >
-          <table className="conversation-table">
-            <thead>
-              <tr>
-                <th>标题</th>
-                <th>来源</th>
-                <th>项目</th>
-                <th>模型</th>
-                <th>token</th>
-                <th>费用</th>
-                <th>起止</th>
-                <th>能力</th>
-                <th>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <ConversationCatalogRow
-                  key={`${row.source}-${row.session_id}`}
-                  row={row}
-                  maxTotal={maxTotal}
-                  onOpen={loadDetail}
-                />
-              ))}
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="analytics-empty">
-                    {catalogLoading ? (
-                      <EmptyState icon="chat" title="正在加载对话目录…" />
-                    ) : (
-                      <EmptyState
-                        icon="chat"
-                        title="当前条件下暂无对话记录"
-                        hint="请确认本机已有会话文件，并执行一次刷新。Cursor 与其它来源共用此目录。"
-                      />
-                    )}
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </LoadingOverlay>
-      )}
-      <Pagination page={page} pageCount={pageCount} totalCount={total} onPageChange={setPage} />
-    </section>
+    <ConversationCatalog
+      searchInput={searchInput}
+      onSearchInput={setSearchInput}
+      search={search}
+      page={page}
+      onPage={setPage}
+      pageData={pageData}
+      loading={catalogLoading}
+      error={catalogError}
+      indexProgress={indexProgress}
+      onOpen={loadDetail}
+    />
   );
 }

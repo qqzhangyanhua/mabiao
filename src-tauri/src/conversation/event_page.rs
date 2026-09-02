@@ -98,6 +98,13 @@ pub(crate) fn paginate_events(
                 .unwrap_or(events.len());
             (start, (start + limit).min(events.len()))
         }
+        ConversationEventAnchor::Around { sequence } => {
+            let start = events
+                .iter()
+                .position(|event| event.sequence >= *sequence)
+                .unwrap_or(events.len());
+            (start, (start + limit).min(events.len()))
+        }
     };
 
     if start >= end {
@@ -110,6 +117,10 @@ pub(crate) fn paginate_events(
             ConversationEventAnchor::After { sequence } => (
                 events.iter().any(|event| event.sequence <= *sequence),
                 false,
+            ),
+            ConversationEventAnchor::Around { sequence } => (
+                events.iter().any(|event| event.sequence < *sequence),
+                events.iter().any(|event| event.sequence >= *sequence),
             ),
         };
         return ConversationEventPage {

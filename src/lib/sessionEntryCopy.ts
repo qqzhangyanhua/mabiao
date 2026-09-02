@@ -11,7 +11,7 @@ export const SESSION_ENTRY_COPY = {
   openConversationRowTitle: "打开对话记录中的同一条会话",
   workTimelineBanner: "点时间轴横条可打开「对话记录」里的同一条会话。",
   conversationCatalogNote:
-    "全来源共用此目录（含 Cursor Agent）。目录只索引元数据；正文仅在进入详情后读取。侧栏「Cursor → 会话」是同一批 Cursor 会话的跨会话聚合，不含正文。",
+    "全来源共用此目录（含 Cursor Agent）。搜索可命中标题与已索引正文；正文留在本机，不进备份。侧栏「Cursor → 会话」是同一批 Cursor 会话的跨会话聚合，不含正文。",
   behaviorTabNote: "本页签是同一条 Cursor 会话的行为聚合；正文在「完整事件」。",
 } as const;
 

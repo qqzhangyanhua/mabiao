@@ -47,6 +47,8 @@ export type SourceLabelProps = {
 export type ConversationCatalogRowProps = {
   row: ConversationSessionRow;
   maxTotal: number;
+  searching?: boolean;
+  highlightQuery?: string;
   onOpen: (row: ConversationSessionRow) => void;
 };
 

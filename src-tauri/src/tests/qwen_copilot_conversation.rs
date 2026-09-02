@@ -142,7 +142,20 @@ fn qwen_tokenless_log_feeds_partial_detail_export_search_and_missing_file_state(
         },
     )
     .unwrap();
-    assert_eq!(body_search.total, 0);
+    assert_eq!(body_search.total, 1);
+    assert_eq!(
+        body_search.rows[0].match_field,
+        Some(crate::domain::ConversationMatchField::Body)
+    );
+    let details_search = conversation::sessions_page(
+        &conn,
+        &ConversationQuery {
+            search: Some("generic Qwen payload".to_string()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(details_search.total, 0, "details 不得进入正文搜索");
     let metadata_search = conversation::sessions_page(
         &conn,
         &ConversationQuery {

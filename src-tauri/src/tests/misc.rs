@@ -896,6 +896,14 @@ fn backup_omits_conversation_event_bodies_and_restore_reads_via_fallback() {
         )
         .unwrap();
     assert!(!has_events_table, "备份产物不得包含事件索引表");
+    let has_fts_table: bool = backup_db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversation_events_fts')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!has_fts_table, "备份产物不得包含正文全文索引");
     let generations: i64 = backup_db
         .query_row(
             "SELECT COUNT(*) FROM conversation_sessions WHERE event_index_generation IS NOT NULL",

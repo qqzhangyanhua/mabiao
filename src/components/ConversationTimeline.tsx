@@ -11,7 +11,7 @@ import {
   type UIEvent,
 } from "react";
 import { useConversationEventPages } from "../lib/useConversationEventPages";
-import { groupTimelineEvents, unadaptedGroupLabel } from "../lib/conversationEventDisplay";
+import { groupTimelineEvents } from "../lib/conversationEventDisplay";
 import {
   pruneTimelineMeasurements,
   TIMELINE_ROW_ESTIMATE,
@@ -25,6 +25,7 @@ import {
 import type { ConversationAgentLink, ConversationEvent } from "../types";
 import { ConversationAgentBranch } from "./ConversationAgentBranch";
 import { ConversationEventItem } from "./ConversationEventItem";
+import { ConversationUnadaptedGroup } from "./ConversationUnadaptedGroup";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
@@ -43,6 +44,10 @@ export type ConversationTimelineProps = {
   expandedRelationshipIds: string[];
   depth?: number;
   followLatest?: boolean;
+  initialSequence?: number | null;
+  highlightEventId?: string | null;
+  highlightQuery?: string | null;
+  highlightSnippet?: string | null;
   onToggleChild: (link: ConversationAgentLink) => void;
   onOpenChild: (link: ConversationAgentLink) => void;
   timelineRef?: RefObject<HTMLDivElement | null>;
@@ -87,25 +92,6 @@ function TimelineVirtualRow({
   );
 }
 
-function UnadaptedEventGroup({
-  events,
-  renderEvent,
-}: {
-  events: ConversationEvent[];
-  renderEvent: (event: ConversationEvent) => ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <details
-      className="conversation-unadapted-group"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>{unadaptedGroupLabel(events)}</summary>
-      {open ? events.map((event) => renderEvent(event)) : null}
-    </details>
-  );
-}
-
 export function ConversationTimeline({
   source,
   sessionId,
@@ -115,6 +101,10 @@ export function ConversationTimeline({
   expandedRelationshipIds,
   depth = 0,
   followLatest = false,
+  initialSequence = null,
+  highlightEventId = null,
+  highlightQuery = null,
+  highlightSnippet = null,
   onToggleChild,
   onOpenChild,
   timelineRef,
@@ -134,7 +124,14 @@ export function ConversationTimeline({
     jumpToFirst,
     jumpToLast,
     applyEventContent,
-  } = useConversationEventPages({ source, sessionId, revision, followLatest });
+  } = useConversationEventPages({
+    source,
+    sessionId,
+    revision,
+    followLatest,
+    initialSequence,
+  });
+  const scrolledToHighlight = useRef(false);
   const events = eventWindow.events;
   const firstSequence = events[0]?.sequence;
   const lastSequence = events[events.length - 1]?.sequence;
@@ -286,6 +283,27 @@ export function ConversationTimeline({
   ]);
 
   useLayoutEffect(() => {
+    if (!highlightEventId || loading || scrolledToHighlight.current) {
+      return;
+    }
+    const node = nodeRef.current;
+    if (!node) {
+      return;
+    }
+    let index = keys.indexOf(`event:${highlightEventId}`);
+    if (index < 0) {
+      index = keys.indexOf("unadapted");
+    }
+    if (index < 0) {
+      return;
+    }
+    const top = timelineOffsetAt(keys, index, measuredLiveRef.current);
+    node.scrollTop = Math.max(0, top - 8);
+    scrolledToHighlight.current = true;
+    syncViewport();
+  }, [highlightEventId, keys, loading, syncViewport]);
+
+  useLayoutEffect(() => {
     const node = nodeRef.current;
     if (!node) {
       return;
@@ -339,12 +357,16 @@ export function ConversationTimeline({
   }
 
   function renderTimelineEvent(event: ConversationEvent) {
+    const highlighted = event.event_id === highlightEventId;
     return (
       <div className="conversation-event-group" data-event-id={event.event_id} key={event.event_id}>
         <ConversationEventItem
           event={event}
           source={source}
           sessionId={sessionId}
+          highlighted={highlighted}
+          highlightQuery={highlighted ? highlightQuery : null}
+          highlightSnippet={highlighted ? highlightSnippet : null}
           onEventContentLoaded={applyEventContent}
         />
         {renderAgentLinks(linksForEvent(event.event_id))}
@@ -399,7 +421,13 @@ export function ConversationTimeline({
       );
     }
     if (row.type === "unadapted") {
-      return <UnadaptedEventGroup events={row.events} renderEvent={renderTimelineEvent} />;
+      return (
+        <ConversationUnadaptedGroup
+          events={row.events}
+          renderEvent={renderTimelineEvent}
+          defaultOpen={row.events.some((event) => event.event_id === highlightEventId)}
+        />
+      );
     }
     if (row.type === "trailing") {
       return <>{renderAgentLinks(row.links)}</>;

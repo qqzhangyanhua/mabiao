@@ -10,6 +10,7 @@ import { conversationKey } from "./conversationCache";
 import { humanStatus } from "./format";
 import {
   advanceConversationEventWindow,
+  aroundPageAnchor,
   CONVERSATION_EVENT_PAGE_SIZE,
   emptyConversationEventWindow,
   firstPageAnchor,
@@ -25,11 +26,13 @@ export function useConversationEventPages({
   sessionId,
   revision,
   followLatest = false,
+  initialSequence = null,
 }: {
   source: string;
   sessionId: string;
   revision: string;
   followLatest?: boolean;
+  initialSequence?: number | null;
 }) {
   const sessionKey = conversationKey({ source, session_id: sessionId });
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
@@ -43,40 +46,53 @@ export function useConversationEventPages({
   const seenRevision = useRef(revision);
   const skippedRevision = useRef<string | null>(null);
 
-  const replaceWithLatest = useCallback(() => {
-    const request = ++generation.current;
-    const expectedSession = sessionKey;
-    void invoke<ConversationEventPage>("get_conversation_events", {
-      source,
-      sessionId,
-      anchor: latestPageAnchor(),
-      limit: CONVERSATION_EVENT_PAGE_SIZE,
-    })
-      .then((page) => {
-        if (generation.current !== request) {
-          return;
-        }
-        setEventWindow((current) => advanceConversationEventWindow(current, page, "replace"));
-        setLoadedFor(expectedSession);
-        setError(null);
+  const replaceWindow = useCallback(
+    (anchor: ConversationEventAnchor) => {
+      const request = ++generation.current;
+      const expectedSession = sessionKey;
+      void invoke<ConversationEventPage>("get_conversation_events", {
+        source,
+        sessionId,
+        anchor,
+        limit: CONVERSATION_EVENT_PAGE_SIZE,
       })
-      .catch((caught: unknown) => {
-        if (generation.current !== request) {
-          return;
-        }
-        setEventWindow(emptyConversationEventWindow());
-        setError(humanStatus(caught));
-        setLoadedFor(expectedSession);
-      });
-  }, [sessionId, sessionKey, source]);
+        .then((page) => {
+          if (generation.current !== request) {
+            return;
+          }
+          setEventWindow((current) => advanceConversationEventWindow(current, page, "replace"));
+          setLoadedFor(expectedSession);
+          setError(null);
+        })
+        .catch((caught: unknown) => {
+          if (generation.current !== request) {
+            return;
+          }
+          setEventWindow(emptyConversationEventWindow());
+          setError(humanStatus(caught));
+          setLoadedFor(expectedSession);
+        });
+    },
+    [sessionId, sessionKey, source],
+  );
+
+  const replaceWithLatest = useCallback(() => {
+    replaceWindow(latestPageAnchor());
+  }, [replaceWindow]);
+
+  const loadInitial = useCallback(() => {
+    replaceWindow(
+      initialSequence == null ? latestPageAnchor() : aroundPageAnchor(initialSequence),
+    );
+  }, [initialSequence, replaceWindow]);
 
   useEffect(() => {
     seenRevision.current = revision;
     skippedRevision.current = null;
-    replaceWithLatest();
-    // 换会话才重新锚定最新一页；revision 是否跟随由下面的 effect 判定。
+    loadInitial();
+    // 换会话才重新锚定；revision 是否跟随由下面的 effect 判定。
     // eslint-disable-next-line react-hooks/exhaustive-deps -- session identity only
-  }, [replaceWithLatest, sessionKey]);
+  }, [loadInitial, sessionKey]);
 
   useEffect(() => {
     if (seenRevision.current !== revision) {

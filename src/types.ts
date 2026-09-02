@@ -394,6 +394,8 @@ export type ConversationQuery = {
   to?: string | null;
 };
 
+export type ConversationMatchField = "title" | "body";
+
 export type ConversationSessionRow = {
   source: string;
   session_id: string;
@@ -410,6 +412,11 @@ export type ConversationSessionRow = {
   total_tokens: number;
   cost: number | null;
   unpriced: boolean;
+  event_index_ready?: boolean;
+  match_field?: ConversationMatchField | null;
+  match_snippet?: string | null;
+  match_event_id?: string | null;
+  match_sequence?: number | null;
 };
 
 export type ConversationPage = {
@@ -533,7 +540,8 @@ export type ConversationEventAnchor =
   | { type: "first" }
   | { type: "last" }
   | { type: "before"; sequence: number }
-  | { type: "after"; sequence: number };
+  | { type: "after"; sequence: number }
+  | { type: "around"; sequence: number };
 
 export type ConversationEventPage = {
   events: ConversationEvent[];
@@ -559,6 +567,7 @@ export type ConversationDetailStateDto = {
 export type ConversationIndexProgressDto = {
   indexed: number;
   total: number;
+  index_bytes?: number;
 };
 
 export type CostSource = "native" | "user" | "snapshot" | "none";

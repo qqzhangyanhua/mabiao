@@ -44,6 +44,10 @@ export function firstPageAnchor(): ConversationEventAnchor {
   return { type: "first" };
 }
 
+export function aroundPageAnchor(sequence: number): ConversationEventAnchor {
+  return { type: "around", sequence };
+}
+
 export function nextEarlierAnchor<T extends { sequence: number }>(
   window: ConversationEventWindow<T>,
 ): ConversationEventAnchor | null {

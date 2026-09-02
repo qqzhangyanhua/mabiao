@@ -747,6 +747,13 @@ pub struct ConversationQuery {
     pub to: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationMatchField {
+    Title,
+    Body,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ConversationSessionRow {
     pub source: String,
@@ -768,6 +775,17 @@ pub struct ConversationSessionRow {
     pub cost: Option<f64>,
     #[serde(default)]
     pub unpriced: bool,
+    /// 事件索引已发布当前适配器版本的代次。目录搜索在 false 时只保证标题可搜。
+    #[serde(default)]
+    pub event_index_ready: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_field: Option<ConversationMatchField>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_snippet: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_event_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_sequence: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -960,8 +978,16 @@ pub struct ConversationAgentRelations {
 pub enum ConversationEventAnchor {
     First,
     Last,
-    Before { sequence: u32 },
-    After { sequence: u32 },
+    Before {
+        sequence: u32,
+    },
+    After {
+        sequence: u32,
+    },
+    /// 从该序号起向后取一页，用于正文搜索命中后落到第一条匹配事件。
+    Around {
+        sequence: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1001,10 +1027,13 @@ pub struct ConversationDetailStateDto {
 }
 
 /// 对话事件索引补建进度：已就绪会话数 / 应索引会话数。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationIndexProgressDto {
     pub indexed: u32,
     pub total: u32,
+    /// 事件表 + FTS 占用；dbstat 不可用时回落为正文字节数，补建中可能为 0。
+    #[serde(default)]
+    pub index_bytes: u64,
 }
 
 /// 工作时间线的补充会话区间：有起止时间、没有（或不完整）消耗记录。

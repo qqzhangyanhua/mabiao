@@ -99,6 +99,18 @@ fn conversation_sessions_has_generation(conn: &Connection) -> Result<bool, Strin
 
 /// 事件索引是派生缓存，且含完整对话正文。备份只留目录元数据，恢复后走回退路径再渐进补建。
 fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS conversation_events_ai;
+        DROP TRIGGER IF EXISTS conversation_events_ad;
+        DROP TRIGGER IF EXISTS conversation_events_au;
+        "#,
+    )
+    .map_err(|e| e.to_string())?;
+    if table_exists(conn, "conversation_events_fts")? {
+        conn.execute("DROP TABLE conversation_events_fts", [])
+            .map_err(|e| e.to_string())?;
+    }
     if table_exists(conn, "conversation_events")? {
         conn.execute("DROP TABLE conversation_events", [])
             .map_err(|e| e.to_string())?;
