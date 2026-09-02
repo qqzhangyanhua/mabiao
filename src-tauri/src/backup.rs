@@ -8,6 +8,7 @@ use rusqlite::{backup::Backup, Connection};
 use serde::{Deserialize, Serialize};
 
 use crate::official_quota::custom::store::CONFIG_NAME as CUSTOM_QUOTA_NAME;
+use crate::scan_paths::CONFIG_NAME as SCAN_PATHS_NAME;
 
 pub const MANIFEST_NAME: &str = "manifest.json";
 pub const DB_NAME: &str = "usage.sqlite";
@@ -40,7 +41,7 @@ pub struct BackupManifest {
 }
 
 fn default_note() -> String {
-    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken，也不含对话事件正文和自定义提供商密钥；恢复会覆盖当前缓存、单价/预算配置与自定义提供商配置（不含密钥）。"
+    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken，也不含对话事件正文和自定义提供商密钥；恢复会覆盖当前缓存、单价/预算/扫描路径配置与自定义提供商配置（不含密钥）。"
         .to_string()
 }
 
@@ -168,6 +169,12 @@ pub fn backup_to(
         &mut files,
         CUSTOM_QUOTA_NAME,
     )?;
+    copy_if_exists(
+        &sibling(&paths.budget_path, SCAN_PATHS_NAME),
+        &dest_dir.join(SCAN_PATHS_NAME),
+        &mut files,
+        SCAN_PATHS_NAME,
+    )?;
 
     let manifest = BackupManifest {
         created_at: Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
@@ -289,6 +296,13 @@ fn stage_restore(
         src_dir,
         CUSTOM_QUOTA_NAME,
         &sibling(&paths.official_quota_path, CUSTOM_QUOTA_NAME),
+        staging,
+        &mut planned,
+    )?;
+    stage_optional(
+        src_dir,
+        SCAN_PATHS_NAME,
+        &sibling(&paths.budget_path, SCAN_PATHS_NAME),
         staging,
         &mut planned,
     )?;

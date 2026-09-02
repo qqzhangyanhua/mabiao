@@ -21,6 +21,7 @@ pub mod paths;
 pub mod query;
 pub mod rollup_source;
 pub mod rollup_split;
+pub mod scan_paths;
 pub mod store;
 pub mod tray;
 pub mod tray_popup;
@@ -28,6 +29,7 @@ pub mod user_files;
 pub mod vscode_state;
 pub mod work_timeline;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -402,6 +404,34 @@ async fn get_budget_status(app: tauri::AppHandle) -> Result<BudgetStatusDto, Str
 #[tauri::command]
 fn save_budget(state: tauri::State<AppState>, config: BudgetConfig) -> Result<(), String> {
     budget::save_config(&state.budget_path, &config)
+}
+
+#[tauri::command]
+fn get_scan_path_config() -> scan_paths::ScanPathPanelDto {
+    scan_paths::panel(&scan_paths::config_path(), &ingest::default_home())
+}
+
+#[tauri::command]
+fn save_scan_path_config(
+    overrides: BTreeMap<String, Vec<String>>,
+) -> Result<scan_paths::ScanPathPanelDto, String> {
+    let home = ingest::default_home();
+    let path = scan_paths::config_path();
+    let config = scan_paths::normalize(overrides, &home)?;
+    scan_paths::save(&path, &config)?;
+    Ok(scan_paths::panel(&path, &home))
+}
+
+#[tauri::command]
+async fn pick_directory(title: String) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(rfd::FileDialog::new()
+            .set_title(&title)
+            .pick_folder()
+            .map(|path| path.to_string_lossy().into_owned()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 当前生效的 LiteLLM 价目快照元信息（内置或已刷新）。
@@ -1452,6 +1482,9 @@ pub fn run() {
             refresh_price_snapshot,
             reset_price_snapshot,
             get_source_diagnostics,
+            get_scan_path_config,
+            save_scan_path_config,
+            pick_directory,
             rebuild_cache,
             purge_archived_records,
             get_code_volume,

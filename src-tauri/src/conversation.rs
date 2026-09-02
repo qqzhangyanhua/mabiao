@@ -1839,7 +1839,7 @@ pub(crate) fn catalog_roots(
 }
 
 fn conversation_source_roots(home: &Path, source: Source) -> Vec<PathBuf> {
-    catalog_roots(&ingest::env_overrides(), home, source)
+    catalog_roots(&ingest::path_overrides(), home, source)
 }
 
 pub fn detail_state(

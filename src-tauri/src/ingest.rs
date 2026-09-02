@@ -40,8 +40,31 @@ pub(crate) fn env_overrides() -> PathOverrides {
         .collect()
 }
 
+/// 设置页覆盖叠在环境变量上：同一来源以设置页为准，未填写的来源仍走环境变量。
+pub(crate) fn merge_path_overrides(mut env: PathOverrides, file: PathOverrides) -> PathOverrides {
+    for (key, paths) in file {
+        env.insert(key, paths);
+    }
+    env
+}
+
+/// 生产环境读取设置页文件 + 环境变量。测试里不碰真实 `scan_paths.json`，只读进程环境变量。
+pub(crate) fn path_overrides() -> PathOverrides {
+    #[cfg(test)]
+    {
+        env_overrides()
+    }
+    #[cfg(not(test))]
+    {
+        merge_path_overrides(
+            env_overrides(),
+            crate::scan_paths::load_overrides(&crate::scan_paths::config_path()),
+        )
+    }
+}
+
 pub(crate) fn source_scan_dirs(home: &Path, source: Source) -> Vec<PathBuf> {
-    source_scan_dirs_with(&env_overrides(), home, source)
+    source_scan_dirs_with(&path_overrides(), home, source)
 }
 
 fn env_override(var: &str) -> Option<Vec<PathBuf>> {
@@ -55,7 +78,7 @@ fn env_override(var: &str) -> Option<Vec<PathBuf>> {
     (!paths.is_empty()).then_some(paths)
 }
 
-/// 解析某个 Source 的根目录列表：环境变量整体覆盖优先，否则退回默认的单个 home 相对路径；
+/// 解析某个 Source 的根目录列表：覆盖表（设置页优先于环境变量）整体替换默认的 home 相对路径；
 /// 两种情况都按同样的规则拼接叶子子路径（`leaf` 为空表示根目录本身就是扫描目标）。
 pub(crate) fn resolve_dirs(
     overrides: &PathOverrides,
@@ -104,7 +127,7 @@ pub fn ingest_all_timed(
     conn: &Connection,
     home: &Path,
 ) -> Result<(IngestReport, IngestPhaseTimings), String> {
-    ingest_all_with_overrides_timed(conn, home, &env_overrides())
+    ingest_all_with_overrides_timed(conn, home, &path_overrides())
 }
 
 /// 与 ingest 使用同一套 cache fingerprint（主文件 metadata + sidecar）。
@@ -140,7 +163,7 @@ pub fn load_scan_cache(conn: &Connection) -> Result<ScanCache, String> {
 }
 
 pub fn scan_is_stale_from_cache(cache: &ScanCache, home: &Path) -> Result<bool, String> {
-    scan_is_stale_with_overrides(cache, home, &env_overrides())
+    scan_is_stale_with_overrides(cache, home, &path_overrides())
 }
 
 /// 供测试注入与摄取相同的路径覆盖表，避免心跳判定偷偷读进程环境变量。
@@ -303,7 +326,7 @@ fn sync_rollup(conn: &Connection, report: &IngestReport) -> Result<(), String> {
 }
 
 pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDiagnostic>, String> {
-    let overrides = env_overrides();
+    let overrides = path_overrides();
     Source::ALL
         .iter()
         .map(|source| {
@@ -335,7 +358,7 @@ pub fn rebuild_cache(
     home: &Path,
     source: Option<Source>,
 ) -> Result<IngestReport, String> {
-    let overrides = env_overrides();
+    let overrides = path_overrides();
     let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut removed_unknown = 0;
     if let Some(selected) = source {

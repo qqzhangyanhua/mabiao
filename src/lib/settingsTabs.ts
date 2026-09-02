@@ -7,7 +7,12 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   {
     id: "sources",
     label: "数据",
-    anchors: ["settings-diagnostics", "settings-conversation-index", "settings-backup"],
+    anchors: [
+      "settings-scan-paths",
+      "settings-diagnostics",
+      "settings-conversation-index",
+      "settings-backup",
+    ],
   },
   {
     id: "quota",

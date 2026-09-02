@@ -11,6 +11,7 @@ describe("tabFromHash", () => {
   });
 
   it("keeps existing panel anchors on their grouped tab", () => {
+    expect(tabFromHash("#settings-scan-paths")).toBe("sources");
     expect(tabFromHash("#settings-diagnostics")).toBe("sources");
     expect(tabFromHash("#settings-conversation-index")).toBe("sources");
     expect(tabFromHash("#settings-backup")).toBe("sources");
@@ -43,6 +44,7 @@ describe("hashForTab", () => {
 
   it("writes the first panel anchor for each tab", () => {
     expect(hashForTab("general")).toBe("settings-appearance");
+    expect(hashForTab("sources")).toBe("settings-scan-paths");
     expect(hashForTab("quota")).toBe("settings-official-quota");
     expect(hashForTab("pricing")).toBe("settings-budget");
   });

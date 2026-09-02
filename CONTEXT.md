@@ -84,4 +84,4 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
 
-以上是各 Source 的默认扫描路径；每个 Source 都可以用环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。
+以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。

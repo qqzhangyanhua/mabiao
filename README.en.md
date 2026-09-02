@@ -18,7 +18,7 @@ A local desktop app that scans AI coding CLI session files on your machine, norm
 
 ## Supported sources
 
-Mabiao reads local directories. It does not replace vendor dashboards. Scan roots can be overridden with environment variables; see [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md).
+Mabiao reads local directories. It does not replace vendor dashboards. Scan roots can be set as absolute paths in Settings, or overridden with environment variables (Settings wins); see [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md).
 
 | Source | Local tokens | Local cost | Notes |
 |------|:---:|:---:|------|

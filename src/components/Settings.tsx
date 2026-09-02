@@ -22,6 +22,7 @@ import { OfficialQuotaSettingsPanel } from "./OfficialQuotaSettingsPanel";
 import { OverviewLayoutPanel } from "./OverviewLayoutPanel";
 import { PriceConfigPanel } from "./PriceConfigPanel";
 import { PricePresetPanel } from "./PricePresetPanel";
+import { ScanPathPanel } from "./ScanPathPanel";
 import { SourceDiagnosticsPanel } from "./SourceDiagnosticsPanel";
 import { UnpricedDiagnosisPanel } from "./UnpricedDiagnosisPanel";
 import type { SettingsTabIcon } from "./type";
@@ -192,6 +193,7 @@ export function Settings({
         ) : null}
         {tab === "sources" ? (
           <>
+            <ScanPathPanel operationBusy={operationBusy} onSaved={onSnapshotRefreshed} />
             <SourceDiagnosticsPanel
               diagnostics={diagnostics}
               ingestReport={ingestReport}

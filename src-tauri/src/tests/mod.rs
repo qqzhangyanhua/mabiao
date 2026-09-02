@@ -46,6 +46,7 @@ mod read_pool;
 mod rollup;
 mod rollup_source;
 mod rollup_split;
+mod scan_paths;
 mod store;
 mod tray_popup;
 mod work_timeline;

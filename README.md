@@ -18,7 +18,7 @@
 
 ## 支持的来源
 
-码表扫的是本机目录，不代替各家官方仪表盘。路径可用环境变量覆盖，详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。
+码表扫的是本机目录，不代替各家官方仪表盘。路径可在设置页填写绝对路径，也可用环境变量覆盖（设置页优先），详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。
 
 | 来源 | 本机 Token | 本机费用 | 说明 |
 |------|:---:|:---:|------|
