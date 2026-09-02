@@ -1,0 +1,24 @@
+src-tauri/src/tests/adapters.rs
+  s_99ca771d766051::t_a8fb8d9d154349 1003-1044
+  s_99ca771d766051::t_64d0e132be9911 1002
+src-tauri/src/adapters/hermes.rs
+  s_99ca771d766051::t_1e25c5fc3c8233 1,32-35,37-49,52-66
+  s_99ca771d766051::t_63b6f609fb6518 67
+  s_99ca771d766051::t_9c44f1eea9b5b3 135-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "ea18bf2a8e2207556211b303cc9781d16d7e34fc",
+  "prompts": {},
+  "sessions": {
+    "s_99ca771d766051": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06235-98b1-7cf2-adb5-7ffb47e79334",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
