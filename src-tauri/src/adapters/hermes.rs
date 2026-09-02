@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use rusqlite::OpenFlags;
@@ -28,28 +29,42 @@ pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
     let source_db = open_readonly(path)?;
-    let mut stmt = source_db
-        .prepare(
-            r#"
+    let usage_cols = table_columns(&source_db, "session_model_usage")?;
+    let session_cols = table_columns(&source_db, "sessions")?;
+    let sql = format!(
+        "
             SELECT
-                u.session_id,
-                COALESCE(u.model, ''),
-                COALESCE(u.billing_provider, ''),
-                COALESCE(u.input_tokens, 0),
-                COALESCE(u.output_tokens, 0),
-                COALESCE(u.cache_read_tokens, 0),
-                COALESCE(u.cache_write_tokens, 0),
-                COALESCE(u.reasoning_tokens, 0),
-                COALESCE(u.actual_cost_usd, 0),
-                u.cost_source,
-                s.started_at,
-                COALESCE(s.cwd, ''),
-                COALESCE(s.git_repo_root, '')
+                {session_id},
+                {model},
+                {provider},
+                {input_tokens},
+                {output_tokens},
+                {cache_read_tokens},
+                {cache_write_tokens},
+                {reasoning_tokens},
+                {actual_cost_usd},
+                {cost_source},
+                {started_at},
+                {cwd},
+                {git_repo_root}
             FROM session_model_usage AS u
             JOIN sessions AS s ON s.id = u.session_id
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
+            ",
+        session_id = sql_coalesce(&usage_cols, "u", "session_id", "''"),
+        model = sql_coalesce(&usage_cols, "u", "model", "''"),
+        provider = sql_coalesce(&usage_cols, "u", "billing_provider", "''"),
+        input_tokens = sql_coalesce(&usage_cols, "u", "input_tokens", "0"),
+        output_tokens = sql_coalesce(&usage_cols, "u", "output_tokens", "0"),
+        cache_read_tokens = sql_coalesce(&usage_cols, "u", "cache_read_tokens", "0"),
+        cache_write_tokens = sql_coalesce(&usage_cols, "u", "cache_write_tokens", "0"),
+        reasoning_tokens = sql_coalesce(&usage_cols, "u", "reasoning_tokens", "0"),
+        actual_cost_usd = sql_coalesce(&usage_cols, "u", "actual_cost_usd", "0"),
+        cost_source = sql_optional(&usage_cols, "u", "cost_source"),
+        started_at = sql_optional(&session_cols, "s", "started_at"),
+        cwd = sql_coalesce(&session_cols, "s", "cwd", "''"),
+        git_repo_root = sql_coalesce(&session_cols, "s", "git_repo_root", "''"),
+    );
+    let mut stmt = source_db.prepare(&sql).map_err(|error| error.to_string())?;
     let source_file = path.to_string_lossy().into_owned();
     let rows = stmt
         .query_map([], |row| {
@@ -114,6 +129,36 @@ impl ParsedUsage {
             total_tokens: 0,
             native_cost: native_cost(self.cost_source.as_deref(), self.actual_cost_usd),
         })
+    }
+}
+
+fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<BTreeSet<String>, String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?;
+    let mut names = BTreeSet::new();
+    for name in rows {
+        names.insert(name.map_err(|error| error.to_string())?);
+    }
+    Ok(names)
+}
+
+fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {
+    if columns.contains(name) {
+        format!("COALESCE({alias}.{name}, {fallback})")
+    } else {
+        fallback.to_string()
+    }
+}
+
+fn sql_optional(columns: &BTreeSet<String>, alias: &str, name: &str) -> String {
+    if columns.contains(name) {
+        format!("{alias}.{name}")
+    } else {
+        "NULL".to_string()
     }
 }
 

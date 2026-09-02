@@ -1000,6 +1000,49 @@ fn hermes_adapter_falls_back_to_git_repo_root_when_cwd_empty() {
 }
 
 #[test]
+fn hermes_adapter_defaults_missing_columns_instead_of_failing() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(".hermes/state.db");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        r#"
+        CREATE TABLE sessions (
+            id TEXT PRIMARY KEY,
+            started_at REAL NOT NULL
+        );
+        CREATE TABLE session_model_usage (
+            session_id TEXT NOT NULL,
+            model TEXT NOT NULL,
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (session_id, model)
+        );
+        INSERT INTO sessions (id, started_at) VALUES ('sess-old', 1775376000.0);
+        INSERT INTO session_model_usage (session_id, model, input_tokens, output_tokens)
+        VALUES ('sess-old', 'gpt-5.6', 40, 8);
+        "#,
+    )
+    .unwrap();
+    drop(db);
+
+    let records = hermes::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].session_id, "sess-old");
+    assert_eq!(records[0].model, "gpt-5.6");
+    assert_eq!(records[0].occurred_at, "2026-04-05T08:00:00+00:00");
+    assert_eq!(records[0].input_tokens, 40);
+    assert_eq!(records[0].output_tokens, 8);
+    assert_eq!(records[0].cache_read_tokens, 0);
+    assert_eq!(records[0].cache_creation_tokens, 0);
+    assert_eq!(records[0].reasoning_tokens, 0);
+    assert_eq!(records[0].total_tokens, 48);
+    assert_eq!(records[0].provider, "");
+    assert_eq!(records[0].project, "");
+    assert_eq!(records[0].native_cost, None);
+}
+
+#[test]
 fn hermes_adapter_returns_empty_when_state_db_missing() {
     let dir = tempfile::tempdir().unwrap();
     let found = hermes::discover(&[dir.path().to_path_buf()]).unwrap();
