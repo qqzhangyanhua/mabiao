@@ -1,0 +1,78 @@
+src/lib/costBreakdown.test.ts
+  s_e95730614ed89c::t_e4b8874f3457fc 2
+src/lib/useConversationCatalog.ts
+  s_e95730614ed89c::t_69b18cb29d8999 3,109
+  s_e95730614ed89c::t_d2204094df31d9 98
+  s_e95730614ed89c::t_ffc752e864a3ca 1-2
+  s_e95730614ed89c::t_4c7e12ac8da04d 4-6,95-97
+  s_e95730614ed89c::t_5a5a34bd88bad8 99-101,106-108
+  s_e95730614ed89c::t_b7e662daf698e5 110-112
+src/lib/format.test.ts
+  s_e95730614ed89c::t_d36d93b5e6d79f 24,76-80
+  s_e95730614ed89c::t_eac80b6e879952 81-83
+src-tauri/src/conversation/grok.rs
+  s_e95730614ed89c::t_07e6a90c35ab5b 176-177
+  s_e95730614ed89c::t_0dd49fd95bf973 178
+src-tauri/src/tests/conversation.rs
+  s_e95730614ed89c::t_9c36f9536e0799 1984-2003
+src/lib/useConversationTimelineFollow.ts
+  s_e95730614ed89c::t_1e087f7654af47 2-19
+  s_e95730614ed89c::t_c4bcee1f710d23 199-200
+  s_e95730614ed89c::t_f686b7d7412310 1
+  s_e95730614ed89c::t_d5dbde26033b42 20-22,196-198
+  s_e95730614ed89c::t_5f78b78a1283a0 201-203
+src/components/Settings.tsx
+  s_e95730614ed89c::t_663122447ce098 51,79,258
+src/hooks/useUsageData.ts
+  s_e95730614ed89c::t_4c13d5878699d8 230,417
+src/hooks/usage/useCursorAccountRefresh.ts
+  s_e95730614ed89c::t_31d0ffc2c95043 11,55,142-145,171-173,182-184,188
+src/components/ConversationDetailView.tsx
+  s_e95730614ed89c::t_ebfc6bdee8cc1e 90-101
+  s_e95730614ed89c::t_ec4aafc96c22d1 87-89
+  s_e95730614ed89c::t_756ccc67575baf 102-104
+src-tauri/src/conversation/toolbox.rs
+  s_e95730614ed89c::t_f94b4da1a9115b 889-892
+src-tauri/src/conversation.rs
+  s_e95730614ed89c::t_1c4cca8b4b54da 78,1256-1258,1260-1263,1271-1272
+  s_e95730614ed89c::t_5cebdac96e064c 1273-1274
+src/lib/costBreakdown.ts
+  s_e95730614ed89c::t_db7e5ba4efb817 2
+src-tauri/src/conversation/claude_test.rs
+  s_e95730614ed89c::t_4165a0a636f65e 71-79
+  s_e95730614ed89c::t_8bb18e8aa9d8f5 68-70,80-83
+src/lib/useConversationDetailLoader.ts
+  s_e95730614ed89c::t_215659b532b385 54-59,145,199
+  s_e95730614ed89c::t_e325aec3eaa32a 1-53,60-144,146-198,200-340
+src/components/CursorAccountSettingsPanel.tsx
+  s_e95730614ed89c::t_0843880d02785d 31,35,121,123
+src-tauri/src/conversation/grok_test.rs
+  s_e95730614ed89c::t_b70fbba6d64c37 227-285
+src/components/CursorAccountUsagePanel.tsx
+  s_e95730614ed89c::t_b10280ada68c80 38,44,88,129,131
+src/App.tsx
+  s_e95730614ed89c::t_c8c1d1eefb2a04 196,266
+src/lib/format.ts
+  s_e95730614ed89c::t_3e12cde75e69bc 43-50
+src/components/Conversations.tsx
+  s_e95730614ed89c::t_426fb2846bbd8a 41-57,75,131,156,173-175
+  s_e95730614ed89c::t_d4b6225896d2ac 76-82,127-128,161-162,169,221,227,229-256
+  s_e95730614ed89c::t_bc9edd97cc4426 72-74
+  s_e95730614ed89c::t_8281fec1a8c201 257-259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "36eb8de90d180e3aeae70ed04021fd92a6cb5866",
+  "prompts": {},
+  "sessions": {
+    "s_e95730614ed89c": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0612a-489e-7b71-bbbf-6cf4516c7302",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
