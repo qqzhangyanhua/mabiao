@@ -40,12 +40,14 @@ function segmentLabel(segment: WorkSegment): string {
 }
 
 export function WorkTimeline({
+  initialDay,
   onSessionClick,
 }: {
+  initialDay?: string | null;
   onSessionClick?: (session: { id: string; source: string }) => void;
 }) {
   const [day, setDay] = useState(
-    () => parseWorktimeDay(window.location.hash) ?? toDateValue(new Date()),
+    () => initialDay ?? parseWorktimeDay(window.location.hash) ?? toDateValue(new Date()),
   );
   const [data, setData] = useState<WorkTimelineDto | null>(null);
   const [loading, setLoading] = useState(true);

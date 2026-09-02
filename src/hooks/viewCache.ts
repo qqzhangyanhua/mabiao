@@ -168,6 +168,11 @@ export function parseWorktimeDay(raw: string): string | null {
   return parseDateValue(day) ? day : null;
 }
 
+/** 热力图格子点击：合法日历日才写成工作时间线 hash。 */
+export function worktimeHashForDay(day: string): string | null {
+  return parseDateValue(day) ? hashForWorktime(day) : null;
+}
+
 export function hashBelongsToView(raw: string, view: View): boolean {
   const hash = stripLocationHash(raw);
   if (view === "settings") {

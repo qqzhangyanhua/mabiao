@@ -86,6 +86,7 @@ export const Overview = memo(function Overview({
   onOpenCursor,
   onProjectClick,
   onSessionClick,
+  onOpenWorktime,
   onRangeSelect,
   onRangeBack,
   onModelClick,
@@ -117,6 +118,7 @@ export const Overview = memo(function Overview({
   onOpenCursor: () => void;
   onProjectClick?: (project: string) => void;
   onSessionClick?: (session: { id: string; source: string }) => void;
+  onOpenWorktime?: (day: string) => void;
   onRangeSelect?: (from: string, to: string) => void;
   onRangeBack?: () => void;
   onModelClick?: (model: string) => void;
@@ -337,13 +339,13 @@ export const Overview = memo(function Overview({
           extra={
             <span className="muted">
               {heatmap.some((point) => point.total_tokens > 0)
-                ? "近 53 周 · 按日 Token"
+                ? "近 53 周 · 按日 Token · 点击打开当天时间线"
                 : "近 53 周暂无 Token"}
             </span>
           }
           collapsedSummary={`${heatmapWeeks} 周热力图`}
         >
-          <ActivityHeatmap points={heatmap} range={heatmapRange} onDayClick={onRangeSelect} />
+          <ActivityHeatmap points={heatmap} range={heatmapRange} onDayClick={onOpenWorktime} />
         </CollapsibleSection>
       ) : null}
 

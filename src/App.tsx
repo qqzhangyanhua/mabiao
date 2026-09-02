@@ -8,6 +8,7 @@ import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
+import { parseWorktimeDay } from "./hooks/viewCache";
 import { clearDimensionFilters, withModelFilter, withProviderFilter } from "./lib/filterChips";
 import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
 import {
@@ -132,6 +133,7 @@ export default function App() {
                     onProjectClick={(project) =>
                       data.applyFilter({ ...data.filter, projects: [project] })
                     }
+                    onOpenWorktime={data.openWorktime}
                     onRangeSelect={data.drillRange}
                     onRangeBack={data.canGoBack ? data.popRange : undefined}
                     onModelClick={(model) => data.applyFilter(withModelFilter(data.filter, model))}
@@ -216,6 +218,7 @@ export default function App() {
                 ) : null}
                 {view === "worktime" ? (
                   <LazyWorkTimeline
+                    initialDay={parseWorktimeDay(window.location.hash)}
                     onSessionClick={(session) => data.openConversations(session)}
                   />
                 ) : null}

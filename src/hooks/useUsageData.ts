@@ -38,6 +38,7 @@ import {
   syncSharedFilters,
   viewFromHash,
   viewsWarmedBy,
+  worktimeHashForDay,
   type ViewScope,
 } from "./viewCache";
 import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
@@ -296,6 +297,15 @@ export function useUsageData() {
     );
   }, []);
 
+  const openWorktime = useCallback((day: string) => {
+    const hash = worktimeHashForDay(day);
+    if (!hash) {
+      return;
+    }
+    replaceLocationHash(hash);
+    setView("worktime");
+  }, []);
+
   const openUnpricedDiagnosis = useCallback(() => {
     setView("settings");
     replaceLocationHash(SETTINGS_UNPRICED_ANCHOR);
@@ -426,6 +436,7 @@ export function useUsageData() {
     canGoBack,
     applyFilter,
     openConversations,
+    openWorktime,
     openUnpricedDiagnosis,
     clearConversationFocus,
     runIngest: runIngestWithCacheClear,

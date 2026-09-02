@@ -18,6 +18,7 @@ import {
   views,
   viewsInvalidatedBy,
   viewsWarmedBy,
+  worktimeHashForDay,
 } from "./viewCache";
 
 const filter: Filter = {
@@ -110,6 +111,12 @@ describe("conversation and worktime hashes", () => {
     expect(parseWorktimeDay("#worktime/2026-08-22")).toBe("2026-08-22");
     expect(parseWorktimeDay("#worktime")).toBeNull();
     expect(parseWorktimeDay("#worktime/2026-13-01")).toBeNull();
+  });
+
+  it("maps a heatmap day to a worktime hash and rejects invalid dates", () => {
+    expect(worktimeHashForDay("2026-08-22")).toBe("worktime/2026-08-22");
+    expect(worktimeHashForDay("2026-13-01")).toBeNull();
+    expect(worktimeHashForDay("nope")).toBeNull();
   });
 
   it("treats nested hashes as belonging to the current view", () => {

@@ -21,7 +21,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 }: {
   points: SeriesPoint[];
   range: { from: string; to: string };
-  onDayClick?: (from: string, to: string) => void;
+  onDayClick?: (day: string) => void;
 }) {
   const weeks = useMemo(() => heatmapGrid(range.from, range.to), [range.from, range.to]);
   const months = useMemo(() => heatmapMonthLabels(weeks), [weeks]);
@@ -87,9 +87,9 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
                   key={cell.date}
                   type="button"
                   className={className}
-                  aria-label={`${cell.date} · ${formatCompact(tokens)} Token`}
+                  aria-label={`${cell.date} · ${formatCompact(tokens)} Token · 打开工作时间线`}
                   onMouseEnter={(event) => showTip(event, cell.date)}
-                  onClick={() => onDayClick?.(cell.date, cell.date)}
+                  onClick={() => onDayClick?.(cell.date)}
                 />
               );
             }),
