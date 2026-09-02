@@ -987,6 +987,22 @@ button.kpi {
   line-height: 1.35;
 }
 
+.kpi-detail {
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.kpi-detail p {
+  margin: 0;
+}
+
+.kpi-detail p + p {
+  margin-top: 2px;
+}
+
 .kpi-action {
   display: inline-flex;
   align-items: center;
@@ -2323,6 +2339,10 @@ button.heat-cell {
   min-width: 0;
 }
 
+.legend-col.is-dense {
+  gap: 8px;
+}
+
 .legend-row {
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr) auto;
@@ -2887,6 +2907,7 @@ tr.session-detail-row td {
   font-style: normal;
   color: var(--muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .stat-block small {

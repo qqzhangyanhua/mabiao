@@ -17,9 +17,9 @@ use crate::cursor_account;
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
     CostSource, EfficiencyMetrics, Filter, FilterOptions, InstructionSourceUsage,
-    InstructionUsageSummary, NamedAmount, OverviewDto, PriceTable, ProjectApplicationRow,
-    SeriesPoint, SessionPage, SessionQuery, SessionRow, Source, TurnRow, UnpricedGroupDto,
-    UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
+    InstructionUsageSummary, NamedAmount, OverviewCostBreakdown, OverviewCostSources, OverviewDto,
+    PriceTable, ProjectApplicationRow, SeriesPoint, SessionPage, SessionQuery, SessionRow, Source,
+    TurnRow, UnpricedGroupDto, UsageCallPage, UsageCallRow, WorkSessionSpan, WorkTimelineDto,
 };
 use crate::rollup_source::{dimension_clauses, rollup_source};
 use crate::rollup_split::rollup_plan;
@@ -246,6 +246,48 @@ const ROLLUP_PRICE_JOINS: &str = "
     LEFT JOIN price_rows pe ON pe.model = d.model AND pe.provider = lower(d.provider)
     LEFT JOIN price_rows pf ON pf.model = d.model AND pf.provider IS NULL";
 
+/// 预聚合表上的费用来源，与逐行 `COST_SOURCE_EXPR` 同口径。
+const ROLLUP_COST_SOURCE_EXPR: &str = "
+    CASE
+        WHEN d.has_native = 1 THEN 'native'
+        WHEN pe.model IS NOT NULL THEN COALESCE(pe.origin, 'user')
+        WHEN pf.model IS NOT NULL THEN COALESCE(pf.origin, 'user')
+        ELSE 'none'
+    END";
+
+/// 用户单价 / 快照按口径拆出的费用。native 整笔不进这四档。
+const ROLLUP_COST_INPUT_EXPR: &str = "
+    CASE
+        WHEN d.has_native = 1 THEN NULL
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
+            COALESCE(pe.input, pf.input) * d.input_tokens
+        ELSE NULL
+    END";
+
+const ROLLUP_COST_OUTPUT_EXPR: &str = "
+    CASE
+        WHEN d.has_native = 1 THEN NULL
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
+            COALESCE(pe.output, pf.output) * d.output_tokens
+        ELSE NULL
+    END";
+
+const ROLLUP_COST_CACHE_READ_EXPR: &str = "
+    CASE
+        WHEN d.has_native = 1 THEN NULL
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
+            COALESCE(pe.cache_read, pf.cache_read) * d.cache_read_tokens
+        ELSE NULL
+    END";
+
+const ROLLUP_COST_CACHE_CREATION_EXPR: &str = "
+    CASE
+        WHEN d.has_native = 1 THEN NULL
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
+            COALESCE(pe.cache_creation, pf.cache_creation) * d.cache_creation_tokens
+        ELSE NULL
+    END";
+
 pub fn overview(
     conn: &Connection,
     filter: &Filter,
@@ -271,12 +313,20 @@ pub fn overview(
             COALESCE(SUM(d.reasoning_tokens), 0),
             COUNT(DISTINCT d.source || char(31) || d.session_id),
             SUM({ROLLUP_COST_EXPR}),
-            COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0)
+            COALESCE(SUM({ROLLUP_UNPRICED_EXPR}), 0),
+            SUM({ROLLUP_COST_INPUT_EXPR}),
+            SUM({ROLLUP_COST_OUTPUT_EXPR}),
+            SUM({ROLLUP_COST_CACHE_READ_EXPR}),
+            SUM({ROLLUP_COST_CACHE_CREATION_EXPR}),
+            SUM(CASE WHEN ({ROLLUP_COST_SOURCE_EXPR}) = 'native' THEN ({ROLLUP_COST_EXPR}) END),
+            SUM(CASE WHEN ({ROLLUP_COST_SOURCE_EXPR}) = 'user' THEN ({ROLLUP_COST_EXPR}) END),
+            SUM(CASE WHEN ({ROLLUP_COST_SOURCE_EXPR}) = 'snapshot' THEN ({ROLLUP_COST_EXPR}) END)
         FROM ({}) d
         {ROLLUP_PRICE_JOINS}",
         inner.sql,
     );
     conn.query_row(&sql, params_from_iter(inner.params.iter()), |row| {
+        let unpriced_records: i64 = row.get(8)?;
         Ok(OverviewDto {
             total_tokens: row.get(0)?,
             input_tokens: row.get(1)?,
@@ -286,7 +336,19 @@ pub fn overview(
             reasoning_tokens: row.get(5)?,
             session_count: row.get(6)?,
             cost: row.get(7)?,
-            unpriced: row.get::<_, i64>(8)? > 0,
+            unpriced: unpriced_records > 0,
+            cost_breakdown: OverviewCostBreakdown {
+                input: row.get(9)?,
+                output: row.get(10)?,
+                cache_read: row.get(11)?,
+                cache_creation: row.get(12)?,
+            },
+            cost_sources: OverviewCostSources {
+                native: row.get(13)?,
+                user: row.get(14)?,
+                snapshot: row.get(15)?,
+                unpriced_records,
+            },
         })
     })
     .map_err(|e| e.to_string())

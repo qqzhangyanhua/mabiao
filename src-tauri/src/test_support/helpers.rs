@@ -280,6 +280,27 @@ pub fn assert_opt_f64_eq(a: Option<f64>, b: Option<f64>) {
     }
 }
 
+pub fn assert_overview_cost_split_eq(
+    sql: &crate::domain::OverviewDto,
+    mem: &crate::domain::OverviewDto,
+    label: &str,
+) {
+    assert_opt_f64_eq(sql.cost_breakdown.input, mem.cost_breakdown.input);
+    assert_opt_f64_eq(sql.cost_breakdown.output, mem.cost_breakdown.output);
+    assert_opt_f64_eq(sql.cost_breakdown.cache_read, mem.cost_breakdown.cache_read);
+    assert_opt_f64_eq(
+        sql.cost_breakdown.cache_creation,
+        mem.cost_breakdown.cache_creation,
+    );
+    assert_opt_f64_eq(sql.cost_sources.native, mem.cost_sources.native);
+    assert_opt_f64_eq(sql.cost_sources.user, mem.cost_sources.user);
+    assert_opt_f64_eq(sql.cost_sources.snapshot, mem.cost_sources.snapshot);
+    assert_eq!(
+        sql.cost_sources.unpriced_records, mem.cost_sources.unpriced_records,
+        "{label} unpriced_records"
+    );
+}
+
 pub fn diverse_prices() -> crate::domain::PriceTable {
     use crate::domain::{PriceEntry, PriceOrigin, PriceTable};
     PriceTable {

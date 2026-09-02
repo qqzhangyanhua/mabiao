@@ -32,6 +32,7 @@ import {
   formatPercent,
   formatUsd,
 } from "../lib/format";
+import { formatCostBucketLine, formatCostSourceLine } from "../lib/costBreakdown";
 import { costEstimateKpiLink } from "../lib/unpricedKpi";
 import type {
   BillingWindowsDto,
@@ -62,6 +63,18 @@ const emptyOverview: OverviewDto = {
   session_count: 0,
   cost: null,
   unpriced: false,
+  cost_breakdown: {
+    input: null,
+    output: null,
+    cache_read: null,
+    cache_creation: null,
+  },
+  cost_sources: {
+    native: null,
+    user: null,
+    snapshot: null,
+    unpriced_records: 0,
+  },
 };
 
 export const Overview = memo(function Overview({
@@ -138,6 +151,8 @@ export const Overview = memo(function Overview({
     costLink.actionLabel != null && onOpenUnpricedDiagnosis != null
       ? onOpenUnpricedDiagnosis
       : undefined;
+  const costBucketLine = formatCostBucketLine(data.cost_breakdown, data.cost_sources.native);
+  const costSourceLine = formatCostSourceLine(data.cost_sources);
   const last = trend[trend.length - 1];
   const rate = last ? Math.round(last.total_tokens / BUCKET_MINUTES[grain]) : 0;
   const spark = trend.map((point) => point.total_tokens);
@@ -241,6 +256,14 @@ export const Overview = memo(function Overview({
             delta={costDiagnosis ? null : costDelta}
             spark={trend.map((point) => point.cost ?? 0)}
             hint={costLink.hint}
+            detail={
+              costBucketLine || costSourceLine ? (
+                <>
+                  {costBucketLine ? <p>{costBucketLine}</p> : null}
+                  {costSourceLine ? <p>{costSourceLine}</p> : null}
+                </>
+              ) : undefined
+            }
             actionLabel={costDiagnosis ? costLink.actionLabel : undefined}
             onClick={costDiagnosis}
           />
@@ -373,15 +396,18 @@ export const Overview = memo(function Overview({
           <div className="stat-block">
             <span className="muted">费用（估算）</span>
             <strong>{formatUsd(data.cost, data.unpriced)}</strong>
-            {data.unpriced ? <em>部分模型单价未配置</em> : <em>已按单价核算</em>}
+            <em>{costSourceLine ?? (data.unpriced ? "部分模型单价未配置" : "已按单价核算")}</em>
           </div>
           <div className="stat-block">
             <span className="muted">缓存 / 推理</span>
             <strong>
-              {formatCompact(data.cache_read_tokens + data.cache_creation_tokens)} /{" "}
+              {formatCompact(data.cache_read_tokens)} /{" "}
+              {formatCompact(data.cache_creation_tokens)} /{" "}
               {formatCompact(data.reasoning_tokens)}
             </strong>
-            <em>读+写 / 推理 Token · 命中率 {cacheHitRateLabel}</em>
+            <em>
+              读 / 写 / 推理 · 命中率 {cacheHitRateLabel}（近似口径）
+            </em>
           </div>
           <div className="stat-block">
             <span className="muted">Token 速率（估算）</span>

@@ -4,13 +4,13 @@ use chrono::{DateTime, Datelike, Utc};
 
 use crate::billing_window;
 use crate::cost::{
-    derive_cost, finish_unpriced_groups, sum_costs, sum_cursor_event_costs, UnpricedGroupAcc,
+    derive_cost, finish_unpriced_groups, overview_costs, sum_cursor_event_costs, UnpricedGroupAcc,
 };
 use crate::domain::{
     ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint, BillingWindowsDto,
-    CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewDto,
-    PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto,
-    UsageRecord, WorkTimelineDto,
+    CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount, OverviewCostBreakdown,
+    OverviewCostSources, OverviewDto, PriceTable, ProjectApplicationRow, SeriesPoint, SessionRow,
+    TurnRow, UnpricedGroupDto, UsageRecord, WorkTimelineDto,
 };
 
 pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
@@ -59,6 +59,8 @@ pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -
         session_count: 0,
         cost: None,
         unpriced: false,
+        cost_breakdown: OverviewCostBreakdown::default(),
+        cost_sources: OverviewCostSources::default(),
     };
     for record in &filtered {
         dto.total_tokens += record.total_tokens;
@@ -73,9 +75,11 @@ pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -
         ));
     }
     dto.session_count = sessions.len() as i64;
-    let (cost, unpriced) = sum_costs(&filtered, prices);
+    let (cost, unpriced, breakdown, sources) = overview_costs(&filtered, prices);
     dto.cost = cost;
     dto.unpriced = unpriced;
+    dto.cost_breakdown = breakdown;
+    dto.cost_sources = sources;
     dto
 }
 

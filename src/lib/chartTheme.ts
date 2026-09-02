@@ -31,6 +31,9 @@ const palettes: Record<
   {
     input: string;
     output: string;
+    cacheRead: string;
+    cacheCreation: string;
+    reasoning: string;
     axis: string;
     text: string;
     axisLabel: string;
@@ -45,6 +48,9 @@ const palettes: Record<
   dark: {
     input: "#8b6cff",
     output: "#22d3ee",
+    cacheRead: "#34d399",
+    cacheCreation: "#f59e0b",
+    reasoning: "#f472b6",
     axis: "rgba(148, 163, 184, 0.28)",
     text: "#8b97ab",
     axisLabel: "#c9d4e5",
@@ -58,6 +64,9 @@ const palettes: Record<
   light: {
     input: "#7c5cff",
     output: "#0e7490",
+    cacheRead: "#047857",
+    cacheCreation: "#d97706",
+    reasoning: "#db2777",
     axis: "rgba(71, 85, 105, 0.25)",
     text: "#64748b",
     axisLabel: "#334155",

@@ -20,6 +20,7 @@ fn sql_queries_match_in_memory_aggregates() {
     assert_eq!(sql_ov.session_count, mem_ov.session_count);
     assert_eq!(sql_ov.unpriced, mem_ov.unpriced);
     assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
+    assert_overview_cost_split_eq(&sql_ov, &mem_ov, "overview");
 
     // 未定价诊断：全库、不接筛选，逐字段对照
     let sql_ud = query::unpriced_diagnosis(&conn, &prices).unwrap();
@@ -143,6 +144,7 @@ fn sql_queries_match_in_memory_aggregates() {
         assert_eq!(sql_ov.session_count, mem_ov.session_count);
         assert_eq!(sql_ov.unpriced, mem_ov.unpriced);
         assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
+        assert_overview_cost_split_eq(&sql_ov, &mem_ov, &format!("filter={f:?}"));
     }
 
     // work_timeline：SQL 宽口径拉取 + Cursor 会话区间，与内存路径对同一批 records/spans 调 build 必须一致。
@@ -238,6 +240,7 @@ fn assert_overview_parity(
         (None, None) => {}
         (x, y) => panic!("{label} cost Option 不一致：{x:?} vs {y:?}"),
     }
+    assert_overview_cost_split_eq(&sql, &mem, label);
     sql
 }
 

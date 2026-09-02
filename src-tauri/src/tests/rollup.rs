@@ -169,6 +169,33 @@ fn assert_overview_eq(rollup: &crate::domain::OverviewDto, raw: &crate::domain::
         rollup.cost,
         raw.cost
     );
+    assert!(
+        cost_close(rollup.cost_breakdown.input, raw.cost_breakdown.input)
+            && cost_close(rollup.cost_breakdown.output, raw.cost_breakdown.output)
+            && cost_close(
+                rollup.cost_breakdown.cache_read,
+                raw.cost_breakdown.cache_read
+            )
+            && cost_close(
+                rollup.cost_breakdown.cache_creation,
+                raw.cost_breakdown.cache_creation
+            ),
+        "cost_breakdown 超出容差：{:?} vs {:?}",
+        rollup.cost_breakdown,
+        raw.cost_breakdown
+    );
+    assert!(
+        cost_close(rollup.cost_sources.native, raw.cost_sources.native)
+            && cost_close(rollup.cost_sources.user, raw.cost_sources.user)
+            && cost_close(rollup.cost_sources.snapshot, raw.cost_sources.snapshot),
+        "cost_sources 超出容差：{:?} vs {:?}",
+        rollup.cost_sources,
+        raw.cost_sources
+    );
+    assert_eq!(
+        rollup.cost_sources.unpriced_records,
+        raw.cost_sources.unpriced_records
+    );
 }
 
 fn prepared() -> rusqlite::Connection {

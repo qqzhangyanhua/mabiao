@@ -20,6 +20,7 @@ export function KpiCard({
   live,
   radar,
   hint,
+  detail,
   actionLabel,
   onClick,
 }: {
@@ -32,6 +33,7 @@ export function KpiCard({
   live?: boolean;
   radar?: boolean;
   hint?: string;
+  detail?: ReactNode;
   actionLabel?: string;
   onClick?: () => void;
 }) {
@@ -51,6 +53,7 @@ export function KpiCard({
         ) : null}
       </div>
       <div className="kpi-value">{value}</div>
+      {detail ? <div className="kpi-detail">{detail}</div> : null}
       {hint ? <p className="kpi-hint">{hint}</p> : null}
       <div className="kpi-foot">
         {actionLabel ? (

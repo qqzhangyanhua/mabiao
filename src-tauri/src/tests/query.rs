@@ -989,6 +989,135 @@ fn overview_and_turns_use_price_table_and_flag_unpriced() {
     let overview = query::overview(&conn, &Filter::default(), &table).unwrap();
     assert_eq!(lifetime_cost, overview.cost);
     assert_eq!(lifetime_unpriced, overview.unpriced);
+    assert_eq!(overview.cost_breakdown.input, Some(1.0));
+    assert_eq!(overview.cost_sources.user, Some(1.0));
+    assert_eq!(overview.cost_sources.native, Some(0.5));
+    assert_eq!(overview.cost_sources.unpriced_records, 1);
+}
+
+#[test]
+fn overview_splits_cost_buckets_and_sources_without_pricing_reasoning() {
+    let mut user = rec(
+        "2026-08-01T10:00:00Z",
+        Source::Codex,
+        "user-model",
+        "official",
+        "/proj/a",
+        "s-user",
+        0,
+    );
+    user.input_tokens = 100;
+    user.output_tokens = 50;
+    user.cache_read_tokens = 20;
+    user.cache_creation_tokens = 10;
+    user.reasoning_tokens = 40;
+    user.total_tokens = 180;
+
+    let mut snapshot = rec(
+        "2026-08-01T10:01:00Z",
+        Source::Codex,
+        "snap-model",
+        "",
+        "/proj/a",
+        "s-snap",
+        0,
+    );
+    snapshot.input_tokens = 200;
+    snapshot.total_tokens = 200;
+
+    let mut native = rec(
+        "2026-08-01T10:02:00Z",
+        Source::Claude,
+        "claude-native",
+        "anthropic",
+        "/proj/a",
+        "s-native",
+        0,
+    );
+    native.input_tokens = 999;
+    native.output_tokens = 999;
+    native.cache_read_tokens = 999;
+    native.cache_creation_tokens = 999;
+    native.reasoning_tokens = 100;
+    native.native_cost = Some(2.5);
+    native.total_tokens = 3000;
+
+    let mut factory = rec(
+        "2026-08-01T10:03:00Z",
+        Source::Factory,
+        "",
+        "",
+        "/proj/a",
+        "s-factory",
+        0,
+    );
+    factory.input_tokens = 30;
+    factory.total_tokens = 30;
+
+    let unknown = rec(
+        "2026-08-01T10:04:00Z",
+        Source::Codex,
+        "totally-unknown-model",
+        "",
+        "/proj/a",
+        "s-none",
+        10,
+    );
+
+    let prices = PriceTable {
+        prices: vec![
+            PriceEntry {
+                model: "user-model".into(),
+                provider: Some("official".into()),
+                input: 0.01,
+                output: 0.02,
+                cache_read: 0.001,
+                cache_creation: 0.015,
+                origin: PriceOrigin::User,
+            },
+            PriceEntry {
+                model: "snap-model".into(),
+                provider: None,
+                input: 0.005,
+                output: 0.0,
+                cache_read: 0.0,
+                cache_creation: 0.0,
+                origin: PriceOrigin::Snapshot,
+            },
+        ],
+    };
+    let records = vec![
+        user.clone(),
+        snapshot.clone(),
+        native.clone(),
+        factory.clone(),
+        unknown.clone(),
+    ];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+
+    let mem = aggregate::overview(&records, &Filter::default(), &prices);
+    let sql = query::overview(&conn, &Filter::default(), &prices).unwrap();
+    assert_overview_cost_split_eq(&sql, &mem, "cost split");
+    assert_opt_f64_eq(sql.cost, mem.cost);
+
+    assert_opt_f64_eq(mem.cost_breakdown.input, Some(2.0));
+    assert_opt_f64_eq(mem.cost_breakdown.output, Some(1.0));
+    assert_opt_f64_eq(mem.cost_breakdown.cache_read, Some(0.02));
+    assert_opt_f64_eq(mem.cost_breakdown.cache_creation, Some(0.15));
+    assert_opt_f64_eq(mem.cost_sources.native, Some(2.5));
+    assert_opt_f64_eq(mem.cost_sources.user, Some(2.17));
+    assert_opt_f64_eq(mem.cost_sources.snapshot, Some(1.0));
+    assert_eq!(mem.cost_sources.unpriced_records, 2);
+    assert_opt_f64_eq(mem.cost, Some(5.67));
+    assert!(mem.unpriced);
+    // 推理 40 token 不得再乘单价；四档之和等于用户+快照，不含 native。
+    let buckets = mem.cost_breakdown.input.unwrap()
+        + mem.cost_breakdown.output.unwrap()
+        + mem.cost_breakdown.cache_read.unwrap()
+        + mem.cost_breakdown.cache_creation.unwrap();
+    assert!((buckets - 3.17).abs() < 1e-9);
 }
 
 #[test]

@@ -28,13 +28,28 @@ export function OverviewDetail({
   onSessionClick?: (session: { id: string; source: string }) => void;
 }) {
   const palette = chartPalette(theme);
-  const tokenOption = useMemo(() => {
-    const tokenItems = [
+  const tokenItems = useMemo(
+    () => [
       { name: "输入 Token", value: data.input_tokens, color: palette.input },
       { name: "输出 Token", value: data.output_tokens, color: palette.output },
-    ];
-    return donutOption(tokenItems, theme);
-  }, [data.input_tokens, data.output_tokens, theme, palette.input, palette.output]);
+      { name: "缓存读", value: data.cache_read_tokens, color: palette.cacheRead },
+      { name: "缓存写", value: data.cache_creation_tokens, color: palette.cacheCreation },
+      { name: "推理 Token", value: data.reasoning_tokens, color: palette.reasoning },
+    ],
+    [
+      data.input_tokens,
+      data.output_tokens,
+      data.cache_read_tokens,
+      data.cache_creation_tokens,
+      data.reasoning_tokens,
+      palette.input,
+      palette.output,
+      palette.cacheRead,
+      palette.cacheCreation,
+      palette.reasoning,
+    ],
+  );
+  const tokenOption = useMemo(() => donutOption(tokenItems, theme), [tokenItems, theme]);
 
   const recent = useMemo(
     () => [...sessions].sort((a, b) => b.ended_at.localeCompare(a.ended_at)).slice(0, 8),
@@ -43,8 +58,9 @@ export function OverviewDetail({
   const topProjects = projects.slice(0, 5);
   const maxProject = topProjects[0]?.total_tokens ?? 1;
   const tokenTotal = formatCompact(data.total_tokens);
-  const inputShare = data.total_tokens === 0 ? 0 : (data.input_tokens / data.total_tokens) * 100;
-  const outputShare = data.total_tokens === 0 ? 0 : (data.output_tokens / data.total_tokens) * 100;
+  const sliceTotal = tokenItems.reduce((sum, item) => sum + item.value, 0);
+  const sliceShare = (value: number) =>
+    sliceTotal === 0 ? 0 : (value / sliceTotal) * 100;
 
   return (
     <section className="dash-bottom">
@@ -54,19 +70,16 @@ export function OverviewDetail({
         </div>
         <div className="donut-wrap">
           <DonutChart option={tokenOption} centerValue={tokenTotal} />
-          <div className="legend-col">
-            <LegendRow
-              color={palette.input}
-              label="输入 Token"
-              value={formatCompact(data.input_tokens)}
-              extra={`${inputShare.toFixed(1)}%`}
-            />
-            <LegendRow
-              color={palette.output}
-              label="输出 Token"
-              value={formatCompact(data.output_tokens)}
-              extra={`${outputShare.toFixed(1)}%`}
-            />
+          <div className="legend-col is-dense">
+            {tokenItems.map((item) => (
+              <LegendRow
+                key={item.name}
+                color={item.color}
+                label={item.name}
+                value={formatCompact(item.value)}
+                extra={`${sliceShare(item.value).toFixed(1)}%`}
+              />
+            ))}
           </div>
         </div>
       </article>

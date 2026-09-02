@@ -133,6 +133,24 @@ pub struct Filter {
     pub providers: Vec<String>,
 }
 
+/// 用户单价 / LiteLLM 快照按 token 口径拆出的费用。来源自带整笔不进这四档。
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct OverviewCostBreakdown {
+    pub input: Option<f64>,
+    pub output: Option<f64>,
+    pub cache_read: Option<f64>,
+    pub cache_creation: Option<f64>,
+}
+
+/// 概览费用按来源分层：金额给已计价三档，未配置只计记录条数。
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct OverviewCostSources {
+    pub native: Option<f64>,
+    pub user: Option<f64>,
+    pub snapshot: Option<f64>,
+    pub unpriced_records: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OverviewDto {
     pub total_tokens: i64,
@@ -144,6 +162,8 @@ pub struct OverviewDto {
     pub session_count: i64,
     pub cost: Option<f64>,
     pub unpriced: bool,
+    pub cost_breakdown: OverviewCostBreakdown,
+    pub cost_sources: OverviewCostSources,
 }
 
 /// 用户配置的月度预算（美元），持久化在独立文件里，与单价表分开管理。

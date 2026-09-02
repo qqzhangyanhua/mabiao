@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::domain::{
-    CostSource, CursorUsageEvent, DerivedCost, PriceEntry, PriceOrigin, PriceTable,
-    UnpricedGroupDto, UnpricedReason, UsageRecord,
+    CostSource, CursorUsageEvent, DerivedCost, OverviewCostBreakdown, OverviewCostSources,
+    PriceEntry, PriceOrigin, PriceTable, UnpricedGroupDto, UnpricedReason, UsageRecord,
 };
 
 struct PricedTokens<'a> {
@@ -66,37 +66,167 @@ fn resolve_entry<'p>(
     })
 }
 
+struct CostParts {
+    input: f64,
+    output: f64,
+    cache_read: f64,
+    cache_creation: f64,
+}
+
+impl CostParts {
+    fn total(&self) -> f64 {
+        self.input + self.output + self.cache_read + self.cache_creation
+    }
+}
+
+fn priced_parts(usage: &PricedTokens<'_>, entry: &PriceEntry) -> CostParts {
+    CostParts {
+        input: usage.input_tokens as f64 * entry.input,
+        output: usage.output_tokens as f64 * entry.output,
+        cache_read: usage.cache_read_tokens as f64 * entry.cache_read,
+        cache_creation: usage.cache_creation_tokens as f64 * entry.cache_creation,
+    }
+}
+
+struct CostAttribution {
+    derived: DerivedCost,
+    input: Option<f64>,
+    output: Option<f64>,
+    cache_read: Option<f64>,
+    cache_creation: Option<f64>,
+}
+
 /// 把查好的价目条目套到 token 数上。与查价分开，好让批量路径只缓存前者。
+///
+/// 来源自带费用是整笔，四档口径为 `None`；未命中价目同样不拆。推理含在输出里，不单独乘单价。
 fn apply_entry(usage: &PricedTokens<'_>, entry: Option<&PriceEntry>) -> DerivedCost {
+    apply_entry_attribution(usage, entry).derived
+}
+
+fn apply_entry_attribution(
+    usage: &PricedTokens<'_>,
+    entry: Option<&PriceEntry>,
+) -> CostAttribution {
     if let Some(amount) = usage.native_cost {
-        return DerivedCost {
-            amount: Some(amount),
-            unpriced: false,
-            source_native: true,
-            cost_source: CostSource::Native,
+        return CostAttribution {
+            derived: DerivedCost {
+                amount: Some(amount),
+                unpriced: false,
+                source_native: true,
+                cost_source: CostSource::Native,
+            },
+            input: None,
+            output: None,
+            cache_read: None,
+            cache_creation: None,
         };
     }
     let Some(entry) = entry else {
-        return DerivedCost {
-            amount: None,
-            unpriced: true,
-            source_native: false,
-            cost_source: CostSource::None,
+        return CostAttribution {
+            derived: DerivedCost {
+                amount: None,
+                unpriced: true,
+                source_native: false,
+                cost_source: CostSource::None,
+            },
+            input: None,
+            output: None,
+            cache_read: None,
+            cache_creation: None,
         };
     };
-    let amount = (usage.input_tokens as f64) * entry.input
-        + (usage.output_tokens as f64) * entry.output
-        + (usage.cache_read_tokens as f64) * entry.cache_read
-        + (usage.cache_creation_tokens as f64) * entry.cache_creation;
-    DerivedCost {
-        amount: Some(amount),
-        unpriced: false,
-        source_native: false,
-        cost_source: match entry.origin {
-            PriceOrigin::Snapshot => CostSource::Snapshot,
-            PriceOrigin::User => CostSource::User,
+    let parts = priced_parts(usage, entry);
+    CostAttribution {
+        derived: DerivedCost {
+            amount: Some(parts.total()),
+            unpriced: false,
+            source_native: false,
+            cost_source: match entry.origin {
+                PriceOrigin::Snapshot => CostSource::Snapshot,
+                PriceOrigin::User => CostSource::User,
+            },
         },
+        input: Some(parts.input),
+        output: Some(parts.output),
+        cache_read: Some(parts.cache_read),
+        cache_creation: Some(parts.cache_creation),
     }
+}
+
+fn add_amount(slot: &mut Option<f64>, value: Option<f64>) {
+    if let Some(amount) = value {
+        *slot = Some(slot.unwrap_or(0.0) + amount);
+    }
+}
+
+fn fold_overview_costs(
+    items: impl IntoIterator<Item = CostAttribution>,
+) -> (
+    Option<f64>,
+    bool,
+    OverviewCostBreakdown,
+    OverviewCostSources,
+) {
+    let mut total = 0.0;
+    let mut any = false;
+    let mut unpriced = false;
+    let mut breakdown = OverviewCostBreakdown::default();
+    let mut sources = OverviewCostSources::default();
+    for item in items {
+        if let Some(amount) = item.derived.amount {
+            total += amount;
+            any = true;
+        }
+        if item.derived.unpriced {
+            unpriced = true;
+            sources.unpriced_records += 1;
+        }
+        add_amount(&mut breakdown.input, item.input);
+        add_amount(&mut breakdown.output, item.output);
+        add_amount(&mut breakdown.cache_read, item.cache_read);
+        add_amount(&mut breakdown.cache_creation, item.cache_creation);
+        match item.derived.cost_source {
+            CostSource::Native => add_amount(&mut sources.native, item.derived.amount),
+            CostSource::User => add_amount(&mut sources.user, item.derived.amount),
+            CostSource::Snapshot => add_amount(&mut sources.snapshot, item.derived.amount),
+            CostSource::None => {}
+        }
+    }
+    (
+        if any { Some(total) } else { None },
+        unpriced,
+        breakdown,
+        sources,
+    )
+}
+
+/// 概览费用：总额 + 四档口径 + 来源分层。优先级与 `sum_costs` 相同。
+pub fn overview_costs(
+    records: &[&UsageRecord],
+    prices: &PriceTable,
+) -> (
+    Option<f64>,
+    bool,
+    OverviewCostBreakdown,
+    OverviewCostSources,
+) {
+    let mut cache = PriceCache::new(prices);
+    fold_overview_costs(records.iter().map(|record| {
+        let usage = PricedTokens {
+            model: &record.model,
+            provider: &record.provider,
+            input_tokens: record.input_tokens,
+            output_tokens: record.output_tokens,
+            cache_read_tokens: record.cache_read_tokens,
+            cache_creation_tokens: record.cache_creation_tokens,
+            native_cost: record.native_cost,
+        };
+        if usage.native_cost.is_some() {
+            return apply_entry_attribution(&usage, None);
+        }
+        let entry = cache.resolve(&record.model, &record.provider, false);
+        apply_entry_attribution(&usage, entry)
+    }))
 }
 
 pub fn derive_cost(record: &UsageRecord, prices: &PriceTable) -> DerivedCost {

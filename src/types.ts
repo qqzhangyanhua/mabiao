@@ -7,6 +7,20 @@ export type Filter = {
   providers: string[];
 };
 
+export type OverviewCostBreakdown = {
+  input: number | null;
+  output: number | null;
+  cache_read: number | null;
+  cache_creation: number | null;
+};
+
+export type OverviewCostSources = {
+  native: number | null;
+  user: number | null;
+  snapshot: number | null;
+  unpriced_records: number;
+};
+
 export type OverviewDto = {
   total_tokens: number;
   input_tokens: number;
@@ -17,6 +31,8 @@ export type OverviewDto = {
   session_count: number;
   cost: number | null;
   unpriced: boolean;
+  cost_breakdown: OverviewCostBreakdown;
+  cost_sources: OverviewCostSources;
 };
 
 export type BurnRateDto = {
