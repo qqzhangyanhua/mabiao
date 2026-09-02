@@ -1,0 +1,121 @@
+src-tauri/src/conversation.rs
+  s_cf522a418b0896::t_a19866054e5d67 17-18,25,58-59,1272-1276,1283,1301,1303,1324-1333,1343-1345
+  s_cf522a418b0896::t_deab0939067759 1295
+  s_cf522a418b0896::t_e329cdd601e7b8 3201
+  s_cf522a418b0896::t_bf8375cf1359e8 19-20
+  s_cf522a418b0896::t_96cae911dfc6b7 1580-1615,1617-1620,1622-1623,3325,3328,3342-3347,3538
+  s_cf522a418b0896::t_90d28bdd819266 1334
+  s_cf522a418b0896::t_78521618daaccf 3200
+  s_cf522a418b0896::t_966dad2702cae5 1302
+src/components/ConversationCatalog.tsx
+  s_cf522a418b0896::t_49a10c4301bf49 3,40
+  s_cf522a418b0896::t_3849aa4ab9d748 1-2,4-39,41-139
+src-tauri/src/conversation/event_page.rs
+  s_cf522a418b0896::t_abca582a29afa9 101-107,121-123
+  s_cf522a418b0896::t_736d0a11990961 124
+src/types.ts
+  s_cf522a418b0896::t_624110f27fd8a1 397-398,415-419,543-544,570
+src/components/ConversationIndexPanel.tsx
+  s_cf522a418b0896::t_3cfa15972b6c17 87-89
+  s_cf522a418b0896::t_2d8b15128c2a3c 8-20,70,85-86
+src/components/ConversationUnadaptedGroup.tsx
+  s_cf522a418b0896::t_1786c74732d9e0 1-25
+src/styles.css
+  s_cf522a418b0896::t_f13b8d365cdf81 4397-4432,4881-4895
+  s_cf522a418b0896::t_97171320ced39a 4896
+src/lib/highlightMatch.tsx
+  s_cf522a418b0896::t_8b0072538924a2 1-46
+src/lib/conversationCatalogItems.test.ts
+  s_cf522a418b0896::t_aa7a2a01bcc45e 1-79
+src-tauri/src/tests/misc.rs
+  s_cf522a418b0896::t_2020cd8d3465d6 899-906
+CONTEXT.md
+  s_cf522a418b0896::t_2c4b0f0afe3b0a 36-37
+src/components/ConversationEventItem.tsx
+  s_cf522a418b0896::t_13a5af9952bc7c 231-239,246-252
+  s_cf522a418b0896::t_6f7037301385d3 17,215,217-218
+  s_cf522a418b0896::t_f7f4e78b0ea59c 36-38,44-46,195-201,205,216,219-220
+src/components/ConversationTimeline.tsx
+  s_cf522a418b0896::t_6a00e9b93c0f5e 286-293,295-303,305,360,367-369,424,426-430
+  s_cf522a418b0896::t_ce51c5081f90bc 294
+  s_cf522a418b0896::t_94fbc7f45221bf 304
+  s_cf522a418b0896::t_78780c0ce3033a 47-50,104-107,127-134
+  s_cf522a418b0896::t_fa3ed6819cbf59 14,28,425
+  s_cf522a418b0896::t_fe2b8bdbabf492 285
+src-tauri/src/tests/conversation_fts.rs
+  s_cf522a418b0896::t_831f78872a5414 1-16,24-104,109-132,137-166,171-226
+  s_cf522a418b0896::t_bf8375cf1359e8 17-23,105-108,133-136,167-170
+docs/adr/0014-conversation-body-search.md
+  s_cf522a418b0896::t_f8bbdcb5cc244a 1-9
+src-tauri/src/conversation/event_index.rs
+  s_cf522a418b0896::t_779a579cdc788e 455-466,712-728
+  s_cf522a418b0896::t_111cc276b735d2 729
+src-tauri/src/tests/conversation.rs
+  s_cf522a418b0896::t_a3e1f9c7fff591 1683-1686
+  s_cf522a418b0896::t_580a7cf027f11d 1711,1737-1741,1744,1752-1761,2038-2040
+src/lib/sessionEntryCopy.ts
+  s_cf522a418b0896::t_b94c73d0cc8588 14
+src-tauri/src/domain.rs
+  s_cf522a418b0896::t_f8d2292ba843d3 750-756,778-788,987,1030,1034-1036
+  s_cf522a418b0896::t_bf8375cf1359e8 981-986,988-990
+src-tauri/src/backup.rs
+  s_cf522a418b0896::t_5d55832bd91500 110-113
+  s_cf522a418b0896::t_2521900cdbeaee 102-109
+src-tauri/src/tests/qwen_copilot_conversation.rs
+  s_cf522a418b0896::t_26fb59a752370e 145-158
+src/lib/conversationWindow.test.ts
+  s_cf522a418b0896::t_e0461699005b2a 5,28
+src/lib/useConversationIndexProgress.ts
+  s_cf522a418b0896::t_a139e1197c52c9 1-45
+src-tauri/src/conversation/catalog_search.rs
+  s_cf522a418b0896::t_6210f1e4aa1cfd 127
+  s_cf522a418b0896::t_0790caa5c6aa47 2-7,10-87,90-126,128-132,134-203,209-281
+  s_cf522a418b0896::t_bf8375cf1359e8 8-9,88-89,133,204-208
+  s_cf522a418b0896::t_30415c4da55e4f 1
+src/lib/useConversationEventPages.ts
+  s_cf522a418b0896::t_c10721325a348a 82-83,92-93,95
+  s_cf522a418b0896::t_bfa09832f8c569 49-57,59-81,84-87
+  s_cf522a418b0896::t_6299d805af6853 13,29,35
+AGENTS.md
+  s_cf522a418b0896::t_e40ad16839c3f3 30,83-84,93
+  s_cf522a418b0896::t_be547b949ed791 82
+src/lib/conversationWindow.ts
+  s_cf522a418b0896::t_f0fe173fa8bed9 47-50
+src/lib/conversationCatalogItems.ts
+  s_cf522a418b0896::t_e32efe9e2ba7d1 4
+  s_cf522a418b0896::t_842934780e3edd 1-3,5-67
+src-tauri/src/tests/mod.rs
+  s_cf522a418b0896::t_7f5f00436a5b71 12
+src/components/ConversationCatalogRow.tsx
+  s_cf522a418b0896::t_1052d99f5c944d 11,41-45
+  s_cf522a418b0896::t_c0f791171a3dda 15-21,40,46,89-91
+src/components/Conversations.tsx
+  s_cf522a418b0896::t_89b72d8c973b18 631-633,635,637-638
+  s_cf522a418b0896::t_d8d516319e30cd 39,49,63,136,960-971
+  s_cf522a418b0896::t_8c212396e62561 137-142,634,636,639-643,651-656,665,718,790,924,932-935
+  s_cf522a418b0896::t_95e3349533be87 38,311
+src/lib/highlightMatch.test.ts
+  s_cf522a418b0896::t_210e4ffb9d05c7 4
+  s_cf522a418b0896::t_487e6482e98371 1-3,5-18
+src-tauri/src/store.rs
+  s_cf522a418b0896::t_27ca748fdd6fdd 439,443-500
+  s_cf522a418b0896::t_37f7b848adf541 501
+src/components/type.ts
+  s_cf522a418b0896::t_ceeb86e48562be 50-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d0c50bdf32c58876a746f5184092e1d3d240124f",
+  "prompts": {},
+  "sessions": {
+    "s_cf522a418b0896": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06063-fc7c-7382-88e5-57f0389d1867",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
