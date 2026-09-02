@@ -7,7 +7,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `occurred_at` | RFC3339 | 该轮发生时间 |
-| `source` | 文本 | 来源：codex / claude / pi / opencode / kimi / dsh / gemini / grok / qwen / factory / cursor_agent / copilot |
+| `source` | 文本 | 来源：codex / claude / pi / opencode / kimi / dsh / gemini / grok / qwen / factory / cursor_agent / copilot / hermes |
 | `model` | 文本 | 模型 ID |
 | `provider` | 文本 | 官方或中转；未知则为空 |
 | `project` | 文本 | 工作目录（解码后的路径） |
@@ -19,7 +19,7 @@
 | `cache_creation_tokens` | i64 | 缓存写/创建 |
 | `reasoning_tokens` | i64 | 推理 |
 | `total_tokens` | i64 | 总量；来源未给时按各口径之和 |
-| `native_cost` | f64? | 来源自带费用（仅 pi / opencode） |
+| `native_cost` | f64? | 来源自带费用（pi / opencode / hermes 等） |
 
 不含会话正文。
 
@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS ingested_files (
 | Cursor | `~/.cursor/ai-tracking/ai-code-tracking.db` 的 `scored_commits` | 否（代码量） | `linesAdded`/`linesDeleted` / `composer*` / `tab*` / `human*` / `v2AiPercentage`。**不进入 Usage Record**。AI 占比只用 composer÷added | — | 独立代码量面板 |
 | cursor-agent | 无头 stdout `stream-json`；本机 `store.db` / transcript 无 token | 是（仅 stdout） | `result.usage`：inputTokens / outputTokens / cacheReadTokens / cacheWriteTokens。reasoning / 费用：无 | 模型：`system.model`；项目：`system.cwd`；会话：`session_id` | 只取 `type=result`；`request_id` 去重。hook / 本机文件不可用 |
 | copilot | `~/.copilot/session-state/<session-id>/events.jsonl` | 是（仅会话结束时，按模型累计） | `session.shutdown.data.modelMetrics.<model>.usage`：inputTokens / outputTokens / cacheReadTokens→cache_read、cacheWriteTokens→cache_creation。reasoning：无 | 模型：`modelMetrics` 的键；项目：`session.start.data.context.cwd`；会话：`session.start.data.sessionId`（缺失时退回父目录名） | 只取文件里时间最晚的一次 `session.shutdown`（会话续接会写多次，均为累计值，不能叠加）。详见 `docs/probe/copilot.md` |
+| Hermes | `~/.hermes/state.db` 的 `session_model_usage` JOIN `sessions` | 是（模型级累计） | `input_tokens` / `output_tokens` / `cache_read_tokens` / `cache_write_tokens`→cache_creation / `reasoning_tokens`。费用：`cost_source` 非空且非 `none` 且 `actual_cost_usd > 0` 时取 `actual_cost_usd`。`estimated_cost_usd` 不用 | 模型：`session_model_usage.model`；provider：`billing_provider`；项目：`sessions.cwd`，空则 `git_repo_root`；会话：`session_id`；时间：`sessions.started_at`（unix 秒） | 主键六元组每行一条，同 session 多模型拆行。详见 `docs/probe/hermes.md` |
 | amp | 本机仅配置 | 否 | 不纳入 | — | — |
 
 ## dsh 解压后结构

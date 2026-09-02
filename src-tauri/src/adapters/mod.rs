@@ -9,6 +9,7 @@ pub mod dsh;
 pub mod factory;
 pub mod gemini;
 pub mod grok;
+pub mod hermes;
 pub mod kimi;
 pub mod omp;
 pub mod opencode;
@@ -253,6 +254,20 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: false,
         coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Hermes,
+        path_env: "HERMES_HOME",
+        scan_dirs: hermes::scan_dirs,
+        discover: hermes::discover,
+        sidecar_fingerprint: hermes::sidecar_fingerprint,
+        parse: hermes::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        coverage: "模型级 Token（含原生费用）",
         display_dirs: None,
         detected: None,
     },

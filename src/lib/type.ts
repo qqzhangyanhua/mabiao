@@ -24,6 +24,7 @@ export type SourceIconId =
   | "omp"
   | "dsh"
   | "cursor"
+  | "hermes"
   | "unknown";
 
 export type TrendStats = {

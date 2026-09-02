@@ -178,7 +178,7 @@ pub fn assert_rollups_match_overview(
     assert_eq!(overview.total_tokens, session_total);
 }
 
-/// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode 写 sqlite 消息表，
+/// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode / Hermes 写 sqlite，
 /// Cursor Agent 写 token 包装目录下的 jsonl。
 pub fn write_all_source_fixtures(home: &std::path::Path) {
     let paths: [(&str, &str); 10] = [
@@ -232,6 +232,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     let compressed = zstd::encode_all(fixture("dsh.jsonl").as_bytes(), 0).unwrap();
     std::fs::write(&dsh, compressed).unwrap();
     write_opencode_fixture_db(home);
+    super::write_default_hermes_home(home);
 }
 
 fn write_opencode_fixture_db(home: &std::path::Path) {

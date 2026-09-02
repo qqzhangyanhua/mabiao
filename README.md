@@ -28,6 +28,7 @@
 | OMP | ✅ | ✅ | 自带 `cost.total`；子代理计入父会话 |
 | opencode | ✅ | ✅ | |
 | grok | ✅ | ✅ | |
+| Hermes | ✅ | ✅ | 自带 `actual_cost_usd` |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh 需解压；copilot 仅会话结束时累计 |
 | Factory / droid | ✅ | ❌ | 会话累计，无模型名 |
 | Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（读本机客户端登录态） |

@@ -77,6 +77,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | kimi | jsonl `~/.kimi/sessions/*/wire.jsonl` | ✅ | ❌ |
 | gemini | json `~/.gemini/tmp/*/chats/session-*.json` | ✅ | ❌ |
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
+| Hermes | sqlite `~/.hermes/state.db`（`session_model_usage`） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
 | qwen | `~/.qwen/tmp/*/logs.json` | ❌（本地无 Token） | ❌ |
 | Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量 | ✅（会话累计、无模型名） | ❌ |
 | Cursor | sqlite（代码量）+ 账号级 token（联网）+ 会话 transcript（行为统计） | ⚠️ 账号级（默选手动，可独立自动刷新） | ❌ |
