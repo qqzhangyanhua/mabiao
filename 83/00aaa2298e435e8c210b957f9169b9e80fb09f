@@ -1,0 +1,51 @@
+src/components/CursorOverviewPanel.tsx
+  s_64dcf731b9bcb5::t_ea5be232bd4782 55
+src/App.tsx
+  s_64dcf731b9bcb5::t_44c60485b74ff9 192-197,264,267
+src/components/AppearanceSettingsPanel.tsx
+  s_64dcf731b9bcb5::t_cc8216f50538ba 61
+CONTEXT.md
+  s_64dcf731b9bcb5::t_d745d0f6100d34 28
+  s_64dcf731b9bcb5::t_2ac33a96be93cc 82
+docs/adr/0007-cursor-session-local-ingest.md
+  s_64dcf731b9bcb5::t_e1fec3361efc0b 14
+src/hooks/useUsageData.ts
+  s_64dcf731b9bcb5::t_b5fca296ecc217 48,225-240,413-416
+src/components/CursorAccountSettingsPanel.tsx
+  s_64dcf731b9bcb5::t_066f9e1e7b0d26 8-9
+  s_64dcf731b9bcb5::t_df6ae102d802a4 3,29-35,80-81,93-112
+  s_64dcf731b9bcb5::t_bda603af076d9d 113
+src/hooks/usage/useCursorAccountRefresh.ts
+  s_64dcf731b9bcb5::t_56e9e4c1e43393 52,59-176
+  s_64dcf731b9bcb5::t_7f73674dc5e7a6 58
+  s_64dcf731b9bcb5::t_93748d1978c486 49-51
+  s_64dcf731b9bcb5::t_9a204b7cb438d2 53-57
+  s_64dcf731b9bcb5::t_8413293dc6aec9 177-179
+src/hooks/usage/constants.ts
+  s_64dcf731b9bcb5::t_624f3a366d5b58 4-6,33-40,42-44,46
+  s_64dcf731b9bcb5::t_29587859053348 41
+  s_64dcf731b9bcb5::t_d53596dc394c32 45
+src/components/CursorAccountUsagePanel.tsx
+  s_64dcf731b9bcb5::t_3cec92f07c4039 139
+  s_64dcf731b9bcb5::t_d7405685488bc6 3,34-44,71,77,115-119
+src/components/Settings.tsx
+  s_64dcf731b9bcb5::t_32b8a0edf1cfcc 50,64,77,91,253-258
+docs/adr/0006-cursor-account-usage-network-ingest.md
+  s_64dcf731b9bcb5::t_7c2b5b137b4aca 7,12,35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8300aaa2298e435e8c210b957f9169b9e80fb09f",
+  "prompts": {},
+  "sessions": {
+    "s_64dcf731b9bcb5": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a060e9-915b-7dc2-9c10-333db185c7e9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
