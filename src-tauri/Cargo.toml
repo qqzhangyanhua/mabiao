@@ -1,6 +1,6 @@
 [package]
 name = "mabiao"
-version = "0.1.3",
+version = "0.1.3"
 description = "码表：本机 AI 用量统计"
 authors = ["zhangyanhua"]
 license = "MIT"
