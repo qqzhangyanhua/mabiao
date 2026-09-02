@@ -1,0 +1,19 @@
+src-tauri/Cargo.toml
+  s_11936392ec3a7b::t_1f802c42e966f6 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d81dcef1fd16ace68c97fb068ee73f1e1bb1e2c5",
+  "prompts": {},
+  "sessions": {
+    "s_11936392ec3a7b": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06187-26d3-7a22-a765-aeaae7a9c3b8",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
