@@ -1,0 +1,56 @@
+src-tauri/src/query.rs
+  s_21401f8f8b1243::t_19dba934c89496 20-22,249-290,316-323,329,339-351
+src-tauri/src/tests/rollup.rs
+  s_21401f8f8b1243::t_813b67a25f8d21 196-197
+  s_21401f8f8b1243::t_bbddf1e4388605 172-195,198
+src/lib/chartTheme.ts
+  s_21401f8f8b1243::t_2de6a55ec58dfd 34-36,51-53,67-69
+src/types.ts
+  s_21401f8f8b1243::t_4cd3b2f5e54cf9 10-23,34-35
+src-tauri/src/tests/parity.rs
+  s_21401f8f8b1243::t_19a43e60c39d6f 23,147,243
+src/lib/costBreakdown.ts
+  s_21401f8f8b1243::t_cd6fcc0a32fcbf 1-60
+src-tauri/src/aggregate.rs
+  s_21401f8f8b1243::t_9aeed908e04836 7
+  s_21401f8f8b1243::t_784eb75e42a651 11-13,62-63,78,81-82
+src-tauri/src/test_support/helpers.rs
+  s_21401f8f8b1243::t_c76ffa357a77ca 283-289,291-303
+  s_21401f8f8b1243::t_813b67a25f8d21 290
+src-tauri/src/tests/query.rs
+  s_21401f8f8b1243::t_64ee0db57216c9 992-1104,1112,1114-1120
+  s_21401f8f8b1243::t_3c52f3275a3877 1105-1111,1113
+src/components/Overview.tsx
+  s_21401f8f8b1243::t_196938bdcebcb6 35,66-77,154-155,259-266,399,404-405,408-410
+src/styles.css
+  s_21401f8f8b1243::t_9e7e927ad2c9f5 990-1005,2342-2344
+  s_21401f8f8b1243::t_3c7076bdde3106 2910
+  s_21401f8f8b1243::t_a075a47e2827be 2345
+src-tauri/src/domain.rs
+  s_21401f8f8b1243::t_02abbf313b0437 136-153,165-166
+src/lib/costBreakdown.test.ts
+  s_21401f8f8b1243::t_35c72fb18bcfda 1-79
+src/components/OverviewDetail.tsx
+  s_21401f8f8b1243::t_624cf894904c3a 31-32,35-52,61-63,73-82
+src/components/Kpi.tsx
+  s_21401f8f8b1243::t_d9907e35cbad92 23,36,56
+src-tauri/src/cost.rs
+  s_21401f8f8b1243::t_437e7153a0bc70 4-5,69-90,92-98,100-101,103-109,111-121,125-135,138-147,149-193,195-229
+  s_21401f8f8b1243::t_d4307340e488bd 91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "5f715fd0144cfbe35e81fd92afeb19e8ef1e9568",
+  "prompts": {},
+  "sessions": {
+    "s_21401f8f8b1243": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a060ac-4eb5-7542-9665-ceeae38672e9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
