@@ -11,7 +11,7 @@ Cursor IDE Agent 与 `cursor-agent` CLI 共用本机目录：`~/.cursor/chats/<m
 边界：
 
 - **独立维度**：不进入 `UsageRecord`、`Source` 枚举或本机 token 聚合；界面 Sidebar 独立入口。
-- **本机文件**：与 Cursor 账号用量（联网、手动 refresh）严格分离；不得扩散联网路径。
+- **本机文件**：与 Cursor 账号用量（联网、独立 refresh）严格分离；不得扩散联网路径。
 - **可信缓存**：文件 `(mtime_ms, size)` 指纹未变跳过重解析；解析失败保留旧缓存；有失败时跳过对账删除；删除 transcript 后对账清理。
 - **摄取失败不 abort**：Cursor 会话问题记入 `IngestReport.issues`（source=`cursor-session`），不阻断其它 Source。
 - **不参与 ADAPTER_VERSION**：独立 `cursor_session_files` / `cursor_session_meta` 表。

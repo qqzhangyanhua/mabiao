@@ -47,6 +47,7 @@ export function Settings({
   savingBudget,
   themeMode,
   autoRefresh,
+  cursorAccountAutoRefresh,
   onChange,
   onSave,
   onRebuild,
@@ -60,6 +61,7 @@ export function Settings({
   onOverviewLayoutChange,
   onThemeModeChange,
   onAutoRefreshChange,
+  onCursorAccountAutoRefreshChange,
 }: {
   prices: PriceTable;
   diagnostics: SourceDiagnostic[];
@@ -72,6 +74,7 @@ export function Settings({
   savingBudget: boolean;
   themeMode: ThemeMode;
   autoRefresh: string;
+  cursorAccountAutoRefresh: boolean;
   onChange: (prices: PriceTable) => void;
   onSave: () => void | Promise<void>;
   onRebuild: (source: string | null) => void;
@@ -85,6 +88,7 @@ export function Settings({
   onOverviewLayoutChange: (layout: OverviewLayout) => void;
   onThemeModeChange: (mode: ThemeMode) => void;
   onAutoRefreshChange: (value: string) => void;
+  onCursorAccountAutoRefreshChange: (value: boolean) => void;
 }) {
   const detectedSources = diagnostics.filter((row) => row.detected).map((row) => row.source);
   const [tab, setTab] = useState<SettingsTabId>(() => tabFromHash(window.location.hash));
@@ -246,7 +250,12 @@ export function Settings({
             />
           </>
         ) : null}
-        {tab === "cursor" ? <CursorAccountSettingsPanel /> : null}
+        {tab === "cursor" ? (
+          <CursorAccountSettingsPanel
+            autoRefresh={cursorAccountAutoRefresh}
+            onAutoRefreshChange={onCursorAccountAutoRefreshChange}
+          />
+        ) : null}
       </div>
     </div>
   );

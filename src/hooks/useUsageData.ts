@@ -45,6 +45,7 @@ import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { emptyFilter } from "./usage/constants";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
+import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
 import { useIngestOperations } from "./usage/useIngestOperations";
 import { useRangeHistory } from "./usage/useRangeHistory";
 import { useViewRefresh } from "./usage/useViewRefresh";
@@ -221,6 +222,22 @@ export function useUsageData() {
   );
 
   const { autoRefresh, setAutoRefresh } = useAutoRefresh(runIngestWithCacheClear, reportError);
+  const {
+    autoRefresh: cursorAccountAutoRefresh,
+    setAutoRefresh: setCursorAccountAutoRefresh,
+    revision: cursorAccountRevision,
+    refresh: refreshCursorAccount,
+  } = useCursorAccountRefresh({
+    filter,
+    view,
+    grain,
+    loadedStampsRef: loadedStamps,
+    setCursorAccountUsage,
+    setBillingWindows,
+    setTrend,
+    setApplicationAnalytics,
+    setProjects,
+  });
 
   const saveBudget = useCallback(
     async (config: BudgetConfig) => {
@@ -393,6 +410,10 @@ export function useUsageData() {
     officialQuota,
     setOfficialQuota,
     cursorAccountUsage,
+    cursorAccountAutoRefresh,
+    setCursorAccountAutoRefresh,
+    cursorAccountRevision,
+    refreshCursorAccount,
     previous,
     trend,
     heatmap,

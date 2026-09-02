@@ -25,7 +25,7 @@ Cursor `scored_commits` 记录的提交行数：新增/删除/净增、Composer�
 _Avoid_: 用量、消耗（避免与 token 混淆）；不要把 hash 条数当成行数
 
 **Cursor 账号用量 (Cursor Account Usage)**：
-从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。凭证只有一个来源：本机 Cursor 客户端写在 globalStorage `state.vscdb` 里的登录态（Cursor 自己续期），没有手动粘贴通路、也不落钥匙串；缓存可在设置页独立清空，不参与本机文件对账。界面可翻看已缓存的单条事件，对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、来源统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；来源统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
+从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。凭证只有一个来源：本机 Cursor 客户端写在 globalStorage `state.vscdb` 里的登录态（Cursor 自己续期），没有手动粘贴通路、也不落钥匙串；缓存可在设置页独立清空，不参与本机文件对账。默选手动刷新，不跟本机会话的 1/5/10 分钟定时器；要定时联网须在设置 Cursor 页打开独立开关。界面可翻看已缓存的单条事件，对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、来源统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；来源统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
 _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不要把它并进本机 token KPI 或 5 小时窗
 
 **Cursor 会话 (Cursor Session)**：
@@ -79,7 +79,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
 | qwen | `~/.qwen/tmp/*/logs.json` | ❌（本地无 Token） | ❌ |
 | Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量 | ✅（会话累计、无模型名） | ❌ |
-| Cursor | sqlite（代码量）+ 账号级 token（联网）+ 会话 transcript（行为统计） | ⚠️ 账号级（手动刷新） | ❌ |
+| Cursor | sqlite（代码量）+ 账号级 token（联网）+ 会话 transcript（行为统计） | ⚠️ 账号级（默选手动，可独立自动刷新） | ❌ |
 | cursor-agent | 会话与 IDE 共用 `~/.cursor/chats` + `agent-transcripts`；token 仅无头 stdout（需包装落盘到 `~/.cursor-agent-usage`） | ⚠️（仅包装） | ❌ |
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |

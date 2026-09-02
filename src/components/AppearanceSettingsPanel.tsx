@@ -58,7 +58,7 @@ export function AppearanceSettingsPanel({
         <div className="settings-row">
           <div className="settings-row-copy">
             <h3>自动刷新</h3>
-            <p>按间隔重新摄取本机会话数据。Cursor 账号用量不在此列，需在 Cursor 页手动刷新。</p>
+            <p>按间隔重新摄取本机会话数据。Cursor 账号用量不在此列，可在 Cursor 页单独打开。</p>
           </div>
           <Select
             ariaLabel="自动刷新间隔"

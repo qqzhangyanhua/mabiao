@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
+import { CURSOR_ACCOUNT_AUTO_REFRESH_MINUTES } from "../hooks/usage/constants";
 import type { ResolvedTheme } from "../hooks/useTheme";
 import { areaTrendOption, donutOption, modelSlices } from "../lib/chartTheme";
 import { formatClock, formatCompact, formatTokens, humanStatus } from "../lib/format";
@@ -30,7 +31,17 @@ function emptyUsage(): CursorAccountUsageDto {
   };
 }
 
-export function CursorAccountUsagePanel({ theme }: { theme: ResolvedTheme }) {
+export function CursorAccountUsagePanel({
+  theme,
+  autoRefresh,
+  revision,
+  onRefresh,
+}: {
+  theme: ResolvedTheme;
+  autoRefresh: boolean;
+  revision: number;
+  onRefresh: () => Promise<void>;
+}) {
   const [usage, setUsage] = useState<CursorAccountUsageDto | null>(null);
   const [hasToken, setHasToken] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -57,15 +68,14 @@ export function CursorAccountUsagePanel({ theme }: { theme: ResolvedTheme }) {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [revision]);
 
   async function handleRefresh() {
     setBusy(true);
     setError(null);
     try {
-      const next = await invoke<CursorAccountUsageDto>("refresh_cursor_account_usage");
+      await onRefresh();
       setHasToken(true);
-      setUsage(next);
     } catch (err: unknown) {
       setError(humanStatus(err));
     } finally {
@@ -102,8 +112,11 @@ export function CursorAccountUsagePanel({ theme }: { theme: ResolvedTheme }) {
           <div>
             <h2>Cursor 账号用量</h2>
             <p className="note">
-              云端账号 / 含全部设备 / 全时段 / 仅 token 无费用 / 需手动刷新 · 最后刷新于 {asOf} /
-              已缓存 {formatTokens(data.event_count)} 条
+              云端账号 / 含全部设备 / 全时段 / 仅 token 无费用 /{" "}
+              {autoRefresh
+                ? `每 ${CURSOR_ACCOUNT_AUTO_REFRESH_MINUTES} 分钟自动刷新`
+                : "需手动刷新"}{" "}
+              · 最后刷新于 {asOf} / 已缓存 {formatTokens(data.event_count)} 条
             </p>
           </div>
           <Button variant="accent" disabled={busy} onClick={() => void handleRefresh()}>
@@ -123,7 +136,7 @@ export function CursorAccountUsagePanel({ theme }: { theme: ResolvedTheme }) {
             <EmptyState
               icon="cursor"
               title="尚未拉取 Cursor 账号用量"
-              hint="已读到本机 Cursor 登录态。点刷新从云端拉取；离线时会继续展示上次成功结果。该数据是账号级用量，不会并入本机 token 总量。"
+              hint="已读到本机 Cursor 登录态。点刷新从云端拉取，或在设置里打开独立自动刷新；离线时会继续展示上次成功结果。该数据是账号级用量，不会并入本机 token 总量。"
             />
           ) : (
             <EmptyState

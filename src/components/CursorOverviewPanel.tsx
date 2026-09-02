@@ -52,7 +52,7 @@ export const CursorOverviewPanel = memo(function CursorOverviewPanel({
           compact
           icon="cursor"
           title="尚未拉取 Cursor 账号用量"
-          hint="到代码量页点刷新。离线时只读上次缓存，不会自动联网。"
+          hint="到 Cursor 页点刷新，或在设置里打开独立自动刷新。离线时只读上次缓存，不会并入本机总量。"
         />
       ) : usage.event_count === 0 ? (
         <EmptyState

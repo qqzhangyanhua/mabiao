@@ -4,12 +4,12 @@
 
 Cursor 的真实 token 用量只存在于云端账号，本机会话文件里没有。用户需要看到 Cursor 实际消耗了多少 token，但这与「本机离线扫描本地文件」的立身前提冲突。
 
-**决定**：新增独立维度「Cursor 账号用量 (Cursor Account Usage)」。仅在用户手动点「刷新」时，由 Rust 侧携带从本机 Cursor 客户端读到的 `WorkosCursorSessionToken`，调用 Cursor 非公开仪表盘接口 `POST /api/dashboard/get-filtered-usage-events`，把账号级事件解析后写入独立缓存表。self-serve 计划只采 token、不采费用。
+**决定**：新增独立维度「Cursor 账号用量 (Cursor Account Usage)」。由 Rust 侧携带从本机 Cursor 客户端读到的 `WorkosCursorSessionToken`，调用 Cursor 非公开仪表盘接口 `POST /api/dashboard/get-filtered-usage-events`，把账号级事件解析后写入独立缓存表。self-serve 计划只采 token、不采费用。默认仍只在用户点「刷新」时联网；设置里可打开独立自动刷新。
 
 这是对 ADR 0001 / 0002 / 0003 的**显式破例**，边界如下：
 
 - **仅此一处**：其它来源仍只扫描本机文件。不得把联网采集扩散成通用摄取路径。
-- **手动 opt-in**：刷新是独立按钮，不进入 `ingest_all` / 启动摄取 / 定时刷新。离线时只读上次缓存，不阻塞其它来源。
+- **独立 opt-in**：刷新是独立按钮，不进入 `ingest_all` / 启动摄取 / 本机会话的 1/5/10 分钟定时器。离线时只读上次缓存，不阻塞其它来源。用户可在设置 Cursor 页打开独立自动刷新（默认关，固定 10 分钟，独立存储键），仍不进本机 KPI / 5 小时窗。
 - **独立维度**：数据不进入 `UsageRecord`、`Source` 枚举或本机 token 聚合。处理方式对齐「代码量」。
 - **凭证不落明文**：会话 token 不写 `prices.json` 或其它可读配置，也不进备份包。
 
@@ -32,3 +32,5 @@ Cursor 的真实 token 用量只存在于云端账号，本机会话文件里没
 - `usage.sqlite` 新增 `cursor_account_usage` / `cursor_account_meta`，可独立清空，不参与 `ADAPTER_VERSION` 对账。
 - 事件表明细只读上述缓存表，分页下发，不重新联网。与本机会话没有关联键。
 - 概览 7 天滚动用量可单独挂一行 Cursor 账号汇总（`source=cursor`），费用走用户价目 / LiteLLM 快照兜底；仍不进入 `UsageRecord`、本机 token KPI 或 5 小时计费窗。
+
+**2026-09-02 修订（独立自动刷新）**：本机会话自动刷新仍不拉账号用量。账号用量若要定时联网，必须走设置 Cursor 页的独立开关，不得复用 1/5/10 分钟摄取定时器。开启后立即拉一次，之后每 10 分钟再拉；启动摄取路径仍然不碰这个维度。

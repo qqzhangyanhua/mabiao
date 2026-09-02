@@ -189,7 +189,12 @@ export default function App() {
                 ) : null}
                 {view === "cursor" ? (
                   <div className="stack">
-                    <LazyCursorAccountUsagePanel theme={theme} />
+                    <LazyCursorAccountUsagePanel
+                      theme={theme}
+                      autoRefresh={data.cursorAccountAutoRefresh}
+                      revision={data.cursorAccountRevision}
+                      onRefresh={data.refreshCursorAccount}
+                    />
                     <LazyCursorPanel
                       summary={data.codeVolume}
                       loading={data.codeVolumeLoading}
@@ -256,8 +261,10 @@ export default function App() {
                     onOverviewLayoutChange={setOverviewLayout}
                     themeMode={themeMode}
                     autoRefresh={data.autoRefresh}
+                    cursorAccountAutoRefresh={data.cursorAccountAutoRefresh}
                     onThemeModeChange={setThemeMode}
                     onAutoRefreshChange={data.setAutoRefresh}
+                    onCursorAccountAutoRefreshChange={data.setCursorAccountAutoRefresh}
                   />
                 ) : null}
               </Suspense>
