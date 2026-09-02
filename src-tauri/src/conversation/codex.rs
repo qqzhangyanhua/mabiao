@@ -204,6 +204,10 @@ pub(super) fn parse_content(
                     payload.clone(),
                 ));
             }
+            "world_state" | "inter_agent_communication_metadata" => {
+                flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
+                events.push(event_msg_semantic_event(line, &timestamp, kind, payload));
+            }
             "event_msg" => {
                 let event_kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
                 match event_kind {
@@ -214,7 +218,16 @@ pub(super) fn parse_content(
                         "assistant",
                         payload,
                     ),
-                    "token_count" | "heartbeat" => {}
+                    "token_count" | "heartbeat" | "item_completed" => {}
+                    "exec_command_end" | "patch_apply_end" | "mcp_tool_call_end"
+                    | "web_search_end" => {
+                        flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
+                        if let Some(event) =
+                            failed_tool_end_event(line, &timestamp, event_kind, payload)
+                        {
+                            events.push(event);
+                        }
+                    }
                     _ => {
                         flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
                         if let Some(message) = event_message(payload, &timestamp) {
@@ -241,6 +254,7 @@ pub(super) fn parse_content(
     populate_attachments(&mut events, &project);
     strip_message_bodies_from_details(&mut events);
     deduplicate_message_channels(&mut events);
+    assign_tool_result_names(&mut events);
     let source_file = path.to_string_lossy().to_string();
     assign_event_provenance(&mut events, &source_file);
     events.sort_by(compare_event_order);

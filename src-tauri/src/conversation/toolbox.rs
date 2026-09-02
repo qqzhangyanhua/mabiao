@@ -264,6 +264,7 @@ pub(crate) fn finish_source_conversation(
     populate_attachments(&mut events, &project);
     strip_message_bodies_from_details(&mut events);
     deduplicate_message_channels(&mut events);
+    assign_tool_result_names(&mut events);
     let source_file = path.to_string_lossy().to_string();
     assign_event_provenance(&mut events, &source_file);
     events.sort_by(compare_event_order);
@@ -540,23 +541,24 @@ pub(crate) fn response_semantic_event(
     let kind = payload.get("type").and_then(Value::as_str).unwrap_or("");
     match kind {
         "message" => None,
-        "function_call" | "custom_tool_call" | "web_search_call" | "local_shell_call" => {
-            Some(semantic_event(
-                sequence,
-                EventKind::ToolCall,
-                occurred_at,
-                Some(EventActor::Assistant),
-                optional_text(payload, &["name", "tool", "type"]),
-                optional_text(payload, &["arguments", "input", "query", "command"]),
-                payload.clone(),
-            ))
-        }
-        "function_call_output" | "custom_tool_call_output" => Some(tool_result_event(
+        "function_call"
+        | "custom_tool_call"
+        | "web_search_call"
+        | "local_shell_call"
+        | "tool_search_call"
+        | "view_image_tool_call" => Some(semantic_event(
             sequence,
+            EventKind::ToolCall,
             occurred_at,
-            payload,
-            include_deferred_content,
+            Some(EventActor::Assistant),
+            optional_text(payload, &["name", "tool", "type"])
+                .or_else(|| (kind == "view_image_tool_call").then(|| "view_image".to_string())),
+            tool_call_text(payload),
+            normalize_tool_call_details(payload),
         )),
+        "function_call_output" | "custom_tool_call_output" | "tool_search_output" => Some(
+            tool_result_event(sequence, occurred_at, payload, include_deferred_content),
+        ),
         "reasoning" => Some(semantic_event(
             sequence,
             EventKind::Plan,
@@ -575,7 +577,7 @@ pub(crate) fn response_semantic_event(
             None,
             payload.clone(),
         )),
-        "developer" | "system" => None,
+        "developer" | "system" | "agent_message" => None,
         _ => Some(unadapted_event(
             sequence,
             occurred_at,
@@ -608,10 +610,14 @@ pub(crate) fn tool_result_event(
     };
     let mut event = semantic_event(
         sequence,
-        EventKind::ToolResult,
+        if tool_payload_failed(payload) {
+            EventKind::Error
+        } else {
+            EventKind::ToolResult
+        },
         occurred_at,
         Some(EventActor::Tool),
-        optional_text(payload, &["name"]),
+        optional_text(payload, &["name", "toolName", "tool"]),
         rendered_text,
         details,
     );
@@ -636,6 +642,27 @@ pub(crate) fn event_msg_semantic_event(
             None,
             optional_text(payload, &["explanation", "message", "text"]),
             payload.clone(),
+        ),
+        "thread_goal_updated" => semantic_event(
+            sequence,
+            EventKind::Plan,
+            occurred_at,
+            Some(EventActor::Assistant),
+            Some("thread_goal_updated".to_string()),
+            payload
+                .get("goal")
+                .and_then(|goal| optional_text(goal, &["objective", "goal"]))
+                .or_else(|| optional_text(payload, &["objective", "goal"])),
+            payload.clone(),
+        ),
+        "view_image_tool_call" => semantic_event(
+            sequence,
+            EventKind::ToolCall,
+            occurred_at,
+            Some(EventActor::Assistant),
+            Some("view_image".to_string()),
+            optional_text(payload, &["path", "file_path"]),
+            normalize_tool_call_details(payload),
         ),
         "todo_state" => semantic_event(
             sequence,
@@ -691,6 +718,17 @@ fn is_lifecycle_kind(kind: &str) -> bool {
             | "branch_summary"
             | "custom"
             | "custom_message"
+            | "thread_settings_applied"
+            | "thread_name_updated"
+            | "thread_rolled_back"
+            | "world_state"
+            | "inter_agent_communication_metadata"
+            | "sub_agent_activity"
+            | "collab_waiting_end"
+            | "collab_agent_spawn_end"
+            | "collab_close_end"
+            | "collab_agent_interaction_end"
+            | "collab_resume_end"
     )
 }
 
@@ -724,6 +762,18 @@ fn lifecycle_status_text(kind: &str, payload: &Value) -> Option<String> {
             .get("data")
             .and_then(|data| optional_text(data, &["reason", "kind", "intent", "message"]))
             .or_else(|| optional_text(payload, &["reason", "message"])),
+        "thread_settings_applied" => payload
+            .get("thread_settings")
+            .and_then(|settings| optional_text(settings, &["model"])),
+        "thread_name_updated" => optional_text(payload, &["thread_name", "title"]),
+        "sub_agent_activity" => optional_text(payload, &["kind", "agent_path"]),
+        "collab_agent_spawn_end" => {
+            optional_text(payload, &["new_agent_nickname", "new_agent_role", "prompt"])
+        }
+        "collab_close_end" | "collab_resume_end" | "collab_agent_interaction_end" => optional_text(
+            payload,
+            &["receiver_agent_nickname", "receiver_agent_role", "prompt"],
+        ),
         _ => optional_text(
             payload,
             &["message", "reason", "text", "summary", "explanation"],
@@ -758,6 +808,138 @@ fn todo_state_text(payload: &Value) -> Option<String> {
 pub(crate) fn is_duplicate_tool_execution_start(value: &Value) -> bool {
     value.get("type").and_then(Value::as_str) == Some("custom")
         && value.get("customType").and_then(Value::as_str) == Some("tool_execution_start")
+}
+
+pub(crate) fn assign_tool_result_names(events: &mut [ConversationEvent]) {
+    let mut names = BTreeMap::<String, String>::new();
+    for event in events.iter() {
+        if event.kind != EventKind::ToolCall {
+            continue;
+        }
+        let Some(call_id) = event.details.get("call_id").and_then(Value::as_str) else {
+            continue;
+        };
+        if let Some(name) = event.name.clone() {
+            names.insert(call_id.to_string(), name);
+        }
+    }
+    for event in events.iter_mut() {
+        if event.name.is_some() || !is_tool_outcome(event) {
+            continue;
+        }
+        if let Some(call_id) = event.details.get("call_id").and_then(Value::as_str) {
+            event.name = names.get(call_id).cloned();
+        }
+    }
+}
+
+fn is_tool_outcome(event: &ConversationEvent) -> bool {
+    event.kind == EventKind::ToolResult
+        || (event.kind == EventKind::Error && event.actor == Some(EventActor::Tool))
+}
+
+pub(crate) fn failed_tool_end_event(
+    sequence: usize,
+    occurred_at: &str,
+    kind: &str,
+    payload: &Value,
+) -> Option<ConversationEvent> {
+    if !tool_payload_failed(payload) {
+        return None;
+    }
+    let name = match kind {
+        "exec_command_end" => Some("exec_command".to_string()),
+        "patch_apply_end" => Some("apply_patch".to_string()),
+        "web_search_end" => Some("web_search_call".to_string()),
+        "mcp_tool_call_end" => payload
+            .pointer("/invocation/tool")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| optional_text(payload, &["name", "tool"])),
+        _ => Some(kind.to_string()),
+    };
+    Some(semantic_event(
+        sequence,
+        EventKind::Error,
+        occurred_at,
+        Some(EventActor::Tool),
+        name,
+        optional_text(
+            payload,
+            &[
+                "aggregated_output",
+                "formatted_output",
+                "stdout",
+                "stderr",
+                "output",
+                "message",
+            ],
+        ),
+        payload.clone(),
+    ))
+}
+
+pub(crate) fn tool_payload_failed(payload: &Value) -> bool {
+    if json_flag(payload, &["is_error", "isError"]) {
+        return true;
+    }
+    if payload.get("success").and_then(Value::as_bool) == Some(false) {
+        return true;
+    }
+    if payload.get("status").and_then(Value::as_str) == Some("failed") {
+        return true;
+    }
+    if json_i64(payload, "exit_code").is_some_and(|code| code != 0) {
+        return true;
+    }
+    if payload.pointer("/result/Err").is_some() {
+        return true;
+    }
+    if let Some(metadata) = payload.get("metadata") {
+        if json_i64(metadata, "exit_code").is_some_and(|code| code != 0) {
+            return true;
+        }
+    }
+    output_metadata_failed(payload)
+}
+
+fn output_metadata_failed(payload: &Value) -> bool {
+    let Some(output) = payload.get("output").and_then(Value::as_str) else {
+        return false;
+    };
+    let Ok(parsed) = serde_json::from_str::<Value>(output) else {
+        return false;
+    };
+    json_i64(&parsed, "exit_code").is_some_and(|code| code != 0)
+        || parsed
+            .get("metadata")
+            .and_then(|metadata| json_i64(metadata, "exit_code"))
+            .is_some_and(|code| code != 0)
+        || json_flag(&parsed, &["is_error", "isError"])
+}
+
+fn json_flag(value: &Value, keys: &[&str]) -> bool {
+    keys.iter()
+        .any(|key| value.get(*key).and_then(Value::as_bool) == Some(true))
+}
+
+fn json_i64(value: &Value, key: &str) -> Option<i64> {
+    let field = value.get(key)?;
+    field
+        .as_i64()
+        .or_else(|| field.as_u64().and_then(|n| i64::try_from(n).ok()))
+        .or_else(|| field.as_str()?.parse().ok())
+}
+
+fn tool_call_text(payload: &Value) -> Option<String> {
+    optional_text(payload, &["arguments", "input", "query", "command", "path"]).or_else(|| {
+        payload.get("arguments").and_then(|arguments| {
+            arguments
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| optional_text(arguments, &["query", "path", "command"]))
+        })
+    })
 }
 
 pub(crate) fn unadapted_event(
@@ -946,14 +1128,22 @@ pub(crate) fn optional_text(value: &Value, keys: &[&str]) -> Option<String> {
 }
 
 pub(crate) fn response_message(payload: &Value, occurred_at: &str) -> Option<ConversationMessage> {
-    if payload.get("type").and_then(Value::as_str) != Some("message") {
-        return None;
-    }
-    let role = payload.get("role").and_then(Value::as_str)?;
-    if role != "user" && role != "assistant" {
-        return None;
-    }
-    message(role, occurred_at, payload.get("content")?)
+    let kind = payload.get("type").and_then(Value::as_str)?;
+    let (role, content) = match kind {
+        "message" => {
+            let role = payload.get("role").and_then(Value::as_str)?;
+            if role != "user" && role != "assistant" {
+                return None;
+            }
+            (role, payload.get("content")?)
+        }
+        "agent_message" => (
+            "assistant",
+            payload.get("content").or_else(|| payload.get("message"))?,
+        ),
+        _ => return None,
+    };
+    message(role, occurred_at, content)
 }
 
 pub(crate) fn event_message(payload: &Value, occurred_at: &str) -> Option<ConversationMessage> {

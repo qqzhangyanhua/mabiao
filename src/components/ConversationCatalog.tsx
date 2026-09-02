@@ -12,6 +12,13 @@ import { LoadingOverlay } from "./LoadingOverlay";
 import { Pagination } from "./Pagination";
 import { Spinner } from "./Spinner";
 import { SearchField } from "./ui/Field";
+import { Segmented } from "./ui/Segmented";
+import { Select } from "./ui/Select";
+
+const FAILURE_OPTIONS = [
+  { value: "all", label: "全部" },
+  { value: "failed", label: "工具失败" },
+] as const;
 
 export function ConversationCatalog({
   searchInput,
@@ -23,6 +30,11 @@ export function ConversationCatalog({
   loading,
   error,
   indexProgress,
+  toolNames,
+  toolNameOptions,
+  toolFailed,
+  onToolNames,
+  onToolFailed,
   onOpen,
 }: {
   searchInput: string;
@@ -34,6 +46,11 @@ export function ConversationCatalog({
   loading: boolean;
   error: string | null;
   indexProgress: ConversationIndexProgressDto | null;
+  toolNames: string[];
+  toolNameOptions: string[];
+  toolFailed: boolean;
+  onToolNames: (names: string[]) => void;
+  onToolFailed: (failed: boolean) => void;
   onOpen: (row: ConversationSessionRow) => void;
 }) {
   const { rows, total } = pageData;
@@ -55,12 +72,29 @@ export function ConversationCatalog({
           <h2>本地会话目录</h2>
           <p className="panel-note">{SESSION_ENTRY_COPY.conversationCatalogNote}</p>
         </div>
-        <SearchField
-          value={searchInput}
-          onChange={onSearchInput}
-          placeholder="搜索标题、正文、来源、项目、模型、ID 或时间"
-          ariaLabel="搜索对话记录"
-        />
+        <div className="conversation-catalog-filters">
+          <SearchField
+            value={searchInput}
+            onChange={onSearchInput}
+            placeholder="搜索标题、正文、来源、项目、模型、ID 或时间"
+            ariaLabel="搜索对话记录"
+          />
+          <Select
+            ariaLabel="工具名"
+            value={toolNames[0] ?? ""}
+            options={[
+              { value: "", label: "全部工具" },
+              ...toolNameOptions.map((name) => ({ value: name, label: name })),
+            ]}
+            onChange={(value) => onToolNames(value ? [value] : [])}
+          />
+          <Segmented
+            ariaLabel="工具失败"
+            value={toolFailed ? "failed" : "all"}
+            options={FAILURE_OPTIONS}
+            onChange={(value) => onToolFailed(value === "failed")}
+          />
+        </div>
         <span className="muted conversation-total">
           共 {total} 条
           {loading ? (

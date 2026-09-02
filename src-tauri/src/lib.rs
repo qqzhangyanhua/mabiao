@@ -630,6 +630,20 @@ async fn get_conversation_sessions_page(
 }
 
 #[tauri::command]
+async fn get_conversation_tool_names(
+    app: tauri::AppHandle,
+    query: ConversationQuery,
+) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        conversation::catalog_tool_names(&conn, &query)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 async fn get_conversation_detail(
     app: tauri::AppHandle,
     source: String,
@@ -1492,6 +1506,7 @@ pub fn run() {
             get_cursor_sessions_page,
             get_cursor_session_detail,
             get_conversation_sessions_page,
+            get_conversation_tool_names,
             get_conversation_detail,
             get_conversation_events,
             get_conversation_index_progress,

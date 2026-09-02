@@ -277,7 +277,7 @@ fn adapter_maps_legacy_response_items_and_skips_internal_records() {
         vec![
             ("message", None, Some("列出文件")),
             ("tool_call", Some("shell"), Some("{\"command\":[\"ls\"]}")),
-            ("tool_result", None, Some("src")),
+            ("tool_result", Some("shell"), Some("src")),
             ("plan", None, Some("先看目录")),
             ("system_status", Some("compacted"), None),
             ("system_status", Some("ghost_snapshot"), None),
@@ -288,6 +288,90 @@ fn adapter_maps_legacy_response_items_and_skips_internal_records() {
         .events
         .iter()
         .all(|event| event.name.as_deref() != Some("unknown")));
+}
+
+#[test]
+fn adapter_maps_codex_remaining_kinds_and_keeps_unknown_unadapted() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("codex-remaining.jsonl");
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"type":"session_meta","timestamp":"2026-08-21T00:00:00Z","payload":{"id":"remain-1","cwd":"/workspace"}}"#,
+            "\n",
+            r#"{"type":"world_state","timestamp":"2026-08-21T00:00:01Z","payload":{"full":false}}"#,
+            "\n",
+            r#"{"type":"inter_agent_communication_metadata","timestamp":"2026-08-21T00:00:02Z","payload":{"trigger_turn":true}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:03Z","payload":{"type":"thread_goal_updated","goal":{"objective":"覆盖 i18n"}}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:04Z","payload":{"type":"thread_name_updated","thread_name":"Review"}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:05Z","payload":{"type":"item_completed","item":{"type":"UserMessage"}}}"#,
+            "\n",
+            r#"{"type":"response_item","timestamp":"2026-08-21T00:00:06Z","payload":{"type":"function_call","name":"exec_command","call_id":"call-ok","arguments":"{}"}}"#,
+            "\n",
+            r#"{"type":"response_item","timestamp":"2026-08-21T00:00:07Z","payload":{"type":"function_call_output","call_id":"call-ok","output":"ok"}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:08Z","payload":{"type":"exec_command_end","call_id":"call-ok","exit_code":0,"aggregated_output":"ok"}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:09Z","payload":{"type":"exec_command_end","call_id":"call-fail","exit_code":1,"aggregated_output":"boom"}}"#,
+            "\n",
+            r#"{"type":"event_msg","timestamp":"2026-08-21T00:00:10Z","payload":{"type":"view_image_tool_call","call_id":"call-img","path":"/tmp/a.png"}}"#,
+            "\n",
+            r#"{"type":"response_item","timestamp":"2026-08-21T00:00:11Z","payload":{"type":"tool_search_call","call_id":"call-search","arguments":{"query":"spawn"}}}"#,
+            "\n",
+            r#"{"type":"response_item","timestamp":"2026-08-21T00:00:12Z","payload":{"type":"agent_message","content":[{"type":"output_text","text":"collab hello"}]}}"#,
+            "\n",
+            r#"{"type":"future_event","payload":{"secret":"keep-unadapted"}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let parsed = &index(&path).unwrap().conversations[0];
+    let kinds = parsed
+        .events
+        .iter()
+        .map(|event| {
+            (
+                event.kind.as_str(),
+                event.name.as_deref(),
+                event.text.as_deref(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        kinds,
+        vec![
+            ("system_status", Some("session_started"), None),
+            ("system_status", Some("world_state"), None),
+            (
+                "system_status",
+                Some("inter_agent_communication_metadata"),
+                None
+            ),
+            ("plan", Some("thread_goal_updated"), Some("覆盖 i18n")),
+            ("system_status", Some("thread_name_updated"), Some("Review")),
+            ("tool_call", Some("exec_command"), Some("{}")),
+            ("tool_result", Some("exec_command"), Some("ok")),
+            ("error", Some("exec_command"), Some("boom")),
+            ("tool_call", Some("view_image"), Some("/tmp/a.png")),
+            ("tool_call", Some("tool_search_call"), Some("spawn")),
+            ("message", None, Some("collab hello")),
+            ("unadapted", Some("future_event"), None),
+        ]
+    );
+    assert!(parsed
+        .events
+        .iter()
+        .all(|event| event.name.as_deref() != Some("item_completed")));
+    let failed = parsed
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::Error)
+        .unwrap();
+    assert_eq!(failed.actor, Some(EventActor::Tool));
 }
 
 #[test]

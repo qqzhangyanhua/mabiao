@@ -1907,6 +1907,93 @@ fn conversation_catalog_filters_by_model_provider_and_range() {
 }
 
 #[test]
+fn conversation_catalog_filters_by_tool_name_and_failure() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = home.join(".claude/projects/-workspace");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(
+        project.join("ok.jsonl"),
+        concat!(
+            r#"{"type":"user","sessionId":"ok-1","timestamp":"2026-09-01T10:00:00Z","cwd":"/workspace","message":{"role":"user","content":"read"}}"#,
+            "\n",
+            r#"{"type":"assistant","sessionId":"ok-1","timestamp":"2026-09-01T10:00:01Z","message":{"role":"assistant","model":"claude-sonnet-test","content":[{"type":"tool_use","id":"t-ok","name":"Read","input":{"path":"a"}}]}}"#,
+            "\n",
+            r#"{"type":"user","sessionId":"ok-1","timestamp":"2026-09-01T10:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t-ok","content":"ok"}]}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("fail.jsonl"),
+        concat!(
+            r#"{"type":"user","sessionId":"fail-1","timestamp":"2026-09-01T11:00:00Z","cwd":"/workspace","message":{"role":"user","content":"run"}}"#,
+            "\n",
+            r#"{"type":"assistant","sessionId":"fail-1","timestamp":"2026-09-01T11:00:01Z","message":{"role":"assistant","model":"claude-sonnet-test","content":[{"type":"tool_use","id":"t-fail","name":"Bash","input":{"command":"false"}}]}}"#,
+            "\n",
+            r#"{"type":"user","sessionId":"fail-1","timestamp":"2026-09-01T11:00:02Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t-fail","is_error":true,"content":"Exit code 1"}]}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+    let overrides =
+        crate::ingest::PathOverrides::from([("CLAUDE_CONFIG_DIR", vec![home.join(".claude")])]);
+    let conn = store::open_memory().unwrap();
+    crate::ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+
+    let names = crate::conversation::catalog_tool_names(
+        &conn,
+        &crate::domain::ConversationQuery::default(),
+    )
+    .unwrap();
+    assert_eq!(names, vec!["Bash".to_string(), "Read".to_string()]);
+
+    let by_bash = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            tool_names: vec!["Bash".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_bash.total, 1);
+    assert_eq!(by_bash.rows[0].session_id, "fail-1");
+
+    let by_read = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            tool_names: vec!["Read".into()],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_read.total, 1);
+    assert_eq!(by_read.rows[0].session_id, "ok-1");
+
+    let failed = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            tool_failed: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(failed.total, 1);
+    assert_eq!(failed.rows[0].session_id, "fail-1");
+
+    let failed_read = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            tool_names: vec!["Read".into()],
+            tool_failed: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(failed_read.total, 0);
+}
+
+#[test]
 fn codex_conversation_refresh_tombstones_deleted_files_and_revives_the_same_session() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

@@ -75,7 +75,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
 const DETAIL_READ_ATTEMPTS: usize = 3;
 const THUMBNAIL_MAX_WIDTH: u32 = 320;
 const THUMBNAIL_MAX_HEIGHT: u32 = 240;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 12;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 13;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -1221,7 +1221,88 @@ fn catalog_filter_sql(query: &ConversationQuery) -> (String, Vec<rusqlite::types
         clauses.push(format!("({start_at} != '' AND {start_at} <= ?)"));
         params.push(rusqlite::types::Value::Text(to.to_string()));
     }
+    if let Some(event_predicate) = catalog_tool_event_predicate(query) {
+        clauses.push(catalog_event_exists_sql(&event_predicate));
+        for name in query.tool_names.iter().filter(|name| !name.is_empty()) {
+            params.push(rusqlite::types::Value::Text(name.clone()));
+        }
+    }
     (clauses.join(" AND "), params)
+}
+
+fn catalog_event_exists_sql(extra: &str) -> String {
+    format!(
+        "EXISTS (\
+            SELECT 1 FROM conversation_events e \
+            WHERE e.source = sessions.source \
+              AND e.session_id = sessions.session_id \
+              AND e.index_generation = sessions.event_index_generation \
+              AND ({extra})\
+        )"
+    )
+}
+
+fn catalog_tool_event_predicate(query: &ConversationQuery) -> Option<String> {
+    let names = query
+        .tool_names
+        .iter()
+        .filter(|name| !name.is_empty())
+        .count();
+    if names == 0 && !query.tool_failed {
+        return None;
+    }
+    let mut parts = Vec::new();
+    if query.tool_failed {
+        parts.push("e.kind = 'error' AND e.actor = 'tool'".to_string());
+    } else {
+        parts.push(
+            "(e.kind IN ('tool_call', 'tool_result') OR (e.kind = 'error' AND e.actor = 'tool'))"
+                .to_string(),
+        );
+    }
+    if names > 0 {
+        parts.push(format!("e.name IN ({})", sql_placeholders(names)));
+    }
+    Some(parts.join(" AND "))
+}
+
+pub fn catalog_tool_names(
+    conn: &Connection,
+    query: &ConversationQuery,
+) -> Result<Vec<String>, String> {
+    let options_query = ConversationQuery {
+        search: None,
+        page: None,
+        page_size: None,
+        tool_names: Vec::new(),
+        tool_failed: false,
+        ..query.clone()
+    };
+    let (predicate, params) = catalog_filter_sql(&options_query);
+    let sql = format!(
+        r#"
+        SELECT DISTINCT e.name
+        FROM conversation_events e
+        JOIN conversation_sessions AS sessions
+          ON sessions.source = e.source
+         AND sessions.session_id = e.session_id
+         AND sessions.event_index_generation = e.index_generation
+        WHERE {predicate}
+          AND e.kind = 'tool_call'
+          AND e.name IS NOT NULL
+          AND e.name != ''
+        ORDER BY e.name COLLATE NOCASE
+        "#
+    );
+    let mut statement = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let names = statement
+        .query_map(params_from_iter(params.iter()), |row| {
+            row.get::<_, String>(0)
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(names)
 }
 
 pub fn sessions_page(

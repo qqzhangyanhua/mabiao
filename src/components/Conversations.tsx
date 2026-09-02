@@ -97,6 +97,9 @@ export function Conversations({
 }) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [toolNames, setToolNames] = useState<string[]>([]);
+  const [toolFailed, setToolFailed] = useState(false);
+  const [toolNameOptions, setToolNameOptions] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageData, setPageData] = useState<ConversationPage>({ rows: [], total: 0 });
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -141,6 +144,7 @@ export function Conversations({
     query: string;
   } | null>(null);
   const catalogGeneration = useRef(0);
+  const toolNamesGeneration = useRef(0);
   const detailGenerations = useRef(new Map<string, number>());
   const detailRequestGates = useRef(
     new Map<
@@ -298,7 +302,7 @@ export function Conversations({
 
   useEffect(() => {
     setPage(1);
-  }, [filter, search]);
+  }, [filter, search, toolNames, toolFailed]);
 
   useEffect(() => {
     const generation = ++catalogGeneration.current;
@@ -315,6 +319,8 @@ export function Conversations({
         providers: filter.providers,
         from: filter.from,
         to: filter.to,
+        tool_names: toolNames,
+        tool_failed: toolFailed,
       },
     })
       .then((result) => {
@@ -333,7 +339,31 @@ export function Conversations({
           setCatalogLoading(false);
         }
       });
-  }, [filter, revision, search, page, onError]);
+  }, [filter, revision, search, page, toolNames, toolFailed, onError]);
+
+  useEffect(() => {
+    const generation = ++toolNamesGeneration.current;
+    invoke<string[]>("get_conversation_tool_names", {
+      query: {
+        sources: filter.sources,
+        projects: filter.projects,
+        models: filter.models,
+        providers: filter.providers,
+        from: filter.from,
+        to: filter.to,
+      },
+    })
+      .then((names) => {
+        if (generation === toolNamesGeneration.current) {
+          setToolNameOptions(names);
+        }
+      })
+      .catch((error) => {
+        if (generation === toolNamesGeneration.current) {
+          onError?.(error);
+        }
+      });
+  }, [filter, revision, onError]);
 
   const fetchDetail = useCallback(
     (session: ConversationSessionRow, followUpdates = false) => {
@@ -967,6 +997,11 @@ export function Conversations({
       loading={catalogLoading}
       error={catalogError}
       indexProgress={indexProgress}
+      toolNames={toolNames}
+      toolNameOptions={toolNameOptions}
+      toolFailed={toolFailed}
+      onToolNames={setToolNames}
+      onToolFailed={setToolFailed}
       onOpen={loadDetail}
     />
   );

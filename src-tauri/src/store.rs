@@ -264,6 +264,8 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_events_session_gen
             ON conversation_events(source, session_id, index_generation, sequence);
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_kind_name
+            ON conversation_events(source, session_id, index_generation, kind, actor, name);
 
         CREATE TABLE IF NOT EXISTS official_quota (
             provider TEXT PRIMARY KEY,

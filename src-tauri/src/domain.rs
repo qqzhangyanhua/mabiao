@@ -765,6 +765,10 @@ pub struct ConversationQuery {
     pub from: Option<String>,
     #[serde(default)]
     pub to: Option<String>,
+    #[serde(default)]
+    pub tool_names: Vec<String>,
+    #[serde(default)]
+    pub tool_failed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

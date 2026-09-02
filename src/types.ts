@@ -408,6 +408,8 @@ export type ConversationQuery = {
   providers?: string[];
   from?: string | null;
   to?: string | null;
+  tool_names?: string[];
+  tool_failed?: boolean;
 };
 
 export type ConversationMatchField = "title" | "body";
