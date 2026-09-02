@@ -1,0 +1,81 @@
+src-tauri/src/lib.rs
+  s_09b96dd31d5fff::t_2d6d5ff9463b2d 32,409-436,1485-1487
+  s_09b96dd31d5fff::t_8eaff6a242631e 24
+src/components/BackupPanel.tsx
+  s_09b96dd31d5fff::t_f7897558cc9476 28,55
+src-tauri/src/ingest.rs
+  s_09b96dd31d5fff::t_d169b3e159308d 43-65,67,130,166,329,361
+  s_09b96dd31d5fff::t_5833a249fdd2ea 81
+CONTEXT.md
+  s_09b96dd31d5fff::t_5b7965879035c6 87
+src-tauri/src/tests/scan_paths.rs
+  s_09b96dd31d5fff::t_f00cb038175c9a 20-44,49-99,106-113,122,135,143-144,194-199,209,219,221-222
+  s_09b96dd31d5fff::t_1d4c45841ee476 45-46,103,126,148-152,166,169,214-217
+  s_09b96dd31d5fff::t_c5484ce9f36a28 1-19,47-48,100-102,104-105,114-121,123-125,127-134,136-142,145-147,153-165,167-168,170-193,200-208,210-213,218,220,223
+src/styles.css
+  s_09b96dd31d5fff::t_e71e7431d64009 1611-1684
+README.md
+  s_09b96dd31d5fff::t_c58e03e687dbd0 21
+src-tauri/src/tests/mod.rs
+  s_09b96dd31d5fff::t_0e6d7913ea14fb 49
+src/lib/settingsTabs.ts
+  s_09b96dd31d5fff::t_a2d293d702f8ed 10-15
+src-tauri/src/scan_paths.rs
+  s_09b96dd31d5fff::t_abb0d026c981ba 235
+  s_09b96dd31d5fff::t_1039f4eae576e5 171
+  s_09b96dd31d5fff::t_78081786a7e2cd 168-170
+  s_09b96dd31d5fff::t_ee9c8d30a5db9d 172-174,232-234
+  s_09b96dd31d5fff::t_a714ffbfedd426 236-238
+README.en.md
+  s_09b96dd31d5fff::t_f9498fd8eacb06 21
+src-tauri/src/backup.rs
+  s_09b96dd31d5fff::t_1e95c1ae3f6c1d 11,44,172-177,302-305,308
+  s_708138ba817cc5::t_0740848dc927eb 306-307
+src-tauri/src/conversation.rs
+  s_09b96dd31d5fff::t_719e4b779275af 1842
+docs/adr/0005-configurable-source-paths.md
+  s_09b96dd31d5fff::t_b3325dfd695d1a 32-34,38-39
+src/lib/settingsTabs.test.ts
+  s_09b96dd31d5fff::t_d93ecfd9f8db17 47
+  s_09b96dd31d5fff::t_7deadf72553f3a 14
+src/components/Settings.tsx
+  s_09b96dd31d5fff::t_29274fcd1074df 25,196
+src/components/ScanPathPanel.tsx
+  s_09b96dd31d5fff::t_5df2c367e46d0e 16-32,36,43,75,92,116,150,191
+  s_09b96dd31d5fff::t_8e607e79e525af 54
+  s_09b96dd31d5fff::t_52cf7aa80d8159 13-15
+  s_09b96dd31d5fff::t_d32a68d2f04cdf 33-35
+  s_09b96dd31d5fff::t_d2bd3d2b8aa3bc 37-42
+  s_09b96dd31d5fff::t_10c52bb136c700 44-46,51-53
+  s_09b96dd31d5fff::t_3c3bc629a4a950 55-57,72-74
+  s_09b96dd31d5fff::t_3cf021d52550d9 76-78,89-91
+  s_09b96dd31d5fff::t_ff8a1a186c4a24 93-95,113-115
+  s_09b96dd31d5fff::t_56fee8d69273a8 117-119,147-149
+  s_09b96dd31d5fff::t_f6b4ee6d238106 151-153,188-190
+src/components/SourceDiagnosticsPanel.tsx
+  s_09b96dd31d5fff::t_9eaf47238ee253 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3cdda7d03ede37c16204ccbfcfcd31bf6482374b",
+  "prompts": {},
+  "sessions": {
+    "s_09b96dd31d5fff": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0601b-e9ee-75e1-9bc8-66e478f33a13",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_708138ba817cc5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "22c3ab13-87ae-416b-8602-dd05012db644",
+        "model": "grok-4.5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
