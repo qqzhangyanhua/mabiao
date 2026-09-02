@@ -1,0 +1,61 @@
+src-tauri/src/conversation/claude_test.rs
+  s_ab9c85a28cca6a::t_106f2410825b62 31-67
+src-tauri/src/conversation/codex.rs
+  s_ab9c85a28cca6a::t_843c37dd6b045d 222
+  s_ab9c85a28cca6a::t_c9b72f6e7f3ad1 207-210,221,223-230,257
+src/components/ConversationCatalog.tsx
+  s_ab9c85a28cca6a::t_5c303b38a3c18d 15-21,33-37,49-53,75-96
+  s_ab9c85a28cca6a::t_85bd409738ea02 97
+src-tauri/src/store.rs
+  s_ab9c85a28cca6a::t_86dcd797ce2482 267-268
+src-tauri/src/conversation.rs
+  s_ab9c85a28cca6a::t_843c37dd6b045d 1299-1301
+  s_ab9c85a28cca6a::t_ad45e216f110aa 1226
+  s_ab9c85a28cca6a::t_3e31cf30766630 1224-1225,1227-1229,1233-1298,1302-1306
+  s_ab9c85a28cca6a::t_adb3cfc1b7256f 78
+  s_ab9c85a28cca6a::t_820b0685fd6d24 1307
+src-tauri/src/domain.rs
+  s_ab9c85a28cca6a::t_e6127d1b615015 768-771
+src/types.ts
+  s_ab9c85a28cca6a::t_c4494626b91106 411-412
+src/styles.css
+  s_ab9c85a28cca6a::t_c2045e5dd126c4 4386-4400
+  s_ab9c85a28cca6a::t_91cf09b2036b38 5859
+  s_ab9c85a28cca6a::t_22ea8e1cd1a233 5860-5861
+src-tauri/src/conversation/codex_test.rs
+  s_ab9c85a28cca6a::t_360f63b52332d6 280
+  s_ab9c85a28cca6a::t_07f827721added 294-376
+  s_ab9c85a28cca6a::t_7e73015dce6175 293
+src-tauri/src/conversation/toolbox.rs
+  s_ab9c85a28cca6a::t_a2f086a3389d91 813-934,936-944
+  s_ab9c85a28cca6a::t_843c37dd6b045d 554-555,559-561,935,1142
+  s_ab9c85a28cca6a::t_a86c68ae937e4d 267,544-549,551,553,556-557,580,613-617,620,646-666,721-731,765-776,1131-1141,1143-1146
+src/components/Conversations.tsx
+  s_ab9c85a28cca6a::t_1a68a94162f822 100-102,305,322-323,342-344,346-356,358-361,365-366
+  s_ab9c85a28cca6a::t_9a9acdb50709bb 147,345,357,362-364,1000-1004
+src-tauri/src/conversation/omp_test.rs
+  s_ab9c85a28cca6a::t_ea11533a42f22f 57-88
+src-tauri/src/tests/conversation.rs
+  s_ab9c85a28cca6a::t_c543664a47b0ed 1910-1938,1941-1995
+  s_ab9c85a28cca6a::t_843c37dd6b045d 1939-1940
+  s_ab9c85a28cca6a::t_6f64baf338ff6d 1909
+src-tauri/src/lib.rs
+  s_ab9c85a28cca6a::t_e0ad101faf362c 633-645,1509
+  s_ab9c85a28cca6a::t_76aec54d044316 632
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e719c6f8ebff0d80e06425a6521ed12666479ac2",
+  "prompts": {},
+  "sessions": {
+    "s_ab9c85a28cca6a": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a060cf-8e08-79c1-9eb7-b4fd2f2a2c8a",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
