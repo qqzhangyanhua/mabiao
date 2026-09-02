@@ -1,0 +1,77 @@
+README.md
+  s_99ca771d766051::t_6ead4e7851b46e 31
+src-tauri/src/domain.rs
+  s_99ca771d766051::t_9d5aa998e10095 19,23,37,55,74,93
+src/lib/format.ts
+  s_99ca771d766051::t_e35212a9f99882 104
+src/lib/overviewLayout.ts
+  s_99ca771d766051::t_31fb42e5c554d4 44
+src-tauri/src/adapters/mod.rs
+  s_99ca771d766051::t_31680e93567525 12,260-270
+  s_99ca771d766051::t_83098e063b04e7 271-273
+src/lib/type.ts
+  s_99ca771d766051::t_6215547da70af7 27
+src/lib/sourceIcon.test.ts
+  s_99ca771d766051::t_74e57e31d55fcf 19,37
+docs/probe/token-fields.md
+  s_99ca771d766051::t_39f8df8e865d08 10,22,78
+src-tauri/src/test_support/mod.rs
+  s_99ca771d766051::t_c5ad29a980ecfd 2,5
+  s_99ca771d766051::t_1d0e7112b2e426 13
+src/styles.css
+  s_99ca771d766051::t_448747ea0fdd2f 2756
+src-tauri/src/store.rs
+  s_99ca771d766051::t_b001021ab18a31 9
+README.en.md
+  s_99ca771d766051::t_603e88010ad5b0 31
+docs/adr/0005-configurable-source-paths.md
+  s_99ca771d766051::t_431a78880034bf 27
+src/lib/sourceIcon.ts
+  s_99ca771d766051::t_c816fe96f6f8b8 20
+src/icons.tsx
+  s_99ca771d766051::t_4cfcd0c4b1a4fa 254
+CONTEXT.md
+  s_99ca771d766051::t_21675909f581af 80
+src-tauri/src/test_support/helpers.rs
+  s_99ca771d766051::t_4c04862270bd98 181
+  s_99ca771d766051::t_25487983d38de5 235
+src/components/SourceIcon.tsx
+  s_99ca771d766051::t_3f5e34ffa2314f 100-105
+src-tauri/src/tests/ingest.rs
+  s_99ca771d766051::t_52b5ad2bd72b8b 991-994,1011,1034-1037,1130,1200-1202,1219-1223,1230-1231,1245-1248,1252,1274-1280,1282-1284,1364,1366,1368,1370-1371,1399,1541-1548,1550-1563,1585,1594-1599
+  s_99ca771d766051::t_cdb3b5bb062131 1285
+  s_99ca771d766051::t_1eaa335f81d2a9 1549
+src-tauri/src/adapters/hermes.rs
+  s_99ca771d766051::t_c3dff897fdcc2f 49
+  s_99ca771d766051::t_cdb3b5bb062131 1-48,50-185
+src-tauri/src/tests/adapters.rs
+  s_99ca771d766051::t_6c5c89319c7ac2 933-991
+  s_99ca771d766051::t_a788c9ade6d3ba 1007-1009,1019-1025
+  s_99ca771d766051::t_587beb27a74a42 864-888,894-932,992-1006,1026-1039
+  s_99ca771d766051::t_cdb3b5bb062131 889-893
+  s_99ca771d766051::t_0978debb152658 1010-1018
+  s_99ca771d766051::t_2bf223cfd09ca9 543
+  s_99ca771d766051::t_929b1f5348a5b5 1040-1042
+src/types.ts
+  s_99ca771d766051::t_83606bb7cbd63f 873-889,891
+src/lib/format.test.ts
+  s_99ca771d766051::t_9944788aac9c84 141
+src-tauri/src/test_support/hermes_fixture.rs
+  s_99ca771d766051::t_4d3dd1b96508da 1-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b7a7ccbc53d4865745eafc1188a92bd1cbc3efd7",
+  "prompts": {},
+  "sessions": {
+    "s_99ca771d766051": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06235-98b1-7cf2-adb5-7ffb47e79334",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
