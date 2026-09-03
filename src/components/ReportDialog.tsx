@@ -140,7 +140,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   function persistPreference(updates: Partial<SharePreference> = {}) {
     saveSharePreference({
       kind: updates.kind ?? kind,
-      quotaProvider: updates.quotaProvider ?? quotaProvider,
+      quotaProvider: "quotaProvider" in updates ? updates.quotaProvider ?? null : quotaProvider,
       posterStyleId: updates.posterStyleId ?? posterStyleId,
     });
   }
