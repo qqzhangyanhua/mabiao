@@ -53,7 +53,14 @@ ADR 0015 把周报钉成七个固定槽位、只读消耗记录；ADR 0018 把�
 
 海报 CSS 仍与应用外壳隔离：不得 `@import` 主样式表，不得复用应用主样式规则，不得依赖运行时外链资源。周报风格可以使用 `color-mix` 与 `backdrop-filter` 做玻璃 / 霓虹；额度卡 CSS 仍按 0018 禁止这两项，直到有单独决定改它。
 
-门禁盯隔离与主样式复用，不在 CI 里做像素快照。玻璃与霓虹的保真度靠本机 spike 与打包后的 Tauri WKWebView 目视。
+门禁由 `src/report/posterCss.test.ts` 盯隔离与主样式复用，覆盖清单从 `posterStyleRegistry` 推导（每个已注册风格必须带可解析的 `stylesheet`，并由渲染件实际 import），并并入额度卡 CSS。不得另维护一份会漏掉新风格的手写文件列表。不在 CI 里做像素快照。
+
+玻璃与霓虹的保真度靠本机 spike 与打包后的 Tauri WKWebView 目视，**每种已注册周报风格都要过一遍**：
+
+1. 浏览器打开 `http://localhost:1420/report-spike.html`（`pnpm dev`）。页上会列出全部已注册风格；用同一份假数据并排对照，再用风格开关对当前风格点「截图」，核对屏上渲染与 foreignObject PNG。`?case=single-night` / `?case=single-day` 把极端七槽位夹具铺成全部风格。
+2. 打包后的 Tauri 窗口（WKWebView）里打开分享对话框，对每种周报风格各复制一次，粘贴到预览应用：中文、玻璃模糊、霓虹发光、透明圆角、inline 装饰、按天柱、来源条，以及剪贴板图与预览一致。额度卡仍按 0018 做深浅主题目视，不走风格选择器。
+
+仓内复跑入口仍是 `docs/spikes/report-poster/NOTES.md`。
 
 ## 明确不做
 
@@ -64,4 +71,4 @@ ADR 0015 把周报钉成七个固定槽位、只读消耗记录；ADR 0018 把�
 - 当前海报成为 `dark-analytics`，预览与复制对现有用户保持同一张图，直到他们主动换风格。
 - 后续内置风格只往注册表加一行，并继续消费 `toPosterViewModel` 的输出。
 - ADR 0015 仍管报告数字与洞察；ADR 0018 仍管卡片种类与额度卡。本篇只放开周报视觉层。
-- 测试缝：注册表完整性（id 唯一、默认存在、名称与色块合法、渲染件可解析）、偏好解析回退、海报 CSS 隔离。报告 view model 与额度卡用例保持原缝，不在本篇重测口径。
+- 测试缝：注册表完整性（id 唯一、默认存在、名称与色块合法、stylesheet 可解析、渲染件可解析）、偏好解析回退、海报 CSS 隔离（覆盖面从注册表推导；周报允许 `color-mix` / `backdrop-filter`，额度卡仍禁）。报告 view model 与额度卡用例保持原缝，不在本篇重测口径。
