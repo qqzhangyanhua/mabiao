@@ -118,6 +118,7 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  min-height: 0;
   padding: 16px;
   border-right: 1px solid var(--line);
 }
@@ -158,6 +159,54 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.report-dialog-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.report-dialog-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-dialog-account.is-active {
+  border-color: var(--line-strong);
+  background: var(--overlay-recessed);
+}
+
+.report-dialog-account:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.report-dialog-account:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.report-dialog-account-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.report-dialog-account-plan {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .report-dialog-copy {

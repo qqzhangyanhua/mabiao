@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { formatClock, relativeTime } from "./format";
 import { officialQuotaAmountLabel, officialQuotaExhaustLabel } from "./officialQuotaDisplay";
 import {
+  eligibleQuotaRows,
   firstEligibleQuotaRow,
   quotaCardEmptyCopy,
   QUOTA_CARD_KICKER,
+  resolveQuotaAccount,
   toQuotaCardViewModel,
 } from "./quotaCard";
 import type { OfficialQuotaDto, OfficialQuotaRow, OfficialQuotaWindow } from "../types";
@@ -239,30 +241,34 @@ describe("toQuotaCardViewModel", () => {
   });
 });
 
-describe("firstEligibleQuotaRow", () => {
-  it("picks the first visible row that can render, skipping hidden and empty ones", () => {
-    const hidden = quotaRow({
-      provider: "claude",
-      application: "Claude Code",
-      freshness: "official",
-      captured_at: CAPTURED_AT,
-      windows: mixedWindows(),
-    });
-    const empty = quotaRow({
-      provider: "codex",
-      application: "Codex",
-      freshness: "unavailable",
-    });
-    const first = officialCursor({ provider: "cursor", application: "Cursor" });
-    const second = officialCursor({
-      provider: "custom:abc",
-      application: "家里的中转",
-      plan: null,
-    });
-    const picked = firstEligibleQuotaRow(
-      quotaDto([hidden, empty, first, second], { hidden_providers: ["claude"] }),
-    );
-    expect(picked?.provider).toBe("cursor");
+function mixedEligibleDto(): OfficialQuotaDto {
+  const hidden = quotaRow({
+    provider: "claude",
+    application: "Claude Code",
+    freshness: "official",
+    captured_at: CAPTURED_AT,
+    windows: mixedWindows(),
+  });
+  const empty = quotaRow({
+    provider: "codex",
+    application: "Codex",
+    freshness: "unavailable",
+  });
+  const first = officialCursor({ provider: "cursor", application: "Cursor" });
+  const second = officialCursor({
+    provider: "custom:abc",
+    application: "家里的中转",
+    plan: null,
+  });
+  return quotaDto([hidden, empty, first, second], { hidden_providers: ["claude"] });
+}
+
+describe("eligibleQuotaRows", () => {
+  it("lists visible snapshot rows in dto order and drops hidden ones", () => {
+    expect(eligibleQuotaRows(mixedEligibleDto()).map((row) => row.provider)).toEqual([
+      "cursor",
+      "custom:abc",
+    ]);
   });
 
   it("allows an unhidden custom provider with a snapshot", () => {
@@ -271,14 +277,42 @@ describe("firstEligibleQuotaRow", () => {
       application: "家里的中转",
       plan: null,
     });
-    expect(firstEligibleQuotaRow(quotaDto([custom]))?.application).toBe("家里的中转");
+    expect(eligibleQuotaRows(quotaDto([custom])).map((row) => row.application)).toEqual([
+      "家里的中转",
+    ]);
   });
 
-  it("returns null when no visible row can render", () => {
-    expect(firstEligibleQuotaRow(quotaDto([]))).toBeNull();
+  it("returns an empty list when nothing visible can render", () => {
+    expect(eligibleQuotaRows(quotaDto([]))).toEqual([]);
     expect(
-      firstEligibleQuotaRow(quotaDto([officialCursor()], { hidden_providers: ["cursor"] })),
-    ).toBeNull();
+      eligibleQuotaRows(quotaDto([officialCursor()], { hidden_providers: ["cursor"] })),
+    ).toEqual([]);
+  });
+});
+
+describe("firstEligibleQuotaRow", () => {
+  it("picks the first visible row that can render, skipping hidden and empty ones", () => {
+    expect(firstEligibleQuotaRow(mixedEligibleDto())?.provider).toBe("cursor");
+  });
+});
+
+describe("resolveQuotaAccount", () => {
+  it("keeps the remembered account when it is still eligible", () => {
+    const eligible = eligibleQuotaRows(mixedEligibleDto());
+    expect(resolveQuotaAccount(eligible, "custom:abc")?.application).toBe("家里的中转");
+  });
+
+  it("falls back to the first eligible account when memory is hidden, gone, or empty", () => {
+    const eligible = eligibleQuotaRows(mixedEligibleDto());
+    expect(resolveQuotaAccount(eligible, "claude")?.provider).toBe("cursor");
+    expect(resolveQuotaAccount(eligible, "missing")?.provider).toBe("cursor");
+    expect(resolveQuotaAccount(eligible, null)?.provider).toBe("cursor");
+  });
+
+  it("returns null when the eligible list is empty so no poster can be built", () => {
+    const row = resolveQuotaAccount([], "cursor");
+    expect(row).toBeNull();
+    expect(row ? toQuotaCardViewModel(row, NOW) : null).toBeNull();
   });
 });
 

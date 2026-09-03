@@ -84,8 +84,25 @@ export function toQuotaCardViewModel(
   };
 }
 
+export function eligibleQuotaRows(dto: OfficialQuotaDto): OfficialQuotaRow[] {
+  return visibleOfficialQuotaRows(dto.rows, dto.hidden_providers).filter(canRenderQuotaCard);
+}
+
 export function firstEligibleQuotaRow(dto: OfficialQuotaDto): OfficialQuotaRow | null {
-  return visibleOfficialQuotaRows(dto.rows, dto.hidden_providers).find(canRenderQuotaCard) ?? null;
+  return eligibleQuotaRows(dto)[0] ?? null;
+}
+
+export function resolveQuotaAccount(
+  eligible: readonly OfficialQuotaRow[],
+  rememberedProvider: string | null | undefined,
+): OfficialQuotaRow | null {
+  if (rememberedProvider) {
+    const remembered = eligible.find((row) => row.provider === rememberedProvider);
+    if (remembered) {
+      return remembered;
+    }
+  }
+  return eligible[0] ?? null;
 }
 
 export function quotaCardEmptyCopy(dto: OfficialQuotaDto): { title: string; hint: string } {

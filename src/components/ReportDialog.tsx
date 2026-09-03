@@ -4,19 +4,29 @@ import { Icon } from "../icons";
 import { copyReportImage } from "../lib/copyReportImage";
 import { consumeEscape } from "../lib/escapeShortcut";
 import { humanStatus } from "../lib/format";
-import { firstEligibleQuotaRow, quotaCardEmptyCopy, toQuotaCardViewModel } from "../lib/quotaCard";
+import {
+  eligibleQuotaRows,
+  quotaCardEmptyCopy,
+  resolveQuotaAccount,
+  toQuotaCardViewModel,
+} from "../lib/quotaCard";
 import { periodRangeLabel, toPosterViewModel } from "../lib/reportCopy";
+import {
+  loadSharePreference,
+  saveSharePreference,
+  type ShareCardKind,
+} from "../lib/sharePreference";
 import { capturePoster } from "../report/capturePoster";
 import { QuotaPoster } from "../report/QuotaPoster";
 import { ReportPoster } from "../report/ReportPoster";
 import type { OfficialQuotaDto, ReportDto } from "../types";
 import { EmptyState } from "./EmptyState";
+import { ShareQuotaAccounts } from "./ShareQuotaAccounts";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
 import { Segmented } from "./ui/Segmented";
 
 type CopyStatus = { tone: "ok" | "error"; text: string };
-type CardKind = "week" | "quota";
 
 const CARD_KIND_OPTIONS = [
   { value: "week", label: "周报" },
@@ -28,7 +38,9 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const posterRef = useRef<HTMLElement>(null);
   const copyRun = useRef(0);
   const copyingRef = useRef(false);
-  const [kind, setKind] = useState<CardKind>("week");
+  const [openedWith] = useState(loadSharePreference);
+  const [kind, setKind] = useState<ShareCardKind>(openedWith.kind);
+  const [quotaProvider, setQuotaProvider] = useState<string | null>(openedWith.quotaProvider);
   const [offset, setOffset] = useState(0);
   const [weekDto, setWeekDto] = useState<ReportDto | null>(null);
   const [weekError, setWeekError] = useState<string | null>(null);
@@ -36,7 +48,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const [quotaDto, setQuotaDto] = useState<OfficialQuotaDto | null>(null);
   const [quotaNowMs, setQuotaNowMs] = useState(() => Date.now());
   const [quotaError, setQuotaError] = useState<string | null>(null);
-  const [quotaLoading, setQuotaLoading] = useState(false);
+  const [quotaLoading, setQuotaLoading] = useState(openedWith.kind === "quota");
   const [copying, setCopying] = useState(false);
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
 
@@ -147,20 +159,37 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     ? periodRangeLabel(weekDto.start_date, weekDto.end_date)
     : "正在解析周期…";
   const weekPoster = kind === "week" && weekDto && !weekLoading ? toPosterViewModel(weekDto) : null;
+  const eligible = quotaDto ? eligibleQuotaRows(quotaDto) : [];
   const quotaRow =
-    kind === "quota" && quotaDto && !quotaLoading ? firstEligibleQuotaRow(quotaDto) : null;
+    kind === "quota" && quotaDto && !quotaLoading
+      ? resolveQuotaAccount(eligible, quotaProvider)
+      : null;
   const quotaPoster = quotaRow ? toQuotaCardViewModel(quotaRow, quotaNowMs) : null;
   const canCopy = Boolean(kind === "week" ? weekPoster : quotaPoster) && !copying;
 
-  function selectKind(next: CardKind) {
+  function persistPreference(nextKind: ShareCardKind, nextProvider: string | null) {
+    saveSharePreference({ kind: nextKind, quotaProvider: nextProvider });
+  }
+
+  function selectKind(next: ShareCardKind) {
     if (copying) {
       return;
     }
     setKind(next);
     setCopyStatus(null);
+    persistPreference(next, quotaProvider);
     if (next === "quota" && quotaDto === null) {
       setQuotaLoading(true);
     }
+  }
+
+  function selectQuotaAccount(provider: string) {
+    if (copying) {
+      return;
+    }
+    setQuotaProvider(provider);
+    setCopyStatus(null);
+    persistPreference("quota", provider);
   }
 
   async function copyPoster() {
@@ -253,6 +282,13 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                 </Button>
               </div>
             </>
+          ) : eligible.length > 1 && quotaRow ? (
+            <ShareQuotaAccounts
+              rows={eligible}
+              selectedProvider={quotaRow.provider}
+              disabled={copying}
+              onSelect={selectQuotaAccount}
+            />
           ) : quotaRow ? (
             <>
               <p className="report-dialog-range">{quotaRow.application}</p>
