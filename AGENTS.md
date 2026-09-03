@@ -83,6 +83,14 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 2. 跑 `cargo test conversation`（含增量、回填与正文搜索）
 3. 对照 `docs/adr/0011-conversation-event-index.md`、`0014-conversation-body-search.md`
 
+### 修改报告 / 洞察
+
+1. 洞察规则只写 Rust `report` 模块；前端 `reportCopy` 只把 payload 映射成文案，不算数、不排名、不选槽位
+2. 报告数字只来自消耗记录；禁止把代码量、官方额度、Cursor 账号用量并进 token 口径
+3. 新增时段聚合必须同步 `query.rs` 与 `aggregate.rs`，跑 `cargo test parity`
+4. 海报 CSS 不得使用 `color-mix` / `backdrop-filter`，不得复用主样式表
+5. 对照 `docs/adr/0015-report-and-insights.md`
+
 ## 领域词汇（简述）
 
 - **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain.rs`
@@ -93,6 +101,8 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 - **对话记录 (Conversation Record)**：目录元数据 + 事件正文索引（可搜提问/回复/工具名与输出）；不进备份、不进 token KPI
 - **全局指令 (Global Instruction)**：某个 Source 真正会跨项目加载的用户手写指令，不进 token KPI；避免用「规则 / 记忆」
 - **工作时间线 (Work Timeline)**：单日会话区间铺开，不是又一份 token KPI
+- **报告 (Report)**：已结束自然周期内消耗记录的可分享海报；不是独立数据维度，不把代码量 / 官方额度 / Cursor 账号用量并进 token
+- **洞察 (Insight)**：报告里的结构化事实，Rust 产生、前端只措辞
 
 详见 `CONTEXT.md` 与 `docs/adr/`。各平台构建与托盘差异见 `docs/platforms.md`。
 
