@@ -62,7 +62,7 @@ Claude Code 2.1.80+ 在 statusline 命令的 stdin JSON 里提供：
 - `result.rateLimits.primary.resetsAt`
 - 若有 `rateLimitsByLimitId`，按 bucket 展开 primary/secondary
 
-进程不在或超时：该行 `unavailable`，不影响另外三路。
+进程不在或超时：该行 `unavailable`，不影响其他家。
 
 ## Cursor
 

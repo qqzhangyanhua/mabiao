@@ -10,7 +10,7 @@ alwaysApply: false
 
 ## 新增一个 Source 的步骤
 
-1. 在 `domain.rs::Source` 枚举、`Source::ALL`、`as_str`、`application_name`、`parse` 中加入新变体
+1. 在 `domain::Source` 枚举、`Source::ALL`、`as_str`、`application_name`、`parse` 中加入新变体（实现在 `src-tauri/src/domain/usage.rs`，由 `domain.rs` re-export）
 2. 在 `adapters/` 下新增 `xxx.rs`，实现该来源的 `scan_dirs` / `discover` / `parse`（以及可选的 `sidecar_fingerprint`、`prepare_dir`、`prepare_file`、`display_dirs`、`detected`），并在 `adapters/mod.rs` 声明 `pub mod xxx;`
 3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行：登记路径环境变量、扫描目录、发现、解析、是否追加型日志、覆盖说明。漏填会让表完备性测试失败
 4. 在 `src-tauri/tests/fixtures/` 添加最小化脱敏 fixture，并在 `tests/adapters.rs` 写对应单测（参照 `codex_adapter_counts_last_token_usage_not_cumulative`）

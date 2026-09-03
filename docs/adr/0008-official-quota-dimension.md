@@ -1,5 +1,7 @@
 # 官方额度作为独立维度
 
+> **2026-09-03 修订（成员与取数）**：内置账号已扩到九家（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）；自定义提供商见 ADR 0012 / 0013。下文仍保留最初四条通道的决策叙述，不要把它读成当前完整名单。后续补充：Cursor 官方额度凭证不再走钥匙串，与 ADR 0006 相同，只读本机 `state.vscdb`；Claude 首选 `/api/oauth/usage`，失败再回落 statusline；Codex 首选 ChatGPT usage 接口，失败再回落 app-server。字段位置见 `docs/probe/official-quota.md`。
+
 Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消耗记录不是同一件事：官方 5 小时 / 周窗口还包含 claude.ai、Cowork、grok.com 等没有本地 jsonl 的用量。本机计费窗只是本地时间戳估计，不能画在同一根进度条上。
 
 **决定**：新增独立维度「官方额度 (Official Quota)」。四条受控取数通道各自失败、互不影响：

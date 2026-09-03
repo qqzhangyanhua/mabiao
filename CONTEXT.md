@@ -41,7 +41,7 @@ _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或�
 _Avoid_: parser、解析器、插件；不要省略「对话记录」只叫适配器（那条特指消耗记录）
 
 **官方额度 (Official Quota)**：
-账号级订阅限额（已用百分比、重置时间，以及按连续两次官方快照估计的撞线时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 来自 statusline 捕获，Codex 问本机 app-server，Cursor 读 globalStorage `state.vscdb`，Grok 读 `~/.grok/auth.json`，Antigravity 先读 macOS 钥匙串再回落客户端本机状态。本机既没凭证、也没历史缓存的账号不占一行。预计撞线只由官方前后两拍的百分比差计算，文案写成估计，不和官方进度条混成一根，也不用本机 5 小时燃烧去填官方百分比。
+账号级订阅限额（已用百分比、重置时间，以及按连续两次官方快照估计的撞线时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 首选本机 OAuth 调 `/api/oauth/usage`，失败再回落 statusline 捕获；Codex 首选本机 `auth.json` 调 ChatGPT usage 接口，失败再回落 `codex app-server`；Cursor 读 globalStorage `state.vscdb`；Grok 读 `~/.grok/auth.json`；Antigravity 先读 macOS 钥匙串再回落客户端本机状态。其余内置账号的凭证探测见 `docs/probe/official-quota.md`。本机既没凭证、也没历史缓存的账号不占一行。预计撞线只由官方前后两拍的百分比差计算，文案写成估计，不和官方进度条混成一根，也不用本机 5 小时燃烧去填官方百分比。
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条；不要并进报告的 token 总数
 
 **自定义提供商 (Custom Quota Provider)**：

@@ -26,5 +26,5 @@ alwaysApply: false
 
 ## 前端
 
-- 纯函数单测用 Vitest（`pnpm test`），集中在 `src/lib/*.test.ts`，node 环境；暂无组件级/E2E 测试
+- 纯函数单测用 Vitest（`pnpm test`），在 `src/lib/*.test.ts`、`src/hooks/*.test.ts`、`src/report/*.test.ts`，node 环境；暂无组件级/E2E 测试
 - `tsc` 类型检查是 `pnpm run build` 的一部分，改 DTO/`types.ts` 时必须能通过

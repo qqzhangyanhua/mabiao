@@ -123,7 +123,7 @@ cargo run --bin probe --manifest-path src-tauri/Cargo.toml
 
 ## 贡献
 
-欢迎 Issue 和 PR。新增来源 = 往 UsageAdapter 表加一行 + 写一个适配器：在 `domain.rs` 注册，实现 `src-tauri/src/adapters/<source>.rs`，在表里登记扫描 / 发现 / 解析，加脱敏 fixture 与测试，并在改了归一化输出时递增 `ADAPTER_VERSION`。验证命令与分层检查见 [`AGENTS.md`](AGENTS.md)。PR 建议先开 draft，CI 绿后再 mark ready。
+欢迎 Issue 和 PR。新增来源 = 往 UsageAdapter 表加一行 + 写一个适配器：在 `domain::Source`（`src-tauri/src/domain/usage.rs`）注册，实现 `src-tauri/src/adapters/<source>.rs`，在表里登记扫描 / 发现 / 解析，加脱敏 fixture 与测试，并在改了归一化输出时递增 `ADAPTER_VERSION`。验证命令与分层检查见 [`AGENTS.md`](AGENTS.md)。PR 建议先开 draft，CI 绿后再 mark ready。
 
 ## 许可证
 

@@ -1,4 +1,10 @@
-# 探测程序最近一次实测
+# 探测程序 2026-08-16 / 2026-08-17 批次
+
+本文件是 2026-08-16（`cargo run --bin probe`）与 2026-08-17（cursor-agent 脚本）的实测摘录，**不是**仓库里最新的探测记录。之后的探测：
+
+- Hermes：2026-09-02，见 [`hermes.md`](hermes.md)
+- 各来源字段总表：[`token-fields.md`](token-fields.md)
+- 官方额度：[`official-quota.md`](official-quota.md)
 
 时间：2026-08-17。只记录字段位置，不含会话正文。
 

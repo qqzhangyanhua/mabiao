@@ -1,5 +1,5 @@
 ---
-description: Rust backend conventions for the Tauri core (domain, ingest, store, query, cost, lib)
+description: Rust backend conventions for the Tauri core (domain, commands, ingest, store, query, cost)
 globs: src-tauri/src/**/*.rs
 alwaysApply: false
 ---

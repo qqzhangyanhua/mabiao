@@ -10,6 +10,7 @@
 - Grok：`updates.jsonl` + `summary.json`
 - OpenCode：`opencode.db` + `opencode.db-wal`
 - OMP：子代理 jsonl + 同名父会话 `{stem}.jsonl`（存在与否改变 `session_id` / `is_top_level`）
+- Hermes：`state.db` + `state.db-wal` / `state.db-shm`
 
 设置页暴露来源健康信息，并提供单来源或全部缓存重建。重建通过使缓存标记过期来强制重解析；只有新结果验证成功后才替换旧记录，不修改任何来源文件，也不会先清空最后一次正确缓存。
 
@@ -19,7 +20,7 @@
 - 单文件失败不会阻断其他文件和来源；报告标记为部分成功。该来源本轮只要出现失败，就延后删除对账，避免同时误删未见文件。
 - 来源扫描发生目录读取错误时不得做删除对账，避免把“无法读取”误判成“文件已删除”。
 - 追加型日志在**当前** `ADAPTER_VERSION` 下若解析记录数下降，视为截断/异常并保留旧缓存；缓存里的 `adapter_version` 落后于当前版本时，允许条数变少的成功解析覆盖（归一化规则升级的预期结果）。Kimi/Grok 辅助元数据损坏仍保留旧缓存。
-- 主文件指纹包含大小、纳秒级修改时间及平台可用的 inode/ctime；辅助小文件使用稳定内容哈希，OpenCode WAL 使用元数据指纹。
+- 主文件指纹包含大小、纳秒级修改时间及平台可用的 inode/ctime；辅助小文件使用稳定内容哈希，OpenCode / Hermes WAL 使用元数据指纹。
 - 启动摄取与“重建全部”都会清理未知 Source 的可重建缓存，避免旧版本或损坏数据让所有统计查询失效。
 - 修改适配器归一化规则时必须递增 `ADAPTER_VERSION`，触发旧缓存自动重摄取。
 - `usage.sqlite` 是可重建缓存；`prices.json` 是用户配置，不属于缓存重建范围。
