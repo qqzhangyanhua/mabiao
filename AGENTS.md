@@ -21,7 +21,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 | 层级 | 命令 | 覆盖 |
 |------|------|------|
-| 前端纯函数 | `pnpm test` | format、exportRows、viewCache、价目表等（`src/lib/*.test.ts` 与 `src/hooks/*.test.ts`） |
+| 前端纯函数 | `pnpm test` | format、exportRows、viewCache、价目表、海报风格注册表等（`src/lib/*.test.ts`、`src/hooks/*.test.ts`、`src/report/*.test.ts`） |
 | Rust 适配器 | `cargo test adapters` | 各 Source fixture → UsageRecord |
 | 聚合 SQL parity | `cargo test parity` | `query.rs` vs `aggregate.rs` 逐字段对照 |
 | 摄取缓存 | `cargo test ingest` | tempfile 模拟 home，不读真实 `~/.*` |
@@ -45,7 +45,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ### 新增 / 修改 Adapter
 
-1. 在 `domain.rs::Source` 注册变体
+1. 在 `domain::Source` 注册变体（实现文件 `src-tauri/src/domain/usage.rs`，由 `domain.rs` re-export）
 2. 实现 `src-tauri/src/adapters/<source>.rs`（扫描目录、发现、解析；需要时再加辅助指纹 / 目录级或文件级派生上下文）
 3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行，含路径环境变量（漏填会让完备性测试失败）
 4. 添加脱敏 fixture → `src-tauri/tests/fixtures/`
@@ -62,7 +62,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ### 修改前端 DTO
 
-1. 先改 Rust `domain.rs`，再改 `src/types.ts`（字段名保持 snake_case）
+1. 先改 Rust `domain` 模块（根文件 `domain.rs` 全量 re-export），再改 `src/types.ts`（字段名保持 snake_case）
 2. `pnpm build` 必须通过 strict TS
 
 ### 修改摄取 / 备份
@@ -72,7 +72,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ### 修改官方额度 / 自定义提供商
 
-1. 内置九家在 `domain.rs::OfficialQuotaProvider::ALL`（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）；新增一家要同时补 `official_quota/<provider>.rs`、`detect.rs` 的凭证探测与 `fetch.rs` 的分派
+1. 内置九家在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`；Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）；新增一家要同时补 `official_quota/<provider>.rs`、`detect.rs` 的凭证探测与 `fetch.rs` 的分派
 2. 凭证只读各客户端本机已有的登录态，不要加手动粘贴通路、不要写钥匙串；自定义提供商的密钥单独存一份文件，**不进备份**
 3. 用 fixture 测响应解析，不打真实接口（Cloud 上没有登录态）；跑 `cargo test quota`
 4. 对照 `docs/adr/0008-official-quota-dimension.md`、`0012-custom-quota-providers.md`、`0013-custom-quota-implemented-presets.md`
@@ -100,7 +100,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 ## 领域词汇（简述）
 
-- **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain.rs`
+- **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain::UsageRecord`
 - **来源 (Source)**：codex、claude、pi… 不要用「工具/渠道」
 - **代码量 (Code Volume)**：Cursor 行数统计，与 token 严格分区
 - **官方额度 (Official Quota)**：账号级订阅限额，成员含内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户登记的**自定义提供商**，不进总览 token KPI

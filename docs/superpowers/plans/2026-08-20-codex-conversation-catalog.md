@@ -1,5 +1,7 @@
 # Codex 对话记录基础闭环 Implementation Plan
 
+> **状态：已落地（历史计划）。** 对话记录目录已实现，见 ADR 0011 / 0014。下文路径与勾选框保留当时的实施步骤，**不要按本文件改代码**。现行约定见 `AGENTS.md`。已知过时处：`src-tauri/src/conversation.rs` 现为 `conversation/` 目录。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 新增独立“对话记录”入口，索引 Codex 会话元数据并按需读取用户与助手正文，同时保持消耗记录和 Cursor 会话口径不变。

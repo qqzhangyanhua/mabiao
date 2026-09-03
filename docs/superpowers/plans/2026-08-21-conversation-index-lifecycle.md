@@ -1,5 +1,7 @@
 # Conversation Index Lifecycle Implementation Plan
 
+> **状态：已落地（历史计划）。** 对话索引生命周期已实现，见 ADR 0011 / 0014。下文路径与勾选框保留当时的实施步骤，**不要按本文件改代码**。现行约定见 `AGENTS.md`。已知过时处：`src-tauri/src/conversation.rs` 现为 `conversation/` 目录；仓库没有 `pnpm type-check`，类型检查走 `pnpm build`。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 让 Codex 对话索引随既有摄取生命周期可靠更新，并让打开的详情在不重复解析无变化文件的前提下持续显示新增内容。
