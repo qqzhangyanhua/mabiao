@@ -1,0 +1,44 @@
+src/components/OverviewPanels.tsx
+  s_50d05f6d390d09::t_58740a3f475040 1-194
+src/components/ConversationTimelineRow.tsx
+  s_50d05f6d390d09::t_000b9ebc5464b9 3-7,72
+  s_50d05f6d390d09::t_342f02f5258281 1-2,8-71,73-146
+src/components/Overview.tsx
+  s_50d05f6d390d09::t_e878d6947f413f 19,259-294
+  s_50d05f6d390d09::t_ffaf6c2f2fc865 17,238-255,297-309
+src/hooks/useTickingNow.ts
+  s_50d05f6d390d09::t_de4ee6155c49ac 1-13
+src/components/OverviewKpiSection.tsx
+  s_50d05f6d390d09::t_f81e3326d5b75b 4-5
+  s_50d05f6d390d09::t_8e89b5e718ccb6 2,132
+  s_50d05f6d390d09::t_8ab2f6f1f33464 1,3,6-131,133-138
+src/lib/conversationTimelineVirtual.test.ts
+  s_50d05f6d390d09::t_2c063854619bac 185,187-188
+  s_50d05f6d390d09::t_a3fdbdd42ab386 3,8,12,15,163-184,186,189-264
+src/lib/conversationTimelineVirtual.ts
+  s_50d05f6d390d09::t_5f2bbb5d4a33b7 5-7,177-262
+src/components/OfficialQuotaSettingsPanel.tsx
+  s_50d05f6d390d09::t_57de6530f47248 3,10
+src/components/ConversationTimeline.tsx
+  s_50d05f6d390d09::t_bcf97dfcdf487a 26-27,348-364
+  s_50d05f6d390d09::t_6c2b894abc60fd 329,333-335
+  s_50d05f6d390d09::t_48e3db6d261890 14,18,22,117-127,240,313-319
+src/components/OfficialQuotaPanel.tsx
+  s_50d05f6d390d09::t_9a657ef24915c1 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "13afdcf1aefea2514c0434e3e98ce434133a1d52",
+  "prompts": {},
+  "sessions": {
+    "s_50d05f6d390d09": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a066b7-1e6e-7cf3-83a9-f95a174283de",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
