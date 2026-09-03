@@ -136,6 +136,32 @@ fn source_shares(dto: &ReportDto) -> Vec<(&str, i64)> {
         .collect()
 }
 
+/// `has_data` 时七个槽位都必须有当期值：总量、作息两条、最忙一天、来源、模型、最贵/最多会话、七根柱。
+fn assert_seven_slots(dto: &ReportDto) {
+    assert!(dto.has_data, "有消耗记录时必须 has_data");
+    assert!(dto.totals.session_count >= 1, "至少一条会话");
+    assert_eq!(dto.days.len(), 7, "按天必须铺满周一到周日");
+    assert!(
+        !dto.sources.is_empty(),
+        "来源占比不能空：{sources:?}",
+        sources = dto.sources
+    );
+    assert_eq!(
+        dto.sources.iter().map(|slice| slice.pct).sum::<i64>(),
+        100,
+        "来源占比必须合成 100%"
+    );
+    assert!(
+        !dto.models.is_empty() && dto.models.len() <= 3,
+        "模型有几条列几条、最多三条：{models:?}",
+        models = dto.models
+    );
+    let _ = night_share(dto);
+    let _ = peak_hours(dto);
+    let _ = busiest_day(dto);
+    let _ = top_session(dto);
+}
+
 fn usage_named(
     date: NaiveDate,
     hour: u32,
@@ -859,5 +885,153 @@ fn cursor_account_usage_does_not_become_top_session() {
             cost: Some(1.25),
             total_tokens: 100,
         }
+    );
+}
+
+#[test]
+fn single_usage_record_fills_all_seven_slots() {
+    let dto = build_with(&[usage(day(2026, 8, 12), 14, 0, 0, "only", 80)], week(0));
+    assert_seven_slots(&dto);
+    assert_eq!(dto.totals.total_tokens, 80);
+    assert_eq!(dto.totals.cost, None);
+    assert_eq!(dto.totals.session_count, 1);
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 0),
+            ("2026-08-11", 0),
+            ("2026-08-12", 80),
+            ("2026-08-13", 0),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
+    assert_eq!(busiest_day(&dto), 2);
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+    assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+    assert_eq!(night_share(&dto), (0, 80, 0));
+    assert_eq!(peak_hours(&dto), (11, 15));
+    assert!(matches!(
+        top_session(&dto),
+        ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            session_id,
+            total_tokens: 80,
+            ..
+        } if session_id == "only"
+    ));
+}
+
+#[test]
+fn single_day_of_usage_fills_all_seven_slots() {
+    let records = vec![
+        usage(day(2026, 8, 13), 10, 0, 0, "thu-a", 30),
+        usage(day(2026, 8, 13), 16, 0, 0, "thu-b", 50),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_seven_slots(&dto);
+    assert_eq!(dto.totals.total_tokens, 80);
+    assert_eq!(
+        day_tokens(&dto)
+            .iter()
+            .filter(|(_, tokens)| *tokens > 0)
+            .count(),
+        1
+    );
+    assert_eq!(busiest_day(&dto), 3);
+}
+
+#[test]
+fn single_source_and_model_fills_all_seven_slots() {
+    let records = vec![
+        usage(day(2026, 8, 10), 11, 0, 0, "mon", 20),
+        usage(day(2026, 8, 12), 14, 0, 0, "wed", 60),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_seven_slots(&dto);
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+    assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+}
+
+#[test]
+fn zero_cost_period_fills_all_seven_slots() {
+    let unpriced = build_with(&[usage(day(2026, 8, 12), 14, 0, 0, "free", 80)], week(0));
+    assert_seven_slots(&unpriced);
+    assert_eq!(unpriced.totals.cost, None);
+    assert!(matches!(
+        top_session(&unpriced),
+        ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            ..
+        }
+    ));
+
+    let zero_native = build_with(
+        &[with_cost(
+            usage(day(2026, 8, 12), 14, 0, 0, "zero", 80),
+            0.0,
+        )],
+        week(0),
+    );
+    assert_seven_slots(&zero_native);
+    assert_eq!(zero_native.totals.cost, Some(0.0));
+    assert!(matches!(
+        top_session(&zero_native),
+        ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            cost: Some(0.0),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn night_share_extremes_still_fill_all_seven_slots() {
+    let none = build_with(&[usage(day(2026, 8, 12), 14, 0, 0, "day", 80)], week(0));
+    assert_seven_slots(&none);
+    assert_eq!(night_share(&none), (0, 80, 0));
+
+    let all = build_with(&[usage(day(2026, 8, 12), 3, 0, 0, "night", 80)], week(0));
+    assert_seven_slots(&all);
+    assert_eq!(night_share(&all), (80, 80, 100));
+    assert_eq!(peak_hours(&all), (0, 4));
+}
+
+#[test]
+fn stacked_sparse_and_extreme_values_still_fill_all_seven_slots() {
+    // 一条凌晨记录：单日、单来源、单模型、不能定价、深夜 100%。
+    let dto = build_with(&[usage(day(2026, 8, 12), 3, 0, 0, "only", 80)], week(0));
+    assert_seven_slots(&dto);
+    assert_eq!(dto.totals.total_tokens, 80);
+    assert_eq!(dto.totals.cost, None);
+    assert_eq!(dto.totals.session_count, 1);
+    assert_eq!(busiest_day(&dto), 2);
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+    assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+    assert_eq!(night_share(&dto), (80, 80, 100));
+    assert_eq!(peak_hours(&dto), (0, 4));
+    assert!(matches!(
+        top_session(&dto),
+        ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            session_id,
+            project: Some(project),
+            cost: None,
+            total_tokens: 80,
+            ..
+        } if session_id == "only" && project == "/proj/a"
+    ));
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 0),
+            ("2026-08-11", 0),
+            ("2026-08-12", 80),
+            ("2026-08-13", 0),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
     );
 }

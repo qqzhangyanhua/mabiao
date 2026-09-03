@@ -126,7 +126,8 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     rangeLabel: periodRangeLabel(dto.start_date, dto.end_date),
     totalTokensLabel: formatCompact(dto.totals.total_tokens),
     totalUnit: REPORT_TOTAL_UNIT,
-    totalCostLabel: dto.totals.cost == null ? null : formatUsdAmount(dto.totals.cost),
+    totalCostLabel:
+      dto.totals.cost != null && dto.totals.cost > 0 ? formatUsdAmount(dto.totals.cost) : null,
     comments,
     days: dto.days.map((day, index) => ({
       label: BAR_LABELS[index] ?? "",
@@ -159,4 +160,3 @@ function parseDateParts(value: string): { year: number; month: number; day: numb
     day: Number(match[3]),
   };
 }
-

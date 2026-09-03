@@ -7,12 +7,14 @@ import "./poster.css";
 export function ReportPoster({
   data,
   posterRef,
+  posterId = "report-poster",
 }: {
   data: PosterViewModel;
   posterRef?: Ref<HTMLElement | null>;
+  posterId?: string;
 }) {
   return (
-    <article ref={posterRef} id="report-poster" className="report-poster">
+    <article ref={posterRef} id={posterId} className="report-poster">
       <p className="rp-kicker">{data.kicker}</p>
       <p className="rp-range">{data.rangeLabel}</p>
       <p className="rp-total">{data.totalTokensLabel}</p>

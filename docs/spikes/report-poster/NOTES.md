@@ -13,3 +13,9 @@ python3 scripts/capture-report-spike.py webkit chromium
 ```
 
 浏览器打开 `http://localhost:1420/report-spike.html`，点「截图」对比左右两栏。此页不进入产品导航，也不进生产构建。
+
+## 极端数据整图（#158）
+
+同一页底部有稀疏组合海报，数据走 `toPosterViewModel`。`?case=single-night` / `?case=single-day` 只渲染那一张，方便本机目视。
+
+检查项：七个槽位都在、没有「暂无数据」「——」「未命名会话」或 `$0.00`、单日仍是七根柱、单一来源是一条 100%、深夜 0% / 100% 文案读得通。截图见 `extreme/`。

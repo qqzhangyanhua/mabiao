@@ -1,3 +1,5 @@
+import { EXTREME_REPORT_CASES } from "../lib/reportExtremeFixtures";
+import { toPosterViewModel } from "../lib/reportCopy";
 import type { PosterViewModel } from "./posterTypes";
 
 /** 固定假数据：只用来验证截图路线，不是真实消耗记录。 */
@@ -28,3 +30,19 @@ export const FAKE_POSTER: PosterViewModel = {
     { label: "模型 Top 3", value: "claude-opus-4.1 · gpt-5 · grok-4" },
   ],
 };
+
+function requirePoster(id: string, dto: Parameters<typeof toPosterViewModel>[0]): PosterViewModel {
+  const poster = toPosterViewModel(dto);
+  if (!poster) {
+    throw new Error(`extreme case ${id} produced no poster`);
+  }
+  return poster;
+}
+
+/** #158 整图收口：与 reportCopy 组合用例同一份 DTO。 */
+export const EXTREME_POSTERS: { id: string; label: string; data: PosterViewModel }[] =
+  EXTREME_REPORT_CASES.map((item) => ({
+    id: item.id,
+    label: item.label,
+    data: requirePoster(item.id, item.dto),
+  }));

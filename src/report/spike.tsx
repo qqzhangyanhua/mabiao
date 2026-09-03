@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { capturePoster } from "./capturePoster";
-import { FAKE_POSTER } from "./fakePosterData";
+import { EXTREME_POSTERS, FAKE_POSTER } from "./fakePosterData";
 import { ReportPoster } from "./ReportPoster";
 import "./spike.css";
 
@@ -20,7 +20,16 @@ function posterNode(): HTMLElement {
   return node;
 }
 
+function selectedExtreme(): (typeof EXTREME_POSTERS)[number] | undefined {
+  const id = new URLSearchParams(window.location.search).get("case");
+  if (!id) {
+    return undefined;
+  }
+  return EXTREME_POSTERS.find((item) => item.id === id);
+}
+
 function SpikeApp() {
+  const extreme = selectedExtreme();
   const [png, setPng] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,6 +62,14 @@ function SpikeApp() {
       }
     }
   }, []);
+
+  if (extreme) {
+    return (
+      <div className="spike spike-focus">
+        <ReportPoster data={extreme.data} />
+      </div>
+    );
+  }
 
   return (
     <div className="spike">
@@ -93,6 +110,18 @@ function SpikeApp() {
           ) : null}
         </section>
       </div>
+      <section className="spike-extremes">
+        <h2>极端数据整图</h2>
+        <p>稀疏与数值极端的组合。目视确认没有空槽位或占位符。</p>
+        <div className="spike-extreme-list">
+          {EXTREME_POSTERS.map((item) => (
+            <div key={item.id} className="spike-col">
+              <h3>{item.label}</h3>
+              <ReportPoster data={item.data} posterId={`report-poster-${item.id}`} />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
