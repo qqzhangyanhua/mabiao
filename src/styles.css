@@ -943,7 +943,8 @@ input[type="checkbox"] {
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .kpi,
@@ -957,12 +958,16 @@ input[type="checkbox"] {
 }
 
 .kpi {
-  padding: 9px 14px 7px;
-  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px 12px 6px;
+  border-radius: 12px;
 }
 
 button.kpi {
-  display: block;
+  display: flex;
   width: 100%;
   margin: 0;
   font: inherit;
@@ -981,17 +986,17 @@ button.kpi {
 }
 
 .kpi-hint {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.3;
 }
 
 .kpi-detail {
-  margin-top: 6px;
+  margin-top: 2px;
   color: var(--text-soft);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.3;
   white-space: normal;
 }
 
@@ -1014,17 +1019,17 @@ button.kpi {
 .kpi-top {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted);
   font-size: 12px;
 }
 
 .kpi-ico {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--tone-codex-bg);
   color: var(--purple-fg);
 }
@@ -1045,9 +1050,10 @@ button.kpi {
 }
 
 .kpi-value {
-  margin-top: 6px;
-  font-size: 24px;
+  margin-top: 4px;
+  font-size: 20px;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
@@ -1057,7 +1063,8 @@ button.kpi {
   align-items: flex-end;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: auto;
+  padding-top: 2px;
 }
 
 .delta {
@@ -1077,71 +1084,48 @@ button.kpi {
 }
 
 .spark {
-  width: 108px;
-  height: 32px;
-}
-
-/* 概览页卡片略收紧：只作用于 .dash，避免趋势 / 拆分 / 时间线等共用 .kpi 一起变矮。
-   spark 叠在角上不占高度；四张卡 stretch 到费用卡（hint 那一行）的统一高度。 */
-.dash .kpi-row {
-  align-items: stretch;
-  gap: 8px;
-}
-
-.dash .kpi {
-  padding: 6px 10px 5px;
-  min-height: 72px;
-}
-
-.dash .kpi-ico {
-  width: 22px;
+  width: 88px;
   height: 22px;
 }
 
-.dash .kpi-top {
-  gap: 5px;
-}
-
-.dash .kpi-value {
-  margin-top: 3px;
-  font-size: 20px;
-}
-
-.dash .kpi-hint {
-  margin: 1px 0 0;
-  font-size: 10px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-right: 76px;
-}
-
-.dash .kpi-detail {
-  margin-top: 2px;
-  font-size: 10px;
-  line-height: 1.25;
-}
-
-.dash .kpi-detail p {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dash .kpi-foot {
-  margin-top: 2px;
-  min-height: 14px;
-  padding-right: 76px;
-}
-
-.dash .kpi .spark {
+.kpi .spark {
   position: absolute;
   right: 8px;
   bottom: 6px;
   width: 72px;
   height: 18px;
   pointer-events: none;
+}
+
+.kpi:has(.spark) .kpi-value,
+.kpi:has(.spark) .kpi-hint,
+.kpi:has(.spark) .kpi-detail,
+.kpi:has(.spark) .kpi-foot {
+  padding-right: 76px;
+}
+
+/* 概览 KPI 再收一档：费用附加信息单行截断，四张卡仍 stretch 对齐。 */
+.dash .kpi {
+  padding: 6px 10px 5px;
+}
+
+.dash .kpi-value {
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.dash .kpi-hint,
+.dash .kpi-detail {
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.dash .kpi-hint,
+.dash .kpi-detail p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dash .status-bar {
@@ -2967,10 +2951,10 @@ tr.session-detail-row td {
 .status-bar {
   display: grid;
   grid-template-columns: 1.1fr 1.1fr 1.2fr 0.9fr;
-  gap: 12px;
-  padding: 10px 16px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(180deg, var(--panel-grad-1), var(--panel-grad-2));
   box-shadow: 0 10px 30px var(--shadow-soft);
   flex: 0 0 auto;
@@ -2979,12 +2963,12 @@ tr.session-detail-row td {
 .stat-block {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .stat-block strong {
-  font-size: 17px;
+  font-size: 16px;
   letter-spacing: -0.03em;
 }
 
@@ -3002,9 +2986,10 @@ tr.session-detail-row td {
 }
 
 .stat-block .spark {
+  position: static;
   width: 100%;
   max-width: 140px;
-  height: 28px;
+  height: 22px;
 }
 
 .stat-block.last .muted {
@@ -3021,34 +3006,34 @@ tr.session-detail-row td {
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .roi-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .roi-cell {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px 16px;
+  gap: 4px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: var(--overlay-1);
   border: 1px solid var(--line);
 }
 
 .roi-cell strong {
-  font-size: 20px;
+  font-size: 18px;
   letter-spacing: -0.02em;
 }
 
@@ -3064,7 +3049,7 @@ tr.session-detail-row td {
 }
 
 .mini-card {
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 12px;
   background: var(--overlay-1);
   border: 1px solid var(--line);
@@ -3076,9 +3061,9 @@ tr.session-detail-row td {
 }
 
 .mini-card .value {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 650;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .note {
@@ -3663,19 +3648,18 @@ td.row-actions {
 .efficiency-cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .efficiency-card {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-height: 118px;
-  padding: 16px 18px;
+  gap: 4px;
+  padding: 10px 12px 8px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   background: linear-gradient(145deg, var(--panel-grad-1), var(--panel-grad-2));
   box-shadow: 0 10px 30px var(--shadow-soft);
 }
@@ -3683,10 +3667,10 @@ td.row-actions {
 .efficiency-card::after {
   content: "";
   position: absolute;
-  right: -32px;
-  bottom: -54px;
-  width: 140px;
-  height: 140px;
+  right: -28px;
+  bottom: -40px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   background: rgba(139, 108, 255, 0.16);
   filter: blur(1px);
@@ -3709,7 +3693,7 @@ td.row-actions {
 
 .efficiency-card span {
   color: var(--text-soft);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .efficiency-label {
@@ -3719,7 +3703,7 @@ td.row-actions {
 }
 
 .efficiency-card strong {
-  font-size: 30px;
+  font-size: 22px;
   line-height: 1.15;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
@@ -3742,12 +3726,12 @@ td.row-actions {
 
 .official-quota-panel {
   flex: 0 0 auto;
-  padding: 12px 14px 10px;
+  padding: 10px 12px 8px;
 }
 
 .cursor-overview-panel {
   flex: 0 0 auto;
-  padding: 12px 14px 12px;
+  padding: 10px 12px 10px;
 }
 
 .cursor-overview-metrics {
@@ -3786,10 +3770,10 @@ td.row-actions {
 
 .official-quota-list {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -6120,12 +6104,10 @@ td.row-actions {
   }
 
   .kpi {
-    min-height: 80px;
-    padding: 8px 12px 6px;
+    padding: 6px 10px 5px;
   }
 
   .dash .kpi {
-    min-height: 64px;
     padding: 5px 8px 4px;
   }
 
