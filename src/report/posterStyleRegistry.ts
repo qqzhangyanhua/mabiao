@@ -1,6 +1,7 @@
 import type { ComponentType, Ref } from "react";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
 import { LightGlassPoster } from "./lightGlassPoster";
+import { PurpleGlassPoster } from "./purpleGlassPoster";
 import type { PosterViewModel } from "./posterTypes";
 
 export type ReportPosterRenderProps = {
@@ -39,6 +40,17 @@ export const REPORT_POSTER_STYLES = [
       accent: "#3d9aa8",
     },
     Component: LightGlassPoster,
+  },
+  {
+    id: "purple-glass",
+    label: "紫蓝玻璃",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "purpleGlassPoster.css",
+    swatch: {
+      background: "#1b1460",
+      accent: "#c4b5fd",
+    },
+    Component: PurpleGlassPoster,
   },
 ] as const;
 

@@ -95,6 +95,13 @@ describe("parseSharePreference", () => {
       quotaProvider: null,
       posterStyleId: "light-glass",
     });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "purple-glass" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "purple-glass",
+    });
   });
 
   it("falls back to dark-analytics for missing, unknown, or malformed style ids", () => {
@@ -164,6 +171,12 @@ describe("share preference round-trip", () => {
       posterStyleId: "light-glass" as const,
     };
     expect(parseSharePreference(serializeSharePreference(lightGlass))).toEqual(lightGlass);
+    const purpleGlass = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "purple-glass" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(purpleGlass))).toEqual(purpleGlass);
   });
 
   it("loads stored preferences from localStorage and falls back when missing or malformed", () => {
@@ -203,5 +216,11 @@ describe("share preference round-trip", () => {
       posterStyleId: "light-glass",
     });
     expect(loadSharePreference().posterStyleId).toBe("light-glass");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "purple-glass",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("purple-glass");
   });
 });
