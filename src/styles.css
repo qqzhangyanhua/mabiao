@@ -1097,6 +1097,10 @@ button.kpi {
   pointer-events: none;
 }
 
+.kpi.has-spark .kpi-value,
+.kpi.has-spark .kpi-hint,
+.kpi.has-spark .kpi-detail,
+.kpi.has-spark .kpi-foot,
 .kpi:has(.spark) .kpi-value,
 .kpi:has(.spark) .kpi-hint,
 .kpi:has(.spark) .kpi-detail,
@@ -1135,10 +1139,14 @@ button.kpi {
 
 .dash .stat-block {
   gap: 2px;
+  min-width: 0;
 }
 
 .dash .stat-block strong {
   font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dash .cursor-overview-metrics {
@@ -1871,6 +1879,11 @@ button.heat-cell {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+.overview-layout-editor {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
 }
 
 .overview-layout-editor,

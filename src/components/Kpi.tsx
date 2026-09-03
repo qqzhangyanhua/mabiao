@@ -4,10 +4,10 @@ import { Icon, type IconName } from "../icons";
 export type KpiTone = "purple" | "cyan" | "orange" | "blue";
 
 export function toneColor(tone: KpiTone): string {
-  if (tone === "cyan") return "#22d3ee";
-  if (tone === "orange") return "#f59e0b";
-  if (tone === "blue") return "#60a5fa";
-  return "#8b6cff";
+  if (tone === "cyan") return "var(--cyan-fg)";
+  if (tone === "orange") return "var(--orange-fg)";
+  if (tone === "blue") return "var(--blue-fg)";
+  return "var(--purple-fg)";
 }
 
 export function KpiCard({
@@ -41,6 +41,8 @@ export function KpiCard({
 }) {
   const interactive = onClick != null;
   const cardTitle = title ?? hint;
+  const hasSpark = Boolean(spark && spark.length >= 2);
+  const cardClassName = `kpi tone-${tone}${hasSpark ? " has-spark" : ""}${interactive ? " is-clickable" : ""}`;
   const body = (
     <>
       {radar ? <div className="radar" /> : null}
@@ -77,7 +79,7 @@ export function KpiCard({
     return (
       <button
         type="button"
-        className={`kpi tone-${tone} is-clickable`}
+        className={cardClassName}
         aria-label={[label, value, hint, actionLabel, title].filter(Boolean).join("，")}
         title={cardTitle}
         onClick={onClick}
@@ -87,7 +89,7 @@ export function KpiCard({
     );
   }
   return (
-    <article className={`kpi tone-${tone}`} title={cardTitle}>
+    <article className={cardClassName} title={cardTitle}>
       {body}
     </article>
   );
