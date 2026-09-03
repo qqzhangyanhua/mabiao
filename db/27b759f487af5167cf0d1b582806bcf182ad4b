@@ -1,0 +1,30 @@
+src-tauri/src/tests/budget.rs
+  s_8f8c8f6508b5dd::t_af28f96813bd1a 1-191
+src-tauri/src/tests/tray.rs
+  s_8f8c8f6508b5dd::t_af28f96813bd1a 1-79
+src-tauri/src/tests/litellm.rs
+  s_8f8c8f6508b5dd::t_af28f96813bd1a 1-285
+src-tauri/src/tests/backup.rs
+  s_8f8c8f6508b5dd::t_af28f96813bd1a 1-365
+src-tauri/src/tests/cost.rs
+  s_8f8c8f6508b5dd::t_ac40241ed852aa 125-138
+  s_8f8c8f6508b5dd::t_af28f96813bd1a 124,139-271
+src-tauri/src/tests/mod.rs
+  s_8f8c8f6508b5dd::t_5c1fd277a9188b 5,7,36,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "db27b759f487af5167cf0d1b582806bcf182ad4b",
+  "prompts": {},
+  "sessions": {
+    "s_8f8c8f6508b5dd": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a066eb-1738-7592-b0a8-7e0c1cb58363",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
