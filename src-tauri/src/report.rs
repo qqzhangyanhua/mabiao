@@ -5,7 +5,8 @@ use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate};
 use rusqlite::{params_from_iter, Connection};
 
 use crate::domain::{
-    Filter, PriceTable, ReportDayPoint, ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind,
+    Filter, NamedAmount, PriceTable, ReportDayPoint, ReportDto, ReportInsight, ReportPeriod,
+    ReportPeriodKind, ReportShareSlice,
 };
 use crate::query;
 use crate::rollup_source::rollup_source;
@@ -36,6 +37,8 @@ pub fn build(
     } else {
         Vec::new()
     };
+    let sources = share_slices(&query::breakdown(conn, &filter, prices, "source")?);
+    let models = top_models(&query::breakdown(conn, &filter, prices, "model")?);
     Ok(ReportDto {
         period_kind: period.kind,
         offset: period.offset,
@@ -44,8 +47,69 @@ pub fn build(
         has_data,
         totals,
         days,
+        sources,
+        models,
         insights,
     })
+}
+
+fn share_slices(rows: &[NamedAmount]) -> Vec<ReportShareSlice> {
+    let rows: Vec<&NamedAmount> = rows.iter().filter(|row| row.total_tokens > 0).collect();
+    let tokens: Vec<i64> = rows.iter().map(|row| row.total_tokens).collect();
+    integer_pcts(&tokens)
+        .into_iter()
+        .zip(rows)
+        .map(|(pct, row)| ReportShareSlice {
+            name: row.name.clone(),
+            pct,
+        })
+        .collect()
+}
+
+fn top_models(rows: &[NamedAmount]) -> Vec<String> {
+    rows.iter()
+        .filter(|row| row.total_tokens > 0)
+        .take(3)
+        .map(|row| row.name.clone())
+        .collect()
+}
+
+fn integer_pcts(tokens: &[i64]) -> Vec<i64> {
+    let n = tokens.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let total: i64 = tokens.iter().sum();
+    if total <= 0 {
+        return vec![0; n];
+    }
+    if n == 1 {
+        return vec![100];
+    }
+    let mut floors = Vec::with_capacity(n);
+    let mut remainders = Vec::with_capacity(n);
+    let mut used = 0i64;
+    for (index, &token) in tokens.iter().enumerate() {
+        let exact = token as f64 * 100.0 / total as f64;
+        let floor = exact.floor() as i64;
+        used += floor;
+        floors.push(floor);
+        remainders.push((exact - floor as f64, index));
+    }
+    remainders.sort_by(|a, b| {
+        b.0.partial_cmp(&a.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.1.cmp(&b.1))
+    });
+    let mut leftover = 100 - used;
+    for (_, index) in remainders {
+        if leftover <= 0 {
+            break;
+        }
+        floors[index] += 1;
+        leftover -= 1;
+    }
+    floors
 }
 
 fn period_insights(

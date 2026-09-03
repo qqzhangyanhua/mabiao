@@ -953,6 +953,11 @@ export type ReportDayPoint = {
   total_tokens: number;
 };
 
+export type ReportShareSlice = {
+  name: string;
+  pct: number;
+};
+
 export type ReportDto = {
   period_kind: ReportPeriodKind;
   offset: number;
@@ -961,5 +966,7 @@ export type ReportDto = {
   has_data: boolean;
   totals: OverviewDto;
   days: ReportDayPoint[];
+  sources: ReportShareSlice[];
+  models: string[];
   insights: ReportInsight[];
 };

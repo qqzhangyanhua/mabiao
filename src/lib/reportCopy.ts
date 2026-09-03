@@ -1,6 +1,6 @@
 import type { PosterStat, PosterViewModel } from "../report/posterTypes";
 import type { ReportDto, ReportInsight } from "../types";
-import { formatCompact, formatUsdAmount } from "./format";
+import { formatCompact, formatUsdAmount, sourceLabel } from "./format";
 
 export const REPORT_KICKER = "码表 · 周报";
 export const REPORT_TOTAL_UNIT = "本周 token";
@@ -12,6 +12,15 @@ export type InsightCopy = {
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"] as const;
 const BAR_LABELS = ["一", "二", "三", "四", "五", "六", "日"] as const;
+const SHARE_COLORS = [
+  "#8b6cff",
+  "#3b82f6",
+  "#22d3ee",
+  "#f59e0b",
+  "#34d399",
+  "#f472b6",
+  "#64748b",
+] as const;
 
 export function periodRangeLabel(startDate: string, endDate: string): string {
   const start = parseDateParts(startDate);
@@ -101,6 +110,12 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     const copy = insightCopy(busiest);
     stats.push({ label: copy.headline, value: copy.comment });
   }
+  if (dto.models.length > 0) {
+    stats.push({
+      label: modelRankLabel(dto.models.length),
+      value: dto.models.join(" · "),
+    });
+  }
   return {
     kicker: REPORT_KICKER,
     rangeLabel: periodRangeLabel(dto.start_date, dto.end_date),
@@ -112,9 +127,20 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
       label: BAR_LABELS[index] ?? "",
       tokens: day.total_tokens,
     })),
-    sources: [],
+    sources: dto.sources.map((slice, index) => ({
+      label: sourceLabel(slice.name),
+      pct: slice.pct,
+      color: SHARE_COLORS[index % SHARE_COLORS.length] ?? SHARE_COLORS[0],
+    })),
     stats,
   };
+}
+
+function modelRankLabel(count: number): string {
+  if (count <= 1) {
+    return "模型";
+  }
+  return `模型 Top ${count}`;
 }
 
 function parseDateParts(value: string): { year: number; month: number; day: number } | null {

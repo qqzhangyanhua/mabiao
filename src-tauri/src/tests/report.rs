@@ -107,6 +107,32 @@ fn day_tokens(dto: &ReportDto) -> Vec<(&str, i64)> {
         .collect()
 }
 
+fn source_shares(dto: &ReportDto) -> Vec<(&str, i64)> {
+    dto.sources
+        .iter()
+        .map(|slice| (slice.name.as_str(), slice.pct))
+        .collect()
+}
+
+fn usage_named(
+    date: NaiveDate,
+    hour: u32,
+    source: Source,
+    model: &str,
+    session_id: &str,
+    total: i64,
+) -> crate::domain::UsageRecord {
+    rec(
+        &local_time_iso(date, hour, 0, 0),
+        source,
+        model,
+        "anthropic",
+        "/proj/a",
+        session_id,
+        total,
+    )
+}
+
 #[test]
 fn offset_zero_is_last_complete_local_week() {
     let dto = build_with(&[], week(0));
@@ -175,6 +201,8 @@ fn empty_period_returns_has_data_false_with_zero_totals() {
     assert_eq!(dto.totals.session_count, 0);
     assert_eq!(dto.totals.cost, None);
     assert!(dto.insights.is_empty());
+    assert!(dto.sources.is_empty());
+    assert!(dto.models.is_empty());
     assert_eq!(
         day_tokens(&dto),
         vec![
@@ -485,4 +513,135 @@ fn daily_series_uses_local_calendar_day_not_utc_date_prefix() {
         ]
     );
     assert_eq!(busiest_day(&dto), 0);
+}
+
+#[test]
+fn single_source_is_one_hundred_percent() {
+    let records = vec![
+        usage(day(2026, 8, 12), 10, 0, 0, "a", 40),
+        usage(day(2026, 8, 13), 11, 0, 0, "b", 60),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+}
+
+#[test]
+fn source_share_keeps_every_positive_source_as_integer_pct_summing_to_100() {
+    let records = vec![
+        usage_named(
+            day(2026, 8, 12),
+            10,
+            Source::Claude,
+            "claude-sonnet-5",
+            "c",
+            50,
+        ),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "x", 30),
+        usage_named(day(2026, 8, 13), 9, Source::Grok, "grok-4", "g", 20),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        source_shares(&dto),
+        vec![("claude", 50), ("codex", 30), ("grok", 20)]
+    );
+    assert_eq!(dto.sources.iter().map(|slice| slice.pct).sum::<i64>(), 100);
+}
+
+#[test]
+fn source_share_omits_zero_token_sources_and_ignores_records_outside_period() {
+    let records = vec![
+        usage_named(
+            day(2026, 8, 12),
+            10,
+            Source::Claude,
+            "claude-sonnet-5",
+            "in",
+            80,
+        ),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "zero", 0),
+        usage_named(day(2026, 8, 9), 10, Source::Pi, "pi-model", "prev", 900),
+        usage_named(day(2026, 8, 17), 10, Source::Grok, "grok-4", "next", 900),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+}
+
+#[test]
+fn source_share_largest_remainder_keeps_three_equal_slices_at_100() {
+    let records = vec![
+        usage_named(
+            day(2026, 8, 12),
+            10,
+            Source::Claude,
+            "claude-sonnet-5",
+            "c",
+            1,
+        ),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "x", 1),
+        usage_named(day(2026, 8, 12), 12, Source::Pi, "pi-model", "p", 1),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        source_shares(&dto),
+        vec![("claude", 34), ("codex", 33), ("pi", 33)]
+    );
+}
+
+#[test]
+fn cursor_account_usage_does_not_change_source_share() {
+    let records = vec![usage(day(2026, 8, 12), 12, 0, 0, "local", 100)];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    store::upsert_cursor_account_events(
+        &conn,
+        &[CursorUsageEvent {
+            occurred_at: local_time_iso(day(2026, 8, 12), 12, 0, 0),
+            model: "gpt-5".into(),
+            input_tokens: 999_999,
+            output_tokens: 999_999,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        }],
+    )
+    .unwrap();
+    let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
+    assert_eq!(source_shares(&dto), vec![("claude", 100)]);
+    assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+}
+
+#[test]
+fn model_rank_keeps_at_most_three_by_tokens_desc() {
+    let records = vec![
+        usage_named(day(2026, 8, 12), 10, Source::Claude, "opus", "a", 40),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "b", 30),
+        usage_named(day(2026, 8, 13), 9, Source::Grok, "grok-4", "c", 20),
+        usage_named(day(2026, 8, 13), 10, Source::Pi, "pi-mini", "d", 10),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        dto.models,
+        vec![
+            "opus".to_string(),
+            "gpt-5".to_string(),
+            "grok-4".to_string()
+        ]
+    );
+}
+
+#[test]
+fn model_rank_lists_however_many_exist_when_fewer_than_three() {
+    let records = vec![usage(day(2026, 8, 12), 10, 0, 0, "only", 80)];
+    let dto = build_with(&records, week(0));
+    assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+}
+
+#[test]
+fn model_rank_omits_zero_token_models() {
+    let records = vec![
+        usage_named(day(2026, 8, 12), 10, Source::Claude, "opus", "a", 80),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "b", 0),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(dto.models, vec!["opus".to_string()]);
 }

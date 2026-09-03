@@ -30,6 +30,8 @@ function dto(partial: Partial<ReportDto> & Pick<ReportDto, "has_data" | "totals"
     start_date: "2026-08-10",
     end_date: "2026-08-16",
     days: [],
+    sources: [],
+    models: [],
     insights: [],
     ...partial,
   };
@@ -210,6 +212,81 @@ describe("toPosterViewModel", () => {
       }),
     );
     expect(poster?.stats).toEqual([{ label: "最忙的一天", value: "周三" }]);
+  });
+
+  it("maps a single source as one 100% share slice with the source label", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        sources: [{ name: "claude", pct: 100 }],
+      }),
+    );
+    expect(poster?.sources).toEqual([{ label: "Claude Code", pct: 100, color: "#8b6cff" }]);
+  });
+
+  it("maps multiple sources using DTO integer percents without recomputing", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 100, session_count: 3 },
+        sources: [
+          { name: "claude", pct: 50 },
+          { name: "codex", pct: 30 },
+          { name: "grok", pct: 20 },
+        ],
+      }),
+    );
+    expect(poster?.sources).toEqual([
+      { label: "Claude Code", pct: 50, color: "#8b6cff" },
+      { label: "Codex", pct: 30, color: "#3b82f6" },
+      { label: "Grok CLI", pct: 20, color: "#22d3ee" },
+    ]);
+  });
+
+  it("labels a single model as 模型 without Top 1", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        models: ["claude-sonnet-5"],
+      }),
+    );
+    expect(poster?.stats).toEqual([{ label: "模型", value: "claude-sonnet-5" }]);
+  });
+
+  it("joins two models as 模型 Top 2 and three as 模型 Top 3", () => {
+    const two = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 2 },
+        models: ["opus", "gpt-5"],
+      }),
+    );
+    expect(two?.stats).toEqual([{ label: "模型 Top 2", value: "opus · gpt-5" }]);
+    const three = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 3 },
+        models: ["opus", "gpt-5", "grok-4"],
+      }),
+    );
+    expect(three?.stats).toEqual([{ label: "模型 Top 3", value: "opus · gpt-5 · grok-4" }]);
+  });
+
+  it("puts the model rank after busiest day in the stats row", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        models: ["opus"],
+        insights: [{ kind: "busiest_day", weekday: 2 }],
+      }),
+    );
+    expect(poster?.stats).toEqual([
+      { label: "最忙的一天", value: "周三" },
+      { label: "模型", value: "opus" },
+    ]);
   });
 
   it("appends night-share and peak-hours comments, including 0% and 100%", () => {
