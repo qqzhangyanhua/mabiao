@@ -22,11 +22,11 @@ alwaysApply: false
 - 数据模型对外路径保持 `crate::domain::…`。对话记录子模块私有、根上 re-export。存储/查询可以走真实子模块路径。见 `docs/adr/0017-rust-module-boundaries.md`
 - 纯重构不得改 `store::ADAPTER_VERSION` 与 `conversation::CONVERSATION_ADAPTER_VERSION`
 
-## Tauri command 层（lib.rs）
+## Tauri command 层
 
+- 函数体在 `commands/` 子模块；`generate_handler!` 注册列表留在 crate 根，写 `commands::…` 全路径
 - 每个 command 都用 `tauri::async_runtime::spawn_blocking` 包裹阻塞的 sqlite/文件 IO，再 `.await.map_err(...)?`
 - command 内部只做：取 `AppState`、锁 `conn`、按需 `load_prices`，然后委托给 `query`/`ingest` 模块；不要把业务逻辑写进 command
-- 新增 command 必须同时加入 crate 根的 `tauri::generate_handler![...]` 列表（宏要全路径）
 
 ## 费用计算（cost.rs）
 
