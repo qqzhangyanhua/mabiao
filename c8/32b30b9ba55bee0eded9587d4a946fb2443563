@@ -1,0 +1,65 @@
+src/report/poster.css
+  s_c472b413eaa1b3::t_a178f7a04f4c89 2-10,14-15,21-32,44,51,62,79,85
+  s_c472b413eaa1b3::t_cd3f8a5f19b5be 70,93,103,113,128,146,174,181,188
+  s_c472b413eaa1b3::t_4ff7841e08a925 104
+src-tauri/src/report.rs
+  s_c472b413eaa1b3::t_cc6f0597b4c367 5,9-11,25,31,65-82
+  s_c472b413eaa1b3::t_a3204eef743937 7
+  s_c472b413eaa1b3::t_b975fe15357460 1-4,6,8,12-24,26-30,32-64,83-97
+  s_c472b413eaa1b3::t_aec0239a80526d 98-99
+src/types.ts
+  s_c472b413eaa1b3::t_99af857ac1b0a7 927-959
+src/lib/reportCopy.test.ts
+  s_c472b413eaa1b3::t_2d3b1c8fac1018 56-67,125-133
+  s_c472b413eaa1b3::t_b3d2ebc5ec7f94 1-55,68-124,134-175
+src/report/fakePosterData.ts
+  s_c472b413eaa1b3::t_4f7d62ed0954a4 10,25-28
+  s_c472b413eaa1b3::t_6a3cf3acc6740a 29
+src/components/ReportDialog.tsx
+  s_c472b413eaa1b3::t_c2bbd20d9cb430 1-21,23-153
+  s_c472b413eaa1b3::t_dcbf10dd42daa1 22
+src/report/ReportPoster.tsx
+  s_c472b413eaa1b3::t_aefee01af9b2a9 13-42
+src-tauri/src/tests/report.rs
+  s_c472b413eaa1b3::t_f0ac29dd05717c 138-145
+  s_c472b413eaa1b3::t_503ad8ab021b87 5
+  s_c472b413eaa1b3::t_4fd0d1f675e913 1-4,6-137,146-219
+src/styles.css
+  s_c472b413eaa1b3::t_251206eab27cb3 6811-6917
+src-tauri/src/tests/mod.rs
+  s_c472b413eaa1b3::t_a3204eef743937 48
+src-tauri/src/lib.rs
+  s_c472b413eaa1b3::t_72f0540ddc89bd 22,53-55,240-251,1499
+src/lib/reportCopy.ts
+  s_c472b413eaa1b3::t_02a614227531fd 2-93,95-96,98-111
+  s_c472b413eaa1b3::t_95367f77f8f3de 1,94,97
+src/components/Overview.tsx
+  s_c472b413eaa1b3::t_e8506d9dc0abc1 1,232
+  s_c472b413eaa1b3::t_7930f97cc2fb91 201,224-231,233-237
+  s_c472b413eaa1b3::t_e18ef805641d12 15,21
+  s_c472b413eaa1b3::t_2d3b1c8fac1018 200,409-410,412
+src-tauri/src/domain.rs
+  s_c472b413eaa1b3::t_c6ff45a75edc94 174-235
+src-tauri/src/work_timeline.rs
+  s_c472b413eaa1b3::t_c835fcbe9261a4 288-295
+src/report/DailyBarChart.tsx
+  s_c472b413eaa1b3::t_14b09857b96d62 28,34
+src/report/posterTypes.ts
+  s_c472b413eaa1b3::t_45fa91ccc82e46 12-16,22-23,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "c832b30b9ba55bee0eded9587d4a946fb2443563",
+  "prompts": {},
+  "sessions": {
+    "s_c472b413eaa1b3": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a065d6-f7a8-76e3-8738-e057c7f7dd16",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
