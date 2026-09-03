@@ -153,6 +153,9 @@ export const Overview = memo(function Overview({
       : undefined;
   const costBucketLine = formatCostBucketLine(data.cost_breakdown, data.cost_sources.native);
   const costSourceLine = formatCostSourceLine(data.cost_sources);
+  const costExtraLine = [costLink.hint, costBucketLine, costSourceLine]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
   const last = trend[trend.length - 1];
   const rate = last ? Math.round(last.total_tokens / BUCKET_MINUTES[grain]) : 0;
   const spark = trend.map((point) => point.total_tokens);
@@ -255,15 +258,8 @@ export const Overview = memo(function Overview({
             value={formatUsd(data.cost, data.unpriced)}
             delta={costDiagnosis ? null : costDelta}
             spark={trend.map((point) => point.cost ?? 0)}
-            hint={costLink.hint}
-            detail={
-              costBucketLine || costSourceLine ? (
-                <>
-                  {costBucketLine ? <p>{costBucketLine}</p> : null}
-                  {costSourceLine ? <p>{costSourceLine}</p> : null}
-                </>
-              ) : undefined
-            }
+            title={costExtraLine || undefined}
+            detail={costExtraLine ? <p>{costExtraLine}</p> : undefined}
             actionLabel={costDiagnosis ? costLink.actionLabel : undefined}
             onClick={costDiagnosis}
           />

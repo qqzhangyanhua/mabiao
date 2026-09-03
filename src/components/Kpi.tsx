@@ -21,6 +21,7 @@ export function KpiCard({
   radar,
   hint,
   detail,
+  title,
   actionLabel,
   onClick,
 }: {
@@ -34,16 +35,18 @@ export function KpiCard({
   radar?: boolean;
   hint?: string;
   detail?: ReactNode;
+  title?: string;
   actionLabel?: string;
   onClick?: () => void;
 }) {
   const interactive = onClick != null;
+  const cardTitle = title ?? hint;
   const body = (
     <>
       {radar ? <div className="radar" /> : null}
       <div className="kpi-top">
         <span className="kpi-ico">
-          <Icon name={icon} size={16} />
+          <Icon name={icon} size={14} />
         </span>
         <span className="kpi-label">{label}</span>
         {live ? (
@@ -55,19 +58,19 @@ export function KpiCard({
       <div className="kpi-value">{value}</div>
       {detail ? <div className="kpi-detail">{detail}</div> : null}
       {hint ? <p className="kpi-hint">{hint}</p> : null}
-      <div className="kpi-foot">
-        {actionLabel ? (
+      {actionLabel ? (
+        <div className="kpi-foot">
           <span className="kpi-action">
             {actionLabel}
             <Icon name="chevron" size={12} className="flip" />
           </span>
-        ) : delta ? (
+        </div>
+      ) : delta ? (
+        <div className="kpi-foot">
           <span className={`delta ${delta.tone}`}>{delta.text}</span>
-        ) : (
-          <span />
-        )}
-        {spark ? <Spark values={spark} color={toneColor(tone)} /> : null}
-      </div>
+        </div>
+      ) : null}
+      {spark ? <Spark values={spark} color={toneColor(tone)} /> : null}
     </>
   );
   if (interactive) {
@@ -75,14 +78,19 @@ export function KpiCard({
       <button
         type="button"
         className={`kpi tone-${tone} is-clickable`}
-        aria-label={[label, value, hint, actionLabel].filter(Boolean).join("，")}
+        aria-label={[label, value, hint, actionLabel, title].filter(Boolean).join("，")}
+        title={cardTitle}
         onClick={onClick}
       >
         {body}
       </button>
     );
   }
-  return <article className={`kpi tone-${tone}`}>{body}</article>;
+  return (
+    <article className={`kpi tone-${tone}`} title={cardTitle}>
+      {body}
+    </article>
+  );
 }
 
 export function Spark({ values, color }: { values: number[]; color: string }) {
