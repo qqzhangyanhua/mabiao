@@ -3,6 +3,7 @@ pub mod aggregate;
 pub mod backup;
 pub mod billing_window;
 pub mod budget;
+pub mod clipboard;
 pub mod conversation;
 pub mod cost;
 pub mod cursor_account;
@@ -1349,6 +1350,14 @@ async fn refresh_tray(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())?
 }
 
+/// 把 PNG（base64）解码成 RGBA 并写入系统剪贴板。不落盘。
+#[tauri::command]
+async fn copy_image_to_clipboard(base64: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::copy_png_base64(&base64))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// 弹出原生保存对话框并写入图表 PNG（base64 编码）；返回 `false` 表示用户取消。
 #[tauri::command]
 async fn export_image(default_name: String, base64: String) -> Result<bool, String> {
@@ -1560,6 +1569,7 @@ pub fn run() {
             clear_cursor_account_usage,
             export_csv,
             export_json,
+            copy_image_to_clipboard,
             export_image,
             backup_data,
             restore_data,

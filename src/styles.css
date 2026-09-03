@@ -6887,6 +6887,33 @@ td.row-actions {
   gap: 8px;
 }
 
+.report-dialog-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.report-dialog-copy .ghost-btn {
+  gap: 6px;
+  width: 100%;
+}
+
+.report-dialog-copy-status {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.report-dialog-copy-status.is-ok {
+  color: var(--green-fg);
+}
+
+.report-dialog-copy-status.is-error {
+  color: var(--red-fg);
+}
+
 .report-dialog-preview {
   min-width: 0;
   padding: 24px;

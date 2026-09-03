@@ -78,6 +78,18 @@ pnpm tauri build -- --target aarch64-apple-darwin
 pnpm tauri build -- --target x86_64-apple-darwin
 ```
 
+## 报告剪贴板
+
+周报薄切版只写入系统剪贴板，不落盘。路径：webview 用 `modern-screenshot` 的 `foreignObject` 截成 PNG → Rust 解码为未预乘 RGBA → `arboard` 写入。不要把 PNG 字节直接塞进剪贴板。
+
+| 平台 | 写入形态 | 已知差异 |
+|------|----------|----------|
+| macOS | NSPasteboard TIFF（arboard 把 RGBA 再编码） | 本机 `cargo test macos_clipboard_roundtrip -- --ignored` 已把 1×1 红像素写进剪贴板并读回。未在 Tauri 窗口里粘贴到聊天应用。个别只认 `public.png` 的应用可能贴不上 |
+| Windows | `CF_DIB` | 未在本机验证。圆角透明通道在 DIB 上可能被铺成不透明底 |
+| Linux | X11 选区 / Wayland `wlr-data-control` | 未在本机验证。X11 必须在应用运行期间保持 `Clipboard` 实例，关闭应用后若没有剪贴板管理器，选区会丢。没有 `wlr-data-control` 的 Wayland 会话可能写失败 |
+
+CI 不测截图与剪贴板 I/O（见 ADR 0015）。
+
 ## 开发约定
 
 - 包管理：**pnpm**（`tauri.conf.json` 的 `beforeDevCommand` / `beforeBuildCommand` 亦使用 `pnpm run`）

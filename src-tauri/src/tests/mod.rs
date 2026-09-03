@@ -5,6 +5,7 @@ mod antigravity_quota;
 mod billing;
 mod claude_quota;
 mod claude_usage;
+mod clipboard;
 mod codex_quota;
 mod codex_usage;
 mod conversation;

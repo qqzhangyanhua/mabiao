@@ -41,6 +41,7 @@ urlencoding = "2"
 dirs = "6"
 rfd = "0.17.2"
 base64 = "0.22"
+arboard = "3"
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 tauri-plugin-notification = "2.3.3"
 ureq = { version = "2", default-features = false, features = ["json", "tls", "socks-proxy"] }

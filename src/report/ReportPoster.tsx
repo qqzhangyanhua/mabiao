@@ -1,11 +1,18 @@
+import type { Ref } from "react";
 import { DailyBarChart } from "./DailyBarChart";
 import type { PosterViewModel } from "./posterTypes";
 import { ShareBar } from "./ShareBar";
 import "./poster.css";
 
-export function ReportPoster({ data }: { data: PosterViewModel }) {
+export function ReportPoster({
+  data,
+  posterRef,
+}: {
+  data: PosterViewModel;
+  posterRef?: Ref<HTMLElement | null>;
+}) {
   return (
-    <article id="report-poster" className="report-poster">
+    <article ref={posterRef} id="report-poster" className="report-poster">
       <p className="rp-kicker">{data.kicker}</p>
       <p className="rp-range">{data.rangeLabel}</p>
       <p className="rp-total">{data.totalTokensLabel}</p>
