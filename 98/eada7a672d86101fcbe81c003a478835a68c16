@@ -1,0 +1,70 @@
+src/report/capturePoster.ts
+  s_c6f5a6f7a81a56::t_aa678dc5586b09 20
+  s_c6f5a6f7a81a56::t_c0afad16756671 17-19
+  s_c6f5a6f7a81a56::t_609b796faf67ef 21-23
+package.json
+  s_c6f5a6f7a81a56::t_e81887758434b7 22
+src/report/fakePosterData.ts
+  s_c6f5a6f7a81a56::t_d8e02185f22607 1
+  s_c6f5a6f7a81a56::t_e81887758434b7 2-32
+scripts/capture-report-spike.py
+  s_c6f5a6f7a81a56::t_2ce76615299c3a 36
+  s_c6f5a6f7a81a56::t_42310181ce4b12 1-29,34-35,37-63
+  s_c6f5a6f7a81a56::t_6284eb70795e14 30-33
+src/report/posterCss.test.ts
+  s_c6f5a6f7a81a56::t_a5c3a74464abdf 4-8,10-12
+  s_267d232eec5fbe::t_33a9a5cb653f02 1-3,9,13-15
+src/report/DailyBarChart.tsx
+  s_c6f5a6f7a81a56::t_ed8348b9186fa4 22-29
+  s_c6f5a6f7a81a56::t_86fc024c61edeb 1
+  s_c6f5a6f7a81a56::t_e81887758434b7 2-21,30-45
+src/report/poster.css
+  s_c6f5a6f7a81a56::t_e81887758434b7 1-168
+src/report/spike.tsx
+  s_c6f5a6f7a81a56::t_13bf623534fb4d 27-30,37-39,43-45,50-51,53
+  s_c6f5a6f7a81a56::t_bae446d7245c65 8-11
+  s_c6f5a6f7a81a56::t_fed6adaa7cbb96 12,33-34,41,48,52
+  s_c6f5a6f7a81a56::t_7b65b892a0b8a3 1,63-69
+  s_c6f5a6f7a81a56::t_42310181ce4b12 72-75
+  s_c6f5a6f7a81a56::t_ed8348b9186fa4 87-92
+  s_c6f5a6f7a81a56::t_b38bc22bdda042 2-7,13-26,31-32,35-36,40,42,46-47,49,54-62,70-71,76-86,93-109
+src/report/node-fs.d.ts
+  s_c6f5a6f7a81a56::t_31c312295a54dc 1
+  s_267d232eec5fbe::t_0d02b44519124a 2-4
+src/report/ReportPoster.tsx
+  s_c6f5a6f7a81a56::t_f282f995c99212 2
+  s_c6f5a6f7a81a56::t_e81887758434b7 1,3-42
+src/report/ShareBar.tsx
+  s_c6f5a6f7a81a56::t_e81887758434b7 2-25
+  s_c6f5a6f7a81a56::t_fbeb01fcd1f5a0 1
+docs/spikes/report-poster/NOTES.md
+  s_c6f5a6f7a81a56::t_ba763b63261029 3
+  s_c6f5a6f7a81a56::t_a1973677142d3d 5
+  s_c6f5a6f7a81a56::t_ec69292888ecec 1-2,4,6-15
+pnpm-lock.yaml
+  s_c6f5a6f7a81a56::t_dde43da2bc937f 20-22,1246-1248,2905-2906
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "98eada7a672d86101fcbe81c003a478835a68c16",
+  "prompts": {},
+  "sessions": {
+    "s_267d232eec5fbe": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4db92bbc-fca6-4f38-9cb9-25bf493af9f4",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_c6f5a6f7a81a56": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06597-8aa1-7610-845d-e9be705ec937",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
