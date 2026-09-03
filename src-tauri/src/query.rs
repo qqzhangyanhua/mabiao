@@ -585,6 +585,46 @@ pub fn trend(
     ))
 }
 
+/// 按本地一天中的第几个小时（0–23）跨天汇总 token。
+///
+/// 与 `trend(grain="hour")` 不同：这里合并所有日期的同一小时，不保留时间轴。
+/// 小时无法从日级预聚合还原，强制走明细。
+pub fn hour_of_day(conn: &Connection, filter: &Filter) -> Result<[i64; 24], String> {
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            Some("hour"),
+        ),
+        filter,
+    );
+    let sql = format!(
+        "SELECT CAST(strftime('%H', d.first_at, 'localtime') AS INTEGER),
+                COALESCE(SUM(d.total_tokens), 0)
+         FROM ({}) d
+         GROUP BY 1",
+        inner.sql,
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(inner.params.iter()), |row| {
+            Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut hours = [0i64; 24];
+    for row in rows {
+        let (hour, tokens) = row.map_err(|e| e.to_string())?;
+        let Some(hour) = hour else {
+            continue;
+        };
+        if (0..24).contains(&hour) {
+            hours[hour as usize] = tokens;
+        }
+    }
+    Ok(hours)
+}
+
 fn breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
     match dimension {
         "application" | "source" => Ok("d.source"),

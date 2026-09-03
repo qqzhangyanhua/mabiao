@@ -1,5 +1,5 @@
 use crate::domain::{
-    CursorUsageEvent, ReportInsight, ReportPeriod, ReportPeriodKind, ReportTopSessionBy,
+    CursorUsageEvent, ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind, ReportTopSessionBy,
 };
 use crate::test_support::*;
 use chrono::{DateTime, Local, NaiveDate};
@@ -62,6 +62,33 @@ fn build_with(
     let conn = store::open_memory().unwrap();
     store::insert_records(&conn, records).unwrap();
     crate::report::build(&conn, &PriceTable::default(), period, now()).unwrap()
+}
+
+fn night_share(dto: &ReportDto) -> (i64, i64, i64) {
+    for insight in &dto.insights {
+        if let ReportInsight::NightShare {
+            night_tokens,
+            total_tokens,
+            pct,
+        } = insight
+        {
+            return (*night_tokens, *total_tokens, *pct);
+        }
+    }
+    panic!("expected night_share, got {:?}", dto.insights);
+}
+
+fn peak_hours(dto: &ReportDto) -> (u8, u8) {
+    for insight in &dto.insights {
+        if let ReportInsight::PeakHours {
+            start_hour,
+            end_hour,
+        } = insight
+        {
+            return (*start_hour, *end_hour);
+        }
+    }
+    panic!("expected peak_hours, got {:?}", dto.insights);
 }
 
 #[test]
@@ -184,6 +211,9 @@ fn cursor_account_usage_does_not_change_report_totals() {
     let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
     assert_eq!(dto.totals.total_tokens, 100);
     assert_eq!(dto.totals.session_count, 1);
+    let (night_tokens, total_tokens, _) = night_share(&dto);
+    assert_eq!(night_tokens, 0);
+    assert_eq!(total_tokens, 100);
 }
 
 #[test]
@@ -216,4 +246,120 @@ fn insight_payload_has_no_natural_language_fields() {
         }
         assert!(obj.get("kind").and_then(|v| v.as_str()).is_some());
     }
+}
+
+#[test]
+fn same_local_hour_across_days_is_merged_into_night_share() {
+    let monday = day(2026, 8, 10);
+    let tuesday = day(2026, 8, 11);
+    let records = vec![
+        usage(monday, 3, 0, 0, "night-1", 10),
+        usage(tuesday, 3, 15, 0, "night-2", 20),
+        usage(tuesday, 14, 0, 0, "afternoon", 70),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 30);
+    assert_eq!(total_tokens, 100);
+    assert_eq!(pct, 30);
+}
+
+#[test]
+fn night_share_is_zero_when_no_tokens_land_before_six() {
+    let records = vec![
+        usage(day(2026, 8, 12), 6, 0, 0, "six", 40),
+        usage(day(2026, 8, 12), 22, 0, 0, "evening", 60),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 0);
+    assert_eq!(total_tokens, 100);
+    assert_eq!(pct, 0);
+}
+
+#[test]
+fn night_share_is_all_when_every_token_is_before_six() {
+    let records = vec![
+        usage(day(2026, 8, 12), 0, 0, 0, "midnight", 25),
+        usage(day(2026, 8, 13), 5, 59, 0, "almost-six", 75),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 100);
+    assert_eq!(total_tokens, 100);
+    assert_eq!(pct, 100);
+}
+
+#[test]
+fn night_share_pct_clamps_sub_one_percent_up_to_one() {
+    let records = vec![
+        usage(day(2026, 8, 12), 2, 0, 0, "night", 1),
+        usage(day(2026, 8, 12), 14, 0, 0, "day", 999),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 1);
+    assert_eq!(total_tokens, 1000);
+    assert_eq!(pct, 1);
+}
+
+#[test]
+fn night_share_pct_clamps_over_ninety_nine_down_to_ninety_nine() {
+    let records = vec![
+        usage(day(2026, 8, 12), 2, 0, 0, "night", 996),
+        usage(day(2026, 8, 12), 14, 0, 0, "day", 4),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 996);
+    assert_eq!(total_tokens, 1000);
+    assert_eq!(pct, 99);
+}
+
+#[test]
+fn peak_hours_uses_four_hour_window_wrapping_midnight() {
+    let records = vec![
+        usage(day(2026, 8, 12), 22, 0, 0, "h22", 10),
+        usage(day(2026, 8, 12), 23, 0, 0, "h23", 10),
+        usage(day(2026, 8, 13), 0, 0, 0, "h0", 10),
+        usage(day(2026, 8, 13), 1, 0, 0, "h1", 10),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(peak_hours(&dto), (22, 2));
+}
+
+#[test]
+fn peak_hours_tie_takes_the_earlier_start_hour() {
+    let records = vec![usage(day(2026, 8, 12), 14, 0, 0, "only", 80)];
+    let dto = build_with(&records, week(0));
+    assert_eq!(peak_hours(&dto), (11, 15));
+}
+
+#[test]
+fn records_outside_the_period_do_not_enter_hour_of_day() {
+    let records = vec![
+        usage(day(2026, 8, 9), 3, 0, 0, "prev-night", 500),
+        usage(day(2026, 8, 12), 3, 0, 0, "in-night", 10),
+        usage(day(2026, 8, 12), 14, 0, 0, "in-day", 90),
+        usage(day(2026, 8, 17), 3, 0, 0, "next-night", 500),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 10);
+    assert_eq!(total_tokens, 100);
+    assert_eq!(pct, 10);
+}
+
+#[test]
+fn hour_of_day_uses_local_timezone_not_utc() {
+    // 本地 03:00。UTC+8 机器上对应前一天 19:00Z；若误按 UTC 小时归桶就不会进深夜。
+    let records = vec![
+        usage(day(2026, 8, 12), 3, 0, 0, "local-night", 40),
+        usage(day(2026, 8, 12), 15, 0, 0, "local-day", 60),
+    ];
+    let dto = build_with(&records, week(0));
+    let (night_tokens, total_tokens, pct) = night_share(&dto);
+    assert_eq!(night_tokens, 40);
+    assert_eq!(total_tokens, 100);
+    assert_eq!(pct, 40);
 }

@@ -4,7 +4,7 @@
 use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate};
 use rusqlite::{params_from_iter, Connection};
 
-use crate::domain::{Filter, PriceTable, ReportDto, ReportPeriod, ReportPeriodKind};
+use crate::domain::{Filter, PriceTable, ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind};
 use crate::query;
 use crate::rollup_source::rollup_source;
 use crate::rollup_split::rollup_plan;
@@ -23,15 +23,67 @@ pub fn build(
     let filter = period_filter(start, end_exclusive);
     let totals = query::overview(conn, &filter, prices)?;
     let record_count = usage_record_count(conn, &filter)?;
+    let has_data = record_count > 0;
+    let insights = if has_data {
+        schedule_insights(&query::hour_of_day(conn, &filter)?)
+    } else {
+        Vec::new()
+    };
     Ok(ReportDto {
         period_kind: period.kind,
         offset: period.offset,
         start_date: start.format("%Y-%m-%d").to_string(),
         end_date: end_inclusive.format("%Y-%m-%d").to_string(),
-        has_data: record_count > 0,
+        has_data,
         totals,
-        insights: Vec::new(),
+        insights,
     })
+}
+
+fn schedule_insights(hours: &[i64; 24]) -> Vec<ReportInsight> {
+    let total_tokens: i64 = hours.iter().sum();
+    let night_tokens: i64 = hours[..6].iter().sum();
+    let start_hour = peak_start_hour(hours);
+    vec![
+        ReportInsight::NightShare {
+            night_tokens,
+            total_tokens,
+            pct: night_pct(night_tokens, total_tokens),
+        },
+        ReportInsight::PeakHours {
+            start_hour,
+            end_hour: (start_hour + 4) % 24,
+        },
+    ]
+}
+
+fn night_pct(night_tokens: i64, total_tokens: i64) -> i64 {
+    if night_tokens <= 0 || total_tokens <= 0 {
+        return 0;
+    }
+    if night_tokens >= total_tokens {
+        return 100;
+    }
+    let rounded = ((night_tokens as f64) * 100.0 / (total_tokens as f64)).round() as i64;
+    rounded.clamp(1, 99)
+}
+
+fn peak_start_hour(hours: &[i64; 24]) -> u8 {
+    let window = |start: u8| -> i64 {
+        (0..4)
+            .map(|offset| hours[usize::from((start + offset) % 24)])
+            .sum()
+    };
+    let mut best_start = 0u8;
+    let mut best_sum = window(0);
+    for start in 1..24u8 {
+        let sum = window(start);
+        if sum > best_sum {
+            best_sum = sum;
+            best_start = start;
+        }
+    }
+    best_start
 }
 
 fn resolve_period(

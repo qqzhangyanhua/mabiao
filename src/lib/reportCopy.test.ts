@@ -172,4 +172,38 @@ describe("toPosterViewModel", () => {
     );
     expect(poster?.totalCostLabel).toBe("$18.60");
   });
+
+  it("appends night-share and peak-hours comments, including 0% and 100%", () => {
+    const none = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 100, session_count: 1 },
+        insights: [
+          { kind: "night_share", night_tokens: 0, total_tokens: 100, pct: 0 },
+          { kind: "peak_hours", start_hour: 9, end_hour: 13 },
+        ],
+      }),
+    );
+    expect(none?.comments).toEqual([
+      "你这周烧掉了 100 token。",
+      "这个周期没有在凌晨烧过 token。",
+      "最活跃的时段是 09:00 到 13:00。",
+    ]);
+
+    const all = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 40, session_count: 1 },
+        insights: [
+          { kind: "night_share", night_tokens: 40, total_tokens: 40, pct: 100 },
+          { kind: "peak_hours", start_hour: 22, end_hour: 2 },
+        ],
+      }),
+    );
+    expect(all?.comments).toEqual([
+      "你这周烧掉了 40 token。",
+      "这个周期的 token 全是凌晨烧掉的。",
+      "最活跃的时段是 22:00 到 02:00。",
+    ]);
+  });
 });

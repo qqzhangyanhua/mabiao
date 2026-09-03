@@ -85,13 +85,22 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
   if (!dto.has_data) {
     return null;
   }
+  const comments = [totalsComment(dto.totals.total_tokens)];
+  const night = dto.insights.find((insight) => insight.kind === "night_share");
+  const peak = dto.insights.find((insight) => insight.kind === "peak_hours");
+  if (night) {
+    comments.push(insightCopy(night).comment);
+  }
+  if (peak) {
+    comments.push(insightCopy(peak).comment);
+  }
   return {
     kicker: REPORT_KICKER,
     rangeLabel: periodRangeLabel(dto.start_date, dto.end_date),
     totalTokensLabel: formatCompact(dto.totals.total_tokens),
     totalUnit: REPORT_TOTAL_UNIT,
     totalCostLabel: dto.totals.cost == null ? null : formatUsdAmount(dto.totals.cost),
-    comments: [totalsComment(dto.totals.total_tokens)],
+    comments,
     days: [],
     sources: [],
     stats: [],
