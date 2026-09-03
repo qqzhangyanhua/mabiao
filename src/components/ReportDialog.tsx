@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
+import { useShareQuota } from "../hooks/useShareQuota";
 import { Icon } from "../icons";
 import { copyReportImage } from "../lib/copyReportImage";
 import { consumeEscape } from "../lib/escapeShortcut";
@@ -19,7 +20,7 @@ import {
 import { capturePoster } from "../report/capturePoster";
 import { QuotaPoster } from "../report/QuotaPoster";
 import { ReportPoster } from "../report/ReportPoster";
-import type { OfficialQuotaDto, ReportDto } from "../types";
+import type { ReportDto } from "../types";
 import { EmptyState } from "./EmptyState";
 import { ShareQuotaAccounts } from "./ShareQuotaAccounts";
 import { Spinner } from "./Spinner";
@@ -45,12 +46,9 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const [weekDto, setWeekDto] = useState<ReportDto | null>(null);
   const [weekError, setWeekError] = useState<string | null>(null);
   const [weekLoading, setWeekLoading] = useState(true);
-  const [quotaDto, setQuotaDto] = useState<OfficialQuotaDto | null>(null);
-  const [quotaNowMs, setQuotaNowMs] = useState(() => Date.now());
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-  const [quotaLoading, setQuotaLoading] = useState(openedWith.kind === "quota");
   const [copying, setCopying] = useState(false);
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
+  const quota = useShareQuota(kind, copyingRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,36 +79,6 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
       cancelled = true;
     };
   }, [offset]);
-
-  useEffect(() => {
-    if (kind !== "quota" || quotaDto !== null) {
-      return;
-    }
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 切到额度时先置 loading，避免空态闪一下
-    setQuotaLoading(true);
-    setQuotaError(null);
-    void invoke<OfficialQuotaDto>("get_official_quota")
-      .then((next) => {
-        if (!cancelled) {
-          setQuotaDto(next);
-          setQuotaNowMs(Date.now());
-        }
-      })
-      .catch((caught: unknown) => {
-        if (!cancelled) {
-          setQuotaError(humanStatus(caught));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setQuotaLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [kind, quotaDto]);
 
   useEffect(() => {
     const previousFocus =
@@ -159,12 +127,10 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     ? periodRangeLabel(weekDto.start_date, weekDto.end_date)
     : "正在解析周期…";
   const weekPoster = kind === "week" && weekDto && !weekLoading ? toPosterViewModel(weekDto) : null;
-  const eligible = quotaDto ? eligibleQuotaRows(quotaDto) : [];
-  const quotaRow =
-    kind === "quota" && quotaDto && !quotaLoading
-      ? resolveQuotaAccount(eligible, quotaProvider)
-      : null;
-  const quotaPoster = quotaRow ? toQuotaCardViewModel(quotaRow, quotaNowMs) : null;
+  const eligible = quota.dto ? eligibleQuotaRows(quota.dto) : [];
+  const quotaRow = kind === "quota" && quota.dto ? resolveQuotaAccount(eligible, quotaProvider) : null;
+  const quotaPoster = quotaRow ? toQuotaCardViewModel(quotaRow, quota.nowMs) : null;
+  const quotaWaitingCache = quota.cacheLoading && quota.dto === null;
   const canCopy = Boolean(kind === "week" ? weekPoster : quotaPoster) && !copying;
 
   function persistPreference(nextKind: ShareCardKind, nextProvider: string | null) {
@@ -172,19 +138,16 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   }
 
   function selectKind(next: ShareCardKind) {
-    if (copying) {
+    if (copyingRef.current) {
       return;
     }
     setKind(next);
     setCopyStatus(null);
     persistPreference(next, quotaProvider);
-    if (next === "quota" && quotaDto === null) {
-      setQuotaLoading(true);
-    }
   }
 
   function selectQuotaAccount(provider: string) {
-    if (copying) {
+    if (copyingRef.current) {
       return;
     }
     setQuotaProvider(provider);
@@ -268,14 +231,24 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
               <div className="report-dialog-period-nav">
                 <Button
                   size="sm"
-                  onClick={() => setOffset((value) => value + 1)}
+                  onClick={() => {
+                    if (copyingRef.current) {
+                      return;
+                    }
+                    setOffset((value) => value + 1);
+                  }}
                   disabled={weekLoading || copying}
                 >
                   更早一周
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => setOffset((value) => Math.max(0, value - 1))}
+                  onClick={() => {
+                    if (copyingRef.current) {
+                      return;
+                    }
+                    setOffset((value) => Math.max(0, value - 1));
+                  }}
                   disabled={weekLoading || copying || offset === 0}
                 >
                   更近一周
@@ -298,7 +271,16 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
             <p className="muted">只使用可见且已有官方额度快照的账号。</p>
           )}
           <div className="report-dialog-copy">
-            <Button variant="accent" onClick={() => void copyPoster()} disabled={!canCopy}>
+            <Button
+              variant="accent"
+              onClick={() => {
+                if (copyingRef.current) {
+                  return;
+                }
+                void copyPoster();
+              }}
+              disabled={!canCopy}
+            >
               <Icon name={copyStatus?.tone === "ok" && !copying ? "check" : "copy"} size={14} />
               {copying ? "正在复制…" : "复制图片"}
             </Button>
@@ -342,26 +324,24 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
             </>
           ) : (
             <>
-              {quotaLoading ? (
+              {quotaWaitingCache ? (
                 <div className="report-dialog-status">
                   <Spinner size={22} />
                   <span>正在读取官方额度…</span>
                 </div>
               ) : null}
-              {!quotaLoading && quotaError ? (
+              {!quotaWaitingCache && quota.error && !quota.dto ? (
                 <EmptyState
                   icon="alertTriangle"
                   tone="warn"
                   title="额度加载失败"
-                  hint={quotaError}
+                  hint={quota.error}
                 />
               ) : null}
-              {!quotaLoading && !quotaError && quotaDto && !quotaPoster ? (
-                <EmptyState icon="clock" {...quotaCardEmptyCopy(quotaDto)} />
+              {!quotaWaitingCache && quota.dto && !quotaPoster ? (
+                <EmptyState icon="clock" {...quotaCardEmptyCopy(quota.dto)} />
               ) : null}
-              {!quotaLoading && !quotaError && quotaPoster ? (
-                <QuotaPoster data={quotaPoster} posterRef={posterRef} />
-              ) : null}
+              {quotaPoster ? <QuotaPoster data={quotaPoster} posterRef={posterRef} /> : null}
             </>
           )}
         </section>
