@@ -29,6 +29,7 @@ describe("report poster style registry", () => {
     for (const style of REPORT_POSTER_STYLES) {
       expect(style.id).toMatch(STYLE_ID);
       expect(style.label.trim().length).toBeGreaterThan(0);
+      expect(style.stylesheet).toMatch(/^[a-z0-9].*\.css$/);
       expect(style.swatch.background).toMatch(HEX_COLOR);
       expect(style.swatch.accent).toMatch(HEX_COLOR);
       expect(typeof style.Component).toBe("function");

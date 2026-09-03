@@ -36,6 +36,86 @@ body,
   font-size: 13px;
   font-weight: 500;
   color: #8b97ab;
+  max-width: 72em;
+}
+
+.spike-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.spike-style {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border: 1px solid #2a3a56;
+  border-radius: 999px;
+  background: #151e32;
+  color: #e8eef7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.spike-style.is-active {
+  border-color: #8b6cff;
+}
+
+.spike-style-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+
+.spike-gallery,
+.spike-extremes {
+  max-width: none;
+}
+
+.spike-gallery {
+  margin: 48px 0 0;
+}
+
+.spike-gallery h2,
+.spike-focus-note {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.spike-gallery > p,
+.spike-focus-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #8b97ab;
+}
+
+.spike-style-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 720px);
+  gap: 24px;
+  margin-top: 20px;
+  justify-content: start;
+}
+
+.spike-style-gallery h3,
+.spike-extreme-list h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #8b97ab;
+}
+
+.spike-style-gallery code {
+  font-size: 12px;
+  font-weight: 500;
+  color: #8b97ab;
 }
 
 .spike-status {
@@ -93,8 +173,7 @@ body,
 }
 
 .spike-extremes {
-  max-width: 1480px;
-  margin: 48px auto 0;
+  margin: 48px 0 0;
 }
 
 .spike-extremes h2 {
@@ -112,17 +191,10 @@ body,
 
 .spike-extreme-list {
   display: grid;
-  grid-template-columns: 720px 720px;
+  grid-template-columns: repeat(auto-fit, 720px);
   gap: 24px;
   margin-top: 20px;
-}
-
-.spike-extreme-list h3 {
-  margin: 0 0 12px;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.04em;
-  color: #8b97ab;
+  justify-content: start;
 }
 
 .spike-focus {
