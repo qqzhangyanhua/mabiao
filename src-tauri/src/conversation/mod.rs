@@ -11,22 +11,19 @@ use serde_json::Value;
 use crate::domain::{
     ConversationAgentCapabilityStatus as AgentCapabilityStatus, ConversationAgentLink,
     ConversationAgentLinkStatus as AgentLinkStatus, ConversationAgentRelations,
-    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
-    ConversationAttachmentStatus as AttachmentStatus, ConversationDetailDto,
-    ConversationDetailStateDto, ConversationEvent, ConversationEventContentDto,
-    ConversationEventKind as EventKind, ConversationIndexProgressDto, ConversationMatchField,
-    ConversationPage, ConversationParsedDetail, ConversationQuery, ConversationSessionRow,
-    ConversationUsagePage, CursorSessionDetailDto, CursorSessionRecord, PriceTable, Source,
-    UsageRecord,
+    ConversationAttachmentKind as AttachmentKind, ConversationAttachmentStatus as AttachmentStatus,
+    ConversationEvent, ConversationEventKind as EventKind, ConversationMatchField,
+    ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord, Source, UsageRecord,
 };
 use crate::ingest;
-use crate::query;
 
+mod catalog;
 mod catalog_search;
 mod claude;
 mod codex;
 mod copilot;
 mod cursor;
+mod discover;
 mod droid;
 mod dsh;
 mod event_index;
@@ -39,8 +36,10 @@ mod kimi;
 mod line_direct;
 mod omp;
 mod opencode;
+mod persist;
 mod pi;
 mod qwen;
+mod read;
 mod toolbox;
 
 use toolbox::{
@@ -49,6 +48,34 @@ use toolbox::{
     CAPABILITY_MESSAGES, CAPABILITY_USAGE, EXPERIMENTAL,
 };
 pub(crate) use toolbox::{AttachmentCandidate, FileIndexCursor, ParsedConversation};
+
+pub use catalog::{
+    catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
+    usage_records_page,
+};
+pub(crate) use catalog::{conversation_source_paths, finish_catalog_rows, sql_placeholders};
+pub(crate) use discover::{
+    detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
+    discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,
+    discover_opencode, index_claude, index_gemini, index_omp, index_pi, regular_source_revision,
+    single_detail,
+};
+pub(crate) use persist::{
+    apply_incremental, persist_session_file_cursors, prepare_incremental, record_full_parse,
+    write_session_file_events, IncrementalPrepare, PendingIncremental,
+};
+#[cfg(test)]
+pub(crate) use read::read_consistent_snapshot;
+pub use read::{
+    backfill_event_index, backfill_event_index_step, detail_state, event_index_progress,
+    load_attachment, load_attachment_thumbnail, load_detail, load_event_content,
+    load_parsed_detail, parse_session_events, rebuild_events_from_line,
+};
+pub(crate) use read::{
+    backfill_event_index_step_skipping, catalog_roots, conversation_source_roots,
+    event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
+    prepare_detail_read,
+};
 
 pub use export::build_export;
 #[cfg(test)]
@@ -72,9 +99,9 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Qwen,
     Source::Copilot,
 ];
-const DETAIL_READ_ATTEMPTS: usize = 3;
-const THUMBNAIL_MAX_WIDTH: u32 = 320;
-const THUMBNAIL_MAX_HEIGHT: u32 = 240;
+pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
+pub(crate) const THUMBNAIL_MAX_WIDTH: u32 = 320;
+pub(crate) const THUMBNAIL_MAX_HEIGHT: u32 = 240;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 14;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +112,7 @@ pub struct ConversationIndexIssue {
     pub line: Option<u64>,
 }
 
-struct CachedConversationFingerprint {
+pub(crate) struct CachedConversationFingerprint {
     session_id: String,
     source_file_mtime_ns: i64,
     source_file_size: i64,
@@ -96,7 +123,7 @@ struct CachedConversationFingerprint {
     has_live_generation: bool,
 }
 
-struct SessionFileCursorWrite<'a> {
+pub(crate) struct SessionFileCursorWrite<'a> {
     path: &'a Path,
     cursor: FileIndexCursor,
     max_sequence: Option<u32>,
@@ -105,26 +132,27 @@ struct SessionFileCursorWrite<'a> {
     source_revision: &'a str,
 }
 
-struct ConversationIndexBatch {
+pub(crate) struct ConversationIndexBatch {
     conversations: Vec<ParsedConversation>,
     diagnostics: Vec<ConversationIndexIssue>,
 }
 
 /// 一个源文件在目录索引里的全部有效信息。见 `IndexedAgentEvent` 的说明。
-struct IndexedFile {
+pub(crate) struct IndexedFile {
     session: ConversationSessionRow,
     is_top_level: bool,
     agent_events: Vec<IndexedAgentEvent>,
 }
 
-type ConversationDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
-type ConversationIndexFn = fn(&Path) -> Result<ConversationIndexBatch, ConversationIndexIssue>;
-type ConversationIndexSuffixFn =
+pub(crate) type ConversationDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
+pub(crate) type ConversationIndexFn =
+    fn(&Path) -> Result<ConversationIndexBatch, ConversationIndexIssue>;
+pub(crate) type ConversationIndexSuffixFn =
     fn(&Path, u64, u32, &str) -> Result<ParsedConversation, ConversationIndexIssue>;
-type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedConversation, String>;
-type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
+pub(crate) type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedConversation, String>;
+pub(crate) type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 
-struct ConversationAdapter {
+pub(crate) struct ConversationAdapter {
     source: Source,
     discover: ConversationDiscoverFn,
     index: ConversationIndexFn,
@@ -136,7 +164,7 @@ struct ConversationAdapter {
     reuse_unchanged_index: bool,
 }
 
-const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
+pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
     ConversationAdapter {
         source: Source::Codex,
         discover: discover_jsonl,
@@ -269,7 +297,7 @@ const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
     },
 ];
 
-fn conversation_adapter(source: Source) -> Result<&'static ConversationAdapter, String> {
+pub(crate) fn conversation_adapter(source: Source) -> Result<&'static ConversationAdapter, String> {
     CONVERSATION_ADAPTERS
         .iter()
         .find(|adapter| adapter.source == source)
@@ -280,189 +308,14 @@ pub(super) fn raw_export_extension(source: Source) -> Result<Option<&'static str
     Ok(conversation_adapter(source)?.raw_extension)
 }
 
-fn discover_extension(roots: &[PathBuf], extension: &str) -> Result<Vec<PathBuf>, String> {
-    let mut paths = Vec::new();
-    for root in roots {
-        paths.extend(ingest::walk_files(root, extension)?);
-    }
-    paths.sort();
-    paths.dedup();
-    Ok(paths)
-}
-
-fn discover_jsonl(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    discover_extension(roots, "jsonl")
-}
-
-fn discover_dsh(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(discover_extension(roots, "zstd")?
-        .into_iter()
-        .filter(|path| {
-            path.file_name().and_then(|name| name.to_str()) == Some("session.jsonl.zstd")
-        })
-        .collect())
-}
-
-fn discover_droid(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(discover_jsonl(roots)?
-        .into_iter()
-        .filter(|path| {
-            let Some(session_id) = path.file_stem().and_then(|name| name.to_str()) else {
-                return false;
-            };
-            path.with_file_name(format!("{session_id}.settings.json"))
-                .is_file()
-        })
-        .collect())
-}
-
-fn discover_gemini(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(discover_extension(roots, "json")?
-        .into_iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("session-"))
-        })
-        .collect())
-}
-
-fn discover_opencode(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(roots
-        .iter()
-        .filter(|path| path.is_file())
-        .cloned()
-        .collect())
-}
-
-fn regular_source_revision(path: &Path) -> Result<String, String> {
-    fs::metadata(path)
-        .map(|metadata| metadata_revision(&metadata))
-        .map_err(|error| format!("读取原始文件元数据失败：{error}"))
-}
-
-fn single_index(
-    path: &Path,
-    parse: fn(&Path, bool) -> Result<ParsedConversation, String>,
-) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    parse(path, false)
-        .map(|conversation| ConversationIndexBatch {
-            conversations: vec![conversation],
-            diagnostics: Vec::new(),
-        })
-        .map_err(|message| ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message,
-            event_type: None,
-            line: None,
-        })
-}
-
-fn single_detail(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-    parse: fn(&Path, bool) -> Result<ParsedConversation, String>,
-) -> Result<ParsedConversation, String> {
-    let parsed = parse(path, include_deferred_content)?;
-    if parsed.session.session_id == session_id {
-        Ok(parsed)
-    } else {
-        Err("原始文件中的会话 ID 与索引不一致".to_string())
-    }
-}
-
-type DiagnosticParseFn =
-    fn(&Path, bool) -> Result<(ParsedConversation, Vec<ConversationIndexIssue>), String>;
-
-fn diagnostic_index(
-    path: &Path,
-    event_type: &str,
-    parse: DiagnosticParseFn,
-) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let (conversation, diagnostics) =
-        parse(path, false).map_err(|message| ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message,
-            event_type: Some(event_type.to_string()),
-            line: None,
-        })?;
-    Ok(ConversationIndexBatch {
-        conversations: vec![conversation],
-        diagnostics,
-    })
-}
-
-fn diagnostic_detail(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-    parse: DiagnosticParseFn,
-) -> Result<ParsedConversation, String> {
-    let (parsed, _) = parse(path, include_deferred_content)?;
-    if parsed.session.session_id == session_id {
-        Ok(parsed)
-    } else {
-        Err("原始文件中的会话 ID 与索引不一致".to_string())
-    }
-}
-
-fn index_claude(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, claude::parse)
-}
-
-fn detail_claude(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    single_detail(path, session_id, include_deferred_content, claude::parse)
-}
-
-fn index_pi(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, pi::parse)
-}
-
-fn detail_pi(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    single_detail(path, session_id, include_deferred_content, pi::parse)
-}
-
-fn index_omp(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, omp::parse)
-}
-
-fn detail_omp(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    single_detail(path, session_id, include_deferred_content, omp::parse)
-}
-
-fn index_gemini(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, gemini::parse)
-}
-
-fn detail_gemini(
-    path: &Path,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<ParsedConversation, String> {
-    single_detail(path, session_id, include_deferred_content, gemini::parse)
-}
-
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
-struct IndexedAgentMetadata {
+pub(crate) struct IndexedAgentMetadata {
     parent_session_ids: Vec<String>,
     spawn_attempts: Vec<IndexedSpawnAttempt>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct IndexedSpawnAttempt {
+pub(crate) struct IndexedSpawnAttempt {
     launch_event_id: String,
     child_session_id: Option<String>,
 }
@@ -872,1300 +725,7 @@ pub(crate) fn refresh_source_in_roots(
     Ok(issues)
 }
 
-enum IncrementalPrepare {
-    Ready(Box<ParsedConversation>),
-    NeedFull,
-}
-
-struct PendingIncremental {
-    path: PathBuf,
-    session_id: String,
-    parsed: ParsedConversation,
-    mtime_ns: i64,
-    size: i64,
-    source_revision: String,
-}
-
-fn record_full_parse(
-    conn: &Connection,
-    source: Source,
-    parsed: ParsedConversation,
-    event_generations: &mut BTreeMap<String, i64>,
-    grouped: &mut BTreeMap<String, Vec<IndexedFile>>,
-    file_cursors: &mut BTreeMap<(String, String), FileIndexCursor>,
-) -> Result<(), String> {
-    if let Some(cursor) = parsed.index_cursor {
-        file_cursors.insert(
-            (
-                parsed.session.session_id.clone(),
-                parsed.session.source_file.clone(),
-            ),
-            cursor,
-        );
-    }
-    write_session_file_events(conn, source, &parsed, event_generations)?;
-    grouped
-        .entry(parsed.session.session_id.clone())
-        .or_default()
-        .push(summarize_for_index(parsed));
-    Ok(())
-}
-
-fn prepare_incremental(
-    conn: &Connection,
-    source: Source,
-    index_suffix: ConversationIndexSuffixFn,
-    path: &Path,
-    cached: &CachedConversationFingerprint,
-) -> Result<IncrementalPrepare, String> {
-    let parsed = match index_suffix(
-        path,
-        cached.indexed_byte_offset as u64,
-        cached.indexed_line as u32,
-        &cached.session_id,
-    ) {
-        Ok(parsed) => parsed,
-        Err(_) => return Ok(IncrementalPrepare::NeedFull),
-    };
-    if parsed.session.session_id != cached.session_id {
-        return Ok(IncrementalPrepare::NeedFull);
-    }
-    if !event_index::has_live_generation(conn, source, &cached.session_id)? {
-        return Ok(IncrementalPrepare::NeedFull);
-    }
-    if event_index::live_index_would_rewind(conn, source, &cached.session_id, &parsed.events)? {
-        return Ok(IncrementalPrepare::NeedFull);
-    }
-    Ok(IncrementalPrepare::Ready(Box::new(parsed)))
-}
-
-fn apply_incremental(
-    conn: &Connection,
-    source: Source,
-    pending: PendingIncremental,
-) -> Result<(), String> {
-    let tx = conn
-        .unchecked_transaction()
-        .map_err(|error| error.to_string())?;
-    let result = apply_incremental_in_tx(&tx, source, pending);
-    match result {
-        Ok(()) => tx.commit().map_err(|error| error.to_string()),
-        Err(error) => {
-            let _ = tx.rollback();
-            Err(error)
-        }
-    }
-}
-
-fn apply_incremental_in_tx(
-    conn: &Connection,
-    source: Source,
-    pending: PendingIncremental,
-) -> Result<(), String> {
-    let PendingIncremental {
-        path,
-        session_id,
-        parsed,
-        mtime_ns,
-        size,
-        source_revision,
-    } = pending;
-    let max_sequence = event_index::append_live_events(conn, source, &session_id, &parsed.events)?;
-    let cursor = parsed.index_cursor.unwrap_or(FileIndexCursor {
-        byte_offset: size,
-        line: 0,
-    });
-    persist_file_cursor(
-        conn,
-        source,
-        &session_id,
-        &SessionFileCursorWrite {
-            path: &path,
-            cursor,
-            max_sequence: Some(max_sequence),
-            mtime_ns,
-            size,
-            source_revision: &source_revision,
-        },
-    )?;
-    touch_session_after_append(
-        conn,
-        source,
-        &session_id,
-        &parsed,
-        mtime_ns,
-        size,
-        &source_revision,
-    )
-}
-
-fn touch_session_after_append(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-    parsed: &ParsedConversation,
-    mtime_ns: i64,
-    size: i64,
-    source_revision: &str,
-) -> Result<(), String> {
-    let ended_at = parsed.session.ended_at.as_str();
-    conn.execute(
-        r#"
-        UPDATE conversation_sessions
-        SET ended_at = CASE
-                WHEN ?3 != '' AND (ended_at = '' OR ended_at < ?3) THEN ?3
-                ELSE ended_at
-            END,
-            model = CASE WHEN ?4 != '' THEN ?4 ELSE model END,
-            source_file_mtime_ns = ?5,
-            source_file_size = ?6,
-            source_revision = ?7,
-            file_available = 1
-        WHERE source = ?1 AND session_id = ?2
-        "#,
-        params![
-            source.as_str(),
-            session_id,
-            ended_at,
-            parsed.session.model,
-            mtime_ns,
-            size,
-            source_revision,
-        ],
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-fn persist_session_file_cursors(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-    paths: &[PathBuf],
-    file_cursors: &BTreeMap<(String, String), FileIndexCursor>,
-) -> Result<(), String> {
-    let max_sequence = conn
-        .query_row(
-            r#"
-            SELECT MAX(sequence) FROM conversation_events
-            WHERE source = ?1 AND session_id = ?2
-              AND index_generation = (
-                  SELECT event_index_generation FROM conversation_sessions
-                  WHERE source = ?1 AND session_id = ?2
-              )
-            "#,
-            params![source.as_str(), session_id],
-            |row| row.get::<_, Option<u32>>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?
-        .flatten();
-    for path in paths {
-        let metadata =
-            fs::metadata(path).map_err(|error| format!("读取文件元数据失败：{error}"))?;
-        let revision = (conversation_adapter(source)?.revision)(path)?;
-        let cursor = file_cursors
-            .get(&(session_id.to_string(), path.to_string_lossy().to_string()))
-            .copied()
-            .unwrap_or(FileIndexCursor {
-                byte_offset: metadata.len() as i64,
-                line: 0,
-            });
-        persist_file_cursor(
-            conn,
-            source,
-            session_id,
-            &SessionFileCursorWrite {
-                path,
-                cursor,
-                max_sequence,
-                mtime_ns: modified_nanos(&metadata),
-                size: metadata.len() as i64,
-                source_revision: &revision,
-            },
-        )?;
-    }
-    Ok(())
-}
-
-fn persist_file_cursor(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-    write: &SessionFileCursorWrite<'_>,
-) -> Result<(), String> {
-    conn.execute(
-        r#"
-        INSERT INTO conversation_session_files(
-            source, session_id, source_file, source_file_mtime_ns, source_file_size,
-            adapter_version, source_revision, indexed_byte_offset, indexed_line, max_sequence
-        ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-        ON CONFLICT(source, session_id, source_file) DO UPDATE SET
-            source_file_mtime_ns = excluded.source_file_mtime_ns,
-            source_file_size = excluded.source_file_size,
-            adapter_version = excluded.adapter_version,
-            source_revision = excluded.source_revision,
-            indexed_byte_offset = excluded.indexed_byte_offset,
-            indexed_line = excluded.indexed_line,
-            max_sequence = excluded.max_sequence
-        "#,
-        params![
-            source.as_str(),
-            session_id,
-            write.path.to_string_lossy().to_string(),
-            write.mtime_ns,
-            write.size,
-            CONVERSATION_ADAPTER_VERSION,
-            write.source_revision,
-            write.cursor.byte_offset,
-            write.cursor.line,
-            write.max_sequence,
-        ],
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
-fn write_session_file_events(
-    conn: &Connection,
-    source: Source,
-    parsed: &ParsedConversation,
-    generations: &mut BTreeMap<String, i64>,
-) -> Result<(), String> {
-    event_index::write_file_events(conn, source, parsed, generations)
-}
-
-fn conversation_source_paths(source: Source, roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    (conversation_adapter(source)?.discover)(roots)
-}
-
-fn sql_placeholders(count: usize) -> String {
-    std::iter::repeat_n("?", count)
-        .collect::<Vec<_>>()
-        .join(", ")
-}
-
-fn catalog_session_start_sql() -> &'static str {
-    "COALESCE(NULLIF(sessions.started_at, ''), (SELECT cs.first_seen_at FROM cursor_sessions cs WHERE sessions.source = 'cursor_agent' AND cs.session_id = sessions.session_id LIMIT 1), '')"
-}
-
-fn catalog_session_end_sql() -> &'static str {
-    "COALESCE(NULLIF(sessions.ended_at, ''), (SELECT COALESCE(NULLIF(cs.last_seen_at, ''), cs.first_seen_at) FROM cursor_sessions cs WHERE sessions.source = 'cursor_agent' AND cs.session_id = sessions.session_id LIMIT 1), '')"
-}
-
-fn push_in_filter(
-    clauses: &mut Vec<String>,
-    params: &mut Vec<rusqlite::types::Value>,
-    column_sql: &str,
-    values: &[String],
-) {
-    if values.is_empty() {
-        return;
-    }
-    clauses.push(format!(
-        "{column_sql} IN ({})",
-        sql_placeholders(values.len())
-    ));
-    for value in values {
-        params.push(rusqlite::types::Value::Text(value.clone()));
-    }
-}
-
-fn catalog_filter_sql(query: &ConversationQuery) -> (String, Vec<rusqlite::types::Value>) {
-    let mut clauses = vec!["sessions.is_top_level = 1".to_string()];
-    let mut params = Vec::new();
-    push_in_filter(&mut clauses, &mut params, "sessions.source", &query.sources);
-    push_in_filter(
-        &mut clauses,
-        &mut params,
-        "sessions.project",
-        &query.projects,
-    );
-    if !query.models.is_empty() {
-        let placeholders = sql_placeholders(query.models.len());
-        clauses.push(format!(
-            "(sessions.model IN ({placeholders}) OR EXISTS (\
-                SELECT 1 FROM cursor_sessions cs, json_each(cs.models_json) AS je \
-                WHERE sessions.source = 'cursor_agent' \
-                  AND cs.session_id = sessions.session_id \
-                  AND je.value IN ({placeholders})\
-            ))"
-        ));
-        for _ in 0..2 {
-            for model in &query.models {
-                params.push(rusqlite::types::Value::Text(model.clone()));
-            }
-        }
-    }
-    if !query.providers.is_empty() {
-        clauses.push(format!(
-            "EXISTS (\
-                SELECT 1 FROM usage_records r \
-                WHERE r.source = sessions.source \
-                  AND r.session_id = sessions.session_id \
-                  AND r.provider IN ({})\
-            )",
-            sql_placeholders(query.providers.len())
-        ));
-        for provider in &query.providers {
-            params.push(rusqlite::types::Value::Text(provider.clone()));
-        }
-    }
-    if let Some(from) = query.from.as_deref().filter(|value| !value.is_empty()) {
-        let end_at = catalog_session_end_sql();
-        clauses.push(format!("({end_at} != '' AND {end_at} >= ?)"));
-        params.push(rusqlite::types::Value::Text(from.to_string()));
-    }
-    if let Some(to) = query.to.as_deref().filter(|value| !value.is_empty()) {
-        let start_at = catalog_session_start_sql();
-        clauses.push(format!("({start_at} != '' AND {start_at} <= ?)"));
-        params.push(rusqlite::types::Value::Text(to.to_string()));
-    }
-    if let Some(event_predicate) = catalog_tool_event_predicate(query) {
-        clauses.push(catalog_event_exists_sql(&event_predicate));
-        for name in query.tool_names.iter().filter(|name| !name.is_empty()) {
-            params.push(rusqlite::types::Value::Text(name.clone()));
-        }
-    }
-    (clauses.join(" AND "), params)
-}
-
-fn catalog_event_exists_sql(extra: &str) -> String {
-    format!(
-        "EXISTS (\
-            SELECT 1 FROM conversation_events e \
-            WHERE e.source = sessions.source \
-              AND e.session_id = sessions.session_id \
-              AND e.index_generation = sessions.event_index_generation \
-              AND ({extra})\
-        )"
-    )
-}
-
-fn catalog_tool_event_predicate(query: &ConversationQuery) -> Option<String> {
-    let names = query
-        .tool_names
-        .iter()
-        .filter(|name| !name.is_empty())
-        .count();
-    if names == 0 && !query.tool_failed {
-        return None;
-    }
-    let mut parts = Vec::new();
-    if query.tool_failed {
-        // 失败的 tool_result 在 ingest 时记成 kind=error / actor=tool；
-        // 事件表没有 is_error 列，目录不能靠 kind=tool_result 判断失败。
-        parts.push(catalog_tool_failure_sql().to_string());
-    } else {
-        parts.push(format!(
-            "(e.kind IN ('tool_call', 'tool_result') OR {})",
-            catalog_tool_failure_sql()
-        ));
-    }
-    if names > 0 {
-        parts.push(format!("e.name IN ({})", sql_placeholders(names)));
-    }
-    Some(parts.join(" AND "))
-}
-
-fn catalog_tool_failure_sql() -> &'static str {
-    "e.kind = 'error' AND e.actor = 'tool'"
-}
-
-pub fn catalog_tool_names(
-    conn: &Connection,
-    query: &ConversationQuery,
-) -> Result<Vec<String>, String> {
-    let options_query = ConversationQuery {
-        search: None,
-        page: None,
-        page_size: None,
-        tool_names: Vec::new(),
-        tool_failed: false,
-        ..query.clone()
-    };
-    let (predicate, params) = catalog_filter_sql(&options_query);
-    let sql = format!(
-        r#"
-        SELECT DISTINCT e.name
-        FROM conversation_events e
-        JOIN conversation_sessions AS sessions
-          ON sessions.source = e.source
-         AND sessions.session_id = e.session_id
-         AND sessions.event_index_generation = e.index_generation
-        WHERE {predicate}
-          AND e.kind = 'tool_call'
-          AND e.name IS NOT NULL
-          AND e.name != ''
-        ORDER BY e.name COLLATE NOCASE
-        "#
-    );
-    let mut statement = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let names = statement
-        .query_map(params_from_iter(params.iter()), |row| {
-            row.get::<_, String>(0)
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    Ok(names)
-}
-
-pub fn sessions_page(
-    conn: &Connection,
-    query: &ConversationQuery,
-) -> Result<ConversationPage, String> {
-    sessions_page_with_prices(conn, query, &PriceTable::default())
-}
-
-pub fn indexed_events(
-    conn: &Connection,
-    source: &str,
-    session_id: &str,
-) -> Result<Vec<ConversationEvent>, String> {
-    event_index::indexed_events(conn, source, session_id)
-}
-
-pub fn usage_records_page(
-    conn: &Connection,
-    source: &str,
-    session_id: &str,
-    page: u32,
-    page_size: u32,
-) -> Result<ConversationUsagePage, String> {
-    let source = Source::parse(source).filter(|source| CONVERSATION_SOURCES.contains(source));
-    let Some(source) = source else {
-        return Err("该来源尚未支持对话详情".to_string());
-    };
-    let records = load_usage_records(conn, source, session_id)?;
-    let total = records.len() as u32;
-    let page = page.max(1);
-    let page_size = page_size.clamp(1, MAX_PAGE_SIZE);
-    let start = ((page - 1) * page_size) as usize;
-    let rows = if start >= records.len() {
-        Vec::new()
-    } else {
-        let end = (start + page_size as usize).min(records.len());
-        records[start..end].to_vec()
-    };
-    Ok(ConversationUsagePage { rows, total })
-}
-
-pub fn sessions_page_with_prices(
-    conn: &Connection,
-    query: &ConversationQuery,
-    prices: &PriceTable,
-) -> Result<ConversationPage, String> {
-    let (predicate, params) = catalog_filter_sql(query);
-    if !query.search.as_deref().unwrap_or("").trim().is_empty() {
-        return catalog_search::sessions_page_with_search(conn, query, prices, &predicate, params);
-    }
-
-    let page = query.page.unwrap_or(1).max(1);
-    let page_size = query
-        .page_size
-        .unwrap_or(DEFAULT_PAGE_SIZE)
-        .clamp(1, MAX_PAGE_SIZE);
-    let offset = i64::from((page - 1) * page_size);
-    let mut params = params;
-
-    let total = conn
-        .query_row(
-            &format!("SELECT COUNT(*) FROM conversation_sessions AS sessions WHERE {predicate}"),
-            params_from_iter(params.iter()),
-            |row| row.get::<_, i64>(0),
-        )
-        .map_err(|e| e.to_string())? as u32;
-
-    params.push(rusqlite::types::Value::Integer(i64::from(page_size)));
-    params.push(rusqlite::types::Value::Integer(offset));
-    let ready_sql = catalog_search::event_index_ready_sql("sessions");
-    let sql = format!(
-        r#"
-        SELECT sessions.source, sessions.session_id, sessions.title, sessions.project, sessions.model,
-               COALESCE(NULLIF(sessions.started_at, ''), cursor_times.first_seen_at, '') AS started_at,
-               COALESCE(NULLIF(sessions.ended_at, ''), cursor_times.last_seen_at, cursor_times.first_seen_at, '') AS ended_at,
-               sessions.source_file, sessions.capabilities_json, sessions.support_status, sessions.file_available,
-               {ready_sql},
-               -1
-        FROM conversation_sessions AS sessions
-        LEFT JOIN cursor_sessions AS cursor_times
-          ON sessions.source = 'cursor_agent' AND sessions.session_id = cursor_times.session_id
-        WHERE {predicate}
-        ORDER BY COALESCE(
-            NULLIF(sessions.ended_at, ''),
-            NULLIF(sessions.started_at, ''),
-            cursor_times.last_seen_at,
-            cursor_times.first_seen_at,
-            ''
-        ) DESC, sessions.source ASC, sessions.session_id ASC
-        LIMIT ? OFFSET ?
-        "#
-    );
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let mut rows = stmt
-        .query_map(params_from_iter(params.iter()), row_from_sql)
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    finish_catalog_rows(conn, prices, &mut rows)?;
-
-    Ok(ConversationPage { rows, total })
-}
-
-pub(super) fn finish_catalog_rows(
-    conn: &Connection,
-    prices: &PriceTable,
-    rows: &mut [ConversationSessionRow],
-) -> Result<(), String> {
-    for row in rows.iter_mut() {
-        let paths = load_session_files(conn, &row.source, &row.session_id)?;
-        if !paths.is_empty() {
-            row.source_files = paths
-                .into_iter()
-                .map(|path| path.to_string_lossy().to_string())
-                .collect();
-        }
-    }
-    hydrate_catalog_usage(conn, prices, rows)?;
-    hydrate_cursor_hash_models(conn, rows)?;
-    Ok(())
-}
-
-fn hydrate_catalog_usage(
-    conn: &Connection,
-    prices: &PriceTable,
-    rows: &mut [ConversationSessionRow],
-) -> Result<(), String> {
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let keys = rows
-        .iter()
-        .map(|row| (row.source.clone(), row.session_id.clone()))
-        .collect::<Vec<_>>();
-    let totals = query::usage_rollups_for_sessions(conn, prices, &keys)?;
-    for row in rows {
-        let Some(usage) = totals.get(&(row.source.clone(), row.session_id.clone())) else {
-            continue;
-        };
-        row.total_tokens = usage.total_tokens;
-        row.cost = usage.cost;
-        row.unpriced = usage.unpriced;
-    }
-    Ok(())
-}
-
-pub fn load_detail(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-) -> Result<ConversationDetailDto, String> {
-    finish_prepared_detail(home, prepare_detail_read(conn, home, source, session_id)?)
-}
-
-pub(crate) fn prepare_detail_read(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-) -> Result<PreparedDetailRead, String> {
-    let prepared = prepare_detail(conn, source, session_id)?;
-    if event_index_ready(conn, home, &prepared)? {
-        let event_count = event_index::indexed_event_count(conn, source, session_id)?;
-        return Ok(PreparedDetailRead::Indexed {
-            prepared,
-            event_count,
-        });
-    }
-    Ok(PreparedDetailRead::Parsed { prepared })
-}
-
-pub(crate) fn finish_prepared_detail(
-    home: &Path,
-    read: PreparedDetailRead,
-) -> Result<ConversationDetailDto, String> {
-    match read {
-        PreparedDetailRead::Indexed {
-            prepared,
-            event_count,
-        } => assemble_indexed_detail(home, prepared, event_count),
-        PreparedDetailRead::Parsed { prepared } => load_prepared_detail(home, prepared),
-    }
-}
-
-/// 始终整份解析源文件，供差分基准与回退路径使用。
-pub fn load_parsed_detail(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-) -> Result<ConversationParsedDetail, String> {
-    let prepared = prepare_detail(conn, source, session_id)?;
-    load_prepared_parsed(home, prepared)
-}
-
-pub(crate) fn prepare_detail(
-    conn: &Connection,
-    source: &str,
-    session_id: &str,
-) -> Result<PreparedConversationDetail, String> {
-    let source = Source::parse(source).filter(|source| CONVERSATION_SOURCES.contains(source));
-    let Some(source) = source else {
-        return Err("该来源尚未支持对话详情".to_string());
-    };
-    let session = load_session(conn, source.as_str(), session_id)?
-        .ok_or_else(|| "未找到该对话记录".to_string())?;
-    let usage_records = load_usage_records(conn, source, session_id)?;
-    let agent_relations = load_agent_relations(conn, source, session_id, &[])?;
-    let cursor_session_stats = if source == Source::CursorAgent {
-        load_exact_cursor_session(conn, session_id)?
-    } else {
-        None
-    };
-    Ok(PreparedConversationDetail {
-        source,
-        session,
-        usage_records,
-        agent_relations,
-        cursor_session_stats,
-    })
-}
-
-pub(crate) fn load_prepared_detail(
-    home: &Path,
-    prepared: PreparedConversationDetail,
-) -> Result<ConversationDetailDto, String> {
-    let usage_record_count = prepared.usage_records.len() as u32;
-    Ok(parsed_detail_to_dto(
-        load_prepared_parsed(home, prepared)?,
-        usage_record_count,
-    ))
-}
-
-pub(crate) fn load_prepared_parsed(
-    home: &Path,
-    prepared: PreparedConversationDetail,
-) -> Result<ConversationParsedDetail, String> {
-    let PreparedConversationDetail {
-        source,
-        mut session,
-        usage_records,
-        agent_relations,
-        cursor_session_stats,
-    } = prepared;
-    let source_path = Path::new(&session.source_file);
-    let cursor_behavior = cursor_behavior_dto(home, cursor_session_stats.as_ref());
-    if source == Source::CursorAgent
-        && (!cursor::is_native_transcript(source_path) || !source_path.is_file())
-    {
-        session.file_available = false;
-        let events = cursor_missing_transcript_events(&session);
-        return Ok(ConversationParsedDetail {
-            revision: cursor_metadata_revision(&usage_records, cursor_session_stats.as_ref()),
-            session,
-            events,
-            agent_relations,
-            cursor_behavior,
-        });
-    }
-    let paths = trusted_paths_for_session(home, source, &session)?;
-    let (parsed, revision) =
-        parse_conversation_files_with_revision(source, &paths, &session.session_id)?;
-    ensure_matching_session(&parsed, &session)?;
-    session.file_available = true;
-    session.source_files = parsed.session.source_files.clone();
-    let mut events = parsed.events;
-    events.sort_by(compare_event_order);
-    for (sequence, event) in events.iter_mut().enumerate() {
-        event.sequence = sequence as u32;
-    }
-    Ok(ConversationParsedDetail {
-        revision,
-        session,
-        events,
-        agent_relations,
-        cursor_behavior,
-    })
-}
-
-fn parsed_detail_to_dto(
-    parsed: ConversationParsedDetail,
-    usage_record_count: u32,
-) -> ConversationDetailDto {
-    ConversationDetailDto {
-        revision: parsed.revision,
-        session: parsed.session,
-        event_count: parsed.events.len() as u32,
-        usage_record_count,
-        agent_relations: parsed.agent_relations,
-        cursor_behavior: parsed.cursor_behavior,
-    }
-}
-
-pub(crate) fn event_index_ready(
-    conn: &Connection,
-    home: &Path,
-    prepared: &PreparedConversationDetail,
-) -> Result<bool, String> {
-    let row = conn
-        .query_row(
-            r#"
-            SELECT adapter_version, event_index_generation
-            FROM conversation_sessions
-            WHERE source = ?1 AND session_id = ?2
-            "#,
-            params![prepared.source.as_str(), prepared.session.session_id],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?)),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some((adapter_version, Some(_))) = row else {
-        return Ok(false);
-    };
-    if adapter_version != CONVERSATION_ADAPTER_VERSION {
-        return Ok(false);
-    }
-    let Ok(paths) = trusted_paths_for_session(home, prepared.source, &prepared.session) else {
-        return Ok(false);
-    };
-    stored_revisions_match(conn, prepared.source, &prepared.session.session_id, &paths)
-}
-
-pub(crate) fn assemble_indexed_detail(
-    home: &Path,
-    prepared: PreparedConversationDetail,
-    event_count: u32,
-) -> Result<ConversationDetailDto, String> {
-    let PreparedConversationDetail {
-        source,
-        mut session,
-        usage_records,
-        agent_relations,
-        cursor_session_stats,
-    } = prepared;
-    let cursor_behavior = cursor_behavior_dto(home, cursor_session_stats.as_ref());
-    let paths = trusted_paths_for_session(home, source, &session)?;
-    let revision = files_revision(source, &paths)?;
-    session.file_available = true;
-    session.source_files = paths
-        .iter()
-        .map(|path| path.to_string_lossy().to_string())
-        .collect();
-    Ok(ConversationDetailDto {
-        revision,
-        session,
-        event_count,
-        usage_record_count: usage_records.len() as u32,
-        agent_relations,
-        cursor_behavior,
-    })
-}
-
-pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgressDto, String> {
-    let (total, indexed) = conn
-        .query_row(
-            r#"
-            SELECT
-                COUNT(*) AS total,
-                COALESCE(SUM(
-                    CASE
-                        WHEN adapter_version = ?1 AND event_index_generation IS NOT NULL THEN 1
-                        ELSE 0
-                    END
-                ), 0) AS indexed
-            FROM conversation_sessions
-            WHERE file_available = 1 AND source_revision != 'usage-only'
-            "#,
-            params![CONVERSATION_ADAPTER_VERSION],
-            |row| Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? as u32)),
-        )
-        .map_err(|error| error.to_string())?;
-    Ok(ConversationIndexProgressDto {
-        indexed,
-        total,
-        index_bytes: conversation_index_bytes(conn, indexed >= total || total == 0),
-    })
-}
-
-fn conversation_index_bytes(conn: &Connection, complete: bool) -> u64 {
-    if let Ok(bytes) = conn.query_row(
-        "SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name GLOB 'conversation_events*'",
-        [],
-        |row| row.get::<_, i64>(0),
-    ) {
-        return bytes.max(0) as u64;
-    }
-    if !complete {
-        return 0;
-    }
-    conn.query_row(
-        "SELECT COALESCE(SUM(LENGTH(COALESCE(text, '')) + LENGTH(COALESCE(name, ''))), 0)
-         FROM conversation_events",
-        [],
-        |row| row.get::<_, i64>(0),
-    )
-    .unwrap_or(0)
-    .max(0) as u64
-}
-
-pub fn backfill_event_index_step(conn: &Connection, home: &Path) -> Result<bool, String> {
-    match backfill_event_index_step_skipping(conn, home, &BTreeSet::new()) {
-        Ok(progressed) => Ok(progressed),
-        Err((_, error)) => Err(error),
-    }
-}
-
-pub(crate) fn backfill_event_index_step_skipping(
-    conn: &Connection,
-    home: &Path,
-    skipped: &BTreeSet<(String, String)>,
-) -> Result<bool, ((String, String), String)> {
-    let next = next_unready_session(conn, skipped)
-        .map_err(|error| ((String::new(), String::new()), error))?;
-    let Some((source, session_id)) = next else {
-        return Ok(false);
-    };
-    match reindex_session_events(conn, home, &source, &session_id) {
-        Ok(()) => Ok(true),
-        Err(error) => Err(((source, session_id), error)),
-    }
-}
-
-pub fn backfill_event_index(conn: &Connection, home: &Path) -> Result<u32, String> {
-    let mut completed = 0;
-    let mut skipped = BTreeSet::new();
-    while let Some((source, session_id)) = next_unready_session(conn, &skipped)? {
-        match reindex_session_events(conn, home, &source, &session_id) {
-            Ok(()) => completed += 1,
-            Err(_) => {
-                skipped.insert((source, session_id));
-            }
-        }
-    }
-    Ok(completed)
-}
-
-fn next_unready_session(
-    conn: &Connection,
-    skipped: &BTreeSet<(String, String)>,
-) -> Result<Option<(String, String)>, String> {
-    let mut statement = conn
-        .prepare(
-            r#"
-            SELECT source, session_id
-            FROM conversation_sessions
-            WHERE file_available = 1
-              AND source_revision != 'usage-only'
-              AND (adapter_version != ?1 OR event_index_generation IS NULL)
-            ORDER BY ended_at DESC, source ASC, session_id ASC
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map(params![CONVERSATION_ADAPTER_VERSION], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows.into_iter().find(|key| !skipped.contains(key)))
-}
-
-fn reindex_session_events(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-) -> Result<(), String> {
-    let source = Source::parse(source).filter(|source| CONVERSATION_SOURCES.contains(source));
-    let Some(source) = source else {
-        return Err("该来源尚未支持对话详情".to_string());
-    };
-    let session = load_session(conn, source.as_str(), session_id)?
-        .ok_or_else(|| "未找到该对话记录".to_string())?;
-    let paths = trusted_paths_for_session(home, source, &session)?;
-    let adapter = conversation_adapter(source)?;
-    let mut event_generations = BTreeMap::new();
-    let mut indexed_files = Vec::new();
-    let mut file_cursors = BTreeMap::new();
-    for path in &paths {
-        let batch = (adapter.index)(path).map_err(|issue| issue.message)?;
-        for parsed in batch.conversations {
-            if parsed.session.session_id != session_id {
-                continue;
-            }
-            if let Some(cursor) = parsed.index_cursor {
-                file_cursors.insert(
-                    (session_id.to_string(), parsed.session.source_file.clone()),
-                    cursor,
-                );
-            }
-            write_session_file_events(conn, source, &parsed, &mut event_generations)?;
-            indexed_files.push(summarize_for_index(parsed));
-        }
-    }
-    if indexed_files.is_empty() {
-        return Err(format!("会话 {session_id} 的源文件没有可索引的对话"));
-    }
-    let source_files = indexed_files
-        .iter()
-        .map(|file| PathBuf::from(&file.session.source_file))
-        .collect::<Vec<_>>();
-    let (merged_session, is_top_level, agent_metadata) = merge_indexed_files(indexed_files);
-    let representative_metadata = fs::metadata(&merged_session.source_file)
-        .map_err(|error| format!("读取文件元数据失败：{error}"))?;
-    let representative_revision = (adapter.revision)(Path::new(&merged_session.source_file))?;
-    if let Some(&generation) = event_generations.get(session_id) {
-        event_index::finalize_session_events(conn, source, session_id, generation)?;
-    }
-    upsert_session(
-        conn,
-        &merged_session,
-        is_top_level,
-        &agent_metadata,
-        modified_nanos(&representative_metadata),
-        representative_metadata.len() as i64,
-        &representative_revision,
-    )?;
-    update_session_files(conn, source, session_id, &source_files, true)?;
-    persist_session_file_cursors(conn, source, session_id, &source_files, &file_cursors)?;
-    Ok(())
-}
-
-fn stored_revisions_match(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-    paths: &[PathBuf],
-) -> Result<bool, String> {
-    let mut statement = conn
-        .prepare(
-            r#"
-            SELECT source_file, source_revision
-            FROM conversation_session_files
-            WHERE source = ?1 AND session_id = ?2
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
-    let stored = statement
-        .query_map(params![source.as_str(), session_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeMap<_, _>, _>>()
-        .map_err(|error| error.to_string())?;
-    let adapter = conversation_adapter(source)?;
-    if stored.is_empty() {
-        let stored_revision = conn
-            .query_row(
-                r#"
-                SELECT source_revision
-                FROM conversation_sessions
-                WHERE source = ?1 AND session_id = ?2
-                "#,
-                params![source.as_str(), session_id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        return Ok(files_revision(source, paths)? == stored_revision);
-    }
-    if stored.len() != paths.len() {
-        return Ok(false);
-    }
-    for path in paths {
-        let key = path.to_string_lossy().to_string();
-        let Some(stored_revision) = stored.get(&key) else {
-            return Ok(false);
-        };
-        if &(adapter.revision)(path)? != stored_revision {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
-fn load_exact_cursor_session(
-    conn: &Connection,
-    session_id: &str,
-) -> Result<Option<CursorSessionRecord>, String> {
-    let matches = crate::store::load_cursor_sessions(conn)?
-        .into_iter()
-        .filter(|record| record.session_id == session_id)
-        .collect::<Vec<_>>();
-    match matches.len() {
-        0 => Ok(None),
-        1 => Ok(matches.into_iter().next()),
-        _ => Err(format!(
-            "Cursor 会话 ID {session_id} 对应多个行为记录，无法确定性关联"
-        )),
-    }
-}
-
-fn cursor_behavior_dto(
-    home: &Path,
-    stats: Option<&CursorSessionRecord>,
-) -> Option<CursorSessionDetailDto> {
-    stats.map(|record| crate::cursor_session_detail::detail_from_record(home, record))
-}
-
-fn cursor_missing_transcript_events(session: &ConversationSessionRow) -> Vec<ConversationEvent> {
-    let mut event = semantic_event(
-        0,
-        EventKind::SystemStatus,
-        &session.ended_at,
-        None,
-        Some("transcript_missing".to_string()),
-        Some("Cursor transcript 不可读取；仅展示确定性关联的用量与状态".to_string()),
-        serde_json::json!({"session_id": session.session_id}),
-    );
-    event.event_id = format!("cursor-transcript-missing:{}", session.session_id);
-    event.source_file = session.source_file.clone();
-    vec![event]
-}
-
-fn cursor_metadata_revision(
-    usage_records: &[UsageRecord],
-    stats: Option<&CursorSessionRecord>,
-) -> String {
-    serde_json::to_string(&(
-        usage_records
-            .iter()
-            .map(usage_record_identity)
-            .collect::<Vec<_>>(),
-        stats,
-    ))
-    .unwrap_or_default()
-}
-
-/// Cursor Agent 对话在 `~/.cursor/projects`，与 token 包装目录不是同一条路径。
-pub(crate) fn catalog_roots(
-    overrides: &crate::ingest::PathOverrides,
-    home: &Path,
-    source: Source,
-) -> Vec<PathBuf> {
-    if source == Source::CursorAgent {
-        vec![home.join(".cursor/projects")]
-    } else {
-        ingest::source_scan_dirs_with(overrides, home, source)
-    }
-}
-
-fn conversation_source_roots(home: &Path, source: Source) -> Vec<PathBuf> {
-    catalog_roots(&ingest::path_overrides(), home, source)
-}
-
-pub fn detail_state(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    known_revision: &str,
-) -> Result<ConversationDetailStateDto, String> {
-    let source = Source::parse(source).filter(|source| CONVERSATION_SOURCES.contains(source));
-    let Some(source) = source else {
-        return Err("该来源尚未支持对话详情".to_string());
-    };
-    let session = load_session(conn, source.as_str(), session_id)?
-        .ok_or_else(|| "未找到该对话记录".to_string())?;
-    let representative = PathBuf::from(&session.source_file);
-    if source == Source::CursorAgent
-        && (!cursor::is_native_transcript(&representative) || !representative.is_file())
-    {
-        let usage_records = load_usage_records(conn, source, session_id)?;
-        let stats = load_exact_cursor_session(conn, session_id)?;
-        let revision = cursor_metadata_revision(&usage_records, stats.as_ref());
-        return Ok(ConversationDetailStateDto {
-            changed: revision != known_revision,
-            revision,
-            file_available: false,
-        });
-    }
-    let roots = conversation_source_roots(home, source);
-    let Some(_) = detail_file_revision(source, &representative, &roots)? else {
-        return Ok(ConversationDetailStateDto {
-            revision: known_revision.to_string(),
-            changed: false,
-            file_available: false,
-        });
-    };
-    let paths = session_source_paths(&session)?;
-    let Some(revision) = detail_files_revision(source, &paths, &roots)? else {
-        return Ok(ConversationDetailStateDto {
-            revision: known_revision.to_string(),
-            changed: false,
-            file_available: false,
-        });
-    };
-    Ok(ConversationDetailStateDto {
-        changed: revision != known_revision,
-        revision,
-        file_available: true,
-    })
-}
-
-fn parse_conversation_files_with_revision(
-    source: Source,
-    paths: &[PathBuf],
-    session_id: &str,
-) -> Result<(ParsedConversation, String), String> {
-    read_consistent_snapshot(
-        || files_revision(source, paths),
-        || parse_conversation_files(source, paths, session_id, false),
-    )
-}
-
-pub(crate) fn read_consistent_snapshot<T>(
-    mut revision: impl FnMut() -> Result<String, String>,
-    mut read: impl FnMut() -> Result<T, String>,
-) -> Result<(T, String), String> {
-    for _ in 0..DETAIL_READ_ATTEMPTS {
-        let before_revision = revision()?;
-        let snapshot = read();
-        let after_revision = revision()?;
-        if after_revision != before_revision {
-            continue;
-        }
-        return snapshot.map(|snapshot| (snapshot, after_revision));
-    }
-    Err("原始文件在读取期间持续变化，请重试".to_string())
-}
-
-pub fn rebuild_events_from_line(
-    source: Source,
-    path: &Path,
-    session_id: &str,
-    source_sequence: u32,
-    include_deferred_content: bool,
-) -> Result<Vec<ConversationEvent>, String> {
-    line_direct::rebuild_events_from_line(
-        source,
-        path,
-        session_id,
-        source_sequence,
-        include_deferred_content,
-    )
-}
-
-pub fn parse_session_events(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<Vec<ConversationEvent>, String> {
-    line_direct::parse_session_events(conn, home, source, session_id, include_deferred_content)
-}
-
-pub fn load_event_content(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    event_id: &str,
-) -> Result<ConversationEventContentDto, String> {
-    if let Some(content) =
-        line_direct::try_load_event_content(conn, home, source, session_id, event_id)?
-    {
-        return Ok(content);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .into_iter()
-        .find(|event| event.event_id == event_id)
-        .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
-    Ok(ConversationEventContentDto {
-        event_id: event.event_id,
-        text: event.text,
-        details: event.details,
-    })
-}
-
-pub fn load_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-pub fn load_attachment_thumbnail(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_thumbnail_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-fn resolve_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<AttachmentCandidate, String> {
-    if let Some(candidate) =
-        line_direct::try_resolve_attachment(conn, home, source, session_id, attachment_id)?
-    {
-        return Ok(candidate);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .iter()
-        .find(|event| {
-            event
-                .attachments
-                .iter()
-                .any(|attachment| attachment.id == attachment_id)
-        })
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment_index = event
-        .attachments
-        .iter()
-        .position(|attachment| attachment.id == attachment_id)
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment = event.attachments[attachment_index].clone();
-    if attachment.kind != AttachmentKind::Image {
-        return Err("该附件不是可预览的图片".to_string());
-    }
-    let source_path = PathBuf::from(&event.source_file);
-    let source_fragment = parse_conversation_file(source, &source_path, session_id, true)?;
-    let payload = read_source_payload(source, &source_path, event.source_sequence)?;
-    let mut candidate = attachment_candidates(
-        event.source_sequence,
-        &payload,
-        &source_fragment.session.project,
-    )
-    .into_iter()
-    .nth(attachment_index)
-    .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    candidate.attachment = attachment;
-    ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
-    Ok(candidate)
-}
-
-fn parse_conversation_file(
+pub(crate) fn parse_conversation_file(
     source: Source,
     path: &Path,
     session_id: &str,
@@ -2191,7 +751,7 @@ pub(super) fn parse_conversation_files(
 }
 
 /// 把同一会话散落在多个文件里的会话行合成一行。`rows` 必须已按 `source_file` 排序。
-fn merge_session_rows(rows: &[ConversationSessionRow]) -> ConversationSessionRow {
+pub(crate) fn merge_session_rows(rows: &[ConversationSessionRow]) -> ConversationSessionRow {
     let mut session = rows[0].clone();
     session.started_at = rows
         .iter()
@@ -2234,7 +794,9 @@ fn merge_session_rows(rows: &[ConversationSessionRow]) -> ConversationSessionRow
     session
 }
 
-fn merge_parsed_conversations(mut parsed_files: Vec<ParsedConversation>) -> ParsedConversation {
+pub(crate) fn merge_parsed_conversations(
+    mut parsed_files: Vec<ParsedConversation>,
+) -> ParsedConversation {
     parsed_files.sort_by(|left, right| left.session.source_file.cmp(&right.session.source_file));
     let session = merge_session_rows(
         &parsed_files
@@ -2300,7 +862,7 @@ fn merge_parsed_conversations(mut parsed_files: Vec<ParsedConversation>) -> Pars
     }
 }
 
-fn extract_agent_metadata(events: &[ConversationEvent]) -> IndexedAgentMetadata {
+pub(crate) fn extract_agent_metadata(events: &[ConversationEvent]) -> IndexedAgentMetadata {
     let indexed = events
         .iter()
         .filter_map(index_agent_event)
@@ -2308,7 +870,7 @@ fn extract_agent_metadata(events: &[ConversationEvent]) -> IndexedAgentMetadata 
     fold_agent_metadata(indexed.iter())
 }
 
-fn summarize_for_index(parsed: ParsedConversation) -> IndexedFile {
+pub(crate) fn summarize_for_index(parsed: ParsedConversation) -> IndexedFile {
     IndexedFile {
         is_top_level: parsed.is_top_level,
         agent_events: parsed.events.iter().filter_map(index_agent_event).collect(),
@@ -2318,7 +880,7 @@ fn summarize_for_index(parsed: ParsedConversation) -> IndexedFile {
 
 /// 与 `merge_parsed_conversations` 的事件合并保持同一套语义：先按文件内出现次数生成去重键，
 /// 跨文件保留首次出现，再按 (时间, 文件名, 文件内序号, event_id) 排序。
-fn merge_indexed_files(
+pub(crate) fn merge_indexed_files(
     mut files: Vec<IndexedFile>,
 ) -> (ConversationSessionRow, bool, IndexedAgentMetadata) {
     files.sort_by(|left, right| left.session.source_file.cmp(&right.session.source_file));
@@ -2360,7 +922,7 @@ fn merge_indexed_files(
 /// 就把相关事件压成这个形状：保留合并所需的去重键与排序键，正文只留 `fold_agent_metadata`
 /// 真正读的那几个字段。整份 `events`/`messages` 随即释放——否则扫描期间整个来源的全部
 /// 事件会同时活着，一次「重建全部」就是几个 GB。
-struct IndexedAgentEvent {
+pub(crate) struct IndexedAgentEvent {
     /// 只用于去重比较，所以存哈希而不是 `event_identity` 的完整字符串——
     /// 一条 tool_result 的身份串可以有几十 KB，而它是要一直留到合并阶段的。
     identity: u64,
@@ -2370,7 +932,7 @@ struct IndexedAgentEvent {
     role: IndexedAgentRole,
 }
 
-enum IndexedAgentRole {
+pub(crate) enum IndexedAgentRole {
     SessionStarted {
         parent_session_ids: Vec<String>,
     },
@@ -2385,7 +947,7 @@ enum IndexedAgentRole {
 
 /// 事件是否与父子关系有关，完全由 `kind`/`name`/`details` 决定，而这三者都参与
 /// `event_identity`——所以「先过滤再去重」和「先去重再过滤」结果一致。
-fn index_agent_event(event: &ConversationEvent) -> Option<IndexedAgentEvent> {
+pub(crate) fn index_agent_event(event: &ConversationEvent) -> Option<IndexedAgentEvent> {
     let role = if event.kind == EventKind::SystemStatus
         && event.name.as_deref() == Some("session_started")
     {
@@ -2436,7 +998,7 @@ fn index_agent_event(event: &ConversationEvent) -> Option<IndexedAgentEvent> {
     })
 }
 
-fn fold_agent_metadata<'a>(
+pub(crate) fn fold_agent_metadata<'a>(
     events: impl Iterator<Item = &'a IndexedAgentEvent>,
 ) -> IndexedAgentMetadata {
     let mut parent_session_ids = BTreeSet::new();
@@ -2473,7 +1035,7 @@ fn fold_agent_metadata<'a>(
     }
 }
 
-fn structured_agent_id(value: &Value) -> Option<String> {
+pub(crate) fn structured_agent_id(value: &Value) -> Option<String> {
     if let Some(agent_id) = value
         .as_object()
         .and_then(|object| object.get("agent_id"))
@@ -2585,7 +1147,7 @@ pub(super) fn ensure_attachment_path_allowed(
     }
 }
 
-fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
+pub(crate) fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
     if candidate.attachment.status == AttachmentStatus::Embedded {
         if candidate.source.starts_with("data:image/") {
             return Ok(candidate.source.clone());
@@ -2600,7 +1162,9 @@ fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<String, String
     ))
 }
 
-fn attachment_thumbnail_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
+pub(crate) fn attachment_thumbnail_data_url(
+    candidate: &AttachmentCandidate,
+) -> Result<String, String> {
     let bytes = attachment_bytes(candidate)?;
     let image =
         image::load_from_memory(&bytes).map_err(|error| format!("图片格式无效：{error}"))?;
@@ -2618,7 +1182,7 @@ fn attachment_thumbnail_data_url(candidate: &AttachmentCandidate) -> Result<Stri
     ))
 }
 
-fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> {
+pub(crate) fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> {
     match candidate.attachment.status {
         AttachmentStatus::Embedded => {
             let (metadata, encoded) = candidate
@@ -2644,7 +1208,7 @@ fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> 
     }
 }
 
-fn upsert_session(
+pub(crate) fn upsert_session(
     conn: &Connection,
     session: &ConversationSessionRow,
     is_top_level: bool,
@@ -2704,7 +1268,7 @@ fn upsert_session(
     Ok(())
 }
 
-fn failed_session_paths(
+pub(crate) fn failed_session_paths(
     conn: &Connection,
     source: Source,
     issues: &[ConversationIndexIssue],
@@ -2736,7 +1300,7 @@ fn failed_session_paths(
     Ok(paths_by_session)
 }
 
-fn update_session_files(
+pub(crate) fn update_session_files(
     conn: &Connection,
     source: Source,
     session_id: &str,
@@ -2781,7 +1345,7 @@ fn update_session_files(
     Ok(())
 }
 
-fn load_agent_relations(
+pub(crate) fn load_agent_relations(
     conn: &Connection,
     source: Source,
     current_session_id: &str,
@@ -2886,7 +1450,7 @@ fn load_agent_relations(
     })
 }
 
-fn load_agent_catalog(
+pub(crate) fn load_agent_catalog(
     conn: &Connection,
     source: Source,
 ) -> Result<BTreeMap<String, (ConversationSessionRow, IndexedAgentMetadata)>, String> {
@@ -2916,7 +1480,7 @@ fn load_agent_catalog(
     Ok(catalog)
 }
 
-fn build_parent_link(
+pub(crate) fn build_parent_link(
     child_id: &str,
     catalog: &BTreeMap<String, (ConversationSessionRow, IndexedAgentMetadata)>,
     parent_claims: &BTreeMap<String, BTreeSet<String>>,
@@ -2954,7 +1518,7 @@ fn build_parent_link(
     })
 }
 
-fn agent_link_status(
+pub(crate) fn agent_link_status(
     parent_id: &str,
     child_id: &str,
     catalog: &BTreeMap<String, (ConversationSessionRow, IndexedAgentMetadata)>,
@@ -2975,7 +1539,7 @@ fn agent_link_status(
     AgentLinkStatus::Linked
 }
 
-fn agent_path_exists(
+pub(crate) fn agent_path_exists(
     from: &str,
     target: &str,
     parent_claims: &BTreeMap<String, BTreeSet<String>>,
@@ -2998,7 +1562,7 @@ fn agent_path_exists(
     false
 }
 
-fn sync_cursor_usage_only_sessions(conn: &Connection) -> Result<(), String> {
+pub(crate) fn sync_cursor_usage_only_sessions(conn: &Connection) -> Result<(), String> {
     let mut statement = conn
         .prepare(
             "SELECT DISTINCT session_id FROM usage_records WHERE source = ?1 AND session_id != ''",
@@ -3104,7 +1668,7 @@ fn sync_cursor_usage_only_sessions(conn: &Connection) -> Result<(), String> {
 }
 
 /// transcript 不含模型名。有过代码编辑时，`ai_code_hashes` enrich 写在 `cursor_sessions.models_json`。
-fn model_label_from_models_json(raw: &str) -> String {
+pub(crate) fn model_label_from_models_json(raw: &str) -> String {
     serde_json::from_str::<Vec<String>>(raw)
         .unwrap_or_default()
         .into_iter()
@@ -3113,7 +1677,7 @@ fn model_label_from_models_json(raw: &str) -> String {
         .join(", ")
 }
 
-fn cursor_hash_models_by_session(
+pub(crate) fn cursor_hash_models_by_session(
     conn: &Connection,
     session_ids: &[String],
 ) -> Result<BTreeMap<String, String>, String> {
@@ -3141,7 +1705,7 @@ fn cursor_hash_models_by_session(
         .collect())
 }
 
-fn apply_cursor_hash_model(session: &mut ConversationSessionRow, model: Option<&str>) {
+pub(crate) fn apply_cursor_hash_model(session: &mut ConversationSessionRow, model: Option<&str>) {
     if session.model.is_empty() {
         if let Some(model) = model.filter(|value| !value.is_empty()) {
             session.model = model.to_string();
@@ -3149,7 +1713,7 @@ fn apply_cursor_hash_model(session: &mut ConversationSessionRow, model: Option<&
     }
 }
 
-fn sync_cursor_hash_models(conn: &Connection) -> Result<(), String> {
+pub(crate) fn sync_cursor_hash_models(conn: &Connection) -> Result<(), String> {
     let mut statement = conn
         .prepare(
             r#"
@@ -3180,7 +1744,7 @@ fn sync_cursor_hash_models(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-fn hydrate_cursor_hash_models(
+pub(crate) fn hydrate_cursor_hash_models(
     conn: &Connection,
     rows: &mut [ConversationSessionRow],
 ) -> Result<(), String> {
@@ -3199,7 +1763,7 @@ fn hydrate_cursor_hash_models(
     Ok(())
 }
 
-fn fill_empty_cursor_hash_model(
+pub(crate) fn fill_empty_cursor_hash_model(
     conn: &Connection,
     session: &mut ConversationSessionRow,
 ) -> Result<(), String> {
@@ -3211,7 +1775,7 @@ fn fill_empty_cursor_hash_model(
     Ok(())
 }
 
-fn load_usage_records(
+pub(crate) fn load_usage_records(
     conn: &Connection,
     source: Source,
     session_id: &str,
@@ -3256,7 +1820,7 @@ fn load_usage_records(
     Ok(records)
 }
 
-fn usage_record_identity(record: &UsageRecord) -> String {
+pub(crate) fn usage_record_identity(record: &UsageRecord) -> String {
     serde_json::json!({
         "occurred_at": record.occurred_at,
         "source": record.source,
@@ -3275,7 +1839,7 @@ fn usage_record_identity(record: &UsageRecord) -> String {
     .to_string()
 }
 
-fn load_session(
+pub(crate) fn load_session(
     conn: &Connection,
     source: &str,
     session_id: &str,
@@ -3306,7 +1870,7 @@ fn load_session(
     Ok(session)
 }
 
-fn load_session_files(
+pub(crate) fn load_session_files(
     conn: &Connection,
     source: &str,
     session_id: &str,
@@ -3374,7 +1938,7 @@ pub(super) fn ensure_matching_session(
     }
 }
 
-fn tombstone_missing_sessions(
+pub(crate) fn tombstone_missing_sessions(
     conn: &Connection,
     source: Source,
     seen_session_ids: &BTreeSet<String>,
@@ -3396,7 +1960,7 @@ fn tombstone_missing_sessions(
     Ok(())
 }
 
-fn mark_session_unavailable(
+pub(crate) fn mark_session_unavailable(
     conn: &Connection,
     source: Source,
     session_id: &str,
@@ -3436,7 +2000,7 @@ pub(super) fn row_from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<Conversa
     })
 }
 
-fn load_cached_fingerprints(
+pub(crate) fn load_cached_fingerprints(
     conn: &Connection,
     source: Source,
     path: &Path,
@@ -3486,7 +2050,7 @@ fn load_cached_fingerprints(
         .map_err(|error| error.to_string())
 }
 
-fn modified_nanos(metadata: &fs::Metadata) -> i64 {
+pub(crate) fn modified_nanos(metadata: &fs::Metadata) -> i64 {
     metadata
         .modified()
         .ok()
@@ -3495,7 +2059,7 @@ fn modified_nanos(metadata: &fs::Metadata) -> i64 {
         .unwrap_or(0)
 }
 
-fn metadata_revision(metadata: &fs::Metadata) -> String {
+pub(crate) fn metadata_revision(metadata: &fs::Metadata) -> String {
     let modified_ns = metadata
         .modified()
         .ok()
@@ -3505,13 +2069,16 @@ fn metadata_revision(metadata: &fs::Metadata) -> String {
     format!("{modified_ns}:{}", metadata.len())
 }
 
-fn ensure_trusted_path(path: &Path, roots: &[PathBuf]) -> Result<(), String> {
+pub(crate) fn ensure_trusted_path(path: &Path, roots: &[PathBuf]) -> Result<(), String> {
     let canonical_path =
         fs::canonicalize(path).map_err(|error| format!("无法验证原始文件路径：{error}"))?;
     ensure_canonical_path_in_roots(&canonical_path, roots)
 }
 
-fn ensure_canonical_path_in_roots(canonical_path: &Path, roots: &[PathBuf]) -> Result<(), String> {
+pub(crate) fn ensure_canonical_path_in_roots(
+    canonical_path: &Path,
+    roots: &[PathBuf],
+) -> Result<(), String> {
     for root in roots {
         let Ok(canonical_root) = fs::canonicalize(root) else {
             continue;
@@ -3523,7 +2090,9 @@ fn ensure_canonical_path_in_roots(canonical_path: &Path, roots: &[PathBuf]) -> R
     Err("原始文件不在该来源允许的扫描目录内".to_string())
 }
 
-fn session_source_paths(session: &ConversationSessionRow) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn session_source_paths(
+    session: &ConversationSessionRow,
+) -> Result<Vec<PathBuf>, String> {
     let representative = PathBuf::from(&session.source_file);
     let paths = if session.source_files.is_empty() {
         vec![representative.clone()]
@@ -3536,7 +2105,7 @@ fn session_source_paths(session: &ConversationSessionRow) -> Result<Vec<PathBuf>
     Ok(paths)
 }
 
-fn trusted_paths_for_session(
+pub(crate) fn trusted_paths_for_session(
     home: &Path,
     source: Source,
     session: &ConversationSessionRow,
@@ -3557,7 +2126,7 @@ fn trusted_paths_for_session(
     Ok(paths)
 }
 
-fn files_revision(source: Source, paths: &[PathBuf]) -> Result<String, String> {
+pub(crate) fn files_revision(source: Source, paths: &[PathBuf]) -> Result<String, String> {
     let adapter = conversation_adapter(source)?;
     let revisions = paths
         .iter()
@@ -3571,7 +2140,7 @@ fn files_revision(source: Source, paths: &[PathBuf]) -> Result<String, String> {
     serde_json::to_string(&revisions).map_err(|error| error.to_string())
 }
 
-fn detail_files_revision(
+pub(crate) fn detail_files_revision(
     source: Source,
     paths: &[PathBuf],
     roots: &[PathBuf],
@@ -3591,7 +2160,7 @@ fn detail_files_revision(
         .map_err(|error| error.to_string())
 }
 
-fn detail_file_revision(
+pub(crate) fn detail_file_revision(
     source: Source,
     path: &Path,
     roots: &[PathBuf],

@@ -13,14 +13,20 @@ alwaysApply: false
 
 ## 数据模型
 
-- `domain.rs` 是唯一的数据结构来源：新增字段先改 `UsageRecord`/DTO，再改适配器/查询/前端 `types.ts`，禁止在其它模块里定义平行结构体
+- `domain` 是唯一的数据结构来源（子模块按域拆，根上全量 re-export）。新增字段先改 `UsageRecord`/DTO，再改适配器/查询/前端 `types.ts`，禁止在其它模块里定义平行结构体
 - `UsageRecord::with_total()`（经由 `adapters::finish`）在 `total_tokens <= 0` 时才用四个分项之和兜底；不要在适配器里重复这个逻辑
+
+## 文件规模与模块边界
+
+- 生产代码 800 行软红线：超线要审视是否该按域拆，不是超线即 CI 失败。测试文件豁免行数，按被测模块对齐。
+- 数据模型对外路径保持 `crate::domain::…`。对话记录子模块私有、根上 re-export。存储/查询可以走真实子模块路径。见 `docs/adr/0017-rust-module-boundaries.md`
+- 纯重构不得改 `store::ADAPTER_VERSION` 与 `conversation::CONVERSATION_ADAPTER_VERSION`
 
 ## Tauri command 层（lib.rs）
 
 - 每个 command 都用 `tauri::async_runtime::spawn_blocking` 包裹阻塞的 sqlite/文件 IO，再 `.await.map_err(...)?`
-- command 内部只做：取 `AppState`、锁 `conn`、按需 `load_prices`，然后委托给 `query`/`ingest` 模块；不要把业务逻辑写进 `lib.rs`
-- 新增 command 必须同时加入 `tauri::generate_handler![...]` 列表
+- command 内部只做：取 `AppState`、锁 `conn`、按需 `load_prices`，然后委托给 `query`/`ingest` 模块；不要把业务逻辑写进 command
+- 新增 command 必须同时加入 crate 根的 `tauri::generate_handler![...]` 列表（宏要全路径）
 
 ## 费用计算（cost.rs）
 
