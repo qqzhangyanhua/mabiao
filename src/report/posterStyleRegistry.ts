@@ -1,5 +1,6 @@
 import type { ComponentType, Ref } from "react";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
+import { LightGlassPoster } from "./lightGlassPoster";
 import type { PosterViewModel } from "./posterTypes";
 
 export type ReportPosterRenderProps = {
@@ -27,6 +28,17 @@ export const REPORT_POSTER_STYLES = [
       accent: "#8b6cff",
     },
     Component: DarkAnalyticsPoster,
+  },
+  {
+    id: "light-glass",
+    label: "浅色磨砂",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "lightGlassPoster.css",
+    swatch: {
+      background: "#eef6f8",
+      accent: "#3d9aa8",
+    },
+    Component: LightGlassPoster,
   },
 ] as const;
 
@@ -57,5 +69,7 @@ export function resolveReportPosterStyleId(value: unknown): ReportPosterStyleId 
 }
 
 export function resolveReportPosterStyle(value: unknown): ReportPosterStyle {
-  return REPORT_POSTER_STYLE_BY_ID.get(resolveReportPosterStyleId(value)) ?? REPORT_POSTER_STYLES[0];
+  return (
+    REPORT_POSTER_STYLE_BY_ID.get(resolveReportPosterStyleId(value)) ?? REPORT_POSTER_STYLES[0]
+  );
 }
