@@ -1,0 +1,131 @@
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  background: #0b1220;
+  color: #e8eef7;
+  font-family: "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+.spike {
+  box-sizing: border-box;
+  padding: 24px 28px 48px;
+}
+
+.spike *,
+.spike *::before,
+.spike *::after {
+  box-sizing: border-box;
+}
+
+.spike-head {
+  max-width: 1480px;
+  margin: 0 auto 20px;
+}
+
+.spike-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.spike-head p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #8b97ab;
+}
+
+.spike-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.spike-status button {
+  padding: 6px 12px;
+  border: 1px solid #2a3a56;
+  border-radius: 8px;
+  background: #151e32;
+  color: #e8eef7;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.spike-status button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spike-msg {
+  font-size: 13px;
+  font-weight: 500;
+  color: #8b97ab;
+}
+
+.spike-msg.is-error {
+  color: #fb7185;
+}
+
+.spike-grid {
+  display: grid;
+  grid-template-columns: 720px 720px;
+  gap: 24px;
+  justify-content: start;
+}
+
+.spike-col h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  color: #8b97ab;
+}
+
+.spike-capture {
+  display: block;
+  width: 720px;
+}
+
+.spike-extremes {
+  max-width: 1480px;
+  margin: 48px auto 0;
+}
+
+.spike-extremes h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.spike-extremes > p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #8b97ab;
+}
+
+.spike-extreme-list {
+  display: grid;
+  grid-template-columns: 720px 720px;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.spike-extreme-list h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: #8b97ab;
+}
+
+.spike-focus {
+  padding: 24px;
+  width: fit-content;
+}

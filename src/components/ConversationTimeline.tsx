@@ -6,29 +6,27 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
   type RefObject,
   type UIEvent,
 } from "react";
 import { useConversationEventPages } from "../lib/useConversationEventPages";
-import { groupTimelineEvents } from "../lib/conversationEventDisplay";
 import {
+  buildTimelineRows,
   pruneTimelineMeasurements,
   TIMELINE_ROW_ESTIMATE,
   timelineAnchorAtOffset,
+  timelineHighlightIndex,
   timelineOffsetAt,
   timelineScrollCorrection,
   timelineScrollTopForAnchor,
+  timelineViewKind,
   timelineVisibleRange,
   type TimelineHeightAnchor,
 } from "../lib/conversationTimelineVirtual";
-import type { ConversationAgentLink, ConversationEvent } from "../types";
-import { ConversationAgentBranch } from "./ConversationAgentBranch";
-import { ConversationEventItem } from "./ConversationEventItem";
-import { ConversationUnadaptedGroup } from "./ConversationUnadaptedGroup";
+import type { ConversationAgentLink } from "../types";
+import { TimelineRowView, TimelineVirtualRow } from "./ConversationTimelineRow";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
-import { Button } from "./ui/Button";
 
 export type ConversationTimelineHandle = {
   jumpToStart: () => Promise<void>;
@@ -56,41 +54,6 @@ export type ConversationTimelineProps = {
   onWindowChange?: (edges: { hasMoreBefore: boolean; hasMoreAfter: boolean }) => void;
   onCaptureScrollAnchor?: () => void;
 };
-
-type TimelineRow =
-  | { key: string; type: "gate"; edge: "before" | "after" }
-  | { key: string; type: "error"; message: string }
-  | { key: string; type: "event"; event: ConversationEvent }
-  | { key: string; type: "unadapted"; events: ConversationEvent[] }
-  | { key: string; type: "trailing"; links: ConversationAgentLink[] };
-
-function TimelineVirtualRow({
-  rowKey,
-  onMeasure,
-  children,
-}: {
-  rowKey: string;
-  onMeasure: (key: string, height: number) => void;
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const node = ref.current;
-    if (!node) {
-      return;
-    }
-    const report = () => onMeasure(rowKey, node.offsetHeight);
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [onMeasure, rowKey]);
-  return (
-    <div className="conversation-timeline-row" ref={ref}>
-      {children}
-    </div>
-  );
-}
 
 export function ConversationTimeline({
   source,
@@ -151,33 +114,17 @@ export function ConversationTimeline({
     }
   };
 
-  const rows = useMemo(() => {
-    const eventIds = new Set(events.map((event) => event.event_id));
-    const next: TimelineRow[] = [];
-    if (eventWindow.hasMoreBefore) {
-      next.push({ key: "gate:before", type: "gate", edge: "before" });
-    }
-    if (error) {
-      next.push({ key: "error", type: "error", message: error });
-    }
-    for (const group of groupTimelineEvents(events)) {
-      if (group.type === "unadapted") {
-        next.push({ key: "unadapted", type: "unadapted", events: group.events });
-      } else {
-        next.push({ key: `event:${group.event.event_id}`, type: "event", event: group.event });
-      }
-    }
-    if (eventWindow.hasMoreAfter) {
-      next.push({ key: "gate:after", type: "gate", edge: "after" });
-    }
-    const trailing = agentLinks.filter(
-      (link) => link.launch_event_id === null || !eventIds.has(link.launch_event_id),
-    );
-    if (trailing.length > 0) {
-      next.push({ key: "trailing", type: "trailing", links: trailing });
-    }
-    return next;
-  }, [agentLinks, error, eventWindow.hasMoreAfter, eventWindow.hasMoreBefore, events]);
+  const rows = useMemo(
+    () =>
+      buildTimelineRows({
+        events,
+        hasMoreBefore: eventWindow.hasMoreBefore,
+        hasMoreAfter: eventWindow.hasMoreAfter,
+        error,
+        agentLinks,
+      }),
+    [agentLinks, error, eventWindow.hasMoreAfter, eventWindow.hasMoreBefore, events],
+  );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
 
@@ -290,10 +237,7 @@ export function ConversationTimeline({
     if (!node) {
       return;
     }
-    let index = keys.indexOf(`event:${highlightEventId}`);
-    if (index < 0) {
-      index = keys.indexOf("unadapted");
-    }
+    const index = timelineHighlightIndex(keys, highlightEventId);
     if (index < 0) {
       return;
     }
@@ -339,41 +283,6 @@ export function ConversationTimeline({
     },
   }));
 
-  const linksForEvent = (eventId: string) =>
-    agentLinks.filter((link) => link.launch_event_id === eventId);
-
-  function renderAgentLinks(links: ConversationAgentLink[]) {
-    return links.map((link) => (
-      <ConversationAgentBranch
-        key={link.relationship_id}
-        link={link}
-        expanded={expandedRelationshipIds.includes(link.relationship_id)}
-        expandedRelationshipIds={expandedRelationshipIds}
-        depth={depth}
-        onToggleChild={onToggleChild}
-        onOpenChild={onOpenChild}
-      />
-    ));
-  }
-
-  function renderTimelineEvent(event: ConversationEvent) {
-    const highlighted = event.event_id === highlightEventId;
-    return (
-      <div className="conversation-event-group" data-event-id={event.event_id} key={event.event_id}>
-        <ConversationEventItem
-          event={event}
-          source={source}
-          sessionId={sessionId}
-          highlighted={highlighted}
-          highlightQuery={highlighted ? highlightQuery : null}
-          highlightSnippet={highlighted ? highlightSnippet : null}
-          onEventContentLoaded={applyEventContent}
-        />
-        {renderAgentLinks(linksForEvent(event.event_id))}
-      </div>
-    );
-  }
-
   function revealAdjacent(direction: "earlier" | "later") {
     const node = nodeRef.current;
     const eligible = new Set(
@@ -396,52 +305,18 @@ export function ConversationTimeline({
     }
   }
 
-  function renderRow(row: TimelineRow) {
-    if (row.type === "gate") {
-      const earlier = row.edge === "before";
-      return (
-        <div className="conversation-timeline-page-gate">
-          <span className="muted">{earlier ? "上方还有更早事件" : "下方还有更新事件"}</span>
-          <Button
-            size="sm"
-            disabled={loadingEarlier || loadingLater}
-            onClick={() => revealAdjacent(earlier ? "earlier" : "later")}
-          >
-            {(earlier ? loadingEarlier : loadingLater) ? <Spinner size={12} /> : null}
-            {earlier ? "加载更早" : "加载更新"}
-          </Button>
-        </div>
-      );
-    }
-    if (row.type === "error") {
-      return (
-        <span className="conversation-inline-error" role="alert">
-          {row.message}
-        </span>
-      );
-    }
-    if (row.type === "unadapted") {
-      return (
-        <ConversationUnadaptedGroup
-          events={row.events}
-          renderEvent={renderTimelineEvent}
-          defaultOpen={row.events.some((event) => event.event_id === highlightEventId)}
-        />
-      );
-    }
-    if (row.type === "trailing") {
-      return <>{renderAgentLinks(row.links)}</>;
-    }
-    return renderTimelineEvent(row.event);
-  }
-
   function handleScroll(event: UIEvent<HTMLDivElement>) {
     syncViewport();
     onScroll?.(event);
   }
 
-  const showEmpty =
-    !loading && !error && eventCount === 0 && events.length === 0 && agentLinks.length === 0;
+  const viewKind = timelineViewKind({
+    loading,
+    error,
+    eventCount,
+    eventsLength: events.length,
+    agentLinkCount: agentLinks.length,
+  });
 
   return (
     <div
@@ -451,13 +326,13 @@ export function ConversationTimeline({
       onScroll={handleScroll}
     >
       <div className="conversation-timeline-stack">
-        {loading && events.length === 0 ? (
+        {viewKind === "loading" ? (
           <div className="conversation-agent-loading">
             <Spinner size={16} />
           </div>
-        ) : error && events.length === 0 ? (
-          <EmptyState icon="alertTriangle" tone="warn" title="无法读取事件页" hint={error} />
-        ) : showEmpty ? (
+        ) : viewKind === "error" ? (
+          <EmptyState icon="alertTriangle" tone="warn" title="无法读取事件页" hint={error ?? undefined} />
+        ) : viewKind === "empty" ? (
           <EmptyState icon="chat" title="这条会话暂无事件" hint="当前会话没有可展示的语义事件。" />
         ) : (
           <>
@@ -470,7 +345,23 @@ export function ConversationTimeline({
             ) : null}
             {rows.slice(range.start, range.end).map((row) => (
               <TimelineVirtualRow key={row.key} rowKey={row.key} onMeasure={measureRow}>
-                {renderRow(row)}
+                <TimelineRowView
+                  row={row}
+                  source={source}
+                  sessionId={sessionId}
+                  highlightEventId={highlightEventId}
+                  highlightQuery={highlightQuery}
+                  highlightSnippet={highlightSnippet}
+                  agentLinks={agentLinks}
+                  expandedRelationshipIds={expandedRelationshipIds}
+                  depth={depth}
+                  loadingEarlier={loadingEarlier}
+                  loadingLater={loadingLater}
+                  onToggleChild={onToggleChild}
+                  onOpenChild={onOpenChild}
+                  onEventContentLoaded={applyEventContent}
+                  onRevealAdjacent={revealAdjacent}
+                />
               </TimelineVirtualRow>
             ))}
             {range.paddingBottom > 0 ? (

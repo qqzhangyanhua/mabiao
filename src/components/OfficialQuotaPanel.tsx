@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { memo, useEffect, useState, type PointerEvent } from "react";
+import { useTickingNow } from "../hooks/useTickingNow";
 import { useTrayQuotaArrange } from "../hooks/useTrayQuotaArrange";
 import { Icon } from "../icons";
 import { formatClock, formatWindowClock } from "../lib/format";
@@ -25,7 +26,6 @@ import type { OfficialQuotaListProps } from "./type";
 import { Button } from "./ui/Button";
 
 const DEFAULT_STALE_AFTER_MINUTES = 10;
-const AGE_TICK_MS = 30_000;
 
 export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
   data,
@@ -390,13 +390,4 @@ export function OfficialQuotaWindows({
       })}
     </div>
   );
-}
-
-export function useTickingNow(intervalMs = AGE_TICK_MS): number {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
-  return nowMs;
 }

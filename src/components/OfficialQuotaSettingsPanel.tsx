@@ -1,12 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { useTickingNow } from "../hooks/useTickingNow";
 import {
   officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
 import type { OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
-import { OfficialQuotaPlanMark, QuotaFreshnessMark, useTickingNow } from "./OfficialQuotaPanel";
+import { OfficialQuotaPlanMark, QuotaFreshnessMark } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
 

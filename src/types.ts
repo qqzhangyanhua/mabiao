@@ -924,3 +924,49 @@ export type SourceDiagnostic = {
   coverage: string;
   archived_record_count: number;
 };
+
+export type ReportPeriodKind = "week" | "month";
+
+export type ReportPeriod = {
+  kind: ReportPeriodKind;
+  offset: number;
+};
+
+export type ReportTopSessionBy = "cost" | "tokens";
+
+export type ReportInsight =
+  | { kind: "night_share"; night_tokens: number; total_tokens: number; pct: number }
+  | { kind: "peak_hours"; start_hour: number; end_hour: number }
+  | { kind: "busiest_day"; weekday: number }
+  | {
+      kind: "top_session";
+      by: ReportTopSessionBy;
+      source: string;
+      session_id: string;
+      project: string | null;
+      cost: number | null;
+      total_tokens: number;
+    };
+
+export type ReportDayPoint = {
+  date: string;
+  total_tokens: number;
+};
+
+export type ReportShareSlice = {
+  name: string;
+  pct: number;
+};
+
+export type ReportDto = {
+  period_kind: ReportPeriodKind;
+  offset: number;
+  start_date: string;
+  end_date: string;
+  has_data: boolean;
+  totals: OverviewDto;
+  days: ReportDayPoint[];
+  sources: ReportShareSlice[];
+  models: string[];
+  insights: ReportInsight[];
+};

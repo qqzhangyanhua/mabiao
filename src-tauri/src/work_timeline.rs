@@ -285,6 +285,14 @@ fn local_midnight_to_utc(naive: NaiveDateTime) -> DateTime<Utc> {
     }
 }
 
+pub(crate) fn local_midnight_utc(date: NaiveDate) -> DateTime<Utc> {
+    local_midnight_to_utc(date.and_hms_opt(0, 0, 0).expect("midnight is valid"))
+}
+
+pub(crate) fn rfc3339_millis(timestamp: DateTime<Utc>) -> String {
+    iso(timestamp)
+}
+
 fn iso(timestamp: DateTime<Utc>) -> String {
     timestamp.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }

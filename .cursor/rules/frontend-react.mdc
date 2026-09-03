@@ -20,8 +20,9 @@ alwaysApply: false
 
 ## 样式
 
-- 项目样式集中在单个 `src/styles.css`，用 CSS 自定义属性（`--bg`、`--purple`、`--cyan` 等）做主题色，**没有引入 Tailwind CSS**；新样式沿用「CSS 变量 + BEM 风格 class 名」的既有写法，不要引入新的样式方案（CSS-in-JS、Tailwind、CSS Modules）
-- 深色主题是唯一主题（`color-scheme: dark`），不需要考虑浅色模式适配
+- 入口是 `src/styles.css`，只放 `@import` 与注释，webview 仍只在这里引入一次。分层文件在 `src/styles/`：`base/`（token、reset）、`layout/`（外壳、尺寸断点）、`ui/`（`components/ui/` 原子件）、`shared/`（表格、色调、空态/加载）、`views/`（按域）。新样式写进对应层/域文件，不要把规则塞回入口。
+- 保持全局类名 + BEM 风格 + CSS 自定义属性主题（`--bg`、`--purple`、`--cyan` 等）。**不要引入** Tailwind、CSS Modules、CSS-in-JS。尺寸断点写在 `styles/layout/responsive.css`；`prefers-reduced-motion` 紧贴各自的动画定义。单文件不超过 400 行（`src/lib/cssStructure.ts` 门禁）。
+- 深色主题是唯一主题（`color-scheme: dark`），不需要考虑浅色模式适配。见 `docs/adr/0016-css-layer-split.md`。
 
 ## 与 Tauri 后端通信
 

@@ -44,6 +44,23 @@ fn sql_queries_match_in_memory_aggregates() {
         assert_eq!(sql_tr, mem_tr, "trend grain={grain} 不一致");
     }
 
+    // hour_of_day：按本地一天中的第几个小时跨天合并
+    let sql_hod = query::hour_of_day(&conn, &Filter::default()).unwrap();
+    let mem_hod = aggregate::hour_of_day(&records, &Filter::default());
+    assert_eq!(sql_hod.len(), 24, "hour_of_day 必须覆盖 0–23");
+    assert_eq!(mem_hod.len(), 24, "hour_of_day 必须覆盖 0–23");
+    for hour in 0..24 {
+        assert_eq!(
+            sql_hod[hour], mem_hod[hour],
+            "hour_of_day hour={hour} 不一致"
+        );
+    }
+
+    // tokens_by_local_day：按本地日历日汇总，不含 Cursor 账号用量
+    let sql_days = query::tokens_by_local_day(&conn, &Filter::default()).unwrap();
+    let mem_days = aggregate::tokens_by_local_day(&records, &Filter::default());
+    assert_eq!(sql_days, mem_days, "tokens_by_local_day 不一致");
+
     // breakdown 五个维度
     for dim in ["application", "source", "model", "provider", "project"] {
         let sql_bd = query::breakdown(&conn, &Filter::default(), &prices, dim).unwrap();
@@ -145,6 +162,12 @@ fn sql_queries_match_in_memory_aggregates() {
         assert_eq!(sql_ov.unpriced, mem_ov.unpriced);
         assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
         assert_overview_cost_split_eq(&sql_ov, &mem_ov, &format!("filter={f:?}"));
+        let sql_hod = query::hour_of_day(&conn, f).unwrap();
+        let mem_hod = aggregate::hour_of_day(&records, f);
+        assert_eq!(sql_hod, mem_hod, "hour_of_day filter={f:?}");
+        let sql_days = query::tokens_by_local_day(&conn, f).unwrap();
+        let mem_days = aggregate::tokens_by_local_day(&records, f);
+        assert_eq!(sql_days, mem_days, "tokens_by_local_day filter={f:?}");
     }
 
     // work_timeline：SQL 宽口径拉取 + Cursor 会话区间，与内存路径对同一批 records/spans 调 build 必须一致。

@@ -1,0 +1,279 @@
+.dash {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 可长高填满视口，但不能被压矮。压矮后子块会溢出，盖住状态栏等后续模块。 */
+  flex: 1 0 auto;
+  width: 100%;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.kpi,
+.panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--panel-grad-1), var(--panel-grad-2));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px var(--shadow-soft);
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px 12px 6px;
+  border-radius: 12px;
+}
+
+button.kpi {
+  display: flex;
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kpi.is-clickable {
+  overflow: visible;
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.kpi.is-clickable:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.kpi-hint {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.kpi-detail {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
+.kpi-detail p {
+  margin: 0;
+}
+
+.kpi-detail p + p {
+  margin-top: 2px;
+}
+
+.kpi-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--blue-fg);
+  font-size: 12px;
+}
+
+.kpi-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kpi-ico {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--tone-codex-bg);
+  color: var(--purple-fg);
+}
+
+.tone-cyan .kpi-ico {
+  background: var(--tone-pi-bg);
+  color: var(--cyan-fg);
+}
+
+.tone-orange .kpi-ico {
+  background: rgba(245, 158, 11, 0.16);
+  color: var(--orange-fg);
+}
+
+.tone-blue .kpi-ico {
+  background: var(--tone-gemini-bg);
+  color: var(--blue-fg);
+}
+
+.kpi-value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 2px;
+}
+
+.delta {
+  font-size: 12px;
+}
+
+.delta.up {
+  color: var(--green-fg);
+}
+
+.delta.down {
+  color: var(--red-fg);
+}
+
+.delta.flat {
+  color: var(--muted);
+}
+
+.spark {
+  width: 88px;
+  height: 22px;
+}
+
+.kpi .spark {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 72px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.kpi.has-spark .kpi-value,
+.kpi.has-spark .kpi-hint,
+.kpi.has-spark .kpi-detail,
+.kpi.has-spark .kpi-foot,
+.kpi:has(.spark) .kpi-value,
+.kpi:has(.spark) .kpi-hint,
+.kpi:has(.spark) .kpi-detail,
+.kpi:has(.spark) .kpi-foot {
+  padding-right: 76px;
+}
+
+/* 概览 KPI 再收一档：费用附加信息单行截断，四张卡仍 stretch 对齐。 */
+.dash .kpi {
+  padding: 6px 10px 5px;
+}
+
+.dash .kpi-value {
+  margin-top: 2px;
+  font-size: 18px;
+}
+
+.dash .kpi-hint,
+.dash .kpi-detail {
+  margin-top: 1px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.dash .kpi-hint,
+.dash .kpi-detail p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash .status-bar {
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.dash .stat-block {
+  gap: 2px;
+  min-width: 0;
+}
+
+.dash .stat-block strong {
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash .cursor-overview-metrics {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dash .cursor-overview-metric strong {
+  font-size: 15px;
+}
+
+.live-tag {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.live-tag i {
+  margin: 0;
+}
+
+.radar {
+  position: absolute;
+  right: -28px;
+  top: -36px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow:
+    inset 0 0 24px rgba(56, 189, 248, 0.08),
+    0 0 24px rgba(56, 189, 248, 0.08);
+  pointer-events: none;
+}
+
+.radar::before,
+.radar::after {
+  content: "";
+  position: absolute;
+  inset: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.16);
+}
+
+.radar::after {
+  inset: 44px;
+}
+
+.dash-mid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(250px, 0.9fr);
+  gap: 8px;
+  flex: 1 0 auto;
+  min-height: 220px;
+}
+
+.dash-mid > * {
+  min-height: 0;
+}
+

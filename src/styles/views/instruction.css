@@ -1,0 +1,253 @@
+.instruction-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.instruction-panel .muted,
+.instruction-body .muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-source,
+.instruction-idle,
+.instruction-checkup,
+.instruction-overlap,
+.instruction-insight,
+.instruction-memory {
+  display: grid;
+  gap: 10px;
+}
+
+.instruction-panel h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.instruction-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.instruction-section-head > div .muted {
+  margin: 4px 0 0;
+}
+
+.instruction-source h3 .source-label {
+  max-width: 100%;
+}
+
+.instruction-idle-source {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+  overflow: hidden;
+}
+
+.instruction-idle-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.instruction-idle-source:hover,
+.instruction-idle-head:hover {
+  background: var(--overlay-2);
+}
+
+.instruction-idle-head .instruction-evidence {
+  background: var(--overlay-2);
+  color: var(--text-faint);
+}
+
+.instruction-idle-source .instruction-list {
+  padding: 0 8px 8px;
+}
+
+.instruction-list {
+  --instruction-action-col: 100px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+  overflow: hidden;
+}
+
+.instruction-row-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--instruction-action-col);
+  align-items: center;
+}
+
+.instruction-row-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+}
+
+.instruction-row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.instruction-row:hover,
+.instruction-memory-item:hover {
+  background: var(--overlay-2);
+}
+
+.instruction-row-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
+.instruction-row-title strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.instruction-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.instruction-status,
+.instruction-evidence,
+.instruction-checkup-severity {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.instruction-row.status-present_unloaded .instruction-status {
+  background: var(--tone-claude-bg);
+  color: var(--orange-fg);
+}
+
+.instruction-row.status-locally_invisible .instruction-status {
+  background: var(--tone-pi-bg);
+  color: var(--cyan-fg);
+}
+
+.instruction-row.status-not_created .instruction-status {
+  background: var(--overlay-2);
+  color: var(--text-faint);
+}
+
+.instruction-row.evidence-inferred .instruction-evidence {
+  background: var(--tone-claude-bg);
+  color: var(--orange-fg);
+}
+
+.instruction-row.evidence-no_mechanism .instruction-evidence {
+  background: var(--overlay-2);
+  color: var(--text-faint);
+}
+
+.instruction-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-row-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instruction-body {
+  padding: 0 12px 12px;
+}
+
+.instruction-body pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--input-bg);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.instruction-error {
+  margin: 0 0 8px;
+  color: var(--red-fg);
+  font-size: 12px;
+}
+
+.instruction-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.instruction-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.instruction-editor-actions .instruction-error {
+  margin: 0;
+}
+

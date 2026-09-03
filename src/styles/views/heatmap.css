@@ -1,0 +1,236 @@
+.heatmap-panel {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.heatmap {
+  position: relative;
+  --heat-weeks: 53;
+}
+
+.heatmap-body {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-rows: 16px auto;
+  column-gap: 6px;
+  row-gap: 4px;
+}
+
+.heatmap-months {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--heat-weeks), minmax(0, 1fr));
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.heatmap-weekdays {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+}
+
+.heatmap-weekdays span {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.heatmap-grid {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--heat-weeks), minmax(0, 1fr));
+  gap: 3px;
+}
+
+.heat-cell {
+  aspect-ratio: 1;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  border-radius: 2px;
+  background: var(--heat-0);
+}
+
+button.heat-cell {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.heat-cell.heat-1 {
+  background: var(--heat-1);
+}
+
+.heat-cell.heat-2 {
+  background: var(--heat-2);
+}
+
+.heat-cell.heat-3 {
+  background: var(--heat-3);
+}
+
+.heat-cell.heat-4 {
+  background: var(--heat-4);
+}
+
+.heat-cell.is-future {
+  pointer-events: none;
+}
+
+.heatmap-grid .heat-cell:not(.is-future):hover {
+  outline: 1px solid var(--text);
+  outline-offset: 0;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.heatmap-legend .heat-cell {
+  width: 11px;
+  height: 11px;
+  aspect-ratio: auto;
+}
+
+.heatmap-tip {
+  position: absolute;
+  z-index: 3;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-panel-2);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 8px 20px var(--shadow-soft);
+}
+
+.dash-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dash-side > * {
+  min-height: 0;
+}
+
+.dash-side > .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel {
+  padding: 10px 14px 12px;
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.panel-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.range-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.collapsible-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.collapsible-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collapsible-toggle {
+  flex-shrink: 0;
+}
+
+.collapsible-toggle .caret {
+  display: block;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+
+.collapsible-section.is-collapsed .collapsible-toggle .caret {
+  transform: rotate(180deg);
+}
+
+.collapsible-section.is-collapsed {
+  flex: 0 0 auto;
+}
+
+.billing-panel.collapsible-section .panel-head {
+  flex: 0 0 auto;
+  margin-bottom: 2px;
+}
+
+.billing-panel .collapsible-body {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.collapsible-trend {
+  flex: 1.35 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsible-detail {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsible-trend.is-open .collapsible-body,
+.collapsible-detail.is-open .collapsible-body {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.collapsible-trend .dash-mid,
+.collapsible-detail .dash-bottom {
+  flex: 1 0 auto;
+}
+

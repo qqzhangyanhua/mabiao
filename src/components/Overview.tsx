@@ -1,5 +1,4 @@
-import { memo, useMemo } from "react";
-import { Icon } from "../icons";
+import { memo, useMemo, useState } from "react";
 import { heatmapGrid } from "../lib/calendar";
 import { chartPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
@@ -12,17 +11,12 @@ import {
   visibleModuleCount,
   type OverviewLayout,
 } from "../lib/overviewLayout";
-import { ActivityHeatmap } from "./ActivityHeatmap";
-import { BillingWindows } from "./BillingWindows";
-import { CollapsibleSection } from "./CollapsibleSection";
-import { CursorOverviewPanel } from "./CursorOverviewPanel";
-import { OfficialQuotaPanel } from "./OfficialQuotaPanel";
+import { Button } from "./ui/Button";
+import { ReportDialog } from "./ReportDialog";
 import { EmptyState } from "./EmptyState";
-import { KpiCard, Spark } from "./Kpi";
-import { OverviewDetail } from "./OverviewDetail";
+import { OverviewKpiSection, OverviewStatusBar } from "./OverviewKpiSection";
 import { OverviewLayoutBar } from "./OverviewLayoutBar";
-import { OverviewTrend } from "./OverviewTrend";
-import { WeeklyWindows } from "./WeeklyWindows";
+import { OverviewPanels } from "./OverviewPanels";
 import {
   cacheHitRate,
   deltaPct,
@@ -195,9 +189,8 @@ export const Overview = memo(function Overview({
   const tokenDelta = formatDelta(deltaPct(data.total_tokens, previous?.total_tokens ?? null));
   const costDelta =
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
-  const cacheHitRateLabel = formatPercent(
-    cacheHitRate(data.cache_read_tokens, data.input_tokens),
-  );
+  const cacheHitRateLabel = formatPercent(cacheHitRate(data.cache_read_tokens, data.input_tokens));
+  const [reportOpen, setReportOpen] = useState(false);
 
   if (!overview) {
     return (
@@ -220,12 +213,20 @@ export const Overview = memo(function Overview({
 
   return (
     <div className="dash">
-      <OverviewLayoutBar
-        layout={layout}
-        detectedSources={detectedSources}
-        presentSources={presentSources}
-        onChange={onLayoutChange}
-      />
+      <div className="overview-head">
+        <OverviewLayoutBar
+          layout={layout}
+          detectedSources={detectedSources}
+          presentSources={presentSources}
+          onChange={onLayoutChange}
+        />
+        <div className="overview-report-entry">
+          <Button variant="accent" onClick={() => setReportOpen(true)}>
+            生成周报
+          </Button>
+        </div>
+      </div>
+      {reportOpen ? <ReportDialog onClose={() => setReportOpen(false)} /> : null}
       {!hasVisibleModule ? (
         <EmptyState
           icon="overview"
@@ -234,191 +235,78 @@ export const Overview = memo(function Overview({
         />
       ) : null}
       {showKpi ? (
-        <section className="kpi-row">
-          <KpiCard
-            icon="tokens"
-            tone="purple"
-            label="总 Token 使用量"
-            value={formatCompact(data.total_tokens)}
-            delta={tokenDelta}
-            spark={spark}
-          />
-          <KpiCard
-            icon="chat"
-            tone="cyan"
-            label="总会话数"
-            value={data.session_count.toLocaleString("zh-CN")}
-            delta={formatDelta(deltaPct(data.session_count, previous?.session_count ?? null))}
-            spark={spark}
-          />
-          <KpiCard
-            icon="cost"
-            tone="orange"
-            label="总费用估算"
-            value={formatUsd(data.cost, data.unpriced)}
-            delta={costDiagnosis ? null : costDelta}
-            spark={trend.map((point) => point.cost ?? 0)}
-            title={costExtraLine || undefined}
-            detail={costExtraLine ? <p>{costExtraLine}</p> : undefined}
-            actionLabel={costDiagnosis ? costLink.actionLabel : undefined}
-            onClick={costDiagnosis}
-          />
-          <KpiCard
-            icon="daily"
-            tone="blue"
-            label="日均 Token 使用量"
-            value={formatCompact(Math.round(dailyAvg))}
-            delta={formatDelta(
-              deltaPct(dailyAvg, previous ? previous.total_tokens / Math.max(days, 1) : null),
-            )}
-            spark={spark}
-            live={live}
-            radar
-          />
-        </section>
-      ) : null}
-
-      {showOfficial ? (
-        <OfficialQuotaPanel
-          data={visibleOfficialQuota}
-          onQuota={onOfficialQuota}
-          onError={onQuotaError}
+        <OverviewKpiSection
+          tokenValue={formatCompact(data.total_tokens)}
+          tokenDelta={tokenDelta}
+          sessionValue={data.session_count.toLocaleString("zh-CN")}
+          sessionDelta={formatDelta(deltaPct(data.session_count, previous?.session_count ?? null))}
+          costValue={formatUsd(data.cost, data.unpriced)}
+          costDelta={costDiagnosis ? null : costDelta}
+          costTitle={costExtraLine || undefined}
+          costDetail={costExtraLine ? <p>{costExtraLine}</p> : undefined}
+          costActionLabel={costDiagnosis ? costLink.actionLabel : undefined}
+          onCostClick={costDiagnosis}
+          dailyValue={formatCompact(Math.round(dailyAvg))}
+          dailyDelta={formatDelta(
+            deltaPct(dailyAvg, previous ? previous.total_tokens / Math.max(days, 1) : null),
+          )}
+          spark={spark}
+          costSpark={trend.map((point) => point.cost ?? 0)}
+          live={live}
         />
       ) : null}
 
-      {showCursorAccount ? (
-        <CursorOverviewPanel
-          data={cursorAccountUsage}
-          onOpenCursor={onOpenCursor}
-          onModelClick={onModelClick}
-        />
-      ) : null}
-
-      {showBilling ? (
-        <CollapsibleSection
-          sectionId="billing"
-          title="5 小时计费窗"
-          className="panel billing-panel"
-          extra={
-            <span className="muted">
-              由本地时间戳估计，非官方配额 · 始终展示最近窗口，不受时间范围筛选影响
-            </span>
-          }
-          collapsedSummary={
-            activeWindows > 0 ? `${activeWindows} 个进行中窗口` : "当前没有进行中的窗口"
-          }
-        >
-          <BillingWindows data={visibleBilling} />
-        </CollapsibleSection>
-      ) : null}
-
-      {showWeekly ? (
-        <CollapsibleSection
-          sectionId="weekly"
-          title={`${weeklyDays} 天滚动用量`}
-          className="panel weekly-panel"
-          extra={
-            <span className="muted">
-              按来源统计最近 {weeklyDays} 天的累计消耗；Cursor 来自账号用量，费用按价目 / LiteLLM
-              估算，非官方配额
-            </span>
-          }
-          collapsedSummary={`${weeklyCount} 个 ${weeklyDays} 天窗口`}
-        >
-          <WeeklyWindows windows={visibleBilling?.weekly ?? []} windowDays={weeklyDays} />
-        </CollapsibleSection>
-      ) : null}
-
-      {showTrend ? (
-        <CollapsibleSection
-          sectionId="trend"
-          title="趋势与模型"
-          className="collapsible-trend"
-          collapsedSummary={`趋势 ${trend.length} 点 · 模型 ${models.length} 个`}
-        >
-          <OverviewTrend
-            trend={trend}
-            models={models}
-            totalTokens={data.total_tokens}
-            grain={grain}
-            theme={theme}
-            onGrain={onGrain}
-            onRangeSelect={onRangeSelect}
-            onRangeBack={onRangeBack}
-            onModelClick={onModelClick}
-          />
-        </CollapsibleSection>
-      ) : null}
-
-      {showHeatmap ? (
-        <CollapsibleSection
-          sectionId="heatmap"
-          title="活跃热力图"
-          className="panel heatmap-panel"
-          extra={
-            <span className="muted">
-              {heatmap.some((point) => point.total_tokens > 0)
-                ? "近 53 周 · 按日 Token · 点击打开当天时间线"
-                : "近 53 周暂无 Token"}
-            </span>
-          }
-          collapsedSummary={`${heatmapWeeks} 周热力图`}
-        >
-          <ActivityHeatmap points={heatmap} range={heatmapRange} onDayClick={onOpenWorktime} />
-        </CollapsibleSection>
-      ) : null}
-
-      {showDetail ? (
-        <CollapsibleSection
-          sectionId="detail"
-          title="明细"
-          className="collapsible-detail"
-          collapsedSummary="Token 统计 · Top 项目 · 最近会话"
-        >
-          <OverviewDetail
-            data={data}
-            projects={projects}
-            sessions={sessions}
-            theme={theme}
-            onOpenConversations={onOpenConversations}
-            onProjectClick={onProjectClick}
-            onSessionClick={onSessionClick}
-          />
-        </CollapsibleSection>
-      ) : null}
+      <OverviewPanels
+        showOfficial={showOfficial}
+        showCursorAccount={showCursorAccount}
+        showBilling={showBilling}
+        showWeekly={showWeekly}
+        showTrend={showTrend}
+        showHeatmap={showHeatmap}
+        showDetail={showDetail}
+        officialQuota={visibleOfficialQuota}
+        cursorAccountUsage={cursorAccountUsage}
+        billing={visibleBilling}
+        weeklyDays={weeklyDays}
+        weeklyCount={weeklyCount}
+        activeWindows={activeWindows}
+        trend={trend}
+        models={models}
+        heatmap={heatmap}
+        heatmapRange={heatmapRange}
+        heatmapWeeks={heatmapWeeks}
+        data={data}
+        projects={projects}
+        sessions={sessions}
+        grain={grain}
+        theme={theme}
+        onOfficialQuota={onOfficialQuota}
+        onQuotaError={onQuotaError}
+        onOpenCursor={onOpenCursor}
+        onModelClick={onModelClick}
+        onGrain={onGrain}
+        onRangeSelect={onRangeSelect}
+        onRangeBack={onRangeBack}
+        onOpenWorktime={onOpenWorktime}
+        onOpenConversations={onOpenConversations}
+        onProjectClick={onProjectClick}
+        onSessionClick={onSessionClick}
+      />
 
       {showStatus ? (
-        <footer className="status-bar">
-          <div className="stat-block">
-            <span className="muted">费用（估算）</span>
-            <strong>{formatUsd(data.cost, data.unpriced)}</strong>
-            <em>{costSourceLine ?? (data.unpriced ? "部分模型单价未配置" : "已按单价核算")}</em>
-          </div>
-          <div className="stat-block">
-            <span className="muted">缓存 / 推理</span>
-            <strong>
-              {formatCompact(data.cache_read_tokens)} /{" "}
-              {formatCompact(data.cache_creation_tokens)} /{" "}
-              {formatCompact(data.reasoning_tokens)}
-            </strong>
-            <em>
-              读 / 写 / 推理 · 命中率 {cacheHitRateLabel}（近似口径）
-            </em>
-          </div>
-          <div className="stat-block">
-            <span className="muted">Token 速率（估算）</span>
-            <strong>
-              {rate.toLocaleString("zh-CN")} <small>/min</small>
-            </strong>
-            <Spark values={spark} color={palette.output} />
-          </div>
-          <div className="stat-block last">
-            <span className="muted">
-              <Icon name="clock" size={13} /> 数据更新时间
-            </span>
-            <strong className="clock">{formatClock(updatedAt)}</strong>
-          </div>
-        </footer>
+        <OverviewStatusBar
+          costValue={formatUsd(data.cost, data.unpriced)}
+          costSourceLine={costSourceLine}
+          unpriced={data.unpriced}
+          cacheRead={formatCompact(data.cache_read_tokens)}
+          cacheCreation={formatCompact(data.cache_creation_tokens)}
+          reasoning={formatCompact(data.reasoning_tokens)}
+          cacheHitRateLabel={cacheHitRateLabel}
+          rate={rate.toLocaleString("zh-CN")}
+          spark={spark}
+          sparkColor={palette.output}
+          updatedAt={formatClock(updatedAt)}
+        />
       ) : null}
     </div>
   );

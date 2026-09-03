@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Datelike, Local, Timelike, Utc};
 
 use crate::billing_window;
 use crate::cost::{
@@ -157,6 +157,46 @@ pub fn trend(
             cost: acc.cost,
         })
         .collect()
+}
+
+/// 按本地一天中的第几个小时（0–23）跨天汇总 token。与 `query::hour_of_day` 同口径。
+pub fn hour_of_day(records: &[UsageRecord], filter: &Filter) -> [i64; 24] {
+    let mut hours = [0i64; 24];
+    for record in apply_filter(records, filter) {
+        if let Some(hour) = local_hour_of_day(&record.occurred_at) {
+            hours[hour as usize] += record.total_tokens;
+        }
+    }
+    hours
+}
+
+fn local_hour_of_day(occurred_at: &str) -> Option<u8> {
+    Some(
+        billing_window::parse_occurred_at(occurred_at)?
+            .with_timezone(&Local)
+            .hour() as u8,
+    )
+}
+
+/// 按本地日历日汇总 token。与 `query::tokens_by_local_day` 同口径。
+pub fn tokens_by_local_day(records: &[UsageRecord], filter: &Filter) -> Vec<(String, i64)> {
+    let mut days: BTreeMap<String, i64> = BTreeMap::new();
+    for record in apply_filter(records, filter) {
+        if let Some(date) = local_calendar_day(&record.occurred_at) {
+            *days.entry(date).or_default() += record.total_tokens;
+        }
+    }
+    days.into_iter().collect()
+}
+
+fn local_calendar_day(occurred_at: &str) -> Option<String> {
+    Some(
+        billing_window::parse_occurred_at(occurred_at)?
+            .with_timezone(&Local)
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string(),
+    )
 }
 
 /// 把 Cursor 账号用量并进使用统计时间桶（本机消耗记录之上叠加）。
