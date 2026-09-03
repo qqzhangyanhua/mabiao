@@ -2,7 +2,9 @@
 
 mod adapters;
 mod antigravity_quota;
+mod backup;
 mod billing;
+mod budget;
 mod claude_quota;
 mod claude_usage;
 mod clipboard;
@@ -31,8 +33,8 @@ mod grok_quota;
 mod ingest;
 mod instructions;
 mod kimi_grok_conversation;
+mod litellm;
 mod low_cache_hit;
-mod misc;
 mod net;
 mod official_quota;
 mod opencode_conversation;
@@ -52,5 +54,6 @@ mod rollup_source;
 mod rollup_split;
 mod scan_paths;
 mod store;
+mod tray;
 mod tray_popup;
 mod work_timeline;
