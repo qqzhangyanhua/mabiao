@@ -20,6 +20,8 @@ export const REPORT_POSTER_STYLES = [
   {
     id: "dark-analytics",
     label: "深色分析",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "poster.css",
     swatch: {
       background: "#070b16",
       accent: "#8b6cff",
@@ -36,6 +38,7 @@ export const DEFAULT_REPORT_POSTER_STYLE_ID = "dark-analytics" satisfies ReportP
 export type ReportPosterStyle = {
   id: ReportPosterStyleId;
   label: string;
+  stylesheet: string;
   swatch: ReportPosterStyleSwatch;
   Component: ReportPosterStyleComponent;
 };
