@@ -51,7 +51,9 @@ describe("parseSharePreference", () => {
       quotaProvider: null,
       posterStyleId: "dark-analytics",
     });
-    expect(parseSharePreference(JSON.stringify({ kind: "template", quotaProvider: "cursor" }))).toEqual({
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "template", quotaProvider: "cursor" })),
+    ).toEqual({
       kind: "week",
       quotaProvider: null,
       posterStyleId: "dark-analytics",
@@ -64,11 +66,13 @@ describe("parseSharePreference", () => {
         JSON.stringify({ kind: "quota", quotaProvider: "custom:abc", offset: 3 }),
       ),
     ).toEqual({ kind: "quota", quotaProvider: "custom:abc", posterStyleId: "dark-analytics" });
-    expect(parseSharePreference(JSON.stringify({ kind: "week", quotaProvider: "cursor" }))).toEqual({
-      kind: "week",
-      quotaProvider: "cursor",
-      posterStyleId: "dark-analytics",
-    });
+    expect(parseSharePreference(JSON.stringify({ kind: "week", quotaProvider: "cursor" }))).toEqual(
+      {
+        kind: "week",
+        quotaProvider: "cursor",
+        posterStyleId: "dark-analytics",
+      },
+    );
     expect(parseSharePreference(JSON.stringify({ kind: "quota" }))).toEqual({
       kind: "quota",
       quotaProvider: null,
@@ -83,6 +87,13 @@ describe("parseSharePreference", () => {
       kind: "week",
       quotaProvider: null,
       posterStyleId: "dark-analytics",
+    });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "light-glass" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "light-glass",
     });
   });
 
@@ -147,6 +158,12 @@ describe("share preference round-trip", () => {
       posterStyleId: "dark-analytics" as const,
     };
     expect(parseSharePreference(serializeSharePreference(preference))).toEqual(preference);
+    const lightGlass = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "light-glass" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(lightGlass))).toEqual(lightGlass);
   });
 
   it("loads stored preferences from localStorage and falls back when missing or malformed", () => {
@@ -180,5 +197,11 @@ describe("share preference round-trip", () => {
       posterStyleId: "dark-analytics",
     });
     expect(loadSharePreference().posterStyleId).toBe("dark-analytics");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "light-glass",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("light-glass");
   });
 });
