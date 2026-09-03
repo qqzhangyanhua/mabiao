@@ -5,7 +5,12 @@ import "./lightGlassPoster.css";
 
 function LightGlassDecor() {
   return (
-    <svg className="lg-deco" viewBox="0 0 720 140" aria-hidden="true">
+    <svg
+      className="lg-deco"
+      viewBox="0 0 720 140"
+      preserveAspectRatio="xMaxYMin meet"
+      aria-hidden="true"
+    >
       <circle className="lg-deco-sun" cx="656" cy="40" r="20" />
       <rect className="lg-deco-stem" x="654" y="56" width="4" height="26" rx="2" />
       <ellipse
