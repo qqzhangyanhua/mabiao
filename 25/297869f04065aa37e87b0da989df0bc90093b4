@@ -1,0 +1,36 @@
+src-tauri/src/tests/report.rs
+  s_b937a74ca41dbb::t_b975467625fa69 678-681,694-695,701-716
+  s_b937a74ca41dbb::t_905f7a5c191f6e 112-118,121,682-693,696-700,741-749,752-753,777-781,794-798,801-805,808-812,832-833
+  s_b937a74ca41dbb::t_69f615060561eb 103-111,119-120,122-124
+  s_b937a74ca41dbb::t_889eacd1c99b80 717-740,750-751,754-776,782-793,799-800,806-807,813-831,834-863
+  s_b937a74ca41dbb::t_0de1047a8a3812 248-255
+src/lib/reportCopy.ts
+  s_b937a74ca41dbb::t_180548d1f3b416 102,120-122
+  s_b937a74ca41dbb::t_ac1397616d1748 123
+src-tauri/src/report.rs
+  s_b937a74ca41dbb::t_32caae57f4918c 9,36-41,125,148,153-154,156-165
+  s_b937a74ca41dbb::t_50e32d97aaf731 42
+  s_b937a74ca41dbb::t_f731340b3c2622 137-147,149-151
+  s_b937a74ca41dbb::t_31e88ca93e8d65 152
+  s_b937a74ca41dbb::t_77cbafa1fd6137 131,135-136,155,166
+  s_b937a74ca41dbb::t_bf0fb61256a5a2 167-168
+src/lib/reportCopy.test.ts
+  s_b937a74ca41dbb::t_d8bea88dfd444c 125-141,309-353
+  s_b937a74ca41dbb::t_5885e65d9e989d 354
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "25297869f04065aa37e87b0da989df0bc90093b4",
+  "prompts": {},
+  "sessions": {
+    "s_b937a74ca41dbb": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06674-eea0-7770-b422-f760d587b303",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
