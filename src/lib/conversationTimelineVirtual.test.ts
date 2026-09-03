@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildTimelineRows,
   pruneTimelineMeasurements,
   TIMELINE_OVERSCAN,
   TIMELINE_ROW_ESTIMATE,
   timelineAnchorAtOffset,
+  timelineHighlightIndex,
   timelineOffsetAt,
   timelineScrollCorrection,
   timelineScrollTopForAnchor,
+  timelineViewKind,
   timelineVisibleRange,
 } from "./conversationTimelineVirtual";
+import type { ConversationAgentLink, ConversationEvent } from "../types";
 
 const keysOf = (count: number) => Array.from({ length: count }, (_, index) => `e${index}`);
 
@@ -154,5 +158,107 @@ describe("timelineOffsetAt", () => {
     const measured = new Map([["e1", 40]]);
     expect(timelineOffsetAt(keys, 2, measured, 10)).toBe(50);
     expect(timelineOffsetAt(keys, 99, measured, 10)).toBe(60);
+  });
+});
+
+function event(id: string, kind: ConversationEvent["kind"] = "message"): ConversationEvent {
+  return {
+    event_id: id,
+    sequence: 0,
+    source_file: "session.jsonl",
+    source_sequence: 0,
+    kind,
+    occurred_at: null,
+    actor: null,
+    name: null,
+    text: null,
+    details: {},
+    attachments: [],
+    capability_status: kind === "unadapted" ? "unadapted" : "complete",
+    content_status: "complete",
+  };
+}
+
+function link(id: string, launchEventId: string | null = null): ConversationAgentLink {
+  return {
+    relationship_id: id,
+    session_id: id,
+    launch_event_id: launchEventId,
+    status: "linked",
+    session: null,
+  };
+}
+
+describe("buildTimelineRows", () => {
+  it("闸门、错误、未适配折叠和未挂上的子代理各占一行", () => {
+    const rows = buildTimelineRows({
+      events: [event("m1"), event("u1", "unadapted")],
+      hasMoreBefore: true,
+      hasMoreAfter: true,
+      error: "读取失败",
+      agentLinks: [link("child-open", "m1"), link("child-trailing", null)],
+    });
+    expect(rows.map((row) => row.key)).toEqual([
+      "gate:before",
+      "error",
+      "event:m1",
+      "unadapted",
+      "gate:after",
+      "trailing",
+    ]);
+    const trailing = rows.find((row) => row.type === "trailing");
+    expect(trailing?.type === "trailing" ? trailing.links.map((item) => item.relationship_id) : []).toEqual([
+      "child-trailing",
+    ]);
+  });
+});
+
+describe("timelineHighlightIndex", () => {
+  it("命中事件行，否则回落到未适配组", () => {
+    const keys = ["gate:before", "event:m1", "unadapted"];
+    expect(timelineHighlightIndex(keys, "m1")).toBe(1);
+    expect(timelineHighlightIndex(keys, "missing")).toBe(2);
+    expect(timelineHighlightIndex(keys, null)).toBe(-1);
+  });
+});
+
+describe("timelineViewKind", () => {
+  it("空窗、加载和错误优先于行列表", () => {
+    expect(
+      timelineViewKind({
+        loading: true,
+        error: null,
+        eventCount: 0,
+        eventsLength: 0,
+        agentLinkCount: 0,
+      }),
+    ).toBe("loading");
+    expect(
+      timelineViewKind({
+        loading: false,
+        error: "失败",
+        eventCount: 0,
+        eventsLength: 0,
+        agentLinkCount: 0,
+      }),
+    ).toBe("error");
+    expect(
+      timelineViewKind({
+        loading: false,
+        error: null,
+        eventCount: 0,
+        eventsLength: 0,
+        agentLinkCount: 0,
+      }),
+    ).toBe("empty");
+    expect(
+      timelineViewKind({
+        loading: false,
+        error: null,
+        eventCount: 2,
+        eventsLength: 2,
+        agentLinkCount: 0,
+      }),
+    ).toBe("rows");
   });
 });

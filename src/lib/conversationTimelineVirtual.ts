@@ -2,6 +2,9 @@
  * 会话时间线视口虚拟化：窗口仍可持有最多 1000 条，DOM 只挂视口附近几十行。
  */
 
+import { groupTimelineEvents } from "./conversationEventDisplay";
+import type { ConversationAgentLink, ConversationEvent } from "../types";
+
 export const TIMELINE_ROW_ESTIMATE = 96;
 export const TIMELINE_OVERSCAN = 12;
 
@@ -170,4 +173,90 @@ export function pruneTimelineMeasurements(
       measured.delete(key);
     }
   }
+}
+
+export type TimelineRow =
+  | { key: string; type: "gate"; edge: "before" | "after" }
+  | { key: string; type: "error"; message: string }
+  | { key: string; type: "event"; event: ConversationEvent }
+  | { key: string; type: "unadapted"; events: ConversationEvent[] }
+  | { key: string; type: "trailing"; links: ConversationAgentLink[] };
+
+export function buildTimelineRows({
+  events,
+  hasMoreBefore,
+  hasMoreAfter,
+  error,
+  agentLinks,
+}: {
+  events: readonly ConversationEvent[];
+  hasMoreBefore: boolean;
+  hasMoreAfter: boolean;
+  error: string | null;
+  agentLinks: readonly ConversationAgentLink[];
+}): TimelineRow[] {
+  const eventIds = new Set(events.map((event) => event.event_id));
+  const rows: TimelineRow[] = [];
+  if (hasMoreBefore) {
+    rows.push({ key: "gate:before", type: "gate", edge: "before" });
+  }
+  if (error) {
+    rows.push({ key: "error", type: "error", message: error });
+  }
+  for (const group of groupTimelineEvents([...events])) {
+    if (group.type === "unadapted") {
+      rows.push({ key: "unadapted", type: "unadapted", events: group.events });
+    } else {
+      rows.push({ key: `event:${group.event.event_id}`, type: "event", event: group.event });
+    }
+  }
+  if (hasMoreAfter) {
+    rows.push({ key: "gate:after", type: "gate", edge: "after" });
+  }
+  const trailing = agentLinks.filter(
+    (link) => link.launch_event_id === null || !eventIds.has(link.launch_event_id),
+  );
+  if (trailing.length > 0) {
+    rows.push({ key: "trailing", type: "trailing", links: [...trailing] });
+  }
+  return rows;
+}
+
+export function timelineHighlightIndex(
+  keys: readonly string[],
+  highlightEventId: string | null,
+): number {
+  if (!highlightEventId) {
+    return -1;
+  }
+  const index = keys.indexOf(`event:${highlightEventId}`);
+  if (index >= 0) {
+    return index;
+  }
+  return keys.indexOf("unadapted");
+}
+
+export function timelineViewKind({
+  loading,
+  error,
+  eventCount,
+  eventsLength,
+  agentLinkCount,
+}: {
+  loading: boolean;
+  error: string | null;
+  eventCount: number;
+  eventsLength: number;
+  agentLinkCount: number;
+}): "loading" | "error" | "empty" | "rows" {
+  if (loading && eventsLength === 0) {
+    return "loading";
+  }
+  if (error && eventsLength === 0) {
+    return "error";
+  }
+  if (!loading && !error && eventCount === 0 && eventsLength === 0 && agentLinkCount === 0) {
+    return "empty";
+  }
+  return "rows";
 }
