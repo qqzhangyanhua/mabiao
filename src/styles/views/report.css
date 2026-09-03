@@ -161,6 +161,52 @@
   gap: 8px;
 }
 
+.report-dialog-styles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-dialog-style {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-dialog-style.is-active {
+  border-color: var(--line-strong);
+  background: var(--overlay-recessed);
+}
+
+.report-dialog-style:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.report-dialog-style:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.report-dialog-style-swatch {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.report-dialog-style-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .report-dialog-accounts {
   display: flex;
   flex-direction: column;
