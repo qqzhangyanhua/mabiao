@@ -1,0 +1,29 @@
+AGENTS.md
+  s_f2379dac19e886::t_87deec8444ab8d 86-93,104-105
+docs/adr/0015-report-and-insights.md
+  s_f2379dac19e886::t_35cf1cf3cd1ca4 78
+  s_f2379dac19e886::t_bd06678c1d3626 5-77,79-97
+  s_f2379dac19e886::t_c5952c1f1181ba 2-4
+  s_f2379dac19e886::t_8415fef9113267 98-100
+CONTEXT.md
+  s_f2379dac19e886::t_dc364c3c8d7270 25,29,45,63,65-70,96
+  s_f2379dac19e886::t_082281fb2baea4 64
+docs/spikes/report-poster/NOTES.md
+  s_f2379dac19e886::t_bb917e52d2aa0c 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "26bd1eac0ef4346d92d038f33c842a2ae9a76b2b",
+  "prompts": {},
+  "sessions": {
+    "s_f2379dac19e886": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a065ba-dcea-7953-a0e6-12b12c33f4cb",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
