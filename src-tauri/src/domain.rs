@@ -171,6 +171,68 @@ pub struct OverviewDto {
     pub cost_sources: OverviewCostSources,
 }
 
+/// 报告要取的自然周期。`offset = 0` 是最近一个已经结束的完整周期。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReportPeriod {
+    pub kind: ReportPeriodKind,
+    pub offset: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportPeriodKind {
+    Week,
+    Month,
+}
+
+/// 报告入口 DTO。总量只来自消耗记录；洞察 payload 不含自然语言。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReportDto {
+    pub period_kind: ReportPeriodKind,
+    pub offset: u32,
+    /// 周期第一天（本地日历日，含）。
+    pub start_date: String,
+    /// 周期最后一天（本地日历日，含）。
+    pub end_date: String,
+    pub has_data: bool,
+    pub totals: OverviewDto,
+    pub insights: Vec<ReportInsight>,
+}
+
+/// 报告洞察。`kind` + 数值/标识符，不含文案。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ReportInsight {
+    NightShare {
+        night_tokens: i64,
+        total_tokens: i64,
+        pct: i64,
+    },
+    PeakHours {
+        start_hour: u8,
+        end_hour: u8,
+    },
+    /// `weekday`：0 = 周一 … 6 = 周日。
+    BusiestDay {
+        weekday: u8,
+    },
+    TopSession {
+        by: ReportTopSessionBy,
+        source: String,
+        session_id: String,
+        project: Option<String>,
+        cost: Option<f64>,
+        total_tokens: i64,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportTopSessionBy {
+    Cost,
+    Tokens,
+}
+
 /// 用户配置的月度预算（美元），持久化在独立文件里，与单价表分开管理。
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct BudgetConfig {

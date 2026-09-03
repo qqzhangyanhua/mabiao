@@ -10,33 +10,36 @@ export function ReportPoster({ data }: { data: PosterViewModel }) {
       <p className="rp-range">{data.rangeLabel}</p>
       <p className="rp-total">{data.totalTokensLabel}</p>
       <p className="rp-unit">{data.totalUnit}</p>
-      <p className="rp-cost">{data.totalCostLabel}</p>
-      <div className="rp-comments">
-        <p>{data.nightShareComment}</p>
-        <p>{data.peakHoursComment}</p>
-      </div>
-      <section className="rp-panel">
-        <h2 className="rp-panel-title">按天节奏</h2>
-        <DailyBarChart days={data.days} />
-      </section>
-      <section className="rp-panel">
-        <h2 className="rp-panel-title">来源占比</h2>
-        <ShareBar sources={data.sources} />
-      </section>
-      <ul className="rp-stats">
-        <li>
-          <span className="rp-stat-label">{data.busiestDayLabel}</span>
-          <span className="rp-stat-value">{data.busiestDayValue}</span>
-        </li>
-        <li>
-          <span className="rp-stat-label">{data.topSessionLabel}</span>
-          <span className="rp-stat-value">{data.topSessionValue}</span>
-        </li>
-        <li>
-          <span className="rp-stat-label">{data.modelsLabel}</span>
-          <span className="rp-stat-value">{data.modelsValue}</span>
-        </li>
-      </ul>
+      {data.totalCostLabel ? <p className="rp-cost">{data.totalCostLabel}</p> : null}
+      {data.comments.length > 0 ? (
+        <div className="rp-comments">
+          {data.comments.map((comment) => (
+            <p key={comment}>{comment}</p>
+          ))}
+        </div>
+      ) : null}
+      {data.days.length > 0 ? (
+        <section className="rp-panel">
+          <h2 className="rp-panel-title">按天节奏</h2>
+          <DailyBarChart days={data.days} />
+        </section>
+      ) : null}
+      {data.sources.length > 0 ? (
+        <section className="rp-panel">
+          <h2 className="rp-panel-title">来源占比</h2>
+          <ShareBar sources={data.sources} />
+        </section>
+      ) : null}
+      {data.stats.length > 0 ? (
+        <ul className="rp-stats">
+          {data.stats.map((stat) => (
+            <li key={stat.label}>
+              <span className="rp-stat-label">{stat.label}</span>
+              <span className="rp-stat-value">{stat.value}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   );
 }

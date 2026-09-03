@@ -19,6 +19,7 @@ pub mod net;
 pub mod official_quota;
 pub mod paths;
 pub mod query;
+pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
 pub mod scan_paths;
@@ -49,9 +50,9 @@ use crate::domain::{
     CursorSessionDetailDto, CursorSessionPage, CursorSessionQuery, CursorSessionSummaryDto, Filter,
     FilterOptions, GlobalInstructionDto, IngestReport, LowCacheHitSessionsDto, NamedAmount,
     OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto,
-    OfficialQuotaRow, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, SeriesPoint,
-    SessionRow, Source, SourceDiagnostic, UnpricedGroupDto, UsageCallPage, WorkTimelineDto,
-    WriteUserFileRequest, WriteUserFileResult,
+    OfficialQuotaRow, OverviewDto, PriceSnapshot, PriceSnapshotMeta, PriceTable, ReportDto,
+    ReportPeriod, SeriesPoint, SessionRow, Source, SourceDiagnostic, UnpricedGroupDto,
+    UsageCallPage, WorkTimelineDto, WriteUserFileRequest, WriteUserFileResult,
 };
 use crate::official_quota::QuotaTarget;
 
@@ -231,6 +232,18 @@ async fn get_overview(app: tauri::AppHandle, filter: Filter) -> Result<OverviewD
         let conn = state.lock_read()?;
         let prices = state.effective_prices();
         query::overview(&conn, &filter, &prices)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn get_report(app: tauri::AppHandle, period: ReportPeriod) -> Result<ReportDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        report::build(&conn, &prices, period, chrono::Local::now())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1483,6 +1496,7 @@ pub fn run() {
             ping,
             ingest,
             get_overview,
+            get_report,
             get_billing_windows,
             get_trend,
             get_application_analytics,

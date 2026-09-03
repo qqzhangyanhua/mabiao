@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { Icon } from "../icons";
 import { heatmapGrid } from "../lib/calendar";
 import { chartPalette } from "../lib/chartTheme";
@@ -12,11 +12,13 @@ import {
   visibleModuleCount,
   type OverviewLayout,
 } from "../lib/overviewLayout";
+import { Button } from "./ui/Button";
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { BillingWindows } from "./BillingWindows";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { CursorOverviewPanel } from "./CursorOverviewPanel";
 import { OfficialQuotaPanel } from "./OfficialQuotaPanel";
+import { ReportDialog } from "./ReportDialog";
 import { EmptyState } from "./EmptyState";
 import { KpiCard, Spark } from "./Kpi";
 import { OverviewDetail } from "./OverviewDetail";
@@ -195,9 +197,8 @@ export const Overview = memo(function Overview({
   const tokenDelta = formatDelta(deltaPct(data.total_tokens, previous?.total_tokens ?? null));
   const costDelta =
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
-  const cacheHitRateLabel = formatPercent(
-    cacheHitRate(data.cache_read_tokens, data.input_tokens),
-  );
+  const cacheHitRateLabel = formatPercent(cacheHitRate(data.cache_read_tokens, data.input_tokens));
+  const [reportOpen, setReportOpen] = useState(false);
 
   if (!overview) {
     return (
@@ -220,12 +221,20 @@ export const Overview = memo(function Overview({
 
   return (
     <div className="dash">
-      <OverviewLayoutBar
-        layout={layout}
-        detectedSources={detectedSources}
-        presentSources={presentSources}
-        onChange={onLayoutChange}
-      />
+      <div className="overview-head">
+        <OverviewLayoutBar
+          layout={layout}
+          detectedSources={detectedSources}
+          presentSources={presentSources}
+          onChange={onLayoutChange}
+        />
+        <div className="overview-report-entry">
+          <Button variant="accent" onClick={() => setReportOpen(true)}>
+            生成周报
+          </Button>
+        </div>
+      </div>
+      {reportOpen ? <ReportDialog onClose={() => setReportOpen(false)} /> : null}
       {!hasVisibleModule ? (
         <EmptyState
           icon="overview"
@@ -397,13 +406,10 @@ export const Overview = memo(function Overview({
           <div className="stat-block">
             <span className="muted">缓存 / 推理</span>
             <strong>
-              {formatCompact(data.cache_read_tokens)} /{" "}
-              {formatCompact(data.cache_creation_tokens)} /{" "}
-              {formatCompact(data.reasoning_tokens)}
+              {formatCompact(data.cache_read_tokens)} / {formatCompact(data.cache_creation_tokens)}{" "}
+              / {formatCompact(data.reasoning_tokens)}
             </strong>
-            <em>
-              读 / 写 / 推理 · 命中率 {cacheHitRateLabel}（近似口径）
-            </em>
+            <em>读 / 写 / 推理 · 命中率 {cacheHitRateLabel}（近似口径）</em>
           </div>
           <div className="stat-block">
             <span className="muted">Token 速率（估算）</span>

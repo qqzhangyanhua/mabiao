@@ -25,13 +25,13 @@ export function DailyBarChart({ days }: { days: PosterDayBar[] }) {
               width={BAR_WIDTH}
               height={height}
               rx={8}
-              fill="#8b6cff"
+              fill="var(--rp-accent)"
             />
             <text
               x={x + BAR_WIDTH / 2}
               y={CHART_HEIGHT + 22}
               textAnchor="middle"
-              fill="#8b97ab"
+              fill="var(--rp-muted)"
               fontSize="14"
               fontWeight="650"
             >
