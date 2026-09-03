@@ -1,0 +1,19 @@
+src/styles.css
+  s_74ca5f45253707::t_637214b47e7b26 1100-1103,1142,1147-1149,1884-1888
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "2f1eeca154e5f7815330136442e3eb4c65e76f5d",
+  "prompts": {},
+  "sessions": {
+    "s_74ca5f45253707": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06550-bdaf-78e1-bdd8-575772c1fe9b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
