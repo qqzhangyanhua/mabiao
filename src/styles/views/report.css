@@ -135,6 +135,19 @@
   font-weight: 650;
 }
 
+.report-dialog-kind {
+  align-self: stretch;
+}
+
+.report-dialog-kind .seg {
+  display: flex;
+  width: 100%;
+}
+
+.report-dialog-kind .seg-btn {
+  flex: 1;
+}
+
 .report-dialog-range {
   margin: 0;
   font-size: 14px;

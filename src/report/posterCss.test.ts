@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-const CSS_FILES = ["poster.css", "spike.css"] as const;
+const CSS_FILES = ["poster.css", "quotaPoster.css", "spike.css"] as const;
 
 describe("report poster CSS subset", () => {
   it("does not use color-mix or backdrop-filter", () => {

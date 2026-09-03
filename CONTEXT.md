@@ -60,9 +60,13 @@ _Avoid_: 把它和「LiteLLM Proxy」当成同一个东西。LiteLLM Proxy 属�
 单日会话区间铺开。消耗记录按 `occurred_at` 聚成横条；Cursor 本机会话按起止时间并入同一天，不把账号用量或代码量画上去。Token 与对话轮次仍只统计当天消耗记录。
 _Avoid_: 把它当成又一份 token KPI，或把 Cursor 会话伪造成消耗记录
 
+**可分享卡片 (Share Card)**：
+一张为转发而排版的图，只写系统剪贴板。不是独立数据维度。薄切版只有两种：报告周报、官方额度卡。每种卡片只读一个已有维度；数字禁止跨卡片合并。不是模板，不是画廊。见 `docs/adr/0018-shareable-cards.md`。
+_Avoid_: 模板、导出、把额度卡叫成报告、把多家账号或多个维度拼进一张图
+
 **报告 (Report)**：
-某个已结束的完整自然周期内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度，不是又一份 token KPI，也不是仪表盘的另一种排版。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量本期不出现在海报上，更不得并进总数。洞察在 Rust 侧产生，前端只措辞与排版。本期只做周报、只写剪贴板。见 `docs/adr/0015-report-and-insights.md`。
-_Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费窗）；把报告叫成导出或仪表盘截图
+某个已结束的完整自然周期内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度，不是又一份 token KPI，也不是仪表盘的另一种排版。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量不出现在这张海报上，更不得并进总数。洞察在 Rust 侧产生，前端只措辞与排版。只写剪贴板。总览入口「分享」与官方额度卡见 ADR 0018；报告本身仍只对照 `docs/adr/0015-report-and-insights.md`。
+_Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费窗）；把报告叫成导出或仪表盘截图；把官方额度写进周报
 
 **洞察 (Insight)**：
 报告中的一条结构化事实（`kind` + 数值 payload），由 Rust 规则引擎产生。payload 不含自然语言；措辞不属于洞察本身。
@@ -93,4 +97,4 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
 
-以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告与洞察见 `docs/adr/0015-report-and-insights.md`。
+以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告与洞察见 `docs/adr/0015-report-and-insights.md`。可分享卡片与官方额度卡见 `docs/adr/0018-shareable-cards.md`。

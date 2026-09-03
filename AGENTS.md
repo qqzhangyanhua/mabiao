@@ -91,6 +91,13 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 4. 海报 CSS 不得使用 `color-mix` / `backdrop-filter`，不得复用主样式表
 5. 对照 `docs/adr/0015-report-and-insights.md`
 
+### 修改可分享卡片 / 官方额度卡
+
+1. 周报口径仍走 ADR 0015；额度卡另读官方额度出口，禁止把百分比并进 token，禁止为分享新开取数通道
+2. 额度卡 view model 是前端纯函数：webview 不算窗口百分比、不算撞线、不自己定义过期阈值
+3. 海报 CSS 同样禁止 `color-mix` / `backdrop-filter`，不得复用主样式表
+4. 对照 `docs/adr/0018-shareable-cards.md`
+
 ## 领域词汇（简述）
 
 - **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain.rs`
@@ -103,6 +110,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 - **工作时间线 (Work Timeline)**：单日会话区间铺开，不是又一份 token KPI
 - **报告 (Report)**：已结束自然周期内消耗记录的可分享海报；不是独立数据维度，不把代码量 / 官方额度 / Cursor 账号用量并进 token
 - **洞察 (Insight)**：报告里的结构化事实，Rust 产生、前端只措辞
+- **可分享卡片 (Share Card)**：为转发而排版的图（周报或官方额度卡）；共用剪贴板，数字不合并；不是模板
 
 详见 `CONTEXT.md` 与 `docs/adr/`。各平台构建与托盘差异见 `docs/platforms.md`。
 

@@ -222,7 +222,7 @@ export const Overview = memo(function Overview({
         />
         <div className="overview-report-entry">
           <Button variant="accent" onClick={() => setReportOpen(true)}>
-            生成周报
+            分享
           </Button>
         </div>
       </div>
