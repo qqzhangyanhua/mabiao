@@ -1,5 +1,7 @@
 # 自定义额度提供商
 
+> **2026-09-03 修订（实现细节）**：预设枚举现为 7 种（0013 新增 `litellm_proxy`）；已实现档见 `CustomQuotaPreset::implemented()`（OpenAI 兼容 / NewAPI 别名 / LiteLLM Proxy）。托盘「最紧一档」不再按 `custom:` 前缀一刀切，而是按窗口有无 `resets_at` 分流（0013，`official_quota::tightest_window`）。读到下文「跳过全部 `custom:`」「一次性 6 种」时以 0013 为准；边界条款（只打计费接口、不进消耗记录、密钥不进备份）仍以本篇为准。
+
 内置的 9 个官方额度账号之外，用户还在用第三方 API 中转站和聚合服务：OpenAI 兼容中转、自建的 NewAPI / OneAPI 站点、OpenRouter、DeepSeek 等。这些普遍是充值制，比订阅制**更容易毫无预警地断掉**——而「官方额度」区块只认写死的那 9 家，恰好漏掉了最容易断的那条。
 
 **决定**：新增「自定义提供商 (Custom Quota Provider)」——用户在设置页自行登记、按**内置预设类型**取数的账号级额度来源。它属于「官方额度」维度。

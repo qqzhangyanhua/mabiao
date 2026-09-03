@@ -31,7 +31,7 @@ ADR 0015 把周报钉成七个固定槽位、只读消耗记录；ADR 0018 把�
 - 选择器色块元数据（固定色板，不跟随应用主题）
 - 渲染组件（`PosterViewModel` → 海报 DOM）
 
-首批内置 id：`dark-analytics`、`light-glass`、`purple-glass`、`cyber-neon`。`dark-analytics` 是默认风格，并收编当前周报海报视觉；没有并行的遗留第五套。
+首批规划 id：`dark-analytics`、`light-glass`、`purple-glass`、`cyber-neon`。`dark-analytics` 是默认风格，并收编当前周报海报视觉。**截至当前代码**，`src/report/posterStyleRegistry.ts` 的 `REPORT_POSTER_STYLES` 只注册了 `dark-analytics`；分享对话框的风格选择器也只渲染注册表里的项。后三个 id 仍可在偏好里写入并回退默认，但尚未有对应组件——落地时往注册表加一行即可，不要另开一套海报。
 
 未知、缺省或损坏的风格 id 回退 `dark-analytics`。用户不能上传模板、编辑 CSS、安装风格或从网络拉取风格包。装饰资源必须是纯 CSS、inline SVG 或打包进包内的 data URI；外链图片在 `foreignObject` 截图里不可靠。
 

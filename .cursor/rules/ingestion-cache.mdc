@@ -12,8 +12,8 @@ alwaysApply: false
 
 - 文件只有在完整读取 + 结构校验成功后，才能替换该文件在 `usage_records` 里的旧记录并更新 `ingested_files` 标记；解析失败要保留旧记录，把失败记为该 Source 的诊断问题（`record_failure`）
 - 追加型日志来源以适配器表 `append_log` 为准（当前：codex / claude / pi / omp / kimi / cursor-agent / copilot）。这些来源如果新解析出的记录数比缓存里少，且该文件缓存的 `adapter_version` 已是当前 `ADAPTER_VERSION`，视为截断/异常，保留旧缓存并报失败，不要覆盖。缓存 `adapter_version` 落后时允许条数变少的覆盖（适配器升级）。dsh / grok / gemini / qwen / factory / opencode / hermes 不是追加型日志，记录数下降不能当截断。
-- 每个 Source 扫描完成后按本轮实际看到的路径做删除对账（`reconcile_source`）；但该 Source 本轮只要出现任何 `files_failed`，就必须跳过对账，避免把「解析失败」误判成「文件已删除」
-- 目录读取错误（`walk_matching` 报错）不能触发删除对账，只能记为来源级失败
+- 每个 Source 扫描完成后按本轮实际看到的路径做**归档对账**（`reconcile_source` → `archive_records_for_file`，见 ADR 0004）；已缓存但本轮未见的路径打 `archived_at` 并清 `ingested_files` 指纹，不物理删除 `usage_records`。但该 Source 本轮只要出现任何 `files_failed`，就必须跳过对账，避免把「解析失败」误判成「文件已消失」
+- 目录读取错误（`walk_matching` 报错）不能触发归档对账，只能记为来源级失败
 - 缓存键 = 主文件的 `(mtime_ms, size)` + `metadata_fingerprint`/`content_fingerprint`（辅助文件，如 Kimi 的 `kimi.json`、Grok 的 `summary.json`、OpenCode 的 `-wal`、Hermes 的 `state.db-wal` / `state.db-shm`）+ `ADAPTER_VERSION`；辅助输入变化也必须使缓存失效
 
 ## 修改归一化规则时
