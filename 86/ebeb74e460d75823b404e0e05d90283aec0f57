@@ -1,0 +1,34 @@
+docs/source-coverage-roadmap.md
+  s_af8bda28a79061::t_af7cbd1d0ceaee 3-5
+  s_af8bda28a79061::t_9ec5b61bc882c4 20
+  s_af8bda28a79061::t_96637b9a308e9e 27
+  s_af8bda28a79061::t_db129298f706e9 80
+  s_af8bda28a79061::t_22064e3059bfc2 24
+  s_af8bda28a79061::t_5d3c15b51df854 42-50
+  s_af8bda28a79061::t_e13262c610d68f 13
+  s_af8bda28a79061::t_64047771c15596 1-2
+  s_af8bda28a79061::t_9d2282e44d6c4d 6-8,10-12
+  s_af8bda28a79061::t_5b04d7bd88ee47 14-19
+  s_af8bda28a79061::t_b5039864ac048b 21-23
+  s_af8bda28a79061::t_728363acb4c9bc 25-26
+  s_af8bda28a79061::t_a1abdae7a55198 28-30,39-41
+  s_af8bda28a79061::t_7ddf7e9ec6a677 51-53,77-79
+  s_af8bda28a79061::t_20d301403940ba 81
+  s_af8bda28a79061::t_e8bd23fc99046e 9,31-38,54-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "86ebeb74e460d75823b404e0e05d90283aec0f57",
+  "prompts": {},
+  "sessions": {
+    "s_af8bda28a79061": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "547c2638-bf33-41ed-a8d2-832a7cb7b584",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
