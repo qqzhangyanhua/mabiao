@@ -88,15 +88,15 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 1. 洞察规则只写 Rust `report` 模块；前端 `reportCopy` 只把 payload 映射成文案，不算数、不排名、不选槽位
 2. 报告数字只来自消耗记录；禁止把代码量、官方额度、Cursor 账号用量并进 token 口径
 3. 新增时段聚合必须同步 `query.rs` 与 `aggregate.rs`，跑 `cargo test parity`
-4. 海报 CSS 不得使用 `color-mix` / `backdrop-filter`，不得复用主样式表
-5. 对照 `docs/adr/0015-report-and-insights.md`
+4. 海报 CSS 不得复用主样式表；周报内置风格的玻璃 / 霓虹效果见 ADR 0019，额度卡仍禁止 `color-mix` / `backdrop-filter`
+5. 周报风格走 `posterStyleRegistry`，不要在对话框里按风格分叉。对照 `docs/adr/0015-report-and-insights.md`、`0019-weekly-report-poster-styles.md`
 
 ### 修改可分享卡片 / 官方额度卡
 
 1. 周报口径仍走 ADR 0015；额度卡另读官方额度出口，禁止把百分比并进 token，禁止为分享新开取数通道
 2. 额度卡 view model 是前端纯函数：webview 不算窗口百分比、不算撞线、不自己定义过期阈值
 3. 海报 CSS 同样禁止 `color-mix` / `backdrop-filter`，不得复用主样式表
-4. 对照 `docs/adr/0018-shareable-cards.md`
+4. 对照 `docs/adr/0018-shareable-cards.md`；周报多风格不得牵连额度卡
 
 ## 领域词汇（简述）
 
@@ -108,7 +108,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 - **对话记录 (Conversation Record)**：目录元数据 + 事件正文索引（可搜提问/回复/工具名与输出）；不进备份、不进 token KPI
 - **全局指令 (Global Instruction)**：某个 Source 真正会跨项目加载的用户手写指令，不进 token KPI；避免用「规则 / 记忆」
 - **工作时间线 (Work Timeline)**：单日会话区间铺开，不是又一份 token KPI
-- **报告 (Report)**：已结束自然周期内消耗记录的可分享海报；不是独立数据维度，不把代码量 / 官方额度 / Cursor 账号用量并进 token
+- **报告 (Report)**：已结束自然周期内消耗记录的可分享海报；不是独立数据维度，不把代码量 / 官方额度 / Cursor 账号用量并进 token。内置视觉风格见 ADR 0019，只改样子不改口径
 - **洞察 (Insight)**：报告里的结构化事实，Rust 产生、前端只措辞
 - **可分享卡片 (Share Card)**：为转发而排版的图（周报或官方额度卡）；共用剪贴板，数字不合并；不是模板
 
