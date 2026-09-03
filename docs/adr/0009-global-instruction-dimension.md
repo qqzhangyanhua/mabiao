@@ -23,3 +23,7 @@
 - 每次进入视图重新读盘，没有「最后一次正确结果」可回退——读失败就显示读失败，不得用旧快照冒充当前指令。
 - 路径约定会随各 Source 版本演进而过时；证据等级（已验证 / 推测 / 无机制）是缓解，不是消除。
 - Cursor 的账号级偏好在服务端，本地不可见；不得为此去写 Cursor 的 sqlite。
+
+## 已扫描来源（2026-09）
+
+`instructions/mod.rs::scan` 实时读盘，覆盖 **13 个**来源：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot。**未实现**：hermes、omp、amp（无稳定本地全局指令机制）。可编辑文件走 ADR 0010 `user_files::write`。

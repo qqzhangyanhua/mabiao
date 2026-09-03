@@ -4,7 +4,7 @@
 
 > **2026-09-03 修订（对话记录索引）**：Cursor Agent transcript 的正文与工具事件已纳入对话记录维度（ADR 0011 / 0014），`source=cursor_agent` 走 `conversation/cursor.rs` 写入 `conversation_events`，目录 FTS 可搜。本篇仍只管 **Cursor 会话** 行为聚合表 `cursor_sessions`（轮次、工具、失败率等 KPI），不进 `conversation_events`。
 
-Cursor IDE Agent 与 `cursor-agent` CLI 共用本机目录：`~/.cursor/chats/<md5(cwd)>/<session>/store.db` 和 `~/.cursor/projects/*/agent-transcripts/*/*.jsonl`。transcript 不含 token；行为统计（轮次、工具调用、失败率）与代码量、账号用量语义不同，不应并入消耗记录或总览 token KPI。`~/.cursor-agent-usage` 只是本仓库包装脚本的 token 落盘，不是官方会话库。
+Cursor IDE Agent 与 `cursor-agent` CLI 共用本机目录：`~/.cursor/chats/<md5(cwd)>/<session>/store.db`（cursor-agent **UsageRecord** 适配器用）和 `~/.cursor/projects/*/agent-transcripts/*/*.jsonl`（**Cursor 会话** KPI 与 **对话记录** 用）。`store.db` / `~/.cursor/chats` **不进** `cursor_sessions` 行为表。transcript 不含 token；行为统计（轮次、工具调用、失败率）与代码量、账号用量语义不同，不应并入消耗记录或总览 token KPI。`~/.cursor-agent-usage` 只是本仓库包装脚本的 token 落盘，不是官方会话库。
 
 **决定**：新增独立维度「Cursor 会话 (Cursor Session)」。在 `ingest_all` 时扫描 `~/.cursor/projects/*/agent-transcripts/*/*.jsonl`，按 `agent-transcripts/<session-id>/` 分组：只给父 jsonl 建会话，同目录 `subagents/*.jsonl` 的轮次/工具/提问并入父会话。并从 `ai-code-tracking.db` 的 `ai_code_hashes` enrich 模型/文件/时间/source/扩展名；解析为会话级聚合写入独立缓存表 `cursor_sessions`；只存聚合字段，不存对话正文。orphan hash、只有子代理没有父 jsonl 的目录，都不单独造会话。
 

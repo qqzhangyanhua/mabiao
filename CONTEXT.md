@@ -9,7 +9,7 @@
 _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记录）
 
 **来源 (Source)**：
-一个被统计的 AI 工具（如 codex、claude code、pi、omp、opencode、kimi 等）。每个 Source 有各自的本地存储格式与字段命名。
+一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 14 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
@@ -21,19 +21,19 @@ token 的分类计量：输入 (input)、输出 (output)、缓存读 (cache read
 _Avoid_: token 类型
 
 **代码量 (Code Volume)**：
-Cursor `scored_commits` 记录的提交行数：新增/删除/净增、Composer、Tab、人工，以及按天、按分支、提交明细。与 token 无关，是独立维度。AI 占比 = Composer 新增 ÷ 新增行，Tab 单独展示、不计入该百分比。
+Cursor `~/.cursor/ai-tracking/ai-code-tracking.db` 表 `scored_commits` 记录的提交行数：新增/删除/净增、Composer、Tab、人工，以及按天、按分支、提交明细。与 token 无关，是独立维度，**不写 sqlite 缓存**。AI 占比 = Composer 新增 ÷ 新增行，Tab 单独展示、不计入该百分比。面板可附带跨维度 ROI 提示（`total_cost` = 全来源累计费用；`cost_per_thousand_ai_lines` = 该费用 ÷ Composer 行数），**不是** token KPI。
 _Avoid_: 用量、消耗（避免与 token 混淆）；不要把 hash 条数当成行数；不要并进报告的 token 总数
 
 **Cursor 账号用量 (Cursor Account Usage)**：
-从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。凭证只有一个来源：本机 Cursor 客户端写在 globalStorage `state.vscdb` 里的登录态（Cursor 自己续期），没有手动粘贴通路、也不落钥匙串；缓存可在设置页独立清空，不参与本机文件对账。默选手动刷新，不跟本机会话的 1/5/10 分钟定时器；要定时联网须在设置 Cursor 页打开独立开关。界面可翻看已缓存的单条事件，对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、来源统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；来源统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
+从 Cursor 云端仪表盘拉回的账号级 token 事件，含全部设备与全时段，self-serve 计划下仅有 token、没有费用。独立于本机消耗记录与代码量，不并入本机 token 总量、不进 `UsageRecord` / `Source` / 5 小时计费窗。凭证只有一个来源：本机 Cursor 客户端写在 globalStorage `state.vscdb` 里的登录态（Cursor 自己续期），没有手动粘贴通路、也不落钥匙串；缓存可在设置页独立清空，不参与本机文件对账。默选手动刷新，不跟本机会话的 1/5/10 分钟定时器；要定时联网须在设置 Cursor 页打开独立开关（**前端** `localStorage` + 10 分钟 interval，不是 Rust 摄取定时器）。界面可翻看已缓存的单条事件（分页），对不上本机会话。概览页单独展示缓存摘要（跟随当前时间/模型筛选），仍不并入本机 token KPI。例外：概览「7 天滚动用量」、来源统计、使用统计、项目统计可挂 Cursor 账号用量，费用按用户价目、缺价时用 LiteLLM 快照按模型估算；来源统计不把该行并进页顶本机效率卡片，使用统计按时间桶叠加进趋势，项目统计单独成一行（账号用量无 cwd）。
 _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不要把它并进本机 token KPI、5 小时窗或报告的 token 总数
 
 **Cursor 会话 (Cursor Session)**：
-从本机 `~/.cursor/projects/*/agent-transcripts` jsonl 解析的跨会话行为统计（会话数、轮次、工具调用、失败率、提问数、工具分类等）。`subagents/` 子代理并入父会话，不单独计数。Cursor IDE Agent 与 `cursor-agent` CLI 写同一套目录，无法从路径区分来源；hash 的 `source` 可标 composer/cli。独立仪表盘只展示聚合，不含对话正文，不进总览 token KPI。单条会话的正文、工具事件、用量、读写路径与 hash 文件走对话记录。工作时间线按 `first_seen_at` / `last_seen_at` 把本机会话铺成当天片段，不进消耗记录、不贡献本机 token KPI。
+从本机 `~/.cursor/projects/*/agent-transcripts` jsonl 解析的跨会话行为统计（会话数、轮次、工具调用、失败率、提问数、工具分类等）。`subagents/` 子代理并入父会话，不单独计数。并从 `~/.cursor/ai-tracking/ai-code-tracking.db` 的 `ai_code_hashes` enrich 模型/文件/时间/source/扩展名。Cursor IDE Agent 与 `cursor-agent` CLI 写同一套 transcript 目录；`~/.cursor/chats/.../store.db` 仅供 cursor-agent **UsageRecord**，不进 `cursor_sessions`。独立仪表盘只展示聚合，不含对话正文，不进总览 token KPI。单条会话的正文、工具事件、用量、读写路径与 hash 文件走对话记录。工作时间线按 `first_seen_at` / `last_seen_at` 把本机会话铺成当天片段，不进消耗记录、不贡献本机 token KPI。
 _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话；不要把账号用量或代码量画进工作时间线
 
 **对话记录 (Conversation Record)**：
-本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
+本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
 _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或上传
 
 **对话记录适配器 (Conversation Adapter)**：
@@ -41,7 +41,7 @@ _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或�
 _Avoid_: parser、解析器、插件；不要省略「对话记录」只叫适配器（那条特指消耗记录）
 
 **官方额度 (Official Quota)**：
-账号级订阅限额（已用百分比、重置时间，以及按连续两次官方快照估计的撞线时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 首选本机 OAuth 调 `/api/oauth/usage`，失败再回落 statusline 捕获；Codex 首选本机 `auth.json` 调 ChatGPT usage 接口，失败再回落 `codex app-server`；Cursor 读 globalStorage `state.vscdb`；Grok 读 `~/.grok/auth.json`；Antigravity 先读 macOS 钥匙串再回落客户端本机状态。其余内置账号的凭证探测见 `docs/probe/official-quota.md`。本机既没凭证、也没历史缓存的账号不占一行。预计撞线只由官方前后两拍的百分比差计算，文案写成估计，不和官方进度条混成一根，也不用本机 5 小时燃烧去填官方百分比。
+账号级订阅限额（已用百分比、重置时间，以及按连续两次官方快照估计的撞线时间）。成员由两部分构成：内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户自行登记的**自定义提供商**。**注意**：Usage Source `opencode` 与本维度的 OpenCode **官方额度**是不同通道。独立于消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量与代码量，不并入本机 token KPI。每行可带套餐名（接口原值经 `display_plan_label` 归一）。新鲜度分 official / stale / unavailable；取数失败保留上次正确缓存；连续失败进入退避冷却。本机无凭证且无历史缓存的账号列入 `undetected[]`。凭证一律读各客户端本机已有的登录态，不要求用户粘贴：Claude 首选本机 OAuth 调 `/api/oauth/usage`，失败再回落 statusline 捕获；Codex 首选本机 `auth.json` 调 ChatGPT usage 接口，失败再回落 `codex app-server`；Cursor 读 globalStorage `state.vscdb`；Grok 读 `~/.grok/auth.json`；Antigravity 先读 macOS 钥匙串再回落客户端本机状态。其余内置账号的凭证探测见 `docs/probe/official-quota.md`。托盘每 5 分钟 / 刷新时会 `sync_official_quota` 联网取数（受退避约束）。调试 CLI：`cargo run --bin quota`。预计撞线只由官方前后两拍的百分比差计算，文案写成估计，不和官方进度条混成一根，也不用本机 5 小时燃烧去填官方百分比。
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条；不要并进报告的 token 总数
 
 **自定义提供商 (Custom Quota Provider)**：
@@ -65,7 +65,7 @@ _Avoid_: 把它当成又一份 token KPI，或把 Cursor 会话伪造成消耗�
 _Avoid_: 模板、导出、把额度卡叫成报告、把多家账号或多个维度拼进一张图
 
 **报告 (Report)**：
-某个已结束的完整自然周期内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度，不是又一份 token KPI，也不是仪表盘的另一种排版。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量不出现在这张海报上，更不得并进总数。洞察在 Rust 侧产生，前端只措辞与排版。只写剪贴板。总览入口「分享」与官方额度卡见 ADR 0018；周报内置视觉风格只改排版与配色，见 ADR 0019；报告口径仍只对照 `docs/adr/0015-report-and-insights.md`。
+某个已结束的完整自然周期内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度，不是又一份 token KPI，也不是仪表盘的另一种排版。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量不出现在这张海报上，更不得并进总数。洞察在 Rust 侧产生，前端只措辞与排版。只写剪贴板。Rust API 支持 `week` 与 `month` 周期，**界面薄切入口目前仅开放自然周**。总览入口「分享」与官方额度卡见 ADR 0018；周报内置视觉风格只改排版与配色，见 ADR 0019；报告口径仍只对照 `docs/adr/0015-report-and-insights.md`。
 _Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费窗）；把报告叫成导出或仪表盘截图；把官方额度写进周报
 
 **洞察 (Insight)**：
@@ -73,7 +73,7 @@ _Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费�
 _Avoid_: 评语、文案、headline；不要在 webview 里现算洞察
 
 **全局指令 (Global Instruction)**：
-某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
+某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
 _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、memory（会和 Claude 自动记忆、Cursor 残留 memories 撞名）；提示词
 
 ## 采集源现状
@@ -96,5 +96,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | cursor-agent | 会话与 IDE 共用 `~/.cursor/chats` + `agent-transcripts`；token 仅无头 stdout（需包装落盘到 `~/.cursor-agent-usage`） | ⚠️（仅包装） | ❌ |
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
+
+表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。
 
 以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告与洞察见 `docs/adr/0015-report-and-insights.md`。可分享卡片与官方额度卡见 `docs/adr/0018-shareable-cards.md`。

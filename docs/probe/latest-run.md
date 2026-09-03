@@ -50,7 +50,6 @@
 ## gemini
 
 - 有 token：是（在 `tmp/*/chats/session-*.json`，不在 `logs.json`）
-- 口径：`tokens.input` / `output` / `cached` / `thoughts` / `total`
 - 口径：`tokens.input` / `output` / `cached` / `thoughts` / `total`；cache_creation：无
 - 模型：`message.model`
 - provider：文件中不存在

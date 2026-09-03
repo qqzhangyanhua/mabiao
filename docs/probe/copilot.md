@@ -1,7 +1,6 @@
 # 探测结果：GitHub Copilot CLI
 
-与其它 `docs/probe/*.md` 不同，本机没有 GitHub Copilot CLI 可供直接抓取样本，以下字段位置来自
-GitHub 官方文档与开源实现的交叉验证，落地前建议用真实 `events.jsonl` 再核对一遍：
+与其它 `docs/probe/*.md` 不同，早期没有 GitHub Copilot CLI 本机样本时，字段位置来自官方文档与开源实现的交叉验证。仓库现已用脱敏 fixture `copilot-events.jsonl` 与 `tests/adapters.rs` 单测锁定口径；落地前仍建议用真实 `events.jsonl` 再核对一遍：
 
 - <https://docs.github.com/en/copilot/how-tos/copilot-cli/cli-best-practices>（会话落盘路径）
 - <https://docs.github.com/en/copilot/concepts/agents/copilot-cli/chronicle>（`session-state` 与本地 session store 的关系）

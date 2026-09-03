@@ -149,7 +149,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 ## 领域词汇（简述）
 
 - **消耗记录 (Usage Record)**：归一化 token 条目，定义在 `domain::UsageRecord`
-- **来源 (Source)**：codex、claude、pi… 不要用「工具/渠道」
+- **来源 (Source)**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes（`domain::Source::ALL`，14 个）。不要用「工具/渠道」
 - **代码量 (Code Volume)**：Cursor 行数统计，与 token 严格分区
 - **官方额度 (Official Quota)**：账号级订阅限额，成员含内置九家账号（Claude / Codex / Cursor / Grok / Droid / Antigravity / OpenCode / Copilot / Devin）与用户登记的**自定义提供商**，不进总览 token KPI
 - **Cursor 会话**：agent-transcripts 行为统计，不进总览 token KPI

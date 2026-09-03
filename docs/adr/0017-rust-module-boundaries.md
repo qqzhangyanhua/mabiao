@@ -8,7 +8,7 @@
 
 - **数据模型**（`domain`）是词汇表。拆成子模块后**全量 re-export**，`crate::domain::UsageRecord` 等路径不变。
 - **对话记录**子模块保持私有，模块根 re-export 少数入口（事件读取、各来源刷新）。
-- **存储层 / 聚合查询层**是服务集合，子模块路径可以读出职责（schema / 记录 / 预聚合）。连接打开与 `ADAPTER_VERSION` 留在 `store` 根上。
+- **存储层 / 聚合查询层**是服务集合，子模块路径可以读出职责（schema / 记录 / 预聚合；`query/` 含 analytics、billing、sessions 等）。连接打开与 `ADAPTER_VERSION` 留在 `store` 根上。
 - **Tauri command**：函数体可进 `commands` 子模块，**注册列表留在 crate 根**，因为 `generate_handler!` 要写全路径。command 内部只取状态、锁连接、按需载入价目，然后委托查询/摄取。
 
 ## 哨兵
@@ -20,3 +20,4 @@
 - 加字段时先看它属于哪个 domain 子模块。
 - 新增来源时同时看编排层有没有又胀回去。
 - 不为软红线加机械 CI 门禁。
+- **已知超线文件（2026-09，待继续拆分）**：`conversation/mod.rs`、`conversation/toolbox.rs`、`ingest.rs`、`conversation/event_index.rs`、`aggregate.rs`。超线不阻断 CI，但新增逻辑应优先进子模块而非继续堆高。

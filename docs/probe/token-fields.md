@@ -7,7 +7,7 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `occurred_at` | RFC3339 | 该轮发生时间 |
-| `source` | 文本 | 来源：codex / claude / pi / opencode / kimi / dsh / gemini / grok / qwen / factory / cursor_agent / copilot / hermes |
+| `source` | 文本 | 来源：codex / claude / pi / omp / opencode / kimi / dsh / gemini / grok / qwen / factory / cursor_agent / copilot / hermes |
 | `model` | 文本 | 模型 ID |
 | `provider` | 文本 | 官方或中转；未知则为空 |
 | `project` | 文本 | 工作目录（解码后的路径） |
@@ -47,13 +47,17 @@ CREATE TABLE IF NOT EXISTS usage_records (
     cache_creation_tokens INTEGER NOT NULL,
     reasoning_tokens INTEGER NOT NULL,
     total_tokens INTEGER NOT NULL,
-    native_cost REAL
+    native_cost REAL,
+    archived_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ingested_files (
     path TEXT PRIMARY KEY,
     mtime_ms INTEGER NOT NULL,
-    size INTEGER NOT NULL
+    size INTEGER NOT NULL,
+    source TEXT NOT NULL DEFAULT '',
+    fingerprint TEXT NOT NULL DEFAULT '',
+    adapter_version INTEGER NOT NULL DEFAULT 0
 );
 ```
 
