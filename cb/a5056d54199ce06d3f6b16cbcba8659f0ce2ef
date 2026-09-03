@@ -1,0 +1,43 @@
+src/report/ReportPoster.tsx
+  s_bf435047b1eb12::t_6d03cb4ec0699a 10,14,17
+src/lib/reportExtremeFixtures.ts
+  s_bf435047b1eb12::t_0854885780bc09 1-95
+src/report/spike.tsx
+  s_bf435047b1eb12::t_3d9deec089de05 4,113-124
+  s_bf435047b1eb12::t_036bcae39d9992 23-30,32,66-72
+  s_bf435047b1eb12::t_30034b032b2666 73
+src/report/fakePosterData.ts
+  s_bf435047b1eb12::t_a20ce63936a7be 41
+  s_bf435047b1eb12::t_5bbd5970e61f26 1-2,33-40,42-48
+src/lib/reportCopy.ts
+  s_bf435047b1eb12::t_97031f2e67eab8 129-130
+src/report/spike.css
+  s_bf435047b1eb12::t_a9a64dfeae15f3 94-126
+  s_bf435047b1eb12::t_9664ef3018a5f6 127-131
+src-tauri/src/tests/report.rs
+  s_bf435047b1eb12::t_e66d3a7808d0df 139-164,890-1037
+docs/spikes/report-poster/NOTES.md
+  s_bf435047b1eb12::t_b8e4b3e6e412d0 16-18,20-21
+  s_bf435047b1eb12::t_15842f18c55453 19
+src/lib/reportCopy.extreme.test.ts
+  s_bf435047b1eb12::t_ae63b825fde839 1,4-5,7-33,39-42,52-54,61,63-80,82-103,105-106,114-117,119-126,137-138
+  s_bf435047b1eb12::t_df07f730f48ff2 3
+  s_bf435047b1eb12::t_bee83c29152a9c 34-38
+  s_bf435047b1eb12::t_a0b9a901ba38ca 2,6,43-51,55-60,62,81,104,107-113,118,127-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "cba5056d54199ce06d3f6b16cbcba8659f0ce2ef",
+  "prompts": {},
+  "sessions": {
+    "s_bf435047b1eb12": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06696-d9f2-7ea2-8ec0-58f93b1d8106",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
