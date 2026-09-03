@@ -16,12 +16,15 @@ import {
   loadSharePreference,
   saveSharePreference,
   type ShareCardKind,
+  type SharePreference,
 } from "../lib/sharePreference";
 import { capturePoster } from "../report/capturePoster";
 import { QuotaPoster } from "../report/QuotaPoster";
 import { ReportPoster } from "../report/ReportPoster";
+import type { ReportPosterStyleId } from "../report/posterStyleRegistry";
 import type { ReportDto } from "../types";
 import { EmptyState } from "./EmptyState";
+import { SharePosterStyles } from "./SharePosterStyles";
 import { ShareQuotaAccounts } from "./ShareQuotaAccounts";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
@@ -42,6 +45,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const [openedWith] = useState(loadSharePreference);
   const [kind, setKind] = useState<ShareCardKind>(openedWith.kind);
   const [quotaProvider, setQuotaProvider] = useState<string | null>(openedWith.quotaProvider);
+  const [posterStyleId, setPosterStyleId] = useState<ReportPosterStyleId>(openedWith.posterStyleId);
   const [offset, setOffset] = useState(0);
   const [weekDto, setWeekDto] = useState<ReportDto | null>(null);
   const [weekError, setWeekError] = useState<string | null>(null);
@@ -133,8 +137,12 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const quotaWaitingCache = quota.cacheLoading && quota.dto === null;
   const canCopy = Boolean(kind === "week" ? weekPoster : quotaPoster) && !copying;
 
-  function persistPreference(nextKind: ShareCardKind, nextProvider: string | null) {
-    saveSharePreference({ kind: nextKind, quotaProvider: nextProvider });
+  function persistPreference(updates: Partial<SharePreference> = {}) {
+    saveSharePreference({
+      kind: updates.kind ?? kind,
+      quotaProvider: "quotaProvider" in updates ? updates.quotaProvider ?? null : quotaProvider,
+      posterStyleId: updates.posterStyleId ?? posterStyleId,
+    });
   }
 
   function selectKind(next: ShareCardKind) {
@@ -143,7 +151,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     }
     setKind(next);
     setCopyStatus(null);
-    persistPreference(next, quotaProvider);
+    persistPreference({ kind: next });
   }
 
   function selectQuotaAccount(provider: string) {
@@ -152,7 +160,16 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     }
     setQuotaProvider(provider);
     setCopyStatus(null);
-    persistPreference("quota", provider);
+    persistPreference({ kind: "quota", quotaProvider: provider });
+  }
+
+  function selectPosterStyle(nextStyleId: ReportPosterStyleId) {
+    if (copyingRef.current) {
+      return;
+    }
+    setPosterStyleId(nextStyleId);
+    setCopyStatus(null);
+    persistPreference({ posterStyleId: nextStyleId });
   }
 
   async function copyPoster() {
@@ -254,6 +271,11 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                   更近一周
                 </Button>
               </div>
+              <SharePosterStyles
+                selectedStyleId={posterStyleId}
+                disabled={copying}
+                onSelect={selectPosterStyle}
+              />
             </>
           ) : eligible.length > 1 && quotaRow ? (
             <ShareQuotaAccounts
@@ -319,7 +341,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                 />
               ) : null}
               {!weekLoading && !weekError && weekPoster ? (
-                <ReportPoster data={weekPoster} posterRef={posterRef} />
+                <ReportPoster data={weekPoster} posterRef={posterRef} styleId={posterStyleId} />
               ) : null}
             </>
           ) : (

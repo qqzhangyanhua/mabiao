@@ -1,4 +1,10 @@
-/** 本机 webview 偏好：卡片类型与额度账号。不进备份。 */
+import {
+  DEFAULT_REPORT_POSTER_STYLE_ID,
+  resolveReportPosterStyleId,
+  type ReportPosterStyleId,
+} from "../report/posterStyleRegistry";
+
+/** 本机 webview 偏好：卡片类型、额度账号与周报海报风格。不进备份。 */
 export const SHARE_PREFERENCE_STORAGE_KEY = "mabiao:share-preference";
 
 export type ShareCardKind = "week" | "quota";
@@ -6,10 +12,11 @@ export type ShareCardKind = "week" | "quota";
 export type SharePreference = {
   kind: ShareCardKind;
   quotaProvider: string | null;
+  posterStyleId: ReportPosterStyleId;
 };
 
 export function defaultSharePreference(): SharePreference {
-  return { kind: "week", quotaProvider: null };
+  return { kind: "week", quotaProvider: null, posterStyleId: DEFAULT_REPORT_POSTER_STYLE_ID };
 }
 
 function isShareCardKind(value: unknown): value is ShareCardKind {
@@ -34,7 +41,8 @@ export function parseSharePreference(raw: string | null): SharePreference {
       typeof record.quotaProvider === "string" && record.quotaProvider.length > 0
         ? record.quotaProvider
         : null;
-    return { kind: record.kind, quotaProvider };
+    const posterStyleId = resolveReportPosterStyleId(record.posterStyleId);
+    return { kind: record.kind, quotaProvider, posterStyleId };
   } catch {
     return defaults;
   }
@@ -44,6 +52,7 @@ export function serializeSharePreference(preference: SharePreference): string {
   return JSON.stringify({
     kind: preference.kind,
     quotaProvider: preference.quotaProvider,
+    posterStyleId: preference.posterStyleId,
   });
 }
 
