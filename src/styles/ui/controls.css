@@ -1,0 +1,287 @@
+.chip-field,
+.date-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--muted);
+}
+
+.chip-field:hover:not(:disabled),
+.date-picker-trigger:hover:not(:disabled),
+.icon-btn:hover:not(:disabled) {
+  border-color: rgba(139, 108, 255, 0.45);
+  color: var(--text-soft);
+}
+
+.chip-range {
+  max-width: 168px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.select,
+.date-picker,
+.multi-select {
+  position: relative;
+}
+
+.select-trigger,
+.multi-select-trigger,
+.date-picker-trigger {
+  cursor: pointer;
+}
+
+.select-caret {
+  margin-left: 2px;
+  flex: none;
+  color: var(--muted);
+  transform: rotate(-90deg);
+}
+
+.select-caret.open {
+  transform: rotate(90deg);
+}
+
+.select-plain-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: 100%;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.select-plain-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.select-panel,
+.date-picker-panel,
+.multi-select-panel {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--bg-panel-2);
+  box-shadow: 0 16px 40px var(--shadow-strong);
+  overflow: auto;
+}
+
+.multi-select-panel {
+  min-width: 220px;
+  max-width: 280px;
+  gap: 6px;
+}
+
+.select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+  text-align: left;
+}
+
+.select-option:hover {
+  background: var(--overlay-2);
+}
+
+.select-option.active {
+  background: var(--tone-codex-bg);
+  color: var(--purple-fg);
+}
+
+.custom-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.date-picker-trigger {
+  min-width: 132px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.date-picker-panel {
+  min-width: 268px;
+  padding: 12px;
+  gap: 8px;
+}
+
+.date-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.date-picker-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--overlay-1);
+  color: var(--muted);
+}
+
+.date-nav-btn:hover {
+  color: var(--purple-fg);
+  border-color: rgba(139, 108, 255, 0.35);
+}
+
+.date-picker-weekdays,
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.date-picker-weekdays span {
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.date-cell {
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.date-cell:hover:not(:disabled) {
+  background: var(--overlay-2);
+}
+
+.date-cell.muted-day {
+  color: var(--text-faint-2);
+}
+
+.date-cell.today:not(.selected) {
+  color: var(--purple-fg);
+  box-shadow: inset 0 0 0 1px rgba(139, 108, 255, 0.35);
+}
+
+.date-cell.selected {
+  background: var(--tone-codex-bg);
+  color: var(--purple-fg);
+  font-weight: 600;
+}
+
+.date-cell:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.multi-select-search {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.multi-select-search:focus {
+  outline: none;
+  border-color: rgba(139, 108, 255, 0.45);
+}
+
+.multi-select-actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+.multi-select-list {
+  display: grid;
+  gap: 2px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.multi-select-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.multi-select-item:hover {
+  background: var(--overlay-2);
+}
+
+.multi-select-empty {
+  padding: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #8b6cff;
+  cursor: pointer;
+}
+
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  display: grid;
+  place-items: center;
+  color: var(--text-soft);
+}
+
+.main {
+  min-width: 0;
+  min-height: 0;
+  padding: 3px 16px 6px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  grid-row: 2;
+}
+

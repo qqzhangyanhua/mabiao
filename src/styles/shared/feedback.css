@@ -1,0 +1,252 @@
+.cross-table-wrap {
+  max-height: 520px;
+}
+
+.cross-table {
+  min-width: 760px;
+}
+
+.cross-table th,
+.cross-table td {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cross-table .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+  max-width: 240px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: var(--sticky-col-bg);
+}
+
+.cross-table thead .sticky-col {
+  z-index: 3;
+}
+
+.matrix-cell {
+  min-width: 112px;
+  color: var(--text-faint-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.matrix-cell.active {
+  color: var(--text);
+  background: rgba(109, 74, 255, var(--matrix-alpha));
+}
+
+.analytics-empty {
+  height: 150px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 320px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 16px;
+  color: var(--muted);
+}
+
+.empty-state-icon {
+  color: var(--text-faint);
+  opacity: 0.7;
+}
+
+.empty-state-title {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.empty-state-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.empty-state-compact {
+  padding: 6px 4px;
+  gap: 4px;
+}
+
+.empty-state-compact .empty-state-title {
+  font-size: 12px;
+}
+
+.empty-state-warn .empty-state-icon {
+  color: var(--red-fg);
+  opacity: 0.85;
+}
+
+.empty-state-warn .empty-state-title {
+  color: var(--red-fg);
+}
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--purple-fg);
+  animation: spinner-spin 0.7s linear infinite;
+}
+
+@keyframes spinner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.4s;
+  }
+}
+
+.loading-overlay-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 只有页面根遮罩铺满 main。嵌套层再写 min-height:100% 会按外层总高度再撑一截，滚动到底后留下大片空白。 */
+.main > .loading-overlay-wrap {
+  flex: 1 0 auto;
+  min-height: 100%;
+}
+
+/* 嵌在 panel 里时不要撑满父级高度，否则 overflow:hidden 会裁掉下面的分页。 */
+.panel > .loading-overlay-wrap,
+.loading-overlay-wrap .loading-overlay-wrap {
+  flex: none;
+  min-height: 0;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--scrim);
+  color: var(--text-soft);
+  font-size: 13px;
+  animation: loading-overlay-in 0.15s ease;
+}
+
+@keyframes loading-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.inline-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  color: var(--muted);
+}
+
+/* 侧栏约占 228px，内容区比窗口窄。按 workspace 实际宽度收栅格，
+   避免 1080 窗口仍走四列 KPI / 七列价目行。 */
+@container workspace (max-width: 960px) {
+  .kpi-row,
+  .dash-bottom,
+  .status-bar,
+  .efficiency-cards,
+  .cursor-overview-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dash-mid,
+  .dash-bottom {
+    flex: 1 0 auto;
+    min-height: 180px;
+  }
+
+  .dash-mid {
+    grid-template-columns: 1fr;
+  }
+
+  .price-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .price-row-delete {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .preset-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .preset-price,
+  .preset-detected,
+  .preset-missing {
+    grid-column: 2;
+  }
+
+  .topbar-main {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .donut-wrap {
+    grid-template-columns: 140px minmax(0, 1fr);
+  }
+}
+
+@container workspace (max-width: 720px) {
+  .theme-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .efficiency-cards,
+  .cursor-overview-metrics,
+  .split-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .donut-wrap,
+  .dash-side .donut-wrap,
+  .dash-bottom .donut-wrap {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ingest-issues li {
+    grid-template-columns: 1fr;
+  }
+}
+

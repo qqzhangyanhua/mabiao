@@ -1,0 +1,261 @@
+.instruction-checkup-ok {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-checkup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-checkup-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+}
+
+.instruction-checkup-item.severity-critical {
+  border-color: var(--red-fg);
+}
+
+.instruction-checkup-item.severity-high {
+  border-color: var(--orange-fg);
+}
+
+.instruction-checkup-item.severity-medium {
+  border-color: var(--cyan-fg);
+}
+
+.instruction-checkup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.instruction-checkup-head span,
+.instruction-checkup-consequence {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-checkup-item.severity-critical .instruction-checkup-severity {
+  background: rgba(251, 113, 133, 0.16);
+  color: var(--red-fg);
+}
+
+.instruction-checkup-item.severity-high .instruction-checkup-severity {
+  background: var(--tone-claude-bg);
+  color: var(--orange-fg);
+}
+
+.instruction-checkup-item.severity-medium .instruction-checkup-severity {
+  background: var(--tone-pi-bg);
+  color: var(--cyan-fg);
+}
+
+.instruction-checkup-item.severity-low .instruction-checkup-severity {
+  background: var(--overlay-2);
+  color: var(--muted);
+}
+
+.instruction-checkup-problem,
+.instruction-checkup-consequence {
+  margin: 0;
+}
+
+.instruction-overlap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-overlap-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+}
+
+.instruction-overlap-keyword {
+  margin: 0;
+  font-size: 13px;
+}
+
+.instruction-overlap-pair {
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-overlap-pair blockquote {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--line);
+  background: var(--overlay-2);
+  display: grid;
+  gap: 4px;
+}
+
+.instruction-overlap-pair span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-overlap-pair p {
+  margin: 0;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.instruction-insight-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.instruction-insight-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 92px 148px 92px;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--overlay-1);
+  font-size: 12px;
+}
+
+.instruction-insight-row strong {
+  min-width: 0;
+  font-size: 13px;
+}
+
+.instruction-insight-row span {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instruction-insight-imbalances {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.instruction-insight-imbalances li {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--overlay-1);
+  font-size: 13px;
+}
+
+.instruction-memory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.instruction-memory-item {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--overlay-1);
+  overflow: hidden;
+}
+
+.instruction-memory-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.instruction-memory-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.instruction-memory-title span {
+  overflow-wrap: anywhere;
+}
+
+.instruction-memory-title span,
+.instruction-memory-meta,
+.instruction-memory-file header span,
+.instruction-memory-file header em {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.instruction-memory-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.instruction-memory-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.instruction-memory-file {
+  display: grid;
+  gap: 6px;
+}
+
+.instruction-memory-file header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.instruction-memory-file header em {
+  font-style: normal;
+}
+
+.instruction-memory-file pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--line);
+  background: var(--overlay-2);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
