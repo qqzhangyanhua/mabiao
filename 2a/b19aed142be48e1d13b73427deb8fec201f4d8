@@ -1,0 +1,87 @@
+src/styles/shared/table.css
+  s_50d05f6d390d09::t_0115d961196c62 234-296
+  s_50d05f6d390d09::t_f833f54dca37e2 297-301
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-233
+src/styles/base/tokens.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-151
+src/styles/views/charts.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-48,50-297
+  s_50d05f6d390d09::t_d42bd36d86f504 49
+src/styles/shared/tones.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-277
+src/lib/cssStructure.test.ts
+  s_50d05f6d390d09::t_506396f27019f1 1-88
+src/report/node-fs.d.ts
+  s_50d05f6d390d09::t_70203f7e22c1d6 3-4
+src/styles/views/conversation-timeline.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-355
+  s_50d05f6d390d09::t_6c82b22789b761 356-357
+src/styles/views/instruction-checkup.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-261
+src/styles.css
+  s_50d05f6d390d09::t_7d2d90b35ca4b4 26
+  s_50d05f6d390d09::t_eba87f18dac88c 1
+  s_50d05f6d390d09::t_0f7c7a723f2703 2-25
+src/styles/views/conversation-events.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-214
+src/styles/views/official-quota.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-355,357-392
+  s_50d05f6d390d09::t_2198f194254ae2 356
+src/styles/ui/controls.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-287
+src/styles/views/report.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-191
+src/styles/views/instruction.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-253
+src/styles/views/settings-extra.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-272
+src/styles/views/work-timeline.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-307
+src/styles/views/sessions.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-226
+src/styles/layout/shell.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-347
+src/styles/views/conversation-catalog.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-381
+src/styles/views/conversation-markdown.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-196
+src/lib/cssStructure.ts
+  s_50d05f6d390d09::t_e299082e908f82 1-75
+src/styles/shared/feedback.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-252
+src/styles/base/reset.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-148
+docs/adr/0016-css-layer-split.md
+  s_50d05f6d390d09::t_43714c2ab2d10d 1-29
+src/styles/layout/responsive.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-214
+  s_50d05f6d390d09::t_bb73e57dabb128 215-227
+src/styles/views/heatmap.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-236
+src/styles/views/overview.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-279
+src/styles/views/billing.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-177
+.cursor/rules/frontend-react.mdc
+  s_50d05f6d390d09::t_34950852dc41a4 23-25
+src/styles/views/settings.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-340
+src/styles/views/quota-tray.css
+  s_50d05f6d390d09::t_0f7c7a723f2703 1-317
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "2ab19aed142be48e1d13b73427deb8fec201f4d8",
+  "prompts": {},
+  "sessions": {
+    "s_50d05f6d390d09": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a066b7-1e6e-7cf3-83a9-f95a174283de",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
