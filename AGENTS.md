@@ -95,7 +95,7 @@ Rust 测试按模块拆分在 `src-tauri/src/tests/`，共享辅助函数在 `sr
 
 1. 周报口径仍走 ADR 0015；额度卡另读官方额度出口，禁止把百分比并进 token，禁止为分享新开取数通道
 2. 额度卡 view model 是前端纯函数：webview 不算窗口百分比、不算撞线、不自己定义过期阈值
-3. 海报 CSS 同样禁止 `color-mix` / `backdrop-filter`，不得复用主样式表
+3. 额度卡海报 CSS 仍禁止 `color-mix` / `backdrop-filter`，不得复用主样式表；周报内置风格走 `posterStyleRegistry`，见 ADR 0019
 4. 对照 `docs/adr/0018-shareable-cards.md`；周报多风格不得牵连额度卡
 
 ## 领域词汇（简述）
