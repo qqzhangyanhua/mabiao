@@ -19,6 +19,7 @@
     "@tauri-apps/api": "^2",
     "echarts": "^5.6.0",
     "echarts-for-react": "^3.0.2",
+    "modern-screenshot": "^4.7.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
