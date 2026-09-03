@@ -1,0 +1,63 @@
+src/components/Overview.tsx
+  s_7bdeb4b286f5c9::t_4597c26715dd01 225
+src/styles/views/report.css
+  s_7bdeb4b286f5c9::t_771fa2ab2bfc5a 138-150
+docs/adr/0015-report-and-insights.md
+  s_159884232d9eff::t_6f14d148841306 9,129
+AGENTS.md
+  s_159884232d9eff::t_f38690ae2c344a 94-100,113
+src/report/posterCss.test.ts
+  s_7bdeb4b286f5c9::t_3757a076cec92e 4
+src/components/ReportDialog.tsx
+  s_7bdeb4b286f5c9::t_f06072fd15d648 37-39,48-49,55,60,65,73-102,146-152
+  s_7bdeb4b286f5c9::t_0a6345b5db7f6f 34-36
+  s_7bdeb4b286f5c9::t_c2aad578c73e3a 153-155
+  s_f577d149cff914::t_13ae044e4237d3 7,10,12,16,19-24,31,33,156-164,221-222,226-233,235-263,280-330
+CONTEXT.md
+  s_159884232d9eff::t_180c541007f660 63-66,68-69,100
+src/lib/quotaCard.ts
+  s_7bdeb4b286f5c9::t_3b23186cdef6d5 3-7,80
+  s_7bdeb4b286f5c9::t_794150fe4ad8f2 8
+  s_7bdeb4b286f5c9::t_3462e18f55d24f 45-49
+  s_7bdeb4b286f5c9::t_9a54f163e64bd9 1-2,9-44,50-79,81-100
+src/lib/quotaCard.test.ts
+  s_7bdeb4b286f5c9::t_49bc34b9024039 1-300
+src/report/QuotaPoster.tsx
+  s_7bdeb4b286f5c9::t_bf1d4292672938 1-44
+docs/adr/0018-shareable-cards.md
+  s_f577d149cff914::t_d5d466c9889aac 1-128
+src/report/quotaPoster.css
+  s_f577d149cff914::t_d1e058381bfc7f 1-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4baefb246b83c10fc3cc9c802f53248cbbe48aeb",
+  "prompts": {},
+  "sessions": {
+    "s_159884232d9eff": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06708-af42-7301-8e33-046d65d9179c",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_7bdeb4b286f5c9": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0675d-5af6-74a1-a4b2-91b498cdf3cd",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_f577d149cff914": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "14c9a13a-6719-4762-945d-fe9008895adf",
+        "model": "unknown"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
