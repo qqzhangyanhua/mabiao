@@ -91,6 +91,22 @@ fn peak_hours(dto: &ReportDto) -> (u8, u8) {
     panic!("expected peak_hours, got {:?}", dto.insights);
 }
 
+fn busiest_day(dto: &ReportDto) -> u8 {
+    for insight in &dto.insights {
+        if let ReportInsight::BusiestDay { weekday } = insight {
+            return *weekday;
+        }
+    }
+    panic!("expected busiest_day, got {:?}", dto.insights);
+}
+
+fn day_tokens(dto: &ReportDto) -> Vec<(&str, i64)> {
+    dto.days
+        .iter()
+        .map(|point| (point.date.as_str(), point.total_tokens))
+        .collect()
+}
+
 #[test]
 fn offset_zero_is_last_complete_local_week() {
     let dto = build_with(&[], week(0));
@@ -159,6 +175,18 @@ fn empty_period_returns_has_data_false_with_zero_totals() {
     assert_eq!(dto.totals.session_count, 0);
     assert_eq!(dto.totals.cost, None);
     assert!(dto.insights.is_empty());
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 0),
+            ("2026-08-11", 0),
+            ("2026-08-12", 0),
+            ("2026-08-13", 0),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
 }
 
 #[test]
@@ -214,6 +242,18 @@ fn cursor_account_usage_does_not_change_report_totals() {
     let (night_tokens, total_tokens, _) = night_share(&dto);
     assert_eq!(night_tokens, 0);
     assert_eq!(total_tokens, 100);
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 0),
+            ("2026-08-11", 0),
+            ("2026-08-12", 100),
+            ("2026-08-13", 0),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
 }
 
 #[test]
@@ -362,4 +402,87 @@ fn hour_of_day_uses_local_timezone_not_utc() {
     assert_eq!(night_tokens, 40);
     assert_eq!(total_tokens, 100);
     assert_eq!(pct, 40);
+}
+
+#[test]
+fn week_days_keep_zero_bars_for_days_without_usage() {
+    let records = vec![
+        usage(day(2026, 8, 10), 10, 0, 0, "mon", 10),
+        usage(day(2026, 8, 12), 11, 0, 0, "wed", 50),
+        usage(day(2026, 8, 14), 9, 0, 0, "fri", 20),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 10),
+            ("2026-08-11", 0),
+            ("2026-08-12", 50),
+            ("2026-08-13", 0),
+            ("2026-08-14", 20),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
+}
+
+#[test]
+fn busiest_day_is_the_local_calendar_day_with_most_tokens() {
+    let records = vec![
+        usage(day(2026, 8, 10), 10, 0, 0, "mon", 10),
+        usage(day(2026, 8, 12), 11, 0, 0, "wed-a", 30),
+        usage(day(2026, 8, 12), 16, 0, 0, "wed-b", 20),
+        usage(day(2026, 8, 14), 9, 0, 0, "fri", 20),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(busiest_day(&dto), 2);
+}
+
+#[test]
+fn busiest_day_tie_takes_the_earlier_day() {
+    let records = vec![
+        usage(day(2026, 8, 10), 10, 0, 0, "mon", 40),
+        usage(day(2026, 8, 14), 9, 0, 0, "fri", 40),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(busiest_day(&dto), 0);
+}
+
+#[test]
+fn single_day_with_data_keeps_seven_bars_and_that_weekday() {
+    let records = vec![usage(day(2026, 8, 13), 14, 0, 0, "thu", 80)];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 0),
+            ("2026-08-11", 0),
+            ("2026-08-12", 0),
+            ("2026-08-13", 80),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
+    assert_eq!(busiest_day(&dto), 3);
+}
+
+#[test]
+fn daily_series_uses_local_calendar_day_not_utc_date_prefix() {
+    // 本地周一 00:30。UTC+8 上 occurred_at 前缀是周日；误按 UTC 日切会错位。
+    let records = vec![usage(day(2026, 8, 10), 0, 30, 0, "monday-early", 25)];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        day_tokens(&dto),
+        vec![
+            ("2026-08-10", 25),
+            ("2026-08-11", 0),
+            ("2026-08-12", 0),
+            ("2026-08-13", 0),
+            ("2026-08-14", 0),
+            ("2026-08-15", 0),
+            ("2026-08-16", 0),
+        ]
+    );
+    assert_eq!(busiest_day(&dto), 0);
 }

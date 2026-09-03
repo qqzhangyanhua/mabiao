@@ -625,6 +625,45 @@ pub fn hour_of_day(conn: &Connection, filter: &Filter) -> Result<[i64; 24], Stri
     Ok(hours)
 }
 
+/// 按本地日历日汇总 token。与 `trend(grain="day")` 不同：这里用本地日切，不叠 Cursor 账号用量。
+pub fn tokens_by_local_day(
+    conn: &Connection,
+    filter: &Filter,
+) -> Result<Vec<(String, i64)>, String> {
+    let inner = rollup_source(
+        &rollup_plan(
+            filter.from.as_deref(),
+            filter.to.as_deref(),
+            crate::store::rollup_is_ready(conn),
+            Some("hour"),
+        ),
+        filter,
+    );
+    let sql = format!(
+        "SELECT strftime('%Y-%m-%d', d.first_at, 'localtime'),
+                COALESCE(SUM(d.total_tokens), 0)
+         FROM ({}) d
+         GROUP BY 1
+         ORDER BY 1",
+        inner.sql,
+    );
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params_from_iter(inner.params.iter()), |row| {
+            Ok((row.get::<_, Option<String>>(0)?, row.get::<_, i64>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut days = Vec::new();
+    for row in rows {
+        let (date, tokens) = row.map_err(|e| e.to_string())?;
+        let Some(date) = date else {
+            continue;
+        };
+        days.push((date, tokens));
+    }
+    Ok(days)
+}
+
 fn breakdown_name_expr(dimension: &str) -> Result<&'static str, String> {
     match dimension {
         "application" | "source" => Ok("d.source"),

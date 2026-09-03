@@ -4,7 +4,9 @@
 use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate};
 use rusqlite::{params_from_iter, Connection};
 
-use crate::domain::{Filter, PriceTable, ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind};
+use crate::domain::{
+    Filter, PriceTable, ReportDayPoint, ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind,
+};
 use crate::query;
 use crate::rollup_source::rollup_source;
 use crate::rollup_split::rollup_plan;
@@ -24,8 +26,13 @@ pub fn build(
     let totals = query::overview(conn, &filter, prices)?;
     let record_count = usage_record_count(conn, &filter)?;
     let has_data = record_count > 0;
+    let days = complete_days(
+        start,
+        end_inclusive,
+        &query::tokens_by_local_day(conn, &filter)?,
+    );
     let insights = if has_data {
-        schedule_insights(&query::hour_of_day(conn, &filter)?)
+        period_insights(&query::hour_of_day(conn, &filter)?, start, &days)
     } else {
         Vec::new()
     };
@@ -36,8 +43,57 @@ pub fn build(
         end_date: end_inclusive.format("%Y-%m-%d").to_string(),
         has_data,
         totals,
+        days,
         insights,
     })
+}
+
+fn period_insights(
+    hours: &[i64; 24],
+    start: NaiveDate,
+    days: &[ReportDayPoint],
+) -> Vec<ReportInsight> {
+    let mut insights = schedule_insights(hours);
+    insights.push(ReportInsight::BusiestDay {
+        weekday: busiest_weekday(start, days),
+    });
+    insights
+}
+
+fn complete_days(
+    start: NaiveDate,
+    end_inclusive: NaiveDate,
+    sparse: &[(String, i64)],
+) -> Vec<ReportDayPoint> {
+    let lookup: std::collections::BTreeMap<&str, i64> = sparse
+        .iter()
+        .map(|(date, tokens)| (date.as_str(), *tokens))
+        .collect();
+    let mut days = Vec::new();
+    let mut day = start;
+    while day <= end_inclusive {
+        let date = day.format("%Y-%m-%d").to_string();
+        days.push(ReportDayPoint {
+            total_tokens: lookup.get(date.as_str()).copied().unwrap_or(0),
+            date,
+        });
+        day += Duration::days(1);
+    }
+    days
+}
+
+fn busiest_weekday(start: NaiveDate, days: &[ReportDayPoint]) -> u8 {
+    assert!(!days.is_empty(), "有数据时按天序列必须覆盖周期内每一天");
+    let mut best_index = 0usize;
+    let mut best_tokens = i64::MIN;
+    for (index, point) in days.iter().enumerate() {
+        if point.total_tokens > best_tokens {
+            best_tokens = point.total_tokens;
+            best_index = index;
+        }
+    }
+    let weekday = i64::from(start.weekday().num_days_from_monday()) + best_index as i64;
+    (weekday.rem_euclid(7)) as u8
 }
 
 fn schedule_insights(hours: &[i64; 24]) -> Vec<ReportInsight> {

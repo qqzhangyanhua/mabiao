@@ -29,6 +29,7 @@ function dto(partial: Partial<ReportDto> & Pick<ReportDto, "has_data" | "totals"
     offset: 0,
     start_date: "2026-08-10",
     end_date: "2026-08-16",
+    days: [],
     insights: [],
     ...partial,
   };
@@ -171,6 +172,44 @@ describe("toPosterViewModel", () => {
       }),
     );
     expect(poster?.totalCostLabel).toBe("$18.60");
+  });
+
+  it("maps seven daily bars with short weekday labels and keeps zero-token days", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        days: [
+          { date: "2026-08-10", total_tokens: 10 },
+          { date: "2026-08-11", total_tokens: 0 },
+          { date: "2026-08-12", total_tokens: 50 },
+          { date: "2026-08-13", total_tokens: 0 },
+          { date: "2026-08-14", total_tokens: 20 },
+          { date: "2026-08-15", total_tokens: 0 },
+          { date: "2026-08-16", total_tokens: 0 },
+        ],
+      }),
+    );
+    expect(poster?.days).toEqual([
+      { label: "一", tokens: 10 },
+      { label: "二", tokens: 0 },
+      { label: "三", tokens: 50 },
+      { label: "四", tokens: 0 },
+      { label: "五", tokens: 20 },
+      { label: "六", tokens: 0 },
+      { label: "日", tokens: 0 },
+    ]);
+  });
+
+  it("puts busiest day into the stats row as a weekday name", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        insights: [{ kind: "busiest_day", weekday: 2 }],
+      }),
+    );
+    expect(poster?.stats).toEqual([{ label: "最忙的一天", value: "周三" }]);
   });
 
   it("appends night-share and peak-hours comments, including 0% and 100%", () => {

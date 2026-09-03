@@ -1,4 +1,4 @@
-import type { PosterViewModel } from "../report/posterTypes";
+import type { PosterStat, PosterViewModel } from "../report/posterTypes";
 import type { ReportDto, ReportInsight } from "../types";
 import { formatCompact, formatUsdAmount } from "./format";
 
@@ -11,6 +11,7 @@ export type InsightCopy = {
 };
 
 const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"] as const;
+const BAR_LABELS = ["一", "二", "三", "四", "五", "六", "日"] as const;
 
 export function periodRangeLabel(startDate: string, endDate: string): string {
   const start = parseDateParts(startDate);
@@ -88,11 +89,17 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
   const comments = [totalsComment(dto.totals.total_tokens)];
   const night = dto.insights.find((insight) => insight.kind === "night_share");
   const peak = dto.insights.find((insight) => insight.kind === "peak_hours");
+  const busiest = dto.insights.find((insight) => insight.kind === "busiest_day");
   if (night) {
     comments.push(insightCopy(night).comment);
   }
   if (peak) {
     comments.push(insightCopy(peak).comment);
+  }
+  const stats: PosterStat[] = [];
+  if (busiest) {
+    const copy = insightCopy(busiest);
+    stats.push({ label: copy.headline, value: copy.comment });
   }
   return {
     kicker: REPORT_KICKER,
@@ -101,9 +108,12 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     totalUnit: REPORT_TOTAL_UNIT,
     totalCostLabel: dto.totals.cost == null ? null : formatUsdAmount(dto.totals.cost),
     comments,
-    days: [],
+    days: dto.days.map((day, index) => ({
+      label: BAR_LABELS[index] ?? "",
+      tokens: day.total_tokens,
+    })),
     sources: [],
-    stats: [],
+    stats,
   };
 }
 
@@ -118,3 +128,4 @@ function parseDateParts(value: string): { year: number; month: number; day: numb
     day: Number(match[3]),
   };
 }
+

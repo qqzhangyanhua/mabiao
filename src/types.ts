@@ -948,6 +948,11 @@ export type ReportInsight =
       total_tokens: number;
     };
 
+export type ReportDayPoint = {
+  date: string;
+  total_tokens: number;
+};
+
 export type ReportDto = {
   period_kind: ReportPeriodKind;
   offset: number;
@@ -955,5 +960,6 @@ export type ReportDto = {
   end_date: string;
   has_data: boolean;
   totals: OverviewDto;
+  days: ReportDayPoint[];
   insights: ReportInsight[];
 };

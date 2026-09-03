@@ -196,7 +196,16 @@ pub struct ReportDto {
     pub end_date: String,
     pub has_data: bool,
     pub totals: OverviewDto,
+    /// 周期内每个本地日历日一根柱，零也是 0，不是缺省。
+    pub days: Vec<ReportDayPoint>,
     pub insights: Vec<ReportInsight>,
+}
+
+/// 报告按天序列上的一天。`date` 是本地日历日 `YYYY-MM-DD`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReportDayPoint {
+    pub date: String,
+    pub total_tokens: i64,
 }
 
 /// 报告洞察。`kind` + 数值/标识符，不含文案。

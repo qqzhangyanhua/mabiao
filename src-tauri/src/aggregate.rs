@@ -178,6 +178,27 @@ fn local_hour_of_day(occurred_at: &str) -> Option<u8> {
     )
 }
 
+/// 按本地日历日汇总 token。与 `query::tokens_by_local_day` 同口径。
+pub fn tokens_by_local_day(records: &[UsageRecord], filter: &Filter) -> Vec<(String, i64)> {
+    let mut days: BTreeMap<String, i64> = BTreeMap::new();
+    for record in apply_filter(records, filter) {
+        if let Some(date) = local_calendar_day(&record.occurred_at) {
+            *days.entry(date).or_default() += record.total_tokens;
+        }
+    }
+    days.into_iter().collect()
+}
+
+fn local_calendar_day(occurred_at: &str) -> Option<String> {
+    Some(
+        billing_window::parse_occurred_at(occurred_at)?
+            .with_timezone(&Local)
+            .date_naive()
+            .format("%Y-%m-%d")
+            .to_string(),
+    )
+}
+
 /// 把 Cursor 账号用量并进使用统计时间桶（本机消耗记录之上叠加）。
 pub fn attach_cursor_trend(
     points: Vec<SeriesPoint>,
