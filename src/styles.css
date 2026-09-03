@@ -1081,6 +1081,91 @@ button.kpi {
   height: 32px;
 }
 
+/* 概览页卡片略收紧：只作用于 .dash，避免趋势 / 拆分 / 时间线等共用 .kpi 一起变矮。
+   spark 叠在角上不占高度；四张卡 stretch 到费用卡（hint 那一行）的统一高度。 */
+.dash .kpi-row {
+  align-items: stretch;
+  gap: 8px;
+}
+
+.dash .kpi {
+  padding: 6px 10px 5px;
+  min-height: 72px;
+}
+
+.dash .kpi-ico {
+  width: 22px;
+  height: 22px;
+}
+
+.dash .kpi-top {
+  gap: 5px;
+}
+
+.dash .kpi-value {
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.dash .kpi-hint {
+  margin: 1px 0 0;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 76px;
+}
+
+.dash .kpi-detail {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.dash .kpi-detail p {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash .kpi-foot {
+  margin-top: 2px;
+  min-height: 14px;
+  padding-right: 76px;
+}
+
+.dash .kpi .spark {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 72px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.dash .status-bar {
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.dash .stat-block {
+  gap: 2px;
+}
+
+.dash .stat-block strong {
+  font-size: 15px;
+}
+
+.dash .cursor-overview-metrics {
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dash .cursor-overview-metric strong {
+  font-size: 15px;
+}
+
 .live-tag {
   margin-left: auto;
   display: flex;
@@ -3668,8 +3753,8 @@ td.row-actions {
 .cursor-overview-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .cursor-overview-metric {
@@ -3680,7 +3765,7 @@ td.row-actions {
 
 .cursor-overview-metric strong {
   font-variant-numeric: tabular-nums;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .cursor-overview-models {
@@ -6037,6 +6122,11 @@ td.row-actions {
   .kpi {
     min-height: 80px;
     padding: 8px 12px 6px;
+  }
+
+  .dash .kpi {
+    min-height: 64px;
+    padding: 5px 8px 4px;
   }
 
   .dash-mid,
