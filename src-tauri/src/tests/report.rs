@@ -100,6 +100,28 @@ fn busiest_day(dto: &ReportDto) -> u8 {
     panic!("expected busiest_day, got {:?}", dto.insights);
 }
 
+fn top_session(dto: &ReportDto) -> &ReportInsight {
+    for insight in &dto.insights {
+        if matches!(insight, ReportInsight::TopSession { .. }) {
+            return insight;
+        }
+    }
+    panic!("expected top_session, got {:?}", dto.insights);
+}
+
+fn with_cost(mut record: crate::domain::UsageRecord, cost: f64) -> crate::domain::UsageRecord {
+    record.native_cost = Some(cost);
+    record
+}
+
+fn with_project(
+    mut record: crate::domain::UsageRecord,
+    project: &str,
+) -> crate::domain::UsageRecord {
+    record.project = project.to_string();
+    record
+}
+
 fn day_tokens(dto: &ReportDto) -> Vec<(&str, i64)> {
     dto.days
         .iter()
@@ -223,6 +245,14 @@ fn zero_token_record_still_sets_has_data() {
     let dto = build_with(&[record], week(0));
     assert!(dto.has_data);
     assert_eq!(dto.totals.total_tokens, 0);
+    assert!(matches!(
+        top_session(&dto),
+        ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            total_tokens: 0,
+            ..
+        }
+    ));
 }
 
 #[test]
@@ -644,4 +674,190 @@ fn model_rank_omits_zero_token_models() {
     ];
     let dto = build_with(&records, week(0));
     assert_eq!(dto.models, vec!["opus".to_string()]);
+}
+
+#[test]
+fn top_session_is_the_highest_cost_session_even_when_it_has_fewer_tokens() {
+    let records = vec![
+        with_cost(
+            with_project(
+                usage_named(
+                    day(2026, 8, 12),
+                    10,
+                    Source::Claude,
+                    "opus",
+                    "cheap-tokens",
+                    90,
+                ),
+                "/proj/cheap",
+            ),
+            1.0,
+        ),
+        with_cost(
+            with_project(
+                usage_named(day(2026, 8, 13), 11, Source::Codex, "gpt-5", "dear", 10),
+                "/proj/dear",
+            ),
+            4.2,
+        ),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        top_session(&dto),
+        &ReportInsight::TopSession {
+            by: ReportTopSessionBy::Cost,
+            source: "codex".into(),
+            session_id: "dear".into(),
+            project: Some("/proj/dear".into()),
+            cost: Some(4.2),
+            total_tokens: 10,
+        }
+    );
+}
+
+#[test]
+fn top_session_falls_back_to_most_tokens_when_unpriced() {
+    let records = vec![
+        usage_named(day(2026, 8, 12), 10, Source::Claude, "opus", "small", 10),
+        usage_named(day(2026, 8, 13), 11, Source::Codex, "gpt-5", "big", 90),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        top_session(&dto),
+        &ReportInsight::TopSession {
+            by: ReportTopSessionBy::Tokens,
+            source: "codex".into(),
+            session_id: "big".into(),
+            project: Some("/proj/a".into()),
+            cost: None,
+            total_tokens: 90,
+        }
+    );
+}
+
+#[test]
+fn top_session_falls_back_to_tokens_when_all_costs_are_zero() {
+    let records = vec![
+        with_cost(
+            usage_named(
+                day(2026, 8, 12),
+                10,
+                Source::Claude,
+                "opus",
+                "zero-small",
+                10,
+            ),
+            0.0,
+        ),
+        with_cost(
+            usage_named(day(2026, 8, 13), 11, Source::Codex, "gpt-5", "zero-big", 90),
+            0.0,
+        ),
+    ];
+    let dto = build_with(&records, week(0));
+    match top_session(&dto) {
+        ReportInsight::TopSession {
+            by,
+            session_id,
+            cost,
+            total_tokens,
+            ..
+        } => {
+            assert_eq!(*by, ReportTopSessionBy::Tokens);
+            assert_eq!(session_id, "zero-big");
+            assert_eq!(*cost, Some(0.0));
+            assert_eq!(*total_tokens, 90);
+        }
+        other => panic!("expected top_session, got {other:?}"),
+    }
+}
+
+#[test]
+fn top_session_omits_blank_project() {
+    let records = vec![with_cost(
+        with_project(
+            usage_named(day(2026, 8, 12), 10, Source::Claude, "opus", "s1", 80),
+            "  ",
+        ),
+        1.5,
+    )];
+    let dto = build_with(&records, week(0));
+    match top_session(&dto) {
+        ReportInsight::TopSession { project, .. } => assert_eq!(*project, None),
+        other => panic!("expected top_session, got {other:?}"),
+    }
+}
+
+#[test]
+fn top_session_ignores_sessions_outside_the_period() {
+    let records = vec![
+        with_cost(
+            with_project(
+                usage_named(day(2026, 8, 9), 10, Source::Claude, "opus", "prev", 10),
+                "/proj/prev",
+            ),
+            99.0,
+        ),
+        with_cost(
+            with_project(
+                usage_named(day(2026, 8, 12), 10, Source::Codex, "gpt-5", "in", 50),
+                "/proj/in",
+            ),
+            1.5,
+        ),
+        with_cost(
+            with_project(
+                usage_named(day(2026, 8, 17), 10, Source::Grok, "grok-4", "next", 10),
+                "/proj/next",
+            ),
+            88.0,
+        ),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        top_session(&dto),
+        &ReportInsight::TopSession {
+            by: ReportTopSessionBy::Cost,
+            source: "codex".into(),
+            session_id: "in".into(),
+            project: Some("/proj/in".into()),
+            cost: Some(1.5),
+            total_tokens: 50,
+        }
+    );
+}
+
+#[test]
+fn cursor_account_usage_does_not_become_top_session() {
+    let records = vec![with_cost(
+        usage_named(day(2026, 8, 12), 12, Source::Claude, "opus", "local", 100),
+        1.25,
+    )];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    store::upsert_cursor_account_events(
+        &conn,
+        &[CursorUsageEvent {
+            occurred_at: local_time_iso(day(2026, 8, 12), 12, 0, 0),
+            model: "gpt-5".into(),
+            input_tokens: 999_999,
+            output_tokens: 999_999,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        }],
+    )
+    .unwrap();
+    let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
+    assert_eq!(
+        top_session(&dto),
+        &ReportInsight::TopSession {
+            by: ReportTopSessionBy::Cost,
+            source: "claude".into(),
+            session_id: "local".into(),
+            project: Some("/proj/a".into()),
+            cost: Some(1.25),
+            total_tokens: 100,
+        }
+    );
 }

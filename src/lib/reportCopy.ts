@@ -99,6 +99,7 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
   const night = dto.insights.find((insight) => insight.kind === "night_share");
   const peak = dto.insights.find((insight) => insight.kind === "peak_hours");
   const busiest = dto.insights.find((insight) => insight.kind === "busiest_day");
+  const topSession = dto.insights.find((insight) => insight.kind === "top_session");
   if (night) {
     comments.push(insightCopy(night).comment);
   }
@@ -115,6 +116,10 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
       label: modelRankLabel(dto.models.length),
       value: dto.models.join(" · "),
     });
+  }
+  if (topSession) {
+    const copy = insightCopy(topSession);
+    stats.push({ label: copy.headline, value: copy.comment });
   }
   return {
     kicker: REPORT_KICKER,

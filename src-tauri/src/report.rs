@@ -6,7 +6,7 @@ use rusqlite::{params_from_iter, Connection};
 
 use crate::domain::{
     Filter, NamedAmount, PriceTable, ReportDayPoint, ReportDto, ReportInsight, ReportPeriod,
-    ReportPeriodKind, ReportShareSlice,
+    ReportPeriodKind, ReportShareSlice, ReportTopSessionBy, SessionRow,
 };
 use crate::query;
 use crate::rollup_source::rollup_source;
@@ -33,7 +33,13 @@ pub fn build(
         &query::tokens_by_local_day(conn, &filter)?,
     );
     let insights = if has_data {
-        period_insights(&query::hour_of_day(conn, &filter)?, start, &days)
+        let sessions = query::top_sessions(
+            conn,
+            &filter,
+            prices,
+            usize::try_from(totals.session_count.max(1)).unwrap_or(usize::MAX),
+        )?;
+        period_insights(&query::hour_of_day(conn, &filter)?, start, &days, &sessions)
     } else {
         Vec::new()
     };
@@ -116,12 +122,48 @@ fn period_insights(
     hours: &[i64; 24],
     start: NaiveDate,
     days: &[ReportDayPoint],
+    sessions: &[SessionRow],
 ) -> Vec<ReportInsight> {
     let mut insights = schedule_insights(hours);
     insights.push(ReportInsight::BusiestDay {
         weekday: busiest_weekday(start, days),
     });
+    insights.push(top_session_insight(sessions));
     insights
+}
+
+fn top_session_insight(sessions: &[SessionRow]) -> ReportInsight {
+    assert!(!sessions.is_empty(), "有数据时至少有一条会话");
+    let mut best_priced: Option<&SessionRow> = None;
+    for row in sessions {
+        let Some(cost) = row.cost.filter(|cost| *cost > 0.0) else {
+            continue;
+        };
+        let take = match best_priced.and_then(|current| current.cost) {
+            None => true,
+            Some(best_cost) => cost > best_cost,
+        };
+        if take {
+            best_priced = Some(row);
+        }
+    }
+    let (row, by) = match best_priced {
+        Some(row) => (row, ReportTopSessionBy::Cost),
+        None => (&sessions[0], ReportTopSessionBy::Tokens),
+    };
+    let project = row.project.trim();
+    ReportInsight::TopSession {
+        by,
+        source: row.source.clone(),
+        session_id: row.session_id.clone(),
+        project: if project.is_empty() {
+            None
+        } else {
+            Some(project.to_string())
+        },
+        cost: row.cost,
+        total_tokens: row.total_tokens,
+    }
 }
 
 fn complete_days(

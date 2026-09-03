@@ -122,6 +122,23 @@ describe("insightCopy", () => {
     });
   });
 
+  it("formats a zero-cost top session as tokens without placeholders", () => {
+    const copy = insightCopy({
+      kind: "top_session",
+      by: "tokens",
+      source: "codex",
+      session_id: "s0",
+      project: null,
+      cost: 0,
+      total_tokens: 80,
+    });
+    expect(copy).toEqual({
+      headline: "消耗最多的一次",
+      comment: "80 token",
+    });
+    expect(`${copy.headline}${copy.comment}`).not.toMatch(/暂无数据|——|未命名会话|\$0/);
+  });
+
   it("never emits placeholder copy", () => {
     const copies = [
       insightCopy({ kind: "night_share", night_tokens: 0, total_tokens: 0, pct: 0 }),
@@ -287,6 +304,52 @@ describe("toPosterViewModel", () => {
       { label: "最忙的一天", value: "周三" },
       { label: "模型", value: "opus" },
     ]);
+  });
+
+  it("puts the top session into the stats row after models", () => {
+    const priced = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1, cost: 4.2 },
+        models: ["opus"],
+        insights: [
+          { kind: "busiest_day", weekday: 2 },
+          {
+            kind: "top_session",
+            by: "cost",
+            source: "claude",
+            session_id: "s1",
+            project: "/proj/a",
+            cost: 4.2,
+            total_tokens: 20,
+          },
+        ],
+      }),
+    );
+    expect(priced?.stats).toEqual([
+      { label: "最忙的一天", value: "周三" },
+      { label: "模型", value: "opus" },
+      { label: "最贵的一次", value: "$4.20 · /proj/a" },
+    ]);
+
+    const tokens = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        insights: [
+          {
+            kind: "top_session",
+            by: "tokens",
+            source: "codex",
+            session_id: "s0",
+            project: null,
+            cost: 0,
+            total_tokens: 80,
+          },
+        ],
+      }),
+    );
+    expect(tokens?.stats).toEqual([{ label: "消耗最多的一次", value: "80 token" }]);
   });
 
   it("appends night-share and peak-hours comments, including 0% and 100%", () => {
