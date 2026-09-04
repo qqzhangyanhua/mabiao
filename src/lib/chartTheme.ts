@@ -494,6 +494,51 @@ export function breakdownBarOption(
   };
 }
 
+const DONUT_TOOLTIP_GAP = 12;
+
+export type DonutTooltipSize = {
+  contentSize: number[];
+  viewSize: number[];
+};
+
+/**
+ * 环图只有 160px。ECharts 默认会按图表宽度把 tooltip 翻到指针左侧，
+ * 再被 `.panel { overflow: hidden }` 裁掉长模型名。始终放到指针右侧（图例一侧），
+ * 并由 `appendTo: "body"` 脱出裁切容器。
+ */
+export function donutTooltipPosition(
+  point: number[],
+  _params: unknown,
+  _el: unknown,
+  _rect: unknown,
+  size: DonutTooltipSize,
+): [number, number] {
+  const pointerX = point[0] ?? 0;
+  const pointerY = point[1] ?? 0;
+  const tooltipH = size.contentSize[1] ?? 0;
+  const viewH = size.viewSize[1] ?? 0;
+  const x = pointerX + DONUT_TOOLTIP_GAP;
+  let y = pointerY - tooltipH / 2;
+  if (y < 0) {
+    y = 0;
+  } else if (y + tooltipH > viewH) {
+    y = Math.max(0, viewH - tooltipH);
+  }
+  return [x, y];
+}
+
+function donutItemTooltip(raw: unknown): string {
+  if (typeof raw !== "object" || raw == null || !("name" in raw) || !("value" in raw)) {
+    return "";
+  }
+  const { name, value } = raw;
+  const percent = "percent" in raw && typeof raw.percent === "number" ? raw.percent : 0;
+  if (typeof name !== "string" || typeof value !== "number") {
+    return "";
+  }
+  return `${name}<br/>${formatCompact(value)} (${percent.toFixed(1)}%)`;
+}
+
 export function donutOption(
   items: { name: string; value: number; color: string }[],
   theme: ChartTheme = "dark",
@@ -508,10 +553,11 @@ export function donutOption(
       ? {
           ...tooltipBase(theme),
           trigger: "item",
-          formatter: (raw: unknown) => {
-            const item = raw as { name: string; value: number; percent: number };
-            return `${item.name}<br/>${formatCompact(item.value)} (${item.percent.toFixed(1)}%)`;
-          },
+          appendTo: "body",
+          confine: false,
+          position: donutTooltipPosition,
+          extraCssText: "max-width:280px;white-space:normal;word-break:break-word;",
+          formatter: donutItemTooltip,
         }
       : { show: false },
     series: [
