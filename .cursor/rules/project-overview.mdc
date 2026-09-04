@@ -46,7 +46,7 @@ src/
   App.tsx
   components/
   hooks/                  # 前端 hooks（含 Cursor 账号自动刷新）
-  report/                 # 周报 / 额度卡海报与注册表
+  report/                 # 周报海报风格注册表
   styles/                 # 分层 CSS（入口 styles.css）
   lib/
   types.ts

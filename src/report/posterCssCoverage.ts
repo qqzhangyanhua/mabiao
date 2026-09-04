@@ -160,7 +160,7 @@ function coverNamedFile(
 }
 
 /**
- * 从注册表推每周报 CSS，并并入额度卡 / spike 夹具。
+ * 从注册表推每周报 CSS，并并入 spike 夹具。
  * 目录里多出来的海报 CSS 也会进隔离门禁，避免漏网。
  */
 export function collectPosterCssCoverage(): {
