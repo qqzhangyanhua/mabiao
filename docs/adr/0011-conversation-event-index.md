@@ -19,3 +19,7 @@
 - 递增对话适配器版本会使既有索引按会话失效；启动摄取不再因此重解析全部源文件，改由后台按 `ended_at` 倒序补建。`adapter_version = 0` 仍是「重建缓存」的强制重解析哨兵。
 - 详情读取按会话就绪分流：已索引走索引（不带 `details`），未索引回退整份解析；回退路径长期保留，因此索引出错时有降级开关。
 - 目录索引继续只留会话行和父子关系，不在扫描阶段囤积整份 `ParsedConversation`。
+
+## 对话记录适配来源（2026-09）
+
+`conversation::CONVERSATION_ADAPTERS` 覆盖 **13 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未覆盖**：hermes。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION`**（独立于 `store::ADAPTER_VERSION`）；纯重构不得改动，改动意味着事件归一化输出变了。

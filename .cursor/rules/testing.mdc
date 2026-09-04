@@ -22,7 +22,7 @@ alwaysApply: false
 ## Ingest / store 测试
 
 - 涉及文件系统的测试使用 `tempfile` 构造临时目录模拟 `home`，用 `store::open_memory()` 建内存 sqlite，不要依赖真实的 `~/.codex` 等本机路径
-- 覆盖 `docs/adr/0003-trusted-ingestion-cache.md` 里的场景：文件不变跳过重解析、解析失败保留旧缓存、追加日志记录数下降判定失败、来源消失后对账删除、目录读取错误不误删
+- 覆盖 `docs/adr/0003-trusted-ingestion-cache.md` 里的场景：文件不变跳过重解析、解析失败保留旧缓存、追加日志记录数下降判定失败、来源消失后对账**归档**（`archived_at`，ADR 0004）、目录读取错误不误归档
 
 ## 前端
 

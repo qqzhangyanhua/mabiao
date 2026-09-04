@@ -26,4 +26,4 @@
 
 - 改对话记录样式打开对应域文件即可，不必搜整库。
 - 入口只聚合，单文件重新胀到几千行会被测试拦住。
-- webview 仍只在 `main.tsx` 引入这一处入口，TS 侧不散落样式 import。
+- webview **主壳**仍只在 `main.tsx` 引入 `styles.css` 这一处入口。周报 / 额度卡海报走 ADR 0019 的独立 CSS（`src/report/*.css`，由 `posterStyleRegistry` 引用），**不受**本 ADR 400 行门禁约束，但仍有 `posterCss.test.ts` 隔离校验。

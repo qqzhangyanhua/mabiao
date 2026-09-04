@@ -56,8 +56,8 @@ pnpm tauri build
 
 **触发**
 
-1. 把 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 的 `version` 改成同一号（例如 `0.1.0`）
-2. 推送 tag：`git tag v0.1.0 && git push origin v0.1.0`
+1. 把 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 的 `version` 改成同一号（例如 `0.1.3`）
+2. 推送 tag：`git tag v0.1.3 && git push origin v0.1.3`
 3. 或在 GitHub **Actions → Release → Run workflow** 手动跑（会按配置里的 version 建 `v__VERSION__` tag）
 
 产物写入 **draft** Release「码表 vX.Y.Z」，同时上传 Actions artifact（保留 14 天）。核对 dmg / deb / exe 无误后再在 Releases 页点 Publish。

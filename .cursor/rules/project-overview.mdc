@@ -18,24 +18,39 @@ alwaysApply: true
 
 ```
 src-tauri/src/
-  domain.rs / domain/  # 唯一的数据模型来源；根文件全量 re-export，实现按域拆在 domain/
-  adapters/            # 每个 Source 一个适配器，解析→归一化
-  conversation/        # 对话记录编排（子模块私有，根上 re-export）
-  commands/            # Tauri command 函数体
-  ingest.rs            # 扫描文件、可信摄取缓存、来源级对账
-  store.rs / store/    # sqlite schema 与读写；ADAPTER_VERSION 在 store 根上
-  query.rs             # 生产用聚合查询（SQL 下推）
-  aggregate.rs         # 内存实现，仅作为 query.rs 的差分测试基准（见 testing 规则）
-  cost.rs              # 费用推导（native_cost 优先，其次价目表）
-  official_quota/      # 官方额度取数（内置九家 + 自定义提供商）
-  lib.rs               # generate_handler! 注册列表与 AppState
-  bin/probe.rs         # 探测未确认来源的本机字段格式的独立小工具
+  domain.rs / domain/     # 数据模型；根文件全量 re-export
+  adapters/               # 每个 Usage Source 一个适配器
+  conversation/           # 对话记录编排（子模块私有，根上 re-export）
+  commands/               # Tauri command 函数体
+  instructions/           # 全局指令扫描（实时读盘）
+  official_quota/         # 官方额度（内置九家 + 自定义）
+  report/                 # 报告 / 洞察（Rust）
+  cursor_session.rs       # Cursor 会话 KPI 摄取
+  cursor_account.rs       # Cursor 账号用量联网
+  ingest.rs               # 扫描、可信摄取、归档对账
+  store.rs / store/       # sqlite；ADAPTER_VERSION 在 store 根
+  query.rs / query/       # 聚合 SQL（analytics / billing / …）
+  aggregate.rs            # 内存基准，parity 测试用
+  cost.rs                 # 费用推导
+  user_files.rs           # 用户文件唯一写入入口（ADR 0010）
+  backup.rs               # 备份 / 恢复
+  work_timeline.rs        # 工作时间线
+  tray.rs / tray_*.rs     # 菜单栏托盘
+  lib.rs                  # generate_handler! + AppState
+  bin/
+    probe.rs              # 本机字段探测
+    quota.rs              # 官方额度 CLI（mabiao-quota）
+    litellm_snapshot.rs
+    bench_ingest.rs
 src/
-  App.tsx              # 顶层状态与视图切换
-  components/          # 各视图/图表组件
-  lib/                 # 格式化、图表主题、价目预设等纯函数工具
-  types.ts             # 与 Rust DTO 对应的 TS 类型（手动保持同步）
-docs/adr/              # 架构决策记录，重大架构变更需新增一份 ADR
+  App.tsx
+  components/
+  hooks/                  # 前端 hooks（含 Cursor 账号自动刷新）
+  report/                 # 周报 / 额度卡海报与注册表
+  styles/                 # 分层 CSS（入口 styles.css）
+  lib/
+  types.ts
+docs/adr/
 ```
 
 对外路径约定见 `docs/adr/0017-rust-module-boundaries.md`。新增字段先改 `crate::domain::…`，不要在其它模块定义平行结构体。
@@ -43,7 +58,7 @@ docs/adr/              # 架构决策记录，重大架构变更需新增一份 
 ## 领域词汇（详见 CONTEXT.md，请勿用其它措辞替代）
 
 - **消耗记录 (Usage Record)**：归一化后的标准用量条目，唯一定义在 `domain::UsageRecord`
-- **来源 (Source)**：被统计的 AI 工具（如 codex、claude），避免用「工具/tool/渠道」；权威名单是 `domain::Source::ALL`
+- **来源 (Source)**：被统计的 AI 工具（如 codex、claude），避免用「工具/tool/渠道」；权威名单是 `domain::Source::ALL`（14 个）
 - **适配器 (Adapter)**：把某 Source 的原始格式解析成 Usage Record 的模块，避免用「parser/解析器」
 - **Token 口径 (Token Dimension)**：input/output/cache_read/cache_creation/reasoning/total
 - **代码量 (Code Volume)**：仅 Cursor 编辑器的 AI 生成代码行数统计，与 token 无关，界面上严格分区，避免与「用量/消耗」混用
@@ -54,4 +69,4 @@ docs/adr/              # 架构决策记录，重大架构变更需新增一份 
 
 - 统计与界面代码只面向 `UsageRecord`/DTO，不感知任何具体工具的原始格式（`docs/adr/0001-adapter-per-source-architecture.md`）
 - 前后端通过 Tauri command / IPC 交换已聚合的 JSON；webview 只做展示，不做聚合计算（`docs/adr/0002-tauri-rust-desktop-app.md`）
-- 摄取缓存遵循「最后一次正确结果」语义，细节见 `docs/adr/0003-trusted-ingestion-cache.md` 与 ingestion 相关规则
+- 摄取缓存遵循「最后一次正确结果」语义；源文件消失时**归档**而非物理删除（`docs/adr/0003-trusted-ingestion-cache.md`、`0004-archive-missing-source-files.md`）
