@@ -1,0 +1,22 @@
+.cursor/rules/project-overview.mdc
+  h_4132837b09b7e7 49
+AGENTS.md
+  h_4132837b09b7e7 127-128,152
+CONTEXT.md
+  h_4132837b09b7e7 64-65,68,102
+docs/adr/0020-share-entry-report-only.md
+  h_4132837b09b7e7 1-43
+src/report/posterCssCoverage.ts
+  h_4132837b09b7e7 163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "bd74c333d94ef29c8752fd9a1a19b441dc204179",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
