@@ -1,0 +1,110 @@
+src/report/castConcretePaint.test.ts
+  s_1bba4b9ec8c94c::t_b34d6883fb4a7e 28-29
+src/components/ReportPreviewFrame.tsx
+  s_1bba4b9ec8c94c::t_8e066ddf1f41c4 1-30,32-43,47-48,50-55,60-62,64-65,67-92
+  s_1bba4b9ec8c94c::t_bac2155d8e9ef7 63,66
+  s_1bba4b9ec8c94c::t_0f262a3f1d7e92 31,56,58
+  s_1bba4b9ec8c94c::t_9dc819c3839ac4 44-46,49,59
+  s_1bba4b9ec8c94c::t_083a470f02da04 57
+src/report/capturePoster.ts
+  s_1bba4b9ec8c94c::t_c2a7f4689091ce 33-34,37-38
+src/report/castConcreteLayout.ts
+  s_1bba4b9ec8c94c::t_b469439a803ab1 1
+  s_1bba4b9ec8c94c::t_590621e638bcff 75,140-158,160-161
+src/report/castConcretePaint.ts
+  s_1bba4b9ec8c94c::t_48a7e32e7d3a2c 2,332-333
+  s_1bba4b9ec8c94c::t_b6a61bb7cced1f 267,275,281-282,306
+src/lib/reportCopy.extreme.test.ts
+  s_1bba4b9ec8c94c::t_26715fb653482b 6
+src-tauri/src/report.rs
+  s_1bba4b9ec8c94c::t_ce33b5129276d0 75-78,82
+src/report/ticketStubPaint.ts
+  s_1bba4b9ec8c94c::t_3ec47202a39791 90-95,102,206
+  s_1bba4b9ec8c94c::t_ac419990b94954 2,261-262
+src/components/SharePosterStyles.tsx
+  s_1bba4b9ec8c94c::t_693771cabc9312 3,16,18-49
+docs/adr/0015-report-and-insights.md
+  s_1bba4b9ec8c94c::t_659741d714b0e5 65,93,97
+src/report/lightGlassPoster.css
+  s_1bba4b9ec8c94c::t_a11d3983092c34 23
+src/report/newsprintPaint.test.ts
+  s_1bba4b9ec8c94c::t_0e980230795fe8 36-37
+src/report/posterFrame.ts
+  s_1bba4b9ec8c94c::t_31fcdf46364531 1-13,45-50
+  s_1bba4b9ec8c94c::t_e37f4e86e0fe57 14-44
+src/lib/reportCopy.ts
+  s_1bba4b9ec8c94c::t_c8e27f0bc59e2e 162-163,165-166,195-196
+  s_1bba4b9ec8c94c::t_d31198522022d3 197-198
+src/lib/fitPosterScale.test.ts
+  s_1bba4b9ec8c94c::t_067e2898edfe3e 1-27
+src/components/ReportDialog.tsx
+  s_1bba4b9ec8c94c::t_3df09275f7414a 25,213-220,224-233,235,239-273,276-277,286,288-299,301-302,311,314-316,369-371
+src/report/fuseBeadPaint.ts
+  s_1bba4b9ec8c94c::t_d3018257f4e2ff 2,268-269
+src/report/bauhausPoster.css
+  s_1bba4b9ec8c94c::t_f74dd8a1568593 4
+src/report/ticketStubPoster.css
+  s_1bba4b9ec8c94c::t_c15f820351f3a3 4
+src/report/inkWashPaint.test.ts
+  s_1bba4b9ec8c94c::t_f0f480b409216f 24-25
+src/lib/fitPosterScale.ts
+  s_1bba4b9ec8c94c::t_0ad95a49df03a1 1-12
+src/report/ticketStubLayout.ts
+  s_1bba4b9ec8c94c::t_ad49abc22e3def 1,95,175-195,197,200,202
+src/report/ticketStubPaint.test.ts
+  s_1bba4b9ec8c94c::t_2418fdc694a127 41-42
+src/styles/views/report.css
+  s_1bba4b9ec8c94c::t_ce123e18d76e4f 281
+  s_1bba4b9ec8c94c::t_00422e5f0a3515 105,188-191
+  s_1bba4b9ec8c94c::t_74782b8b171036 305
+  s_1bba4b9ec8c94c::t_3fc7c0ecabf53f 139-145,161-163,176-187,209-210,215,217-240,242-243,270-273,304,307-309,313-340
+  s_1bba4b9ec8c94c::t_327629f7a9fe65 259-263
+  s_1bba4b9ec8c94c::t_e2640a06495d82 341
+src/report/posterFrame.test.ts
+  s_1bba4b9ec8c94c::t_9ddca3a8a36de8 13,15,62-89
+  s_1bba4b9ec8c94c::t_5caafcd3cbe610 1-12,14,16-61,90-91
+src/report/inkWashPaint.ts
+  s_1bba4b9ec8c94c::t_d8123919fffae9 264-266
+  s_1bba4b9ec8c94c::t_73c1f2198bbbfa 2,295-296
+src/report/fuseBeadLayout.ts
+  s_1bba4b9ec8c94c::t_5ef8642d95ccf0 98-99,105,122,124-125,130
+src/report/newsprintPaint.ts
+  s_1bba4b9ec8c94c::t_0d0a8704d9a6d2 324,332
+  s_1bba4b9ec8c94c::t_8424646f447130 2,379-380
+src/report/bauhausPaint.ts
+  s_1bba4b9ec8c94c::t_f55706b330941f 2,440-441
+src/report/poster.css
+  s_1bba4b9ec8c94c::t_18efbbf8444a87 13
+src/report/newsprintLayout.ts
+  s_1bba4b9ec8c94c::t_8c18ea2afbc284 1,83,157-174,176-177
+src/report/castConcretePoster.css
+  s_1bba4b9ec8c94c::t_d36dda5dc73d17 4
+src/report/inkWashPoster.css
+  s_1bba4b9ec8c94c::t_b1d1415ef62a30 4
+src/lib/reportCopy.test.ts
+  s_1bba4b9ec8c94c::t_1cad36d5749a1b 357-376
+src-tauri/src/tests/report.rs
+  s_1bba4b9ec8c94c::t_5996256a44c9dc 723-753
+src/report/newsprintPoster.css
+  s_1bba4b9ec8c94c::t_2bdc1d1316df65 4
+src/report/fuseBeadPoster.css
+  s_1bba4b9ec8c94c::t_1cdbc5170de31c 4
+src/report/inkWashLayout.ts
+  s_1bba4b9ec8c94c::t_7877b0af7bb2c0 1,81,154-172,174,176,178-179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3594f1555466309c303d942787c208d40fc5ccd9",
+  "prompts": {},
+  "sessions": {
+    "s_1bba4b9ec8c94c": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06c53-b67a-7cb0-858c-744676935fb9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
