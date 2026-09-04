@@ -52,6 +52,21 @@ describe("layoutFuseBeadPoster", () => {
     expect(layout.sourceRowH).toBeGreaterThanOrEqual(BEAD * 2);
     expect(layout.sourceH).toBeGreaterThanOrEqual(layout.sourceHeadH + count * layout.sourceRowH);
   });
+
+  it("reserves footer space for top_session even when busiest_day is missing", () => {
+    const full = layoutFuseBeadPoster(FAKE_POSTER);
+    const shifted = layoutFuseBeadPoster(
+      poster({ stats: FAKE_POSTER.stats.filter((stat) => stat.kind !== "busiest_day") }),
+    );
+    expect(shifted.height - shifted.y.footer).toBe(full.height - full.y.footer);
+  });
+
+  it("does not reserve footer space when top_session is missing", () => {
+    const layout = layoutFuseBeadPoster(
+      poster({ stats: FAKE_POSTER.stats.filter((stat) => stat.kind !== "top_session") }),
+    );
+    expect(layout.height - layout.y.footer).toBeLessThan(snap(80));
+  });
 });
 
 describe("snap", () => {

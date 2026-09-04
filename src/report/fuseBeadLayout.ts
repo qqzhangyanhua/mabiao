@@ -1,4 +1,4 @@
-import type { PosterViewModel } from "./posterTypes";
+import { findPosterStat, type PosterViewModel } from "./posterTypes";
 
 export const FUSE_W = 720;
 export const FUSE_SCALE = 2;
@@ -169,10 +169,14 @@ export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
   const barH = data.days.length > 0 ? snap(200) : 0;
   y.bottom = y.bars + (barH > 0 ? barH + snap(14) : 0);
   const sourceCard = layoutSourceCard(data.sources.length);
-  const rightH = data.stats.length > 0 ? snap(SOURCE_FIT_H) : 0;
+  const hasRightStats =
+    findPosterStat(data.stats, "busiest_day") != null ||
+    findPosterStat(data.stats, "models") != null;
+  const hasTopSession = findPosterStat(data.stats, "top_session") != null;
+  const rightH = hasRightStats ? snap(SOURCE_FIT_H) : 0;
   const bottomH = Math.max(sourceCard.sourceH, rightH);
   y.footer = y.bottom + bottomH + (bottomH > 0 ? snap(14) : 0);
-  const footerH = data.stats.length > 2 ? snap(80) : 0;
+  const footerH = hasTopSession ? snap(80) : 0;
   return {
     height: snap(y.footer + footerH + (footerH > 0 ? 24 : 20)),
     y,

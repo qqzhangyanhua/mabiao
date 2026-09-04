@@ -1,4 +1,4 @@
-import type { PosterViewModel } from "./posterTypes";
+import { findPosterStat, type PosterViewModel } from "./posterTypes";
 import { POSTER_FRAME_HEIGHT, POSTER_FRAME_WIDTH, framePosterLayout } from "./posterFrame";
 import {
   BEAD,
@@ -229,30 +229,30 @@ function drawBottom(
       );
     }
   }
-  const stats = data.stats;
-  if (stats[0]) {
+  const busiest = findPosterStat(data.stats, "busiest_day");
+  if (busiest) {
     drawCard(ctx, right, y, colW, 92);
-    fillLabel(ctx, stats[0].label, right + 18, y + 22, FONT_STAT, "#cbd5e1");
-    fillLabel(ctx, stats[0].value, right + 118, y + 58, 36, YELLOW, "center");
+    fillLabel(ctx, busiest.label, right + 18, y + 22, FONT_STAT, "#cbd5e1");
+    fillLabel(ctx, busiest.value, right + 118, y + 58, 36, YELLOW, "center");
     drawSun(ctx, right + 250, y + 56);
   }
-  if (stats[1]) {
+  const models = findPosterStat(data.stats, "models");
+  if (models) {
     const top = y + 106;
     drawCard(ctx, right, top, colW, 84);
-    fillLabel(ctx, stats[1].label, right + 18, top + 20, FONT_STAT, "#cbd5e1");
-    const models = stats[1].value.split(" · ").slice(0, 3);
+    fillLabel(ctx, models.label, right + 18, top + 20, FONT_STAT, "#cbd5e1");
     const tones = [PURPLE, BLUE, TEAL];
-    for (const [index, model] of models.entries()) {
+    for (const [index, model] of models.items.entries()) {
       const my = top + 40 + index * 14;
       drawBead(ctx, right + 18, my - 6, tones[index % tones.length] ?? PURPLE, true);
       fillLabel(ctx, model, right + 36, my, 12, WHITE);
     }
   }
-  if (stats[2]) {
+  const topSession = findPosterStat(data.stats, "top_session");
+  if (topSession) {
     drawCard(ctx, left, layout.y.footer, 610, 80);
-    fillLabel(ctx, stats[2].label, left + 24, layout.y.footer + 40, 15, "#cbd5e1");
-    const price = stats[2].value.match(/(\$\d+(?:\.\d+)?)/)?.[1] ?? stats[2].value;
-    drawDigitString(ctx, price, FUSE_W / 2 + 10, layout.y.footer + 40, YELLOW, 8);
+    fillLabel(ctx, topSession.label, left + 24, layout.y.footer + 40, 15, "#cbd5e1");
+    drawDigitString(ctx, topSession.amount, FUSE_W / 2 + 10, layout.y.footer + 40, YELLOW, 8);
     drawFlame(ctx, left + 560, layout.y.footer + 40);
   }
 }
