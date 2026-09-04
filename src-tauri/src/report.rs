@@ -1,4 +1,4 @@
-//! 报告：已结束自然周期内、仅基于消耗记录的可分享汇总。
+//! 报告：已结束自然周期或用户选定的闭区间内、仅基于消耗记录的可分享汇总。
 //! 洞察规则在本模块；前端只做措辞与排版（ADR 0015）。
 
 use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate};
@@ -21,7 +21,7 @@ pub fn build(
     period: ReportPeriod,
     now: DateTime<Local>,
 ) -> Result<ReportDto, String> {
-    let (start, end_exclusive) = resolve_period(period, now.date_naive())?;
+    let (start, end_exclusive) = resolve_period(&period, now.date_naive())?;
     let end_inclusive = end_exclusive - Duration::days(1);
     let filter = period_filter(start, end_exclusive);
     let totals = query::overview(conn, &filter, prices)?;
@@ -248,8 +248,10 @@ fn peak_start_hour(hours: &[i64; 24]) -> u8 {
     best_start
 }
 
+const CUSTOM_PERIOD_MAX_DAYS: i64 = 93;
+
 fn resolve_period(
-    period: ReportPeriod,
+    period: &ReportPeriod,
     today: NaiveDate,
 ) -> Result<(NaiveDate, NaiveDate), String> {
     match period.kind {
@@ -275,7 +277,40 @@ fn resolve_period(
                 .ok_or_else(|| "月周期超出范围".to_string())?;
             Ok((start, end))
         }
+        ReportPeriodKind::Custom => {
+            resolve_custom_period(period.from.as_deref(), period.to.as_deref(), today)
+        }
     }
+}
+
+fn resolve_custom_period(
+    from: Option<&str>,
+    to: Option<&str>,
+    today: NaiveDate,
+) -> Result<(NaiveDate, NaiveDate), String> {
+    let start = parse_iso_date(from.ok_or("区间缺少起始日")?)?;
+    let end_inclusive = parse_iso_date(to.ok_or("区间缺少结束日")?)?;
+    if start > today {
+        return Err("起始日不能晚于今天".to_string());
+    }
+    if end_inclusive > today {
+        return Err("结束日不能晚于今天".to_string());
+    }
+    if start > end_inclusive {
+        return Err("起始日不能晚于结束日".to_string());
+    }
+    let days = (end_inclusive - start).num_days() + 1;
+    if days > CUSTOM_PERIOD_MAX_DAYS {
+        return Err(format!("区间最多 {CUSTOM_PERIOD_MAX_DAYS} 天"));
+    }
+    let end_exclusive = end_inclusive
+        .checked_add_signed(Duration::days(1))
+        .ok_or_else(|| "区间超出范围".to_string())?;
+    Ok((start, end_exclusive))
+}
+
+fn parse_iso_date(value: &str) -> Result<NaiveDate, String> {
+    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| format!("无法解析日期：{value}"))
 }
 
 fn usage_record_count(conn: &Connection, filter: &Filter) -> Result<i64, String> {

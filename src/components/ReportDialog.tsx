@@ -1,40 +1,39 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { useShareQuota } from "../hooks/useShareQuota";
 import { Icon } from "../icons";
 import { copyReportImage } from "../lib/copyReportImage";
 import { consumeEscape } from "../lib/escapeShortcut";
 import { humanStatus } from "../lib/format";
+import { periodRangeLabel, periodStatusCopy, toPosterViewModel } from "../lib/reportCopy";
 import {
-  eligibleQuotaRows,
-  quotaCardEmptyCopy,
-  resolveQuotaAccount,
-  toQuotaCardViewModel,
-} from "../lib/quotaCard";
-import { periodRangeLabel, toPosterViewModel } from "../lib/reportCopy";
-import {
-  loadSharePreference,
-  saveSharePreference,
-  type ShareCardKind,
-  type SharePreference,
-} from "../lib/sharePreference";
+  clampCustomRange,
+  customPickerBounds,
+  lastCompletedWeekEnd,
+  latestSelectableDate,
+  periodEndFromOffset,
+  periodOffsetFromDate,
+  periodStartFromOffset,
+  reportPeriodPayload,
+  weekStartFromOffset,
+} from "../lib/reportPeriod";
+import { loadSharePreference, saveSharePreference } from "../lib/sharePreference";
 import { capturePoster } from "../report/capturePoster";
-import { QuotaPoster } from "../report/QuotaPoster";
 import { ReportPoster } from "../report/ReportPoster";
 import type { ReportPosterStyleId } from "../report/posterStyleRegistry";
-import type { ReportDto } from "../types";
+import type { ReportDto, ReportPeriodKind } from "../types";
 import { EmptyState } from "./EmptyState";
 import { SharePosterStyles } from "./SharePosterStyles";
-import { ShareQuotaAccounts } from "./ShareQuotaAccounts";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
+import { DatePicker } from "./ui/DatePicker";
 import { Segmented } from "./ui/Segmented";
 
 type CopyStatus = { tone: "ok" | "error"; text: string };
 
-const CARD_KIND_OPTIONS = [
-  { value: "week", label: "周报" },
-  { value: "quota", label: "额度" },
+const PERIOD_KIND_OPTIONS = [
+  { value: "week", label: "一周" },
+  { value: "month", label: "一个月" },
+  { value: "custom", label: "区间" },
 ] as const;
 
 export function ReportDialog({ onClose }: { onClose: () => void }) {
@@ -43,16 +42,16 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const copyRun = useRef(0);
   const copyingRef = useRef(false);
   const [openedWith] = useState(loadSharePreference);
-  const [kind, setKind] = useState<ShareCardKind>(openedWith.kind);
-  const [quotaProvider, setQuotaProvider] = useState<string | null>(openedWith.quotaProvider);
   const [posterStyleId, setPosterStyleId] = useState<ReportPosterStyleId>(openedWith.posterStyleId);
+  const [periodKind, setPeriodKind] = useState<ReportPeriodKind>("week");
   const [offset, setOffset] = useState(0);
+  const [customFrom, setCustomFrom] = useState(() => weekStartFromOffset(0));
+  const [customTo, setCustomTo] = useState(() => lastCompletedWeekEnd());
   const [weekDto, setWeekDto] = useState<ReportDto | null>(null);
   const [weekError, setWeekError] = useState<string | null>(null);
   const [weekLoading, setWeekLoading] = useState(true);
   const [copying, setCopying] = useState(false);
   const [copyStatus, setCopyStatus] = useState<CopyStatus | null>(null);
-  const quota = useShareQuota(kind, copyingRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +62,9 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     setWeekError(null);
     setCopying(false);
     setCopyStatus(null);
-    void invoke<ReportDto>("get_report", { period: { kind: "week", offset } })
+    void invoke<ReportDto>("get_report", {
+      period: reportPeriodPayload(periodKind, offset, customFrom, customTo),
+    })
       .then((next) => {
         if (!cancelled) {
           setWeekDto(next);
@@ -82,7 +83,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, [offset]);
+  }, [customFrom, customTo, offset, periodKind]);
 
   useEffect(() => {
     const previousFocus =
@@ -130,37 +131,13 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
   const rangeLabel = weekDto
     ? periodRangeLabel(weekDto.start_date, weekDto.end_date)
     : "正在解析周期…";
-  const weekPoster = kind === "week" && weekDto && !weekLoading ? toPosterViewModel(weekDto) : null;
-  const eligible = quota.dto ? eligibleQuotaRows(quota.dto) : [];
-  const quotaRow = kind === "quota" && quota.dto ? resolveQuotaAccount(eligible, quotaProvider) : null;
-  const quotaPoster = quotaRow ? toQuotaCardViewModel(quotaRow, quota.nowMs) : null;
-  const quotaWaitingCache = quota.cacheLoading && quota.dto === null;
-  const canCopy = Boolean(kind === "week" ? weekPoster : quotaPoster) && !copying;
+  const periodStatus = periodStatusCopy(periodKind);
+  const customBounds = customPickerBounds(customFrom, customTo);
+  const weekPoster = weekDto && !weekLoading ? toPosterViewModel(weekDto) : null;
+  const canCopy = Boolean(weekPoster) && !copying;
 
-  function persistPreference(updates: Partial<SharePreference> = {}) {
-    saveSharePreference({
-      kind: updates.kind ?? kind,
-      quotaProvider: "quotaProvider" in updates ? updates.quotaProvider ?? null : quotaProvider,
-      posterStyleId: updates.posterStyleId ?? posterStyleId,
-    });
-  }
-
-  function selectKind(next: ShareCardKind) {
-    if (copyingRef.current) {
-      return;
-    }
-    setKind(next);
-    setCopyStatus(null);
-    persistPreference({ kind: next });
-  }
-
-  function selectQuotaAccount(provider: string) {
-    if (copyingRef.current) {
-      return;
-    }
-    setQuotaProvider(provider);
-    setCopyStatus(null);
-    persistPreference({ kind: "quota", quotaProvider: provider });
+  function persistPreference(nextStyleId: ReportPosterStyleId = posterStyleId) {
+    saveSharePreference({ posterStyleId: nextStyleId });
   }
 
   function selectPosterStyle(nextStyleId: ReportPosterStyleId) {
@@ -169,7 +146,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
     }
     setPosterStyleId(nextStyleId);
     setCopyStatus(null);
-    persistPreference({ posterStyleId: nextStyleId });
+    persistPreference(nextStyleId);
   }
 
   async function copyPoster() {
@@ -232,19 +209,81 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
               <Icon name="close" size={15} />
             </Button>
           </header>
+          <p className="report-dialog-range">{rangeLabel}</p>
+          <p className="muted">{periodStatus.help}</p>
           <div className="report-dialog-kind">
             <Segmented
-              value={kind}
-              options={CARD_KIND_OPTIONS}
-              disabled={copying}
-              ariaLabel="卡片类型"
-              onChange={selectKind}
+              value={periodKind}
+              options={PERIOD_KIND_OPTIONS}
+              disabled={copying || weekLoading}
+              ariaLabel="报告周期"
+              onChange={(next) => {
+                if (copyingRef.current) {
+                  return;
+                }
+                if (next === "custom") {
+                  const seedKind = periodKind === "custom" ? "week" : periodKind;
+                  const nextRange = clampCustomRange(
+                    weekDto?.start_date ?? periodStartFromOffset(seedKind, offset),
+                    weekDto?.end_date ?? periodEndFromOffset(seedKind, offset),
+                  );
+                  setCustomFrom(nextRange.from);
+                  setCustomTo(nextRange.to);
+                } else {
+                  setOffset(0);
+                }
+                setPeriodKind(next);
+              }}
             />
           </div>
-          {kind === "week" ? (
+          {periodKind === "custom" ? (
+            <div className="report-dialog-custom-range">
+              <DatePicker
+                ariaLabel="区间起始日"
+                value={customFrom}
+                min={customBounds.fromMin}
+                max={customBounds.fromMax}
+                disabled={weekLoading || copying}
+                onChange={(day) => {
+                  if (copyingRef.current) {
+                    return;
+                  }
+                  const nextRange = clampCustomRange(day, customTo, new Date(), "from");
+                  setCustomFrom(nextRange.from);
+                  setCustomTo(nextRange.to);
+                }}
+              />
+              <span>至</span>
+              <DatePicker
+                ariaLabel="区间结束日"
+                value={customTo}
+                min={customBounds.toMin}
+                max={customBounds.toMax}
+                disabled={weekLoading || copying}
+                onChange={(day) => {
+                  if (copyingRef.current) {
+                    return;
+                  }
+                  const nextRange = clampCustomRange(customFrom, day, new Date(), "to");
+                  setCustomFrom(nextRange.from);
+                  setCustomTo(nextRange.to);
+                }}
+              />
+            </div>
+          ) : (
             <>
-              <p className="report-dialog-range">{rangeLabel}</p>
-              <p className="muted">最近一个已经结束的完整自然周。当前进行中的一周不可选。</p>
+              <DatePicker
+                ariaLabel={periodKind === "month" ? "选择月报日期" : "选择周报日期"}
+                value={periodStartFromOffset(periodKind, offset)}
+                max={latestSelectableDate(periodKind)}
+                disabled={weekLoading || copying}
+                onChange={(day) => {
+                  if (copyingRef.current) {
+                    return;
+                  }
+                  setOffset(periodOffsetFromDate(periodKind, day));
+                }}
+              />
               <div className="report-dialog-period-nav">
                 <Button
                   size="sm"
@@ -256,7 +295,7 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                   }}
                   disabled={weekLoading || copying}
                 >
-                  更早一周
+                  {periodKind === "month" ? "更早一月" : "更早一周"}
                 </Button>
                 <Button
                   size="sm"
@@ -268,30 +307,16 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                   }}
                   disabled={weekLoading || copying || offset === 0}
                 >
-                  更近一周
+                  {periodKind === "month" ? "更近一月" : "更近一周"}
                 </Button>
               </div>
-              <SharePosterStyles
-                selectedStyleId={posterStyleId}
-                disabled={copying}
-                onSelect={selectPosterStyle}
-              />
             </>
-          ) : eligible.length > 1 && quotaRow ? (
-            <ShareQuotaAccounts
-              rows={eligible}
-              selectedProvider={quotaRow.provider}
-              disabled={copying}
-              onSelect={selectQuotaAccount}
-            />
-          ) : quotaRow ? (
-            <>
-              <p className="report-dialog-range">{quotaRow.application}</p>
-              {quotaRow.plan ? <p className="muted">{quotaRow.plan}</p> : null}
-            </>
-          ) : (
-            <p className="muted">只使用可见且已有官方额度快照的账号。</p>
           )}
+          <SharePosterStyles
+            selectedStyleId={posterStyleId}
+            disabled={copying}
+            onSelect={selectPosterStyle}
+          />
           <div className="report-dialog-copy">
             <Button
               variant="accent"
@@ -317,55 +342,30 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
           </div>
         </aside>
         <section className="report-dialog-preview" aria-live="polite">
-          {kind === "week" ? (
-            <>
-              {weekLoading ? (
-                <div className="report-dialog-status">
-                  <Spinner size={22} />
-                  <span>正在生成周报…</span>
-                </div>
-              ) : null}
-              {!weekLoading && weekError ? (
-                <EmptyState
-                  icon="alertTriangle"
-                  tone="warn"
-                  title="周报加载失败"
-                  hint={weekError}
-                />
-              ) : null}
-              {!weekLoading && !weekError && weekDto && !weekDto.has_data ? (
-                <EmptyState
-                  icon="calendar"
-                  title="这个周期没有消耗记录"
-                  hint="不会生成空海报。可以往前切到更早的一周。"
-                />
-              ) : null}
-              {!weekLoading && !weekError && weekPoster ? (
-                <ReportPoster data={weekPoster} posterRef={posterRef} styleId={posterStyleId} />
-              ) : null}
-            </>
-          ) : (
-            <>
-              {quotaWaitingCache ? (
-                <div className="report-dialog-status">
-                  <Spinner size={22} />
-                  <span>正在读取官方额度…</span>
-                </div>
-              ) : null}
-              {!quotaWaitingCache && quota.error && !quota.dto ? (
-                <EmptyState
-                  icon="alertTriangle"
-                  tone="warn"
-                  title="额度加载失败"
-                  hint={quota.error}
-                />
-              ) : null}
-              {!quotaWaitingCache && quota.dto && !quotaPoster ? (
-                <EmptyState icon="clock" {...quotaCardEmptyCopy(quota.dto)} />
-              ) : null}
-              {quotaPoster ? <QuotaPoster data={quotaPoster} posterRef={posterRef} /> : null}
-            </>
-          )}
+          {weekLoading ? (
+            <div className="report-dialog-status">
+              <Spinner size={22} />
+              <span>{periodStatus.loading}</span>
+            </div>
+          ) : null}
+          {!weekLoading && weekError ? (
+            <EmptyState
+              icon="alertTriangle"
+              tone="warn"
+              title={periodStatus.failed}
+              hint={weekError}
+            />
+          ) : null}
+          {!weekLoading && !weekError && weekDto && !weekDto.has_data ? (
+            <EmptyState
+              icon="calendar"
+              title="这个周期没有消耗记录"
+              hint={periodStatus.emptyHint}
+            />
+          ) : null}
+          {!weekLoading && !weekError && weekPoster ? (
+            <ReportPoster data={weekPoster} posterRef={posterRef} styleId={posterStyleId} />
+          ) : null}
         </section>
       </div>
     </div>

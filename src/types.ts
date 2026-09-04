@@ -925,11 +925,13 @@ export type SourceDiagnostic = {
   archived_record_count: number;
 };
 
-export type ReportPeriodKind = "week" | "month";
+export type ReportPeriodKind = "week" | "month" | "custom";
 
 export type ReportPeriod = {
   kind: ReportPeriodKind;
   offset: number;
+  from?: string | null;
+  to?: string | null;
 };
 
 export type ReportTopSessionBy = "cost" | "tokens";

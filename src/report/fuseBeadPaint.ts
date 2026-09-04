@@ -123,7 +123,10 @@ function drawHero(
 
   drawCard(ctx, right, y, cardW, cardH);
   pill(ctx, right + 16, y + 14, cardW - 32, 28, YELLOW);
-  const costTitle = data.totalCostLabel != null ? "你这周烧掉了" : data.totalUnit;
+  const costTitle =
+    data.totalCostLabel != null
+      ? (data.comments[0]?.replace(/\s+\S+\s+token。$/, "") ?? data.totalUnit)
+      : data.totalUnit;
   fillLabel(ctx, costTitle, right + cardW / 2, y + 28, FONT_HERO_LABEL, INK, "center");
   drawDigitString(ctx, data.totalCostLabel ?? data.totalTokensLabel, right + cardW / 2, y + 96, PURPLE, 8);
 }

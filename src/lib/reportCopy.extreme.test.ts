@@ -72,7 +72,7 @@ describe("extreme poster composition", () => {
     expect(poster?.stats).toEqual([
       { label: "最忙的一天", value: "周三" },
       { label: "模型", value: "claude-sonnet-5" },
-      { label: "消耗最多的一次", value: "80 token · /proj/a" },
+      { label: "消耗最多的一次", value: "80 token · a" },
     ]);
   });
 
@@ -109,7 +109,7 @@ describe("extreme poster composition", () => {
     expect(poster?.stats).toEqual([
       { label: "最忙的一天", value: "周四" },
       { label: "模型", value: "claude-sonnet-5" },
-      { label: "消耗最多的一次", value: "50 token · /proj/a" },
+      { label: "消耗最多的一次", value: "50 token · a" },
     ]);
   });
 

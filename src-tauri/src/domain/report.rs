@@ -1,11 +1,16 @@
 use super::overview::OverviewDto;
 use serde::{Deserialize, Serialize};
 
-/// 报告要取的自然周期。`offset = 0` 是最近一个已经结束的完整周期。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// 报告要取的周期。`week` / `month` 用 `offset`（0 是最近一个已经结束的完整周期）。
+/// `custom` 用闭区间 `from` / `to`（`YYYY-MM-DD`，含当天）。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportPeriod {
     pub kind: ReportPeriodKind,
     pub offset: u32,
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,6 +18,7 @@ pub struct ReportPeriod {
 pub enum ReportPeriodKind {
     Week,
     Month,
+    Custom,
 }
 
 /// 报告入口 DTO。总量只来自消耗记录；洞察 payload 不含自然语言。

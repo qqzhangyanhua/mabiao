@@ -4,22 +4,18 @@ import {
   type ReportPosterStyleId,
 } from "../report/posterStyleRegistry";
 
-/** 本机 webview 偏好：卡片类型、额度账号与周报海报风格。不进备份。 */
+/** 本机 webview 偏好：周报海报风格。不进备份。旧字段 kind / quotaProvider 仍可读，额度卡已从分享入口移除。 */
 export const SHARE_PREFERENCE_STORAGE_KEY = "mabiao:share-preference";
 
-export type ShareCardKind = "week" | "quota";
-
 export type SharePreference = {
-  kind: ShareCardKind;
-  quotaProvider: string | null;
   posterStyleId: ReportPosterStyleId;
 };
 
 export function defaultSharePreference(): SharePreference {
-  return { kind: "week", quotaProvider: null, posterStyleId: DEFAULT_REPORT_POSTER_STYLE_ID };
+  return { posterStyleId: DEFAULT_REPORT_POSTER_STYLE_ID };
 }
 
-function isShareCardKind(value: unknown): value is ShareCardKind {
+function isLegacyShareKind(value: unknown): boolean {
   return value === "week" || value === "quota";
 }
 
@@ -34,15 +30,10 @@ export function parseSharePreference(raw: string | null): SharePreference {
       return defaults;
     }
     const record = parsed as Record<string, unknown>;
-    if (!isShareCardKind(record.kind)) {
+    if ("kind" in record && !isLegacyShareKind(record.kind)) {
       return defaults;
     }
-    const quotaProvider =
-      typeof record.quotaProvider === "string" && record.quotaProvider.length > 0
-        ? record.quotaProvider
-        : null;
-    const posterStyleId = resolveReportPosterStyleId(record.posterStyleId);
-    return { kind: record.kind, quotaProvider, posterStyleId };
+    return { posterStyleId: resolveReportPosterStyleId(record.posterStyleId) };
   } catch {
     return defaults;
   }
@@ -50,8 +41,8 @@ export function parseSharePreference(raw: string | null): SharePreference {
 
 export function serializeSharePreference(preference: SharePreference): string {
   return JSON.stringify({
-    kind: preference.kind,
-    quotaProvider: preference.quotaProvider,
+    kind: "week",
+    quotaProvider: null,
     posterStyleId: preference.posterStyleId,
   });
 }

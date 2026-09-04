@@ -1,6 +1,7 @@
 import type { PosterStat, PosterViewModel } from "../report/posterTypes";
-import type { ReportDto, ReportInsight } from "../types";
-import { formatCompact, formatUsdAmount, sourceLabel } from "./format";
+import type { ReportDto, ReportInsight, ReportPeriodKind } from "../types";
+import { formatCompact, formatUsdAmount, projectLabel, sourceLabel } from "./format";
+import { CUSTOM_PERIOD_MAX_DAYS } from "./reportPeriod";
 
 export const REPORT_KICKER = "码表 · 周报";
 export const REPORT_TOTAL_UNIT = "本周 token";
@@ -34,8 +35,55 @@ export function periodRangeLabel(startDate: string, endDate: string): string {
   return `${start.year}年${start.month}月${start.day}日 – ${end.year}年${end.month}月${end.day}日`;
 }
 
-export function totalsComment(totalTokens: number): string {
-  return `你这周烧掉了 ${formatCompact(totalTokens)} token。`;
+function periodPhrases(periodKind: ReportPeriodKind): {
+  kicker: string;
+  totalUnit: string;
+  burned: string;
+} {
+  if (periodKind === "month") {
+    return { kicker: "码表 · 月报", totalUnit: "本月 token", burned: "这月" };
+  }
+  if (periodKind === "custom") {
+    return { kicker: "码表 · 区间", totalUnit: "区间 token", burned: "这段时间" };
+  }
+  return { kicker: REPORT_KICKER, totalUnit: REPORT_TOTAL_UNIT, burned: "这周" };
+}
+
+export function totalsComment(
+  totalTokens: number,
+  periodKind: ReportPeriodKind = "week",
+): string {
+  return `你${periodPhrases(periodKind).burned}烧掉了 ${formatCompact(totalTokens)} token。`;
+}
+
+export function periodStatusCopy(periodKind: ReportPeriodKind): {
+  loading: string;
+  failed: string;
+  help: string;
+  emptyHint: string;
+} {
+  if (periodKind === "month") {
+    return {
+      loading: "正在生成月报…",
+      failed: "月报加载失败",
+      help: "选已经结束的自然月。点一天即取该月；进行中的一个月不可选。",
+      emptyHint: "不会生成空海报。可以改日期，或往前切到更早的周期。",
+    };
+  }
+  if (periodKind === "custom") {
+    return {
+      loading: "正在生成区间报告…",
+      failed: "区间报告加载失败",
+      help: `起止日都含在内，可选到今天。最长 ${CUSTOM_PERIOD_MAX_DAYS} 天。`,
+      emptyHint: "不会生成空海报。可以改起止日期。",
+    };
+  }
+  return {
+    loading: "正在生成周报…",
+    failed: "周报加载失败",
+    help: "选已经结束的自然周。点一天即取该周；进行中的一周不可选。",
+    emptyHint: "不会生成空海报。可以改日期，或往前切到更早的周期。",
+  };
 }
 
 export function weekdayLabel(weekday: number): string {
@@ -81,7 +129,7 @@ export function insightCopy(insight: ReportInsight): InsightCopy {
       const project = insight.project?.trim();
       return {
         headline,
-        comment: project ? `${amount} · ${project}` : amount,
+        comment: project ? `${amount} · ${projectLabel(project)}` : amount,
       };
     }
     default: {
@@ -95,7 +143,7 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
   if (!dto.has_data) {
     return null;
   }
-  const comments = [totalsComment(dto.totals.total_tokens)];
+  const comments = [totalsComment(dto.totals.total_tokens, dto.period_kind)];
   const night = dto.insights.find((insight) => insight.kind === "night_share");
   const peak = dto.insights.find((insight) => insight.kind === "peak_hours");
   const busiest = dto.insights.find((insight) => insight.kind === "busiest_day");
@@ -121,16 +169,17 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     const copy = insightCopy(topSession);
     stats.push({ label: copy.headline, value: copy.comment });
   }
+  const phrases = periodPhrases(dto.period_kind);
   return {
-    kicker: REPORT_KICKER,
+    kicker: phrases.kicker,
     rangeLabel: periodRangeLabel(dto.start_date, dto.end_date),
     totalTokensLabel: formatCompact(dto.totals.total_tokens),
-    totalUnit: REPORT_TOTAL_UNIT,
+    totalUnit: phrases.totalUnit,
     totalCostLabel:
       dto.totals.cost != null && dto.totals.cost > 0 ? formatUsdAmount(dto.totals.cost) : null,
     comments,
     days: dto.days.map((day, index) => ({
-      label: BAR_LABELS[index] ?? "",
+      label: barLabel(dto, day.date, index),
       tokens: day.total_tokens,
     })),
     sources: dto.sources.map((slice, index) => ({
@@ -147,6 +196,14 @@ function modelRankLabel(count: number): string {
     return "模型";
   }
   return `模型 Top ${count}`;
+}
+
+function barLabel(dto: ReportDto, date: string, index: number): string {
+  if (dto.period_kind === "week") {
+    return BAR_LABELS[index] ?? "";
+  }
+  const parts = parseDateParts(date);
+  return parts ? String(parts.day) : "";
 }
 
 function parseDateParts(value: string): { year: number; month: number; day: number } | null {

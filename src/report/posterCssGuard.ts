@@ -1,12 +1,6 @@
-/** 海报 CSS 隔离规则：周报风格可做玻璃/霓虹，额度卡与主样式表仍隔离。 */
+/** 海报 CSS 隔离规则：周报风格可做玻璃/霓虹，与主样式表仍隔离。 */
 
-export type PosterCssKind = "weekly-report" | "quota-card" | "harness";
-
-export type PosterCssIssueKind =
-  | "stylesheet_import"
-  | "main_stylesheet_reuse"
-  | "color_mix"
-  | "backdrop_filter";
+export type PosterCssIssueKind = "stylesheet_import" | "main_stylesheet_reuse";
 
 export type PosterCssIssue = {
   kind: PosterCssIssueKind;
@@ -14,8 +8,6 @@ export type PosterCssIssue = {
 };
 
 const IMPORT_RE = /@import\b/i;
-const COLOR_MIX_RE = /color-mix\s*\(/i;
-const BACKDROP_RE = /(?:^|[^\w-])(?:-webkit-)?backdrop-filter\b/i;
 const MAIN_STYLESHEET_PATH_RE = /(?:^|[^a-zA-Z0-9_-])(?:\.\.?\/)*styles(?:\.css|\/)/i;
 
 export function stripCssComments(source: string): string {
@@ -41,7 +33,6 @@ export function usesCssCustomProperty(source: string, property: string): boolean
 
 export function inspectPosterCss(
   source: string,
-  kind: PosterCssKind,
   appTokenNames: readonly string[],
 ): PosterCssIssue[] {
   const css = stripCssComments(source);
@@ -63,15 +54,6 @@ export function inspectPosterCss(
         kind: "main_stylesheet_reuse",
         detail: `poster CSS must not reuse app tokens: ${reused.join(", ")}`,
       });
-    }
-  }
-
-  if (kind === "quota-card") {
-    if (COLOR_MIX_RE.test(css)) {
-      issues.push({ kind: "color_mix", detail: "quota card CSS must not use color-mix" });
-    }
-    if (BACKDROP_RE.test(css)) {
-      issues.push({ kind: "backdrop_filter", detail: "quota card CSS must not use backdrop-filter" });
     }
   }
 

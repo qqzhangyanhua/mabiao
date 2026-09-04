@@ -4,6 +4,7 @@ import {
   hourLabel,
   insightCopy,
   periodRangeLabel,
+  periodStatusCopy,
   toPosterViewModel,
   totalsComment,
   weekdayLabel,
@@ -37,6 +38,19 @@ function dto(partial: Partial<ReportDto> & Pick<ReportDto, "has_data" | "totals"
   };
 }
 
+describe("periodStatusCopy", () => {
+  it("labels loading and failure by period kind", () => {
+    expect(periodStatusCopy("week").loading).toBe("正在生成周报…");
+    expect(periodStatusCopy("month").failed).toBe("月报加载失败");
+    expect(periodStatusCopy("custom")).toMatchObject({
+      loading: "正在生成区间报告…",
+      failed: "区间报告加载失败",
+      emptyHint: "不会生成空海报。可以改起止日期。",
+    });
+    expect(periodStatusCopy("custom").help).toContain("93");
+  });
+});
+
 describe("periodRangeLabel", () => {
   it("omits the end year when the range stays in one year", () => {
     expect(periodRangeLabel("2026-08-10", "2026-08-16")).toBe("2026年8月10日 – 8月16日");
@@ -50,6 +64,11 @@ describe("periodRangeLabel", () => {
 describe("totalsComment", () => {
   it("uses compact tokens in a second-person sentence", () => {
     expect(totalsComment(12_400_000)).toBe("你这周烧掉了 12.4M token。");
+  });
+
+  it("names the span for month and custom periods", () => {
+    expect(totalsComment(2_000_000, "month")).toBe("你这月烧掉了 2M token。");
+    expect(totalsComment(80, "custom")).toBe("你这段时间烧掉了 80 token。");
   });
 });
 
@@ -105,7 +124,20 @@ describe("insightCopy", () => {
     });
     expect(priced).toEqual({
       headline: "最贵的一次",
-      comment: "$4.20 · /proj/a",
+      comment: "$4.20 · a",
+    });
+    const homePath = insightCopy({
+      kind: "top_session",
+      by: "cost",
+      source: "claude",
+      session_id: "s1",
+      project: "/Users/zhangyanhua/Al/TradingAgents-CN",
+      cost: 953.64,
+      total_tokens: 20,
+    });
+    expect(homePath).toEqual({
+      headline: "最贵的一次",
+      comment: "$953.64 · TradingAgents-CN",
     });
     const tokens = insightCopy({
       kind: "top_session",
@@ -191,6 +223,56 @@ describe("toPosterViewModel", () => {
       }),
     );
     expect(poster?.totalCostLabel).toBe("$18.60");
+  });
+
+  it("maps a custom period to 区间 copy and day-of-month bar labels", () => {
+    const poster = toPosterViewModel(
+      dto({
+        period_kind: "custom",
+        start_date: "2026-08-01",
+        end_date: "2026-08-13",
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 2 },
+        days: [
+          { date: "2026-08-01", total_tokens: 10 },
+          { date: "2026-08-13", total_tokens: 70 },
+        ],
+      }),
+    );
+    expect(poster).toMatchObject({
+      kicker: "码表 · 区间",
+      totalUnit: "区间 token",
+      comments: ["你这段时间烧掉了 80 token。"],
+      days: [
+        { label: "1", tokens: 10 },
+        { label: "13", tokens: 70 },
+      ],
+    });
+  });
+
+  it("maps a month period to 月报 copy and day-of-month bar labels", () => {
+    const poster = toPosterViewModel(
+      dto({
+        period_kind: "month",
+        start_date: "2026-07-01",
+        end_date: "2026-07-31",
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 2_000_000, session_count: 4, cost: 3 },
+        days: [
+          { date: "2026-07-01", total_tokens: 10 },
+          { date: "2026-07-02", total_tokens: 0 },
+        ],
+      }),
+    );
+    expect(poster).toMatchObject({
+      kicker: "码表 · 月报",
+      totalUnit: "本月 token",
+      comments: ["你这月烧掉了 2M token。"],
+      days: [
+        { label: "1", tokens: 10 },
+        { label: "2", tokens: 0 },
+      ],
+    });
   });
 
   it("maps seven daily bars with short weekday labels and keeps zero-token days", () => {
@@ -329,7 +411,7 @@ describe("toPosterViewModel", () => {
     expect(priced?.stats).toEqual([
       { label: "最忙的一天", value: "周三" },
       { label: "模型", value: "opus" },
-      { label: "最贵的一次", value: "$4.20 · /proj/a" },
+      { label: "最贵的一次", value: "$4.20 · a" },
     ]);
 
     const tokens = toPosterViewModel(

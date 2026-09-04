@@ -21,6 +21,8 @@ fn week(offset: u32) -> ReportPeriod {
     ReportPeriod {
         kind: ReportPeriodKind::Week,
         offset,
+        from: None,
+        to: None,
     }
 }
 
@@ -28,7 +30,23 @@ fn month(offset: u32) -> ReportPeriod {
     ReportPeriod {
         kind: ReportPeriodKind::Month,
         offset,
+        from: None,
+        to: None,
     }
+}
+
+fn custom(from: &str, to: &str) -> ReportPeriod {
+    ReportPeriod {
+        kind: ReportPeriodKind::Custom,
+        offset: 0,
+        from: Some(from.to_string()),
+        to: Some(to.to_string()),
+    }
+}
+
+fn build_err(period: ReportPeriod) -> String {
+    let conn = store::open_memory().unwrap();
+    crate::report::build(&conn, &PriceTable::default(), period, now()).unwrap_err()
 }
 
 fn usage(
@@ -1034,4 +1052,74 @@ fn stacked_sparse_and_extreme_values_still_fill_all_seven_slots() {
             ("2026-08-16", 0),
         ]
     );
+}
+
+#[test]
+fn custom_range_is_inclusive_and_fills_every_local_day() {
+    let records = vec![
+        usage(day(2026, 8, 1), 10, 0, 0, "d1", 10),
+        usage(day(2026, 8, 13), 23, 59, 59, "d13", 20),
+        usage(day(2026, 7, 31), 23, 59, 59, "before", 700),
+        usage(day(2026, 8, 14), 0, 0, 0, "after", 800),
+    ];
+    let dto = build_with(&records, custom("2026-08-01", "2026-08-13"));
+    assert_eq!(dto.period_kind, ReportPeriodKind::Custom);
+    assert_eq!(dto.start_date, "2026-08-01");
+    assert_eq!(dto.end_date, "2026-08-13");
+    assert_eq!(dto.days.len(), 13);
+    assert_eq!(dto.days[0].date, "2026-08-01");
+    assert_eq!(dto.days[12].date, "2026-08-13");
+    assert_eq!(dto.totals.total_tokens, 30);
+    assert_eq!(dto.totals.session_count, 2);
+}
+
+#[test]
+fn custom_can_include_today() {
+    let records = vec![usage(day(2026, 8, 19), 12, 0, 0, "today", 50)];
+    let dto = build_with(&records, custom("2026-08-19", "2026-08-19"));
+    assert!(dto.has_data);
+    assert_eq!(dto.start_date, "2026-08-19");
+    assert_eq!(dto.end_date, "2026-08-19");
+    assert_eq!(dto.days.len(), 1);
+    assert_eq!(dto.totals.total_tokens, 50);
+}
+
+#[test]
+fn custom_rejects_missing_inverted_future_and_overlong_ranges() {
+    assert!(build_err(ReportPeriod {
+        kind: ReportPeriodKind::Custom,
+        offset: 0,
+        from: None,
+        to: Some("2026-08-13".into()),
+    })
+    .contains("起始日"));
+    assert!(build_err(custom("2026-08-13", "2026-08-01")).contains("起始日不能晚于结束日"));
+    assert!(build_err(custom("2026-08-01", "2026-08-20")).contains("结束日不能晚于今天"));
+    assert!(build_err(custom("2026-05-01", "2026-08-19")).contains("区间最多 93 天"));
+    assert!(build_err(custom("2026-08-99", "2026-08-13")).contains("无法解析日期"));
+}
+
+#[test]
+fn report_period_deserializes_without_from_to() {
+    let period: ReportPeriod =
+        serde_json::from_str(r#"{"kind":"week","offset":0}"#).expect("legacy payload");
+    assert_eq!(period.kind, ReportPeriodKind::Week);
+    assert_eq!(period.offset, 0);
+    assert_eq!(period.from, None);
+    assert_eq!(period.to, None);
+}
+
+#[test]
+fn week_ignores_custom_from_to_fields() {
+    let dto = build_with(
+        &[],
+        ReportPeriod {
+            kind: ReportPeriodKind::Week,
+            offset: 0,
+            from: Some("2026-08-01".into()),
+            to: Some("2026-08-13".into()),
+        },
+    );
+    assert_eq!(dto.start_date, "2026-08-10");
+    assert_eq!(dto.end_date, "2026-08-16");
 }

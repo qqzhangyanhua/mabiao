@@ -1,12 +1,14 @@
 import type { PosterDayBar } from "./posterTypes";
 
-const BAR_WIDTH = 48;
-const GAP = 40;
 const CHART_HEIGHT = 140;
 
 export function DailyBarChart({ days }: { days: PosterDayBar[] }) {
+  const dense = days.length > 10;
+  const barWidth = dense ? 12 : 48;
+  const gap = dense ? 6 : 40;
+  const fontSize = dense ? 9 : 14;
   const max = Math.max(...days.map((day) => day.tokens), 1);
-  const width = days.length * (BAR_WIDTH + GAP) - GAP;
+  const width = days.length * (barWidth + gap) - gap;
   return (
     <svg
       className="rp-bars"
@@ -16,23 +18,23 @@ export function DailyBarChart({ days }: { days: PosterDayBar[] }) {
     >
       {days.map((day, index) => {
         const height = (day.tokens / max) * CHART_HEIGHT;
-        const x = index * (BAR_WIDTH + GAP);
+        const x = index * (barWidth + gap);
         return (
-          <g key={day.label}>
+          <g key={`${day.label}-${index}`}>
             <rect
               x={x}
               y={CHART_HEIGHT - height}
-              width={BAR_WIDTH}
+              width={barWidth}
               height={height}
-              rx={8}
+              rx={dense ? 3 : 8}
               fill="var(--rp-accent)"
             />
             <text
-              x={x + BAR_WIDTH / 2}
+              x={x + barWidth / 2}
               y={CHART_HEIGHT + 22}
               textAnchor="middle"
               fill="var(--rp-muted)"
-              fontSize="14"
+              fontSize={fontSize}
               fontWeight="650"
             >
               {day.label}

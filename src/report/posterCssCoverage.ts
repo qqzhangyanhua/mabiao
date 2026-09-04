@@ -6,7 +6,6 @@ import {
 } from "./posterCssGuard";
 import { REPORT_POSTER_STYLES, type ReportPosterStyle } from "./posterStyleRegistry";
 
-export const QUOTA_POSTER_STYLESHEET = "quotaPoster.css";
 export const SPIKE_HARNESS_STYLESHEET = "spike.css";
 
 const REPORT_DIR = new URL("./", import.meta.url);
@@ -14,7 +13,7 @@ const TOKENS_URL = new URL("../styles/base/tokens.css", import.meta.url);
 
 export type CoveredPosterCss = {
   name: string;
-  kind: "weekly-report" | "quota-card" | "harness";
+  kind: "weekly-report" | "harness";
   source: string;
 };
 
@@ -183,7 +182,6 @@ export function collectPosterCssCoverage(): {
     coverStyle(style, modules, covered, errors);
   }
 
-  coverNamedFile(QUOTA_POSTER_STYLESHEET, "quota-card", covered, errors);
   coverNamedFile(SPIKE_HARNESS_STYLESHEET, "harness", covered, errors);
 
   for (const relative of listRelativeFiles((name) => name.endsWith(".css"))) {
