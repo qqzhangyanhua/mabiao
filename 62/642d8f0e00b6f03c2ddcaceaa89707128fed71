@@ -1,0 +1,212 @@
+src/report/castConcreteLayout.ts
+  s_bfd5492cc25a7e::t_3433b196f18700 97
+  s_bfd5492cc25a7e::t_ef64ac589a9b05 130
+  s_bfd5492cc25a7e::t_289f8281bbbafc 139
+  s_bfd5492cc25a7e::t_ea8e99fc65ab5c 96,98-100
+  s_bfd5492cc25a7e::t_c1023903f402ea 89
+  s_bfd5492cc25a7e::t_9fbdb7c2c848ca 1-88,90-95,101-129,131-138,140-144
+src/report/fakePosterData.test.ts
+  s_bfd5492cc25a7e::t_4c72654c2f4087 18
+src/report/newsprintPaint.ts
+  s_bfd5492cc25a7e::t_552d7a998cd337 148-150,221-237
+  s_bfd5492cc25a7e::t_83e206a1e7e7b4 128-134,158,161-163,165,204,206-209,278,281,303-365
+  s_bfd5492cc25a7e::t_efd9be84f21bac 243-247
+  s_bfd5492cc25a7e::t_e20594c842002e 32-74,78-79,98,146-147,151,238,252,273-274
+  s_bfd5492cc25a7e::t_3cd51d06ee50d8 1-31,75-77,80-97,99-127,135-145,152-157,159-160,164,166-203,205,210-220,239-242,248-251,253-272,275-277,279-280,282-302,366-394
+src/report/fakePosterData.ts
+  s_bfd5492cc25a7e::t_ec64c394c63313 12-16,34
+src/report/bauhausPaint.test.ts
+  s_bfd5492cc25a7e::t_2a981f6bcdbf01 25-27,29-30
+  s_bfd5492cc25a7e::t_d0ff1b016a6ab3 1-2,4-24,28,31-76
+  s_bfd5492cc25a7e::t_b866e593020076 3
+src/report/inkWashLayout.ts
+  s_bfd5492cc25a7e::t_2e839c0c7f6e34 21
+  s_bfd5492cc25a7e::t_22901fc6ca13e8 95
+  s_ec8b9c8f77ce9e::t_12fada57d0a661 1-20,22-94,96-162
+src/lib/sharePreference.test.ts
+  s_bfd5492cc25a7e::t_f1e963e408e42d 119-125,235-240,310-315
+  s_bfd5492cc25a7e::t_c84b6cb1d47e60 304-309
+  s_bfd5492cc25a7e::t_0a3ec414fd4b65 325,327
+  s_bfd5492cc25a7e::t_2edde7ef68308e 112-118,229-234
+  s_bfd5492cc25a7e::t_73e4e9c96e9276 106,110-111,223-228,298-303
+  s_bfd5492cc25a7e::t_cb17e965b283fd 126-132,241,244,246,316-319,321
+  s_bfd5492cc25a7e::t_7741393d274aba 133-138,247,250,252
+  s_bfd5492cc25a7e::t_a8a598b93a49a3 150-157
+  s_bfd5492cc25a7e::t_172cb374b161ce 99,103,217-222,295-297
+src/report/capturePoster.ts
+  s_bfd5492cc25a7e::t_b866e593020076 13
+  s_bfd5492cc25a7e::t_28161b9607d267 19
+  s_bfd5492cc25a7e::t_78bf7837d6d38d 11-12,14-16,18,25-32
+src/report/fuseBeadPaint.ts
+  s_bfd5492cc25a7e::t_fd74d5fc78bf55 8
+  s_bfd5492cc25a7e::t_965500708e0941 22-56,63-71,75-106,120-128,163,173,182-183,219,226,238,243,245,272
+  s_bfd5492cc25a7e::t_ecdf3569861111 58-59,162,194,218,237
+  s_bfd5492cc25a7e::t_ee6a884208c5c5 224
+  s_bfd5492cc25a7e::t_3ec92d04355259 225
+  s_bfd5492cc25a7e::t_bec887c462bcf8 16
+  s_bfd5492cc25a7e::t_2b4b38cb6ad10e 60,72,107,110,129,164-165,167,246,249,260,276
+  s_bfd5492cc25a7e::t_566130cab9bdb0 1-7,9-15,17-21,57,61-62,73-74,108-109,111-119,130-161,166,168-172,174-181,184-193,195-217,220-223,227-236,239-242,244,247-248,250-259,261-271,273-275
+src/styles/views/report.css
+  s_bfd5492cc25a7e::t_2f51bffa89df09 168-170,265
+src/report/fuseBeadPaint.test.ts
+  s_bfd5492cc25a7e::t_d51fe4512a4925 3-40
+  s_bfd5492cc25a7e::t_6ac9d95c00aafe 1-2
+src/report/fuseBeadDraw.ts
+  s_bfd5492cc25a7e::t_03840c3869b1cf 19,22-25,267,269-277,279-297
+  s_bfd5492cc25a7e::t_374c0a6b342588 188
+  s_bfd5492cc25a7e::t_ec219aaab6a19c 27-187,189-266
+  s_bfd5492cc25a7e::t_37d0de84162991 278
+  s_bfd5492cc25a7e::t_048afb6f9f0017 1-18,20-21,26,268
+src/styles/layout/responsive.css
+  s_bfd5492cc25a7e::t_1d66924489f64d 223
+src/report/fuseBeadLayout.ts
+  s_bfd5492cc25a7e::t_8b7c7fa8471b6a 21
+  s_bfd5492cc25a7e::t_c8c9639c04e0dc 7,10
+  s_bfd5492cc25a7e::t_27b3916492d21f 97-105
+  s_bfd5492cc25a7e::t_523eb93181eb90 17,22,24,26-64,66,69,138
+  s_bfd5492cc25a7e::t_854de4e83cfc8a 1-6,8-9,11-16,18-20,23,25,65,67-68,70-96,106-137
+src/report/bauhausPoster.tsx
+  s_bfd5492cc25a7e::t_93b9a54060e0b7 30-31,33
+  s_bfd5492cc25a7e::t_af1fe50a54d512 6-7,12
+  s_bfd5492cc25a7e::t_bbe1ae5be406a4 13-14
+  s_bfd5492cc25a7e::t_705dc020cde7a7 15-17,27-29
+  s_bfd5492cc25a7e::t_d729d6aabf63e4 34-36
+src/report/castConcretePoster.css
+  s_bfd5492cc25a7e::t_c794fe0c62b520 7
+  s_bfd5492cc25a7e::t_81e707a7ce8829 6
+src/report/ticketStubLayout.ts
+  s_bfd5492cc25a7e::t_8393d4eae2444d 5,158
+  s_bfd5492cc25a7e::t_18a991a68582b4 8-16
+  s_bfd5492cc25a7e::t_628fc3ceb46b1d 2-4
+  s_bfd5492cc25a7e::t_79d8dad6d4fdd3 6-7
+  s_bfd5492cc25a7e::t_088b06f48d75d5 17-19,155-157
+  s_bfd5492cc25a7e::t_a02d92f85a32d0 159-161
+src/report/newsprintPaint.test.ts
+  s_bfd5492cc25a7e::t_83e206a1e7e7b4 1-55
+src/report/posterStyleRegistry.ts
+  s_bfd5492cc25a7e::t_1c10fc85e772eb 111
+  s_bfd5492cc25a7e::t_75a5a6b8cf0886 2,50-51,53,56,58
+  s_bfd5492cc25a7e::t_52d8c57fb5698f 3,103-109,112-113
+  s_bfd5492cc25a7e::t_0cea99a06f08f7 55
+  s_bfd5492cc25a7e::t_2c3babc44c8bce 5,92-102
+  s_bfd5492cc25a7e::t_9828be23c31175 110
+  s_bfd5492cc25a7e::t_e3842cc6b0f07d 9,81-91
+  s_bfd5492cc25a7e::t_14a74882835027 6,70-80
+  s_bfd5492cc25a7e::t_01bf05240a75b9 8,61-62,64,66-67,69
+src/report/inkWashPaint.ts
+  s_bfd5492cc25a7e::t_dbe161fd193c2f 192,197-204
+  s_bfd5492cc25a7e::t_ed79539dc89461 74-94,110,140-172,196
+  s_bfd5492cc25a7e::t_8e923b8d9c68ad 114-139
+  s_bfd5492cc25a7e::t_849b9e17fd11b1 71-73
+  s_bfd5492cc25a7e::t_87204bae98caf2 95-97,107-109
+  s_bfd5492cc25a7e::t_b7632d4acb1c90 111-113
+  s_bfd5492cc25a7e::t_ff5582a506a3f9 173-175,189-191
+  s_bfd5492cc25a7e::t_6b84f9445b70b0 193-195
+  s_bfd5492cc25a7e::t_5958b68d355d22 205-207
+src/report/ticketStubPaint.ts
+  s_bfd5492cc25a7e::t_70312fb74d2508 149,208,266
+  s_bfd5492cc25a7e::t_18a991a68582b4 90
+  s_bfd5492cc25a7e::t_734efc58b92bc8 93,126,164,166
+  s_bfd5492cc25a7e::t_85d0aa4ea3a5a8 56-63,217-223
+  s_bfd5492cc25a7e::t_999aa82843787a 53-55
+  s_bfd5492cc25a7e::t_8e6698fe5877cf 64-66,87-89
+  s_bfd5492cc25a7e::t_42d1fca8b81602 91-92
+  s_bfd5492cc25a7e::t_fe557cd935f29b 94-96,123-125
+  s_bfd5492cc25a7e::t_1216ec17695c49 127-129,146-148
+  s_bfd5492cc25a7e::t_8d9411aacb0c14 150-152,161-163
+  s_bfd5492cc25a7e::t_783dcbbd900af8 165
+  s_bfd5492cc25a7e::t_920cc3b4fdd097 167-169,205-207
+  s_bfd5492cc25a7e::t_b71462570d40b1 209-211,214-216
+  s_bfd5492cc25a7e::t_24e7762b59fcdf 224-226,263-265
+  s_bfd5492cc25a7e::t_52ba2972812423 267-269
+src/report/castConcretePaint.ts
+  s_bfd5492cc25a7e::t_12f84cda00aa97 226-229,235,250
+  s_bfd5492cc25a7e::t_9a36f4fce81870 30-42,44-45
+  s_bfd5492cc25a7e::t_9fbdb7c2c848ca 1-21,23,28,56,75-77,79,111-113,118,121,133-139,147-148,151-152,155-156,160-175,178-179,184,187-188,205,207-208,210-217,233,240-242,244-245,251,260-265,267,269-271,274-275,281-285,287-289,294-295,297-299,301-303,305-306,310-313,316-338,340-345,350
+  s_bfd5492cc25a7e::t_58b31255206488 218
+  s_bfd5492cc25a7e::t_54225dad2b29eb 189-200
+  s_bfd5492cc25a7e::t_9ad137e24a5908 22
+  s_bfd5492cc25a7e::t_f984ae81ed3625 24-27
+  s_bfd5492cc25a7e::t_765d4f8ac9a881 29
+  s_bfd5492cc25a7e::t_eae4df35425197 43
+  s_bfd5492cc25a7e::t_4a33cf4e187df8 46-48,53-55
+  s_bfd5492cc25a7e::t_e9d4f4168c6c2f 57-59,72-74
+  s_bfd5492cc25a7e::t_06c9b423fed8a7 78
+  s_bfd5492cc25a7e::t_418a9aba737992 80-82,108-110
+  s_bfd5492cc25a7e::t_e88b291ac9e4cd 114-117
+  s_bfd5492cc25a7e::t_22e4fd051779fe 119-120
+  s_bfd5492cc25a7e::t_809497ba1ba195 122-124,130-132
+  s_bfd5492cc25a7e::t_87c70312276d08 140-142,144-146
+  s_bfd5492cc25a7e::t_cb6ed049718fd3 149-150
+  s_bfd5492cc25a7e::t_a303ca34af6151 153-154
+  s_bfd5492cc25a7e::t_121ba3f0d14d3d 157-159
+  s_bfd5492cc25a7e::t_61ad5c0ad5f5c8 176-177
+  s_bfd5492cc25a7e::t_477bc74a3f5e19 180-183
+  s_bfd5492cc25a7e::t_2d94eb973f222a 185-186
+  s_bfd5492cc25a7e::t_97c38a83c9ea74 201-204
+  s_bfd5492cc25a7e::t_c04bca4042590e 206
+  s_bfd5492cc25a7e::t_65636d9867ea0a 209
+  s_bfd5492cc25a7e::t_e532fc0d336c32 219-221,223-225
+  s_bfd5492cc25a7e::t_e622823e193b57 230-232
+  s_bfd5492cc25a7e::t_a75b735833d99a 234
+  s_bfd5492cc25a7e::t_f317b8c0dbfa92 236-239
+  s_bfd5492cc25a7e::t_2a3ab712e7bac6 243
+  s_bfd5492cc25a7e::t_86bc139f0d6d0c 246-249
+  s_bfd5492cc25a7e::t_2faf3c76c68425 252-254,257-259
+  s_bfd5492cc25a7e::t_6f8b64d9a871bd 266
+  s_bfd5492cc25a7e::t_deb62d0563bc5b 268
+  s_bfd5492cc25a7e::t_ca1e9f49610615 272-273
+  s_bfd5492cc25a7e::t_c0475b3708cf9a 276-280
+  s_bfd5492cc25a7e::t_f671e513083288 286
+  s_bfd5492cc25a7e::t_74ad01b71329be 290-293
+  s_bfd5492cc25a7e::t_189a33bebff5cd 296
+  s_bfd5492cc25a7e::t_f3160e6d006c8d 300
+  s_bfd5492cc25a7e::t_c25a1a0ebd7f63 304
+  s_bfd5492cc25a7e::t_4a590ed9b29c84 307-309
+  s_bfd5492cc25a7e::t_8519817e925771 314-315
+  s_bfd5492cc25a7e::t_93592f214ac1db 339
+  s_bfd5492cc25a7e::t_5159d9599ba3ff 346-349
+src/report/newsprintLayout.ts
+  s_bfd5492cc25a7e::t_1dc2b7193a6335 15
+  s_bfd5492cc25a7e::t_a2e88d132bb636 1-14,16-164
+src/report/posterStyleRegistry.test.ts
+  s_bfd5492cc25a7e::t_c6888bff4a4281 124
+  s_bfd5492cc25a7e::t_747ee2ccae9013 5,104-115
+  s_bfd5492cc25a7e::t_59d0bfae3878f5 63
+  s_bfd5492cc25a7e::t_9fdef95d31f8ff 6,80-91
+  s_bfd5492cc25a7e::t_4b1f838fbd4e36 135-136
+  s_bfd5492cc25a7e::t_43650716f59171 9,92-103
+  s_bfd5492cc25a7e::t_a3343a92406ace 8,70-79
+  s_bfd5492cc25a7e::t_215b52ef561ac7 2,58-62,64-67
+  s_bfd5492cc25a7e::t_37355ab917093d 3,116-122,125-127
+  s_bfd5492cc25a7e::t_38fe879d47e0f4 123
+src/report/bauhausPaint.ts
+  s_bfd5492cc25a7e::t_6f4e8c1f886b49 198,300-303
+  s_bfd5492cc25a7e::t_b866e593020076 1-38,40-54,93-197,199-206,208-281,284-286,291-299,307,309-310,313-314,319-447,452-454
+  s_bfd5492cc25a7e::t_6df1c45e82055b 39
+  s_bfd5492cc25a7e::t_d46bd22b175150 55-92,207,282-283,287-290,304-306,308,311-312,315-318,448-451
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "62642d8f0e00b6f03c2ddcaceaa89707128fed71",
+  "prompts": {},
+  "sessions": {
+    "s_bfd5492cc25a7e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06a12-5b97-73a2-b78b-b9e782cd33e3",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_ec8b9c8f77ce9e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ce393bfe-84d8-4c83-99cb-154a3ba24c2a",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
