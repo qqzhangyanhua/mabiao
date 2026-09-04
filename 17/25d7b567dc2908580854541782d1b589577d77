@@ -1,0 +1,22 @@
+src/lib/chartTheme.ts
+  s_9e370a6bc5fb4a::t_48575433fc6f82 497-530,532-533,537-538,540-541,556-560
+  s_9e370a6bc5fb4a::t_9c3759335af5d3 531,534-536,539
+src/lib/chartTheme.test.ts
+  s_9e370a6bc5fb4a::t_565258c4bc5921 1-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1725d7b567dc2908580854541782d1b589577d77",
+  "prompts": {},
+  "sessions": {
+    "s_9e370a6bc5fb4a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "6fe0130d-daf4-4be2-aee7-37a961447ca9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
