@@ -1,8 +1,8 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 import {
   BODY,
   BOX_H,
-  CHART_H,
   CONTENT_W,
   HEADLINE,
   INSET,
@@ -321,7 +321,7 @@ function drawContent(
     const chartTop = layout.y.charts + 28;
     if (data.days.length > 0) {
       const barW = split ? CONTENT_W * 0.58 : CONTENT_W;
-      drawBars(ctx, data, layout, PAD, chartTop, barW, CHART_H - 24);
+      drawBars(ctx, data, layout, PAD, chartTop, barW, layout.chartH - 24);
     }
     if (data.sources.length > 0) {
       const pieX = split ? PAD + CONTENT_W * 0.62 : PAD;
@@ -329,7 +329,7 @@ function drawContent(
       if (split) {
         ctx.beginPath();
         ctx.moveTo(PAD + CONTENT_W * 0.6, layout.y.charts);
-        ctx.lineTo(PAD + CONTENT_W * 0.6, layout.y.charts + CHART_H + 20);
+        ctx.lineTo(PAD + CONTENT_W * 0.6, layout.y.charts + layout.chartH + 20);
         ctx.strokeStyle = INK;
         ctx.lineWidth = 1.3;
         ctx.stroke();
@@ -376,11 +376,8 @@ export function paintNewsprintPoster(canvas: HTMLCanvasElement, data: PosterView
     scratch.font = font;
     return scratch.measureText(text).width;
   };
-  const layout = layoutNewsprintPoster(data, measure);
-  canvas.width = NEWSPRINT_CSS_WIDTH * NEWSPRINT_SCALE;
-  canvas.height = layout.height * NEWSPRINT_SCALE;
-  canvas.style.width = `${NEWSPRINT_CSS_WIDTH}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutNewsprintPoster(data, measure));
+  sizePosterCanvas(canvas, NEWSPRINT_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

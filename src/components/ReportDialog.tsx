@@ -22,6 +22,7 @@ import { ReportPoster } from "../report/ReportPoster";
 import type { ReportPosterStyleId } from "../report/posterStyleRegistry";
 import type { ReportDto, ReportPeriodKind } from "../types";
 import { EmptyState } from "./EmptyState";
+import { ReportPreviewFrame } from "./ReportPreviewFrame";
 import { SharePosterStyles } from "./SharePosterStyles";
 import { Spinner } from "./Spinner";
 import { Button } from "./ui/Button";
@@ -209,84 +210,71 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
               <Icon name="close" size={15} />
             </Button>
           </header>
-          <p className="report-dialog-range">{rangeLabel}</p>
-          <p className="muted">{periodStatus.help}</p>
-          <div className="report-dialog-kind">
-            <Segmented
-              value={periodKind}
-              options={PERIOD_KIND_OPTIONS}
-              disabled={copying || weekLoading}
-              ariaLabel="报告周期"
-              onChange={(next) => {
-                if (copyingRef.current) {
-                  return;
-                }
-                if (next === "custom") {
-                  const seedKind = periodKind === "custom" ? "week" : periodKind;
-                  const nextRange = clampCustomRange(
-                    weekDto?.start_date ?? periodStartFromOffset(seedKind, offset),
-                    weekDto?.end_date ?? periodEndFromOffset(seedKind, offset),
-                  );
-                  setCustomFrom(nextRange.from);
-                  setCustomTo(nextRange.to);
-                } else {
-                  setOffset(0);
-                }
-                setPeriodKind(next);
-              }}
-            />
-          </div>
-          {periodKind === "custom" ? (
-            <div className="report-dialog-custom-range">
-              <DatePicker
-                ariaLabel="区间起始日"
-                value={customFrom}
-                min={customBounds.fromMin}
-                max={customBounds.fromMax}
-                disabled={weekLoading || copying}
-                onChange={(day) => {
+          <div className="report-dialog-period" title={periodStatus.help}>
+            <div className="report-dialog-kind">
+              <Segmented
+                value={periodKind}
+                options={PERIOD_KIND_OPTIONS}
+                disabled={copying || weekLoading}
+                ariaLabel="报告周期"
+                onChange={(next) => {
                   if (copyingRef.current) {
                     return;
                   }
-                  const nextRange = clampCustomRange(day, customTo, new Date(), "from");
-                  setCustomFrom(nextRange.from);
-                  setCustomTo(nextRange.to);
-                }}
-              />
-              <span>至</span>
-              <DatePicker
-                ariaLabel="区间结束日"
-                value={customTo}
-                min={customBounds.toMin}
-                max={customBounds.toMax}
-                disabled={weekLoading || copying}
-                onChange={(day) => {
-                  if (copyingRef.current) {
-                    return;
+                  if (next === "custom") {
+                    const seedKind = periodKind === "custom" ? "week" : periodKind;
+                    const nextRange = clampCustomRange(
+                      weekDto?.start_date ?? periodStartFromOffset(seedKind, offset),
+                      weekDto?.end_date ?? periodEndFromOffset(seedKind, offset),
+                    );
+                    setCustomFrom(nextRange.from);
+                    setCustomTo(nextRange.to);
+                  } else {
+                    setOffset(0);
                   }
-                  const nextRange = clampCustomRange(customFrom, day, new Date(), "to");
-                  setCustomFrom(nextRange.from);
-                  setCustomTo(nextRange.to);
+                  setPeriodKind(next);
                 }}
               />
             </div>
-          ) : (
-            <>
-              <DatePicker
-                ariaLabel={periodKind === "month" ? "选择月报日期" : "选择周报日期"}
-                value={periodStartFromOffset(periodKind, offset)}
-                max={latestSelectableDate(periodKind)}
-                disabled={weekLoading || copying}
-                onChange={(day) => {
-                  if (copyingRef.current) {
-                    return;
-                  }
-                  setOffset(periodOffsetFromDate(periodKind, day));
-                }}
-              />
+            {periodKind === "custom" ? (
+              <div className="report-dialog-custom-range">
+                <DatePicker
+                  ariaLabel="区间起始日"
+                  value={customFrom}
+                  min={customBounds.fromMin}
+                  max={customBounds.fromMax}
+                  disabled={weekLoading || copying}
+                  onChange={(day) => {
+                    if (copyingRef.current) {
+                      return;
+                    }
+                    const nextRange = clampCustomRange(day, customTo, new Date(), "from");
+                    setCustomFrom(nextRange.from);
+                    setCustomTo(nextRange.to);
+                  }}
+                />
+                <span>至</span>
+                <DatePicker
+                  ariaLabel="区间结束日"
+                  value={customTo}
+                  min={customBounds.toMin}
+                  max={customBounds.toMax}
+                  disabled={weekLoading || copying}
+                  onChange={(day) => {
+                    if (copyingRef.current) {
+                      return;
+                    }
+                    const nextRange = clampCustomRange(customFrom, day, new Date(), "to");
+                    setCustomFrom(nextRange.from);
+                    setCustomTo(nextRange.to);
+                  }}
+                />
+              </div>
+            ) : (
               <div className="report-dialog-period-nav">
                 <Button
-                  size="sm"
+                  variant="icon"
+                  aria-label={periodKind === "month" ? "更早一月" : "更早一周"}
                   onClick={() => {
                     if (copyingRef.current) {
                       return;
@@ -295,10 +283,23 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                   }}
                   disabled={weekLoading || copying}
                 >
-                  {periodKind === "month" ? "更早一月" : "更早一周"}
+                  <Icon name="chevron" size={13} />
                 </Button>
+                <DatePicker
+                  ariaLabel={periodKind === "month" ? "选择月报日期" : "选择周报日期"}
+                  value={periodStartFromOffset(periodKind, offset)}
+                  max={latestSelectableDate(periodKind)}
+                  disabled={weekLoading || copying}
+                  onChange={(day) => {
+                    if (copyingRef.current) {
+                      return;
+                    }
+                    setOffset(periodOffsetFromDate(periodKind, day));
+                  }}
+                />
                 <Button
-                  size="sm"
+                  variant="icon"
+                  aria-label={periodKind === "month" ? "更近一月" : "更近一周"}
                   onClick={() => {
                     if (copyingRef.current) {
                       return;
@@ -307,11 +308,12 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
                   }}
                   disabled={weekLoading || copying || offset === 0}
                 >
-                  {periodKind === "month" ? "更近一月" : "更近一周"}
+                  <Icon name="chevron" size={13} className="flip" />
                 </Button>
               </div>
-            </>
-          )}
+            )}
+            {weekDto ? <p className="report-dialog-range">{rangeLabel}</p> : null}
+          </div>
           <SharePosterStyles
             selectedStyleId={posterStyleId}
             disabled={copying}
@@ -364,7 +366,9 @@ export function ReportDialog({ onClose }: { onClose: () => void }) {
             />
           ) : null}
           {!weekLoading && !weekError && weekPoster ? (
-            <ReportPoster data={weekPoster} posterRef={posterRef} styleId={posterStyleId} />
+            <ReportPreviewFrame>
+              <ReportPoster data={weekPoster} posterRef={posterRef} styleId={posterStyleId} />
+            </ReportPreviewFrame>
           ) : null}
         </section>
       </div>

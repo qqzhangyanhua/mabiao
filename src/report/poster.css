@@ -10,6 +10,7 @@
   --rp-share-track: #1a2438;
   box-sizing: border-box;
   width: 720px;
+  min-height: 1053px; /* posterFrame.ts POSTER_FRAME_HEIGHT */
   padding: 48px 44px 40px;
   background: var(--rp-bg);
   color: var(--rp-fg);

@@ -1,4 +1,5 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 import {
   BEAD,
   FONT_BODY,
@@ -264,11 +265,8 @@ function drawContent(
 
 /** 在 2× 位图上绘拼豆海报。预览缩到 720px，复制时直接导出画布。 */
 export function paintFuseBeadPoster(canvas: HTMLCanvasElement, data: PosterViewModel): void {
-  const layout = layoutFuseBeadPoster(data);
-  canvas.width = FUSE_W * FUSE_SCALE;
-  canvas.height = layout.height * FUSE_SCALE;
-  canvas.style.width = `${FUSE_W}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutFuseBeadPoster(data));
+  sizePosterCanvas(canvas, FUSE_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

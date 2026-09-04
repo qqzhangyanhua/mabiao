@@ -21,7 +21,8 @@ describe("layoutInkWashPoster", () => {
     expect(layout.sourceLines[0]?.text).toContain("Claude 52%");
     expect(layout.statLines.length).toBeGreaterThan(0);
     expect(layout.statLines[0]?.text).toContain("最忙的一天");
-    expect(layout.height).toBeGreaterThan(600);
+    expect(layout.height).toBe(1053);
+    expect(layout.barH).toBeGreaterThan(148);
     expect(layout.numberSize).toBeGreaterThan(70);
   });
 

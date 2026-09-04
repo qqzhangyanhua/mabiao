@@ -3,7 +3,7 @@ import type { ReportDto } from "../types";
 import { emptyReportTotals, EXTREME_REPORT_CASES, extremeReportDto } from "./reportExtremeFixtures";
 import { toPosterViewModel } from "./reportCopy";
 
-const PLACEHOLDER_RE = /暂无数据|——|未命名会话/;
+const PLACEHOLDER_RE = /暂无数据|——|未命名会话|（未标注）|未标注/;
 
 function posterText(poster: NonNullable<ReturnType<typeof toPosterViewModel>>): string {
   return [

@@ -1,6 +1,6 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 import {
-  BAR_H,
   CONCRETE_SCALE,
   CONCRETE_W,
   CONTENT_W,
@@ -264,6 +264,7 @@ function drawBars(
   scratch: HTMLCanvasElement,
   data: PosterViewModel,
   y: number,
+  barH: number,
 ): void {
   carveText(ctx, scratch, "按天节奏", PAD_X, y, concreteFont(600, 16));
   const max = Math.max(1, ...data.days.map((day) => day.tokens));
@@ -271,13 +272,14 @@ function drawBars(
   const slot = CONTENT_W / n;
   const barW = Math.min(24, slot * 0.34);
   const top = y + 26;
+  const plotH = Math.max(14, barH - 8);
   for (const [index, day] of data.days.entries()) {
     const cx = PAD_X + index * slot + slot / 2;
     ctx.font = concreteFont(600, 16);
     const lw = ctx.measureText(day.label).width;
     carveText(ctx, scratch, day.label, cx - lw / 2, top, concreteFont(600, 16));
-    const h = Math.max(14, (day.tokens / max) * (BAR_H - 8));
-    carveRect(ctx, cx - barW / 2, top + 24 + (BAR_H - 8 - h), barW, h);
+    const h = Math.max(14, (day.tokens / max) * plotH);
+    carveRect(ctx, cx - barW / 2, top + 24 + (plotH - h), barW, h);
   }
 }
 
@@ -301,7 +303,7 @@ function drawContent(
     }
   }
   if (data.days.length > 0 && layout.y.bars != null) {
-    drawBars(ctx, scratch, data, layout.y.bars);
+    drawBars(ctx, scratch, data, layout.y.bars, layout.barH);
   }
   if (layout.sourceLine && layout.y.sources != null) {
     carveText(ctx, scratch, "来源占比", PAD_X, layout.y.sources, concreteFont(600, 16));
@@ -327,11 +329,8 @@ export function paintCastConcretePoster(canvas: HTMLCanvasElement, data: PosterV
     scratch.font = font;
     return scratch.measureText(text).width;
   };
-  const layout = layoutCastConcretePoster(data, measure);
-  canvas.width = CONCRETE_W * CONCRETE_SCALE;
-  canvas.height = layout.height * CONCRETE_SCALE;
-  canvas.style.width = `${CONCRETE_W}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutCastConcretePoster(data, measure));
+  sizePosterCanvas(canvas, CONCRETE_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

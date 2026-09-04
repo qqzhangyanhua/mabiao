@@ -159,10 +159,11 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     const copy = insightCopy(busiest);
     stats.push({ label: copy.headline, value: copy.comment });
   }
-  if (dto.models.length > 0) {
+  const models = namedModels(dto.models);
+  if (models.length > 0) {
     stats.push({
-      label: modelRankLabel(dto.models.length),
-      value: dto.models.join(" · "),
+      label: modelRankLabel(models.length),
+      value: models.join(" · "),
     });
   }
   if (topSession) {
@@ -189,6 +190,10 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     })),
     stats,
   };
+}
+
+function namedModels(models: string[]): string[] {
+  return models.filter((name) => name !== "" && name !== "（未标注）");
 }
 
 function modelRankLabel(count: number): string {

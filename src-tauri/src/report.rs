@@ -72,9 +72,14 @@ fn share_slices(rows: &[NamedAmount]) -> Vec<ReportShareSlice> {
         .collect()
 }
 
+fn unlabeled_model(name: &str) -> bool {
+    name.is_empty() || name == "（未标注）"
+}
+
 fn top_models(rows: &[NamedAmount]) -> Vec<String> {
     rows.iter()
         .filter(|row| row.total_tokens > 0)
+        .filter(|row| !unlabeled_model(&row.name))
         .take(3)
         .map(|row| row.name.clone())
         .collect()

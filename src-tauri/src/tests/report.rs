@@ -721,6 +721,37 @@ fn model_rank_omits_zero_token_models() {
 }
 
 #[test]
+fn model_rank_skips_unlabeled_and_fills_from_named() {
+    let records = vec![
+        usage_named(day(2026, 8, 12), 10, Source::Factory, "", "a", 100),
+        usage_named(day(2026, 8, 12), 11, Source::Codex, "gpt-5", "b", 50),
+        usage_named(day(2026, 8, 13), 9, Source::Grok, "grok-4", "c", 40),
+        usage_named(day(2026, 8, 13), 10, Source::Pi, "pi-mini", "d", 30),
+        usage_named(day(2026, 8, 13), 11, Source::Claude, "opus", "e", 20),
+    ];
+    let dto = build_with(&records, week(0));
+    assert_eq!(
+        dto.models,
+        vec![
+            "gpt-5".to_string(),
+            "grok-4".to_string(),
+            "pi-mini".to_string()
+        ]
+    );
+}
+
+#[test]
+fn model_rank_omits_the_slot_when_every_model_is_unlabeled() {
+    let records = vec![
+        usage_named(day(2026, 8, 12), 10, Source::Factory, "", "a", 80),
+        usage_named(day(2026, 8, 12), 11, Source::Kimi, "", "b", 40),
+    ];
+    let dto = build_with(&records, week(0));
+    assert!(dto.has_data);
+    assert!(dto.models.is_empty());
+}
+
+#[test]
 fn top_session_is_the_highest_cost_session_even_when_it_has_fewer_tokens() {
     let records = vec![
         with_cost(

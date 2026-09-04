@@ -33,7 +33,8 @@ describe("layoutNewsprintPoster", () => {
       "模型 Top 3",
       "最贵的一次",
     ]);
-    expect(layout.height).toBeGreaterThan(700);
+    expect(layout.height).toBe(1053);
+    expect(layout.chartH).toBeGreaterThan(248);
   });
 
   it("falls back to token total when there is no cost", () => {

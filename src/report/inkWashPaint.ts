@@ -1,7 +1,7 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 import {
   CONTENT_W,
-  INK_BAR_HEIGHT,
   INK_WASH_SCALE,
   INK_WASH_WIDTH,
   PAD_X,
@@ -261,9 +261,9 @@ function drawContent(
     const max = Math.max(1, ...data.days.map((day) => day.tokens));
     for (const [index, day] of data.days.entries()) {
       const cx = PAD_X + slot * index + slot / 2;
-      const h = (day.tokens / max) * INK_BAR_HEIGHT;
-      const top = layout.y.bars + INK_BAR_HEIGHT - h;
-      drawBrushBar(ctx, cx, top, layout.y.bars + INK_BAR_HEIGHT, maxW, 1200 + index * 17);
+      const h = (day.tokens / max) * layout.barH;
+      const top = layout.y.bars + layout.barH - h;
+      drawBrushBar(ctx, cx, top, layout.y.bars + layout.barH, maxW, 1200 + index * 17);
       ctx.textAlign = "center";
       ctx.fillStyle = INK;
       ctx.font = inkKai(500, 14);
@@ -292,11 +292,8 @@ export function paintInkWashPoster(canvas: HTMLCanvasElement, data: PosterViewMo
     scratch.font = font;
     return scratch.measureText(text).width;
   };
-  const layout = layoutInkWashPoster(data, measure);
-  canvas.width = INK_WASH_WIDTH * INK_WASH_SCALE;
-  canvas.height = layout.height * INK_WASH_SCALE;
-  canvas.style.width = `${INK_WASH_WIDTH}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutInkWashPoster(data, measure));
+  sizePosterCanvas(canvas, INK_WASH_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

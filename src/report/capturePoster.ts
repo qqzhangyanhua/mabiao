@@ -30,8 +30,12 @@ export async function capturePoster(node: HTMLElement): Promise<string> {
     }
     return dataUrl;
   }
+  const width = node.offsetWidth;
+  const height = node.offsetHeight;
   const dataUrl = await domToPng(node, {
     scale: 2,
+    // 预览父级可能有 transform:scale。必须传布局尺寸，库默认走 getBoundingClientRect 会把缩放算进去。
+    ...(width > 0 && height > 0 ? { width, height } : {}),
     backgroundColor: null,
     features: {
       copyScrollbar: false,

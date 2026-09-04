@@ -1,4 +1,5 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 
 export const BAUHAUS_CSS_WIDTH = 720;
 export const BAUHAUS_SCALE = 2;
@@ -436,11 +437,8 @@ export function paintBauhausPoster(canvas: HTMLCanvasElement, data: PosterViewMo
     scratch.font = font;
     return scratch.measureText(text).width;
   };
-  const layout = layoutBauhausPoster(data, measure);
-  canvas.width = BAUHAUS_CSS_WIDTH * BAUHAUS_SCALE;
-  canvas.height = layout.height * BAUHAUS_SCALE;
-  canvas.style.width = `${BAUHAUS_CSS_WIDTH}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutBauhausPoster(data, measure));
+  sizePosterCanvas(canvas, BAUHAUS_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

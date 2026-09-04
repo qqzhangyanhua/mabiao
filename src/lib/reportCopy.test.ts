@@ -354,6 +354,26 @@ describe("toPosterViewModel", () => {
     expect(poster?.stats).toEqual([{ label: "模型", value: "claude-sonnet-5" }]);
   });
 
+  it("drops unlabeled models from the rank and does not print 未标注", () => {
+    const mixed = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 3 },
+        models: ["（未标注）", "opus", ""],
+      }),
+    );
+    expect(mixed?.stats).toEqual([{ label: "模型", value: "opus" }]);
+    const none = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        models: ["（未标注）", ""],
+      }),
+    );
+    expect(none?.stats.some((stat) => stat.label.startsWith("模型"))).toBe(false);
+    expect(JSON.stringify(none?.stats)).not.toContain("未标注");
+  });
+
   it("joins two models as 模型 Top 2 and three as 模型 Top 3", () => {
     const two = toPosterViewModel(
       dto({

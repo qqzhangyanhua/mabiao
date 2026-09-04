@@ -1,3 +1,4 @@
+import { POSTER_FRAME_HEIGHT, splitFrameExtra } from "./posterFrame";
 import type { PosterViewModel } from "./posterTypes";
 
 export const CONCRETE_W = 720;
@@ -71,6 +72,7 @@ export function wrapText(
 
 export type CastConcreteLayout = {
   height: number;
+  barH: number;
   comments: { y: number; text: string }[];
   sourceLine: string | null;
   y: {
@@ -135,8 +137,28 @@ export function layoutCastConcretePoster(
     cursor += data.stats.length * 28 + 8;
   }
 
+  const packedHeight = cursor + 48;
+  const { chartExtra, gaps } = splitFrameExtra(
+    packedHeight,
+    4,
+    y.bars == null ? 0 : 160,
+  );
+  const afterComments = gaps[0] ?? 0;
+  const afterBars = gaps[1] ?? 0;
+  const afterSources = gaps[2] ?? 0;
+  if (y.bars != null) {
+    y.bars += afterComments;
+  }
+  const afterBarBlock = afterComments + chartExtra + afterBars;
+  if (y.sources != null) {
+    y.sources += afterBarBlock;
+  }
+  if (y.stats != null) {
+    y.stats += afterBarBlock + afterSources;
+  }
   return {
-    height: cursor + 48,
+    height: packedHeight < POSTER_FRAME_HEIGHT ? POSTER_FRAME_HEIGHT : packedHeight,
+    barH: BAR_H + chartExtra,
     comments,
     sourceLine,
     y,

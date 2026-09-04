@@ -95,14 +95,14 @@ export type FuseBeadLayout = {
 export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
   const y = {
     title: snap(36),
-    date: snap(148),
-    hero: snap(198),
+    date: snap(100),
+    hero: snap(150),
     comments: 0,
     bars: 0,
     bottom: 0,
     footer: 0,
   };
-  const heroH = snap(160);
+  const heroH = snap(150);
   y.comments = snap(y.hero + heroH + 16);
   const commentLineH = snap(50);
   const comments: FuseBeadComment[] = [];
@@ -119,15 +119,15 @@ export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
     cursor = y.comments;
   }
   y.bars = snap(cursor + 8);
-  const barH = data.days.length > 0 ? snap(220) : 0;
+  const barH = data.days.length > 0 ? snap(200) : 0;
   y.bottom = y.bars + (barH > 0 ? barH + snap(14) : 0);
-  const sourceH = data.sources.length > 0 ? snap(190) : 0;
-  const rightH = data.stats.length > 0 ? snap(190) : 0;
+  const sourceH = data.sources.length > 0 ? snap(180) : 0;
+  const rightH = data.stats.length > 0 ? snap(180) : 0;
   const bottomH = Math.max(sourceH, rightH);
   y.footer = y.bottom + bottomH + (bottomH > 0 ? snap(14) : 0);
   const footerH = data.stats.length > 2 ? snap(80) : 0;
   return {
-    height: snap(y.footer + footerH + (footerH > 0 ? 40 : 30)),
+    height: snap(y.footer + footerH + (footerH > 0 ? 24 : 20)),
     y,
     comments,
     heroH,

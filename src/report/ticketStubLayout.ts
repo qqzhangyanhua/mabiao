@@ -1,3 +1,4 @@
+import { POSTER_FRAME_HEIGHT, offsetPackedY, splitFrameExtra } from "./posterFrame";
 import type { PosterViewModel } from "./posterTypes";
 
 export const TICKET_WIDTH = 720;
@@ -91,6 +92,7 @@ export type TicketStubLayout = {
   height: number;
   serial: string | null;
   numberSize: number;
+  chartH: number;
   comments: { y: number; text: string }[];
   sourceLines: { y: number; text: string }[];
   y: {
@@ -170,12 +172,34 @@ export function layoutTicketStubPoster(
   }
 
   y.footer = cursor + 8;
+  const packedHeight = cursor + 44;
+  const { chartExtra, gaps } = splitFrameExtra(
+    packedHeight,
+    4,
+    y.chart == null ? 0 : 160,
+  );
+  const afterComments = gaps[0] ?? 0;
+  const afterChart = gaps[1] ?? 0;
+  const afterSources = gaps[2] ?? 0;
+  const afterStats = gaps[3] ?? 0;
+  if (y.chart != null) {
+    y.chart += afterComments;
+  }
+  const afterChartBlock = afterComments + chartExtra + afterChart;
+  if (y.sources != null) {
+    y.sources += afterChartBlock;
+  }
+  if (y.stats != null) {
+    y.stats += afterChartBlock + afterSources;
+  }
+  y.footer += afterChartBlock + afterSources + afterStats;
   return {
-    height: cursor + 44,
+    height: packedHeight < POSTER_FRAME_HEIGHT ? POSTER_FRAME_HEIGHT : packedHeight,
     serial: ticketSerial(data.rangeLabel),
     numberSize,
+    chartH: TICKET_CHART_H + chartExtra,
     comments,
-    sourceLines,
+    sourceLines: offsetPackedY(sourceLines, afterChartBlock),
     y,
   };
 }

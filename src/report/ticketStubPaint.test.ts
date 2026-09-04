@@ -38,7 +38,8 @@ describe("layoutTicketStubPoster", () => {
     expect(layout.comments.length).toBeGreaterThan(0);
     expect(layout.y.chart).not.toBeNull();
     expect(layout.y.stats).not.toBeNull();
-    expect(layout.height).toBeGreaterThan(500);
+    expect(layout.height).toBe(1053);
+    expect(layout.chartH).toBeGreaterThan(92);
   });
 
   it("omits optional blocks when those slots are empty", () => {

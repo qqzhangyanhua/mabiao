@@ -1,8 +1,8 @@
 import type { PosterViewModel } from "./posterTypes";
+import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 import {
   CONTENT_W,
   PAD_X,
-  TICKET_CHART_H,
   TICKET_SCALE,
   TICKET_WIDTH,
   layoutTicketStubPoster,
@@ -87,14 +87,19 @@ function drawStamp(ctx: CanvasRenderingContext2D, x: number, y: number): void {
   ctx.restore();
 }
 
-function drawLineChart(ctx: CanvasRenderingContext2D, data: PosterViewModel, y: number): void {
+function drawLineChart(
+  ctx: CanvasRenderingContext2D,
+  data: PosterViewModel,
+  y: number,
+  chartH: number,
+): void {
   ctx.fillStyle = INK;
   ctx.font = ticketFont(600, 13);
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("按天节奏", PAD_X, y);
   const plotY = y + 22;
-  const plotH = TICKET_CHART_H - 40;
+  const plotH = Math.max(24, chartH - 40);
   const plotW = CONTENT_W;
   const max = Math.max(1, ...data.days.map((day) => day.tokens));
   const n = data.days.length;
@@ -198,7 +203,7 @@ function drawContent(
 
   if (data.days.length > 0 && layout.y.chart != null) {
     dashRule(ctx, layout.y.chart - 10);
-    drawLineChart(ctx, data, layout.y.chart);
+    drawLineChart(ctx, data, layout.y.chart, layout.chartH);
   }
 
   if (data.sources.length > 0 && layout.y.sources != null) {
@@ -253,11 +258,8 @@ export function paintTicketStubPoster(canvas: HTMLCanvasElement, data: PosterVie
     scratch.font = font;
     return scratch.measureText(text).width;
   };
-  const layout = layoutTicketStubPoster(data, measure);
-  canvas.width = TICKET_WIDTH * TICKET_SCALE;
-  canvas.height = layout.height * TICKET_SCALE;
-  canvas.style.width = `${TICKET_WIDTH}px`;
-  canvas.style.height = `${layout.height}px`;
+  const layout = framePosterLayout(layoutTicketStubPoster(data, measure));
+  sizePosterCanvas(canvas, TICKET_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;

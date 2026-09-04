@@ -1,6 +1,7 @@
 .iw-poster {
   box-sizing: border-box;
   width: 720px;
+  min-height: 1053px; /* posterFrame.ts POSTER_FRAME_HEIGHT */
   margin: 0;
   padding: 0;
   line-height: 0;

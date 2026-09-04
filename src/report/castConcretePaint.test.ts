@@ -25,7 +25,8 @@ describe("layoutCastConcretePoster", () => {
     expect(layout.y.bars).not.toBeNull();
     expect(layout.sourceLine).toContain("Claude 52%");
     expect(layout.y.stats).not.toBeNull();
-    expect(layout.height).toBeGreaterThan(500);
+    expect(layout.height).toBe(1053);
+    expect(layout.barH).toBeGreaterThan(80);
   });
 
   it("omits optional sections when empty", () => {

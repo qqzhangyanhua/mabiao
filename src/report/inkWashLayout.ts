@@ -1,3 +1,4 @@
+import { POSTER_FRAME_HEIGHT, offsetPackedY, splitFrameExtra } from "./posterFrame";
 import type { PosterViewModel } from "./posterTypes";
 
 export const INK_WASH_WIDTH = 720;
@@ -77,6 +78,7 @@ export function wrapText(
 export type InkWashLayout = {
   height: number;
   numberSize: number;
+  barH: number;
   comments: { y: number; text: string }[];
   sourceLines: { y: number; text: string }[];
   statLines: { y: number; text: string }[];
@@ -149,12 +151,32 @@ export function layoutInkWashPoster(data: PosterViewModel, measure: TextMeasure)
     }
   }
 
+  const packedHeight = cursor + 48;
+  const { chartExtra, gaps } = splitFrameExtra(
+    packedHeight,
+    4,
+    data.days.length > 0 ? 140 : 0,
+  );
+  const afterComments = gaps[0] ?? 0;
+  const afterBars = gaps[1] ?? 0;
+  const afterSources = gaps[2] ?? 0;
+  const barH = BAR_H + chartExtra;
+  y.bars += afterComments;
+  y.barLabels = y.bars + barH + 10;
+  const afterBarBlock = afterComments + chartExtra + afterBars;
+  if (y.sources != null) {
+    y.sources += afterBarBlock;
+  }
+  if (y.stats != null) {
+    y.stats += afterBarBlock + afterSources;
+  }
   return {
-    height: cursor + 48,
+    height: packedHeight < POSTER_FRAME_HEIGHT ? POSTER_FRAME_HEIGHT : packedHeight,
     numberSize,
+    barH,
     comments,
-    sourceLines,
-    statLines,
+    sourceLines: offsetPackedY(sourceLines, afterBarBlock),
+    statLines: offsetPackedY(statLines, afterBarBlock + afterSources),
     y,
   };
 }

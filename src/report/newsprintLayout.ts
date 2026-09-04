@@ -1,3 +1,4 @@
+import { POSTER_FRAME_HEIGHT, splitFrameExtra } from "./posterFrame";
 import type { PosterViewModel } from "./posterTypes";
 
 export const NEWSPRINT_CSS_WIDTH = 720;
@@ -79,6 +80,7 @@ export function wrapText(
 
 export type NewsprintLayout = {
   height: number;
+  chartH: number;
   headline: string;
   headlineLines: string[];
   body: { y: number; text: string }[];
@@ -152,8 +154,27 @@ export function layoutNewsprintPoster(
   }
 
   y.footer = cursor;
+  const packedHeight = cursor + 22 + INSET + 8;
+  const { chartExtra, gaps } = splitFrameExtra(
+    packedHeight,
+    4,
+    y.charts == null ? 0 : 120,
+  );
+  const afterBody = gaps[0] ?? 0;
+  const afterChart = gaps[1] ?? 0;
+  const afterStats = gaps[2] ?? 0;
+  if (y.charts != null) {
+    y.charts += afterBody;
+  }
+  const afterCharts = afterBody + chartExtra + afterChart;
+  if (y.stats != null && y.statsBottom != null) {
+    y.stats += afterCharts;
+    y.statsBottom += afterCharts;
+  }
+  y.footer += afterCharts + afterStats;
   return {
-    height: cursor + 22 + INSET + 8,
+    height: packedHeight < POSTER_FRAME_HEIGHT ? POSTER_FRAME_HEIGHT : packedHeight,
+    chartH: CHART_H + chartExtra,
     headline,
     headlineLines,
     body,
