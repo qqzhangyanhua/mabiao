@@ -1,0 +1,98 @@
+src/lib/reportPeriod.test.ts
+  s_bfd5492cc25a7e::t_029ce8516c3783 161,164
+  s_bfd5492cc25a7e::t_e2c04d6cf33b56 3-6,15,17-18,30,34,38-39,45-46,53,58,63,67-68,109,112-160,162-163,165-182
+  s_bfd5492cc25a7e::t_d2d03d60be0191 7-14,16,74-108,110-111
+  s_bfd5492cc25a7e::t_62b2ef0d0451e8 19-21,27-29
+  s_bfd5492cc25a7e::t_9ef3d9539b14dd 31-33
+  s_bfd5492cc25a7e::t_dcc35d299dab80 35-37
+  s_bfd5492cc25a7e::t_7617398e1bc204 42-44
+  s_bfd5492cc25a7e::t_2b3f9d9e2a611c 50-52
+  s_bfd5492cc25a7e::t_5e6294814ef51c 55-57
+  s_bfd5492cc25a7e::t_c4b6483291439d 60-62
+  s_bfd5492cc25a7e::t_1d55465fd503fa 65-66
+  s_bfd5492cc25a7e::t_78cf215bc849df 71-73
+src/lib/reportCopy.extreme.test.ts
+  s_bfd5492cc25a7e::t_de4506929ccf3c 75,112
+src/lib/sharePreference.ts
+  s_bfd5492cc25a7e::t_cddc8bd00c2dd1 7,15,18,33,36,44-45
+src-tauri/src/domain/report.rs
+  s_bfd5492cc25a7e::t_b9699db37deac1 4-6,10-13,21
+src-tauri/src/report.rs
+  s_bfd5492cc25a7e::t_4c791fa0ab08ba 1,251-252,286-314
+  s_bfd5492cc25a7e::t_40ad41651c9e17 24,254,280-282
+  s_bfd5492cc25a7e::t_7848cfbd9d3795 315
+src/report/posterCss.test.ts
+  s_bfd5492cc25a7e::t_d931e07c768d06 77,93
+  s_bfd5492cc25a7e::t_d0d23a05d6ef63 27,33,39,46,53,60,99
+src/lib/reportCopy.ts
+  s_bfd5492cc25a7e::t_c805f7d8c2a0ee 38-51,56-61,64-65,72-73,80,172,174,177,207
+  s_bfd5492cc25a7e::t_012d107f53a1a3 3,132
+  s_bfd5492cc25a7e::t_6bc06a1346ef26 2,52-55,146,182,201-206
+  s_bfd5492cc25a7e::t_ce97c064fdaf38 4,62-63,66-71,74-79,81-86
+  s_bfd5492cc25a7e::t_ed7af775bd0d03 208
+src/styles/views/report.css
+  s_bfd5492cc25a7e::t_8e9b9399179af6 158-165
+  s_bfd5492cc25a7e::t_cf6ef31f434b7c 172-183
+src/types.ts
+  s_bfd5492cc25a7e::t_eb3be7cb2665ba 928,933-934
+src/report/fuseBeadPaint.ts
+  s_bfd5492cc25a7e::t_33b1deb9f1070f 126-129
+src-tauri/src/tests/report.rs
+  s_bfd5492cc25a7e::t_242d58ae8e0a2d 24-25,33-34,38-49
+  s_bfd5492cc25a7e::t_c4ac2ba29d5b5f 50,1056-1102,1113-1125
+  s_bfd5492cc25a7e::t_91367dd3eeac42 1103-1112
+  s_bfd5492cc25a7e::t_e52dfdd3d7736e 51
+src/lib/sharePreference.test.ts
+  s_bfd5492cc25a7e::t_3acc7204873b90 2,41,49-52,55,58,60-61,67-71,103-107,109,123-126,134,136,146-149
+src/report/posterCssCoverage.ts
+  s_bfd5492cc25a7e::t_4e3e94a39d48eb 16
+src/lib/reportPeriod.ts
+  s_bfd5492cc25a7e::t_f380070385fb75 42,48,51-84,109-113,121-123,138-141,154-156
+  s_bfd5492cc25a7e::t_d7a40a6506344f 30,32,40-41,85-108,114-120,124-137,142-153,157-201,206-215,217,219
+  s_bfd5492cc25a7e::t_69944f904e5be0 1,6,14,21,27,33,43,49,202-205,216,218,220-232
+  s_bfd5492cc25a7e::t_7dc716f907c52f 2-5
+  s_bfd5492cc25a7e::t_bc132e291fcbae 7-9,11-13
+  s_bfd5492cc25a7e::t_e944b414b266d0 15-20
+  s_bfd5492cc25a7e::t_d245c4275ec1b8 22-26
+  s_bfd5492cc25a7e::t_3e986ab9dbe8c7 28-29
+  s_bfd5492cc25a7e::t_7eec08d0486163 31
+  s_bfd5492cc25a7e::t_46ca6ca97d42e6 34-39
+  s_bfd5492cc25a7e::t_0367bb890e2dbd 44-47
+  s_bfd5492cc25a7e::t_b0ea476c586d3a 50
+src/lib/reportCopy.test.ts
+  s_bfd5492cc25a7e::t_e4323c23034abc 7,41-42,46-47,49,51-53,68-71,228-250
+  s_bfd5492cc25a7e::t_b69b3c53af6fb6 72,251,253-277
+  s_bfd5492cc25a7e::t_79473b70a33a72 43-45,48,50
+  s_bfd5492cc25a7e::t_7dad7a1946dc73 127-140,414
+  s_bfd5492cc25a7e::t_82749618414d6e 252
+src/report/DailyBarChart.tsx
+  s_bfd5492cc25a7e::t_72a4f06cbe7e70 6-9,11,21,23,27,29,33,37
+src/components/ReportDialog.tsx
+  s_bfd5492cc25a7e::t_65d42a09290940 7,9-11,13,16-17,36,48-49,65-67,86
+  s_bfd5492cc25a7e::t_23d7d8f0043c26 19,136-137,139-140,149
+  s_bfd5492cc25a7e::t_86c3acf767ab32 212-213,315-319,345-368
+  s_bfd5492cc25a7e::t_18f41a345db250 134-135
+  s_bfd5492cc25a7e::t_2d1f9bc31c3d57 216-236,239-273,275-286,298,310
+  s_bfd5492cc25a7e::t_ef86a84e4bd5ef 12,14-15,23
+  s_bfd5492cc25a7e::t_13c06a9e1a892e 18,28
+  s_bfd5492cc25a7e::t_3b4856e1496adb 33-35,46
+src/report/posterCssGuard.ts
+  s_bfd5492cc25a7e::t_04fd26739db8ef 1
+  s_bfd5492cc25a7e::t_a5700eda95e041 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6d8bdb5963470e8349c086bf25c68fc45d2df191",
+  "prompts": {},
+  "sessions": {
+    "s_bfd5492cc25a7e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06a12-5b97-73a2-b78b-b9e782cd33e3",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
