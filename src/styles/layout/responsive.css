@@ -220,6 +220,7 @@
   }
 
   .report-dialog-params {
+    max-height: 42vh;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }

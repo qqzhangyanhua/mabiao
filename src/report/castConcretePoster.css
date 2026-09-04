@@ -1,0 +1,14 @@
+.cc-poster {
+  box-sizing: border-box;
+  width: 720px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  background: #b6b5af;
+}
+
+.cc-poster canvas {
+  display: block;
+  width: 720px;
+  height: auto;
+}

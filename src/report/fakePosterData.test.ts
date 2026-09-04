@@ -14,8 +14,8 @@ describe("fake poster fixtures", () => {
     expect(FAKE_POSTER.stats).toHaveLength(3);
     expect(FAKE_POSTER.stats.map((stat) => stat.label)).toEqual([
       "最忙的一天",
-      "最贵的一次",
       "模型 Top 3",
+      "最贵的一次",
     ]);
   });
 

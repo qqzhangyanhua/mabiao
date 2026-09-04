@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CyberNeonPoster } from "./cyberNeonPoster";
+import { BauhausPoster } from "./bauhausPoster";
+import { CastConcretePoster } from "./castConcretePoster";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
+import { FuseBeadPoster } from "./fuseBeadPoster";
+import { InkWashPoster } from "./inkWashPoster";
 import { LightGlassPoster } from "./lightGlassPoster";
-import { PurpleGlassPoster } from "./purpleGlassPoster";
+import { NewsprintPoster } from "./newsprintPoster";
+import { TicketStubPoster } from "./ticketStubPoster";
 import {
   DEFAULT_REPORT_POSTER_STYLE_ID,
   REPORT_POSTER_STYLES,
@@ -51,28 +55,76 @@ describe("report poster style registry", () => {
     expect(resolveReportPosterStyleId("light-glass")).toBe("light-glass");
   });
 
-  it("registers purple-glass with a Chinese label, swatch, stylesheet, and PurpleGlassPoster", () => {
-    const style = resolveReportPosterStyle("purple-glass");
-    expect(style.id).toBe("purple-glass");
-    expect(style.label).toBe("紫蓝玻璃");
-    expect(style.stylesheet).toBe("purpleGlassPoster.css");
-    expect(style.swatch.background).toBe("#1b1460");
-    expect(style.swatch.accent).toBe("#c4b5fd");
-    expect(style.Component).toBe(PurpleGlassPoster);
-    expect(isReportPosterStyleId("purple-glass")).toBe(true);
-    expect(resolveReportPosterStyleId("purple-glass")).toBe("purple-glass");
+  it("registers bauhaus-print with a Chinese label, swatch, stylesheet, and BauhausPoster", () => {
+    const style = resolveReportPosterStyle("bauhaus-print");
+    expect(style.id).toBe("bauhaus-print");
+    expect(style.label).toBe("构成海报");
+    expect(style.stylesheet).toBe("bauhausPoster.css");
+    expect(style.swatch.background).toBe("#f6f1e6");
+    expect(style.swatch.accent).toBe("#e30613");
+    expect(style.Component).toBe(BauhausPoster);
+    expect(isReportPosterStyleId("bauhaus-print")).toBe(true);
+    expect(resolveReportPosterStyleId("bauhaus-print")).toBe("bauhaus-print");
   });
 
-  it("registers cyber-neon with a Chinese label, swatch, stylesheet, and CyberNeonPoster", () => {
-    const style = resolveReportPosterStyle("cyber-neon");
-    expect(style.id).toBe("cyber-neon");
-    expect(style.label).toBe("赛博霓虹");
-    expect(style.stylesheet).toBe("cyberNeonPoster.css");
-    expect(style.swatch.background).toBe("#05060a");
-    expect(style.swatch.accent).toBe("#2ff6ff");
-    expect(style.Component).toBe(CyberNeonPoster);
-    expect(isReportPosterStyleId("cyber-neon")).toBe(true);
-    expect(resolveReportPosterStyleId("cyber-neon")).toBe("cyber-neon");
+  it("registers newsprint with a Chinese label, swatch, stylesheet, and NewsprintPoster", () => {
+    const style = resolveReportPosterStyle("newsprint");
+    expect(style.id).toBe("newsprint");
+    expect(style.label).toBe("旧报号外");
+    expect(style.stylesheet).toBe("newsprintPoster.css");
+    expect(style.swatch.background).toBe("#e7d6b4");
+    expect(style.swatch.accent).toBe("#1c1610");
+    expect(style.Component).toBe(NewsprintPoster);
+    expect(isReportPosterStyleId("newsprint")).toBe(true);
+    expect(resolveReportPosterStyleId("newsprint")).toBe("newsprint");
+  });
+
+  it("registers ink-wash with a Chinese label, swatch, stylesheet, and InkWashPoster", () => {
+    const style = resolveReportPosterStyle("ink-wash");
+    expect(style.id).toBe("ink-wash");
+    expect(style.label).toBe("水墨手札");
+    expect(style.stylesheet).toBe("inkWashPoster.css");
+    expect(style.swatch.background).toBe("#f4efe6");
+    expect(style.swatch.accent).toBe("#9c3b32");
+    expect(style.Component).toBe(InkWashPoster);
+    expect(isReportPosterStyleId("ink-wash")).toBe(true);
+    expect(resolveReportPosterStyleId("ink-wash")).toBe("ink-wash");
+  });
+
+  it("registers ticket-stub with a Chinese label, swatch, stylesheet, and TicketStubPoster", () => {
+    const style = resolveReportPosterStyle("ticket-stub");
+    expect(style.id).toBe("ticket-stub");
+    expect(style.label).toBe("票据存根");
+    expect(style.stylesheet).toBe("ticketStubPoster.css");
+    expect(style.swatch.background).toBe("#f3ead8");
+    expect(style.swatch.accent).toBe("#c45c4a");
+    expect(style.Component).toBe(TicketStubPoster);
+    expect(isReportPosterStyleId("ticket-stub")).toBe(true);
+    expect(resolveReportPosterStyleId("ticket-stub")).toBe("ticket-stub");
+  });
+
+  it("registers fuse-bead with a Chinese label, swatch, stylesheet, and FuseBeadPoster", () => {
+    const style = resolveReportPosterStyle("fuse-bead");
+    expect(style.id).toBe("fuse-bead");
+    expect(style.label).toBe("拼豆海报");
+    expect(style.stylesheet).toBe("fuseBeadPoster.css");
+    expect(style.swatch.background).toBe("#eef0f5");
+    expect(style.swatch.accent).toBe("#8b5cf6");
+    expect(style.Component).toBe(FuseBeadPoster);
+    expect(isReportPosterStyleId("fuse-bead")).toBe(true);
+    expect(resolveReportPosterStyleId("fuse-bead")).toBe("fuse-bead");
+  });
+
+  it("registers cast-concrete with a Chinese label, swatch, stylesheet, and CastConcretePoster", () => {
+    const style = resolveReportPosterStyle("cast-concrete");
+    expect(style.id).toBe("cast-concrete");
+    expect(style.label).toBe("清水混凝土");
+    expect(style.stylesheet).toBe("castConcretePoster.css");
+    expect(style.swatch.background).toBe("#b6b5af");
+    expect(style.swatch.accent).toBe("#7a7872");
+    expect(style.Component).toBe(CastConcretePoster);
+    expect(isReportPosterStyleId("cast-concrete")).toBe(true);
+    expect(resolveReportPosterStyleId("cast-concrete")).toBe("cast-concrete");
   });
 
   it("falls back to dark-analytics for missing, empty, or unknown ids", () => {
@@ -80,6 +132,8 @@ describe("report poster style registry", () => {
     expect(resolveReportPosterStyleId(null)).toBe("dark-analytics");
     expect(resolveReportPosterStyleId("")).toBe("dark-analytics");
     expect(resolveReportPosterStyleId("not-a-style")).toBe("dark-analytics");
+    expect(resolveReportPosterStyleId("purple-glass")).toBe("dark-analytics");
+    expect(resolveReportPosterStyleId("cyber-neon")).toBe("dark-analytics");
     expect(resolveReportPosterStyleId("Dark-Analytics")).toBe("dark-analytics");
     expect(resolveReportPosterStyleId(42)).toBe("dark-analytics");
     expect(isReportPosterStyleId("dark-analytics")).toBe(true);

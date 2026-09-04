@@ -96,18 +96,46 @@ describe("parseSharePreference", () => {
       posterStyleId: "light-glass",
     });
     expect(
-      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "purple-glass" })),
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "bauhaus-print" })),
     ).toEqual({
       kind: "week",
       quotaProvider: null,
-      posterStyleId: "purple-glass",
+      posterStyleId: "bauhaus-print",
     });
     expect(
-      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "cyber-neon" })),
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "newsprint" })),
     ).toEqual({
       kind: "week",
       quotaProvider: null,
-      posterStyleId: "cyber-neon",
+      posterStyleId: "newsprint",
+    });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "ink-wash" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "ink-wash",
+    });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "ticket-stub" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "ticket-stub",
+    });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "fuse-bead" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "fuse-bead",
+    });
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "cast-concrete" })),
+    ).toEqual({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "cast-concrete",
     });
   });
 
@@ -117,6 +145,14 @@ describe("parseSharePreference", () => {
     );
     expect(
       parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "not-a-style" }))
+        .posterStyleId,
+    ).toBe("dark-analytics");
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "purple-glass" }))
+        .posterStyleId,
+    ).toBe("dark-analytics");
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "cyber-neon" }))
         .posterStyleId,
     ).toBe("dark-analytics");
     expect(
@@ -178,18 +214,42 @@ describe("share preference round-trip", () => {
       posterStyleId: "light-glass" as const,
     };
     expect(parseSharePreference(serializeSharePreference(lightGlass))).toEqual(lightGlass);
-    const purpleGlass = {
+    const bauhausPrint = {
       kind: "week" as const,
       quotaProvider: null,
-      posterStyleId: "purple-glass" as const,
+      posterStyleId: "bauhaus-print" as const,
     };
-    expect(parseSharePreference(serializeSharePreference(purpleGlass))).toEqual(purpleGlass);
-    const cyberNeon = {
+    expect(parseSharePreference(serializeSharePreference(bauhausPrint))).toEqual(bauhausPrint);
+    const newsprint = {
       kind: "week" as const,
       quotaProvider: null,
-      posterStyleId: "cyber-neon" as const,
+      posterStyleId: "newsprint" as const,
     };
-    expect(parseSharePreference(serializeSharePreference(cyberNeon))).toEqual(cyberNeon);
+    expect(parseSharePreference(serializeSharePreference(newsprint))).toEqual(newsprint);
+    const inkWash = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "ink-wash" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(inkWash))).toEqual(inkWash);
+    const ticketStub = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "ticket-stub" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(ticketStub))).toEqual(ticketStub);
+    const fuseBead = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "fuse-bead" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(fuseBead))).toEqual(fuseBead);
+    const castConcrete = {
+      kind: "week" as const,
+      quotaProvider: null,
+      posterStyleId: "cast-concrete" as const,
+    };
+    expect(parseSharePreference(serializeSharePreference(castConcrete))).toEqual(castConcrete);
   });
 
   it("loads stored preferences from localStorage and falls back when missing or malformed", () => {
@@ -232,14 +292,38 @@ describe("share preference round-trip", () => {
     saveSharePreference({
       kind: "week",
       quotaProvider: null,
-      posterStyleId: "purple-glass",
+      posterStyleId: "bauhaus-print",
     });
-    expect(loadSharePreference().posterStyleId).toBe("purple-glass");
+    expect(loadSharePreference().posterStyleId).toBe("bauhaus-print");
     saveSharePreference({
       kind: "week",
       quotaProvider: null,
-      posterStyleId: "cyber-neon",
+      posterStyleId: "newsprint",
     });
-    expect(loadSharePreference().posterStyleId).toBe("cyber-neon");
+    expect(loadSharePreference().posterStyleId).toBe("newsprint");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "ink-wash",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("ink-wash");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "ticket-stub",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("ticket-stub");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "fuse-bead",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("fuse-bead");
+    saveSharePreference({
+      kind: "week",
+      quotaProvider: null,
+      posterStyleId: "cast-concrete",
+    });
+    expect(loadSharePreference().posterStyleId).toBe("cast-concrete");
   });
 });

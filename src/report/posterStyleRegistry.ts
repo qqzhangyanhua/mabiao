@@ -1,8 +1,12 @@
 import type { ComponentType, Ref } from "react";
-import { CyberNeonPoster } from "./cyberNeonPoster";
+import { BauhausPoster } from "./bauhausPoster";
+import { CastConcretePoster } from "./castConcretePoster";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
+import { FuseBeadPoster } from "./fuseBeadPoster";
+import { InkWashPoster } from "./inkWashPoster";
 import { LightGlassPoster } from "./lightGlassPoster";
-import { PurpleGlassPoster } from "./purpleGlassPoster";
+import { NewsprintPoster } from "./newsprintPoster";
+import { TicketStubPoster } from "./ticketStubPoster";
 import type { PosterViewModel } from "./posterTypes";
 
 export type ReportPosterRenderProps = {
@@ -43,26 +47,70 @@ export const REPORT_POSTER_STYLES = [
     Component: LightGlassPoster,
   },
   {
-    id: "purple-glass",
-    label: "紫蓝玻璃",
+    id: "bauhaus-print",
+    label: "构成海报",
     /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
-    stylesheet: "purpleGlassPoster.css",
+    stylesheet: "bauhausPoster.css",
     swatch: {
-      background: "#1b1460",
-      accent: "#c4b5fd",
+      background: "#f6f1e6",
+      accent: "#e30613",
     },
-    Component: PurpleGlassPoster,
+    Component: BauhausPoster,
   },
   {
-    id: "cyber-neon",
-    label: "赛博霓虹",
+    id: "newsprint",
+    label: "旧报号外",
     /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
-    stylesheet: "cyberNeonPoster.css",
+    stylesheet: "newsprintPoster.css",
     swatch: {
-      background: "#05060a",
-      accent: "#2ff6ff",
+      background: "#e7d6b4",
+      accent: "#1c1610",
     },
-    Component: CyberNeonPoster,
+    Component: NewsprintPoster,
+  },
+  {
+    id: "ink-wash",
+    label: "水墨手札",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "inkWashPoster.css",
+    swatch: {
+      background: "#f4efe6",
+      accent: "#9c3b32",
+    },
+    Component: InkWashPoster,
+  },
+  {
+    id: "ticket-stub",
+    label: "票据存根",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "ticketStubPoster.css",
+    swatch: {
+      background: "#f3ead8",
+      accent: "#c45c4a",
+    },
+    Component: TicketStubPoster,
+  },
+  {
+    id: "fuse-bead",
+    label: "拼豆海报",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "fuseBeadPoster.css",
+    swatch: {
+      background: "#eef0f5",
+      accent: "#8b5cf6",
+    },
+    Component: FuseBeadPoster,
+  },
+  {
+    id: "cast-concrete",
+    label: "清水混凝土",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "castConcretePoster.css",
+    swatch: {
+      background: "#b6b5af",
+      accent: "#7a7872",
+    },
+    Component: CastConcretePoster,
   },
 ] as const;
 

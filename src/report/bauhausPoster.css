@@ -1,0 +1,14 @@
+.bh-poster {
+  box-sizing: border-box;
+  width: 720px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  background: #f6f1e6;
+}
+
+.bh-poster canvas {
+  display: block;
+  width: 720px;
+  height: auto;
+}

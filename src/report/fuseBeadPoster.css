@@ -1,0 +1,14 @@
+.fb-poster {
+  box-sizing: border-box;
+  width: 720px;
+  margin: 0;
+  padding: 0;
+  line-height: 0;
+  background: #eef0f5;
+}
+
+.fb-poster canvas {
+  display: block;
+  width: 720px;
+  height: auto;
+}
