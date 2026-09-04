@@ -1,0 +1,19 @@
+src/lib/chartTheme.test.ts
+  s_565c473f9837d8::t_1a5fb7ecfec556 48-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6c64f7f331f2f3f515e2cdec57ece60ce0e29a17",
+  "prompts": {},
+  "sessions": {
+    "s_565c473f9837d8": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06cf1-4ff5-7d30-85b1-9f231222adff",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
