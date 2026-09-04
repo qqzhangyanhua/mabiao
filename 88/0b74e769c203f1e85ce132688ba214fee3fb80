@@ -1,0 +1,45 @@
+src/lib/reportCopy.test.ts
+  s_565c473f9837d8::t_e674a88e9a068c 485,516,548
+  s_565c473f9837d8::t_17c1cf83cf6fdb 524-526,528,530-541
+  s_565c473f9837d8::t_9d5535e8835ab7 313-315,356-363,374-376,384,396-398,406-413,426-427,452-460,480-484,486-515,517-523,527,529,542-547,549-551
+src/report/fuseBeadPaint.ts
+  s_565c473f9837d8::t_bd53167730c37d 232-233,235-236,239-240,243,245,251-252,254-255
+  s_565c473f9837d8::t_42ad29331d5884 1
+src/report/fuseBeadPaint.test.ts
+  s_565c473f9837d8::t_82e0ca255dbb5b 55-69
+src/report/posterTypes.ts
+  s_565c473f9837d8::t_e90699e958df42 17-22
+  s_565c473f9837d8::t_24ac8dfa8c0128 12-16
+src/report/fuseBeadLayout.ts
+  s_565c473f9837d8::t_07fd2fe0707279 1
+  s_565c473f9837d8::t_57ebd09ae83d2d 172-176,179
+src/lib/reportCopy.ts
+  s_565c473f9837d8::t_c6755127ce95f3 125-127,131
+  s_565c473f9837d8::t_52a8cb18a94253 128,159,164,167,172-178,202-205,207-212
+  s_565c473f9837d8::t_07c3a0da4f261c 206
+  s_565c473f9837d8::t_fab54b741afef8 213
+src/lib/reportCopy.extreme.test.ts
+  s_565c473f9837d8::t_528ebfa1dc7f39 89,137
+  s_565c473f9837d8::t_4ad5f150c21301 35-37,39,41,43,78-88,90-91,126-136,138-139,153-158
+  s_565c473f9837d8::t_174084a6d6c8b3 38,40,42
+src/report/fakePosterData.test.ts
+  s_565c473f9837d8::t_79768c593a2d85 31-37
+src/report/fakePosterData.ts
+  s_565c473f9837d8::t_78b7d7374274f0 32-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "880b74e769c203f1e85ce132688ba214fee3fb80",
+  "prompts": {},
+  "sessions": {
+    "s_565c473f9837d8": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06cf1-4ff5-7d30-85b1-9f231222adff",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
