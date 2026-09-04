@@ -1,4 +1,5 @@
 import type { ComponentType, Ref } from "react";
+import { CyberNeonPoster } from "./cyberNeonPoster";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
 import { LightGlassPoster } from "./lightGlassPoster";
 import { PurpleGlassPoster } from "./purpleGlassPoster";
@@ -51,6 +52,17 @@ export const REPORT_POSTER_STYLES = [
       accent: "#c4b5fd",
     },
     Component: PurpleGlassPoster,
+  },
+  {
+    id: "cyber-neon",
+    label: "赛博霓虹",
+    /** 相对 `src/report/` 的样式表；CSS 门禁从注册表读这份清单，不要另维护文件列表。 */
+    stylesheet: "cyberNeonPoster.css",
+    swatch: {
+      background: "#05060a",
+      accent: "#2ff6ff",
+    },
+    Component: CyberNeonPoster,
   },
 ] as const;
 
