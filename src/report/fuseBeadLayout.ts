@@ -90,7 +90,54 @@ export type FuseBeadLayout = {
   barH: number;
   commentLineH: number;
   sourceH: number;
+  sourceHeadH: number;
+  sourceRowH: number;
+  sourceFont: number;
 };
+
+const SOURCE_HEAD_H = 56;
+const SOURCE_TAIL_H = 24;
+const SOURCE_ROW_MAX = 30;
+const SOURCE_ROW_MIN = BEAD * 2;
+const SOURCE_FONT_MAX = FONT_BODY;
+const SOURCE_FONT_MIN = 11;
+/** 右侧两张统计卡的高度；来源卡先尽量排进这个高度，排不下再长高。 */
+const SOURCE_FIT_H = 180;
+
+function layoutSourceCard(count: number): {
+  sourceH: number;
+  sourceHeadH: number;
+  sourceRowH: number;
+  sourceFont: number;
+} {
+  if (count <= 0) {
+    return {
+      sourceH: 0,
+      sourceHeadH: SOURCE_HEAD_H,
+      sourceRowH: SOURCE_ROW_MAX,
+      sourceFont: SOURCE_FONT_MAX,
+    };
+  }
+  const comfortable = SOURCE_HEAD_H + count * SOURCE_ROW_MAX + SOURCE_TAIL_H;
+  if (comfortable <= SOURCE_FIT_H) {
+    return {
+      sourceH: snap(comfortable),
+      sourceHeadH: SOURCE_HEAD_H,
+      sourceRowH: SOURCE_ROW_MAX,
+      sourceFont: SOURCE_FONT_MAX,
+    };
+  }
+  const inner = SOURCE_FIT_H - SOURCE_HEAD_H - SOURCE_TAIL_H;
+  const sourceRowH = Math.max(SOURCE_ROW_MIN, Math.floor(inner / count));
+  const t = (sourceRowH - SOURCE_ROW_MIN) / (SOURCE_ROW_MAX - SOURCE_ROW_MIN);
+  const sourceFont = Math.round(SOURCE_FONT_MIN + t * (SOURCE_FONT_MAX - SOURCE_FONT_MIN));
+  return {
+    sourceH: snap(SOURCE_HEAD_H + count * sourceRowH + SOURCE_TAIL_H),
+    sourceHeadH: SOURCE_HEAD_H,
+    sourceRowH,
+    sourceFont,
+  };
+}
 
 export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
   const y = {
@@ -121,9 +168,9 @@ export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
   y.bars = snap(cursor + 8);
   const barH = data.days.length > 0 ? snap(200) : 0;
   y.bottom = y.bars + (barH > 0 ? barH + snap(14) : 0);
-  const sourceH = data.sources.length > 0 ? snap(180) : 0;
-  const rightH = data.stats.length > 0 ? snap(180) : 0;
-  const bottomH = Math.max(sourceH, rightH);
+  const sourceCard = layoutSourceCard(data.sources.length);
+  const rightH = data.stats.length > 0 ? snap(SOURCE_FIT_H) : 0;
+  const bottomH = Math.max(sourceCard.sourceH, rightH);
   y.footer = y.bottom + bottomH + (bottomH > 0 ? snap(14) : 0);
   const footerH = data.stats.length > 2 ? snap(80) : 0;
   return {
@@ -133,6 +180,6 @@ export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
     heroH,
     barH,
     commentLineH,
-    sourceH,
+    ...sourceCard,
   };
 }

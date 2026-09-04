@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { FAKE_POSTER } from "./fakePosterData";
 import { BEAD, FONT_COMMENT, layoutFuseBeadPoster, snap, wrapBeadText } from "./fuseBeadLayout";
-import type { PosterViewModel } from "./posterTypes";
+import type { PosterSourceSlice, PosterViewModel } from "./posterTypes";
 
 function poster(overrides: Partial<PosterViewModel>): PosterViewModel {
   return { ...FAKE_POSTER, ...overrides };
+}
+
+function sources(count: number): PosterSourceSlice[] {
+  return Array.from({ length: count }, (_, index) => ({
+    label: `S${index + 1}`,
+    pct: 1,
+    color: "#888888",
+  }));
 }
 
 describe("layoutFuseBeadPoster", () => {
@@ -21,6 +29,28 @@ describe("layoutFuseBeadPoster", () => {
     const full = layoutFuseBeadPoster(FAKE_POSTER);
     const empty = layoutFuseBeadPoster(poster({ comments: [], sources: [], stats: [] }));
     expect(empty.height).toBeLessThan(full.height);
+  });
+
+  it("grows the source card as more sources appear", () => {
+    const three = layoutFuseBeadPoster(poster({ sources: sources(3) }));
+    const six = layoutFuseBeadPoster(poster({ sources: sources(6) }));
+    expect(six.sourceH).toBeGreaterThan(three.sourceH);
+  });
+
+  it("does not reserve four-row height for one or two sources", () => {
+    const one = layoutFuseBeadPoster(poster({ sources: sources(1) }));
+    const two = layoutFuseBeadPoster(poster({ sources: sources(2) }));
+    const four = layoutFuseBeadPoster(poster({ sources: sources(4) }));
+    expect(one.sourceH).toBeLessThan(four.sourceH);
+    expect(two.sourceH).toBeLessThan(four.sourceH);
+  });
+
+  it("fits every source inside the card, even at the 14-source cap", () => {
+    const count = 14;
+    const layout = layoutFuseBeadPoster(poster({ sources: sources(count) }));
+    // 行距下限是两颗豆子，避免条目叠在一起；卡片必须盖住标题区 + 每一行。
+    expect(layout.sourceRowH).toBeGreaterThanOrEqual(BEAD * 2);
+    expect(layout.sourceH).toBeGreaterThanOrEqual(layout.sourceHeadH + count * layout.sourceRowH);
   });
 });
 

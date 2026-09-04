@@ -1,8 +1,7 @@
 import type { PosterViewModel } from "./posterTypes";
-import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
+import { POSTER_FRAME_HEIGHT, POSTER_FRAME_WIDTH, framePosterLayout } from "./posterFrame";
 import {
   BEAD,
-  FONT_BODY,
   FONT_COMMENT,
   FONT_DATE,
   FONT_HERO_LABEL,
@@ -214,11 +213,20 @@ function drawBottom(
     pill(ctx, left + 14, y + 14, 78, 24, PURPLE);
     fillLabel(ctx, "来源占比", left + 53, y + 26, FONT_STAT, WHITE, "center");
     const tones = [PURPLE, TEAL, BLUE, YELLOW];
-    for (const [index, source] of data.sources.slice(0, 4).entries()) {
-      const sy = y + 56 + index * 30;
-      drawBead(ctx, left + 22, sy - 4, tones[index % tones.length] ?? YELLOW, true);
-      fillLabel(ctx, source.label, left + 46, sy + 6, FONT_BODY, WHITE);
-      fillLabel(ctx, `${source.pct}%`, left + colW - 18, sy + 6, 15, tones[index % tones.length] ?? YELLOW, "right");
+    for (const [index, source] of data.sources.entries()) {
+      const sy = y + layout.sourceHeadH + index * layout.sourceRowH;
+      const tone = tones[index % tones.length] ?? YELLOW;
+      drawBead(ctx, left + 22, sy - 4, tone, true);
+      fillLabel(ctx, source.label, left + 46, sy + 6, layout.sourceFont, WHITE);
+      fillLabel(
+        ctx,
+        `${source.pct}%`,
+        left + colW - 18,
+        sy + 6,
+        Math.min(15, layout.sourceFont + 1),
+        tone,
+        "right",
+      );
     }
   }
   const stats = data.stats;
@@ -265,8 +273,12 @@ function drawContent(
 
 /** 在 2× 位图上绘拼豆海报。预览缩到 720px，复制时直接导出画布。 */
 export function paintFuseBeadPoster(canvas: HTMLCanvasElement, data: PosterViewModel): void {
-  const layout = framePosterLayout(layoutFuseBeadPoster(data));
-  sizePosterCanvas(canvas, FUSE_SCALE);
+  const packed = layoutFuseBeadPoster(data);
+  const layout = packed.height <= POSTER_FRAME_HEIGHT ? framePosterLayout(packed) : packed;
+  canvas.width = POSTER_FRAME_WIDTH * FUSE_SCALE;
+  canvas.height = layout.height * FUSE_SCALE;
+  canvas.style.width = `${POSTER_FRAME_WIDTH}px`;
+  canvas.style.height = `${layout.height}px`;
   const ctx = canvas.getContext("2d");
   if (!ctx) {
     return;
