@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DarkAnalyticsPoster } from "./darkAnalyticsPoster";
 import { LightGlassPoster } from "./lightGlassPoster";
+import { PurpleGlassPoster } from "./purpleGlassPoster";
 import {
   DEFAULT_REPORT_POSTER_STYLE_ID,
   REPORT_POSTER_STYLES,
@@ -47,6 +48,18 @@ describe("report poster style registry", () => {
     expect(style.Component).toBe(LightGlassPoster);
     expect(isReportPosterStyleId("light-glass")).toBe(true);
     expect(resolveReportPosterStyleId("light-glass")).toBe("light-glass");
+  });
+
+  it("registers purple-glass with a Chinese label, swatch, stylesheet, and PurpleGlassPoster", () => {
+    const style = resolveReportPosterStyle("purple-glass");
+    expect(style.id).toBe("purple-glass");
+    expect(style.label).toBe("紫蓝玻璃");
+    expect(style.stylesheet).toBe("purpleGlassPoster.css");
+    expect(style.swatch.background).toBe("#1b1460");
+    expect(style.swatch.accent).toBe("#c4b5fd");
+    expect(style.Component).toBe(PurpleGlassPoster);
+    expect(isReportPosterStyleId("purple-glass")).toBe(true);
+    expect(resolveReportPosterStyleId("purple-glass")).toBe("purple-glass");
   });
 
   it("falls back to dark-analytics for missing, empty, or unknown ids", () => {
