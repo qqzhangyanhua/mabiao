@@ -107,7 +107,7 @@ export function TrendBucketSessions({
   const selected = Boolean(bucket && queryFilter);
   const heading = selected && bucket ? `${bucketHeading(grain, bucket)} 的会话` : "会话明细";
   const note = selected
-    ? "本机消耗记录按会话汇总，Cursor 账号用量不在此列。点行打开对话记录。"
+    ? "这是上方选中时段的全部本机会话。Cursor 账号用量不在此列。点行打开对话记录。"
     : idleNote(grain);
   const emptyTitle = loading
     ? "正在读取会话…"

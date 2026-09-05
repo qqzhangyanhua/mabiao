@@ -106,7 +106,7 @@ export function BreakdownProjectSessions({
         <span>共 {formatTokens(data.total)} 个会话</span>
         <span>与对话记录同一目录，按最近活动排序</span>
       </div>
-      <LoadingOverlay active={loading && data.rows.length > 0} className="breakdown-session-table">
+      <LoadingOverlay active={loading && data.rows.length > 0} className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -140,7 +140,12 @@ export function BreakdownProjectSessions({
           </tbody>
         </table>
       </LoadingOverlay>
-      <Pagination page={page} pageCount={pageCount} totalCount={data.total} onPageChange={setPage} />
+      <Pagination
+        page={page}
+        pageCount={pageCount}
+        totalCount={data.total}
+        onPageChange={setPage}
+      />
     </div>
   );
 }
@@ -190,7 +195,11 @@ function ProjectSessionRow({
         <SourceLabel source={row.source} fallback={conversationSourceLabel(row.source)} size={14} />
       </td>
       <td>
-        {row.model ? <ModelLabel name={row.model} size={14} /> : <span className="muted">未标注</span>}
+        {row.model ? (
+          <ModelLabel name={row.model} size={14} />
+        ) : (
+          <span className="muted">未标注</span>
+        )}
       </td>
       <td>
         <strong>{formatTokens(row.total_tokens)}</strong>

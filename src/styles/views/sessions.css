@@ -282,3 +282,23 @@ tr.breakdown-expand-row > td {
   border-top: 0;
 }
 
+.session-below-bridge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(139, 108, 255, 0.12);
+  color: var(--purple-fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.session-below-bridge svg {
+  flex: 0 0 auto;
+}
+
+.session-below-anchor {
+  scroll-margin-top: 88px;
+}

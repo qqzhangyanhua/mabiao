@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { areaTrendOption, formatBucket } from "../lib/chartTheme";
 import { bucketToDateRange } from "../lib/calendar";
 import { chartClickDataIndex } from "../lib/chartClick";
@@ -6,6 +6,7 @@ import { trendSeriesTable } from "../lib/exportRows";
 import { formatCompact, formatDelta, formatTokens, formatUsd } from "../lib/format";
 import { cacheTokens, summarizeTrend, trendTableRowsNewestFirst } from "../lib/trendStats";
 import type { ResolvedTheme } from "../hooks/useTheme";
+import { Icon } from "../icons";
 import type { Filter, Grain, SeriesPoint } from "../types";
 import { EmptyState } from "./EmptyState";
 import { ExportableChart } from "./ExportableChart";
@@ -52,14 +53,17 @@ export const Trend = memo(function Trend({
   const [page, setPage] = useState(1);
   const [pageKey, setPageKey] = useState(pagingKey);
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null);
+  const sessionsPanelRef = useRef<HTMLDivElement>(null);
   if (pageKey !== pagingKey) {
     setPageKey(pagingKey);
     setPage(1);
+    setSelectedBucket(null);
   }
+  const newestBucket = points[points.length - 1]?.bucket ?? null;
   const activeBucket =
     selectedBucket != null && points.some((point) => point.bucket === selectedBucket)
       ? selectedBucket
-      : null;
+      : newestBucket;
 
   const option = useMemo(() => areaTrendOption(points, theme), [points, theme]);
   const stats = useMemo(() => summarizeTrend(points), [points]);
@@ -98,14 +102,17 @@ export const Trend = memo(function Trend({
     [points, selectBucket],
   );
 
-  function toggleBucket(bucket: string) {
-    setSelectedBucket((current) => (current === bucket ? null : bucket));
+  function selectSessionBucket(bucket: string) {
+    setSelectedBucket(bucket);
+    window.requestAnimationFrame(() => {
+      sessionsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, bucket: string) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      toggleBucket(bucket);
+      selectSessionBucket(bucket);
     }
   }
 
@@ -181,8 +188,8 @@ export const Trend = memo(function Trend({
             <h2>{grainDetailTitle[grain]}</h2>
             <p className="panel-note">
               总量含缓存和推理。无用量时段不出现，环比相对{grainSparsePrev[grain]}。共{" "}
-              {points.length} 段，最新在上。点击一行查看该时段所有会话
-              {onRangeSelect ? "；图表可下钻到该时段" : ""}。
+              {points.length} 段，最新在上
+              {onRangeSelect ? "。图表可下钻到该时段" : ""}。
             </p>
           </div>
           <ExportButton
@@ -191,6 +198,12 @@ export const Trend = memo(function Trend({
             rows={exportTable.rows}
           />
         </div>
+        {points.length > 0 ? (
+          <p className="session-below-bridge" role="note">
+            <Icon name="chevron" size={14} className="flip" />
+            点下面一行，该时段全部会话在页面下方显示
+          </p>
+        ) : null}
         <div className="table-scroll">
           <table>
             <thead>
@@ -214,13 +227,23 @@ export const Trend = memo(function Trend({
                   <tr
                     key={point.bucket}
                     className={activeBucket === point.bucket ? "clickable selected" : "clickable"}
-                    onClick={() => toggleBucket(point.bucket)}
+                    onClick={() => selectSessionBucket(point.bucket)}
                     onKeyDown={(event) => onRowKeyDown(event, point.bucket)}
                     tabIndex={0}
                     aria-selected={activeBucket === point.bucket}
-                    title={activeBucket === point.bucket ? "收起该时段的会话" : "查看该时段的会话"}
+                    aria-expanded={activeBucket === point.bucket}
+                    title={
+                      activeBucket === point.bucket
+                        ? "会话明细已在下方打开"
+                        : "点此在下方查看该时段会话"
+                    }
                   >
-                    <td>{formatBucket(point.bucket)}</td>
+                    <td>
+                      <span className="breakdown-expand-toggle">
+                        <Icon name="chevron" size={12} className="breakdown-expand-caret" />
+                        {formatBucket(point.bucket)}
+                      </span>
+                    </td>
                     <td>
                       <span className="cell-bar">
                         <i style={{ width: `${row.shareOfTotal}%` }} />
@@ -258,14 +281,16 @@ export const Trend = memo(function Trend({
       </div>
 
       {points.length > 0 ? (
-        <TrendBucketSessions
-          filter={filter}
-          grain={grain}
-          bucket={activeBucket}
-          revision={revision}
-          onOpenConversation={onOpenConversation}
-          onError={onError}
-        />
+        <div ref={sessionsPanelRef} className="session-below-anchor">
+          <TrendBucketSessions
+            filter={filter}
+            grain={grain}
+            bucket={activeBucket}
+            revision={revision}
+            onOpenConversation={onOpenConversation}
+            onError={onError}
+          />
+        </div>
       ) : null}
     </div>
   );

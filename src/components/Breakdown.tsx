@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Icon, type IconName } from "../icons";
 import { breakdownBarOption } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
@@ -23,9 +23,9 @@ function rowClassName(selected: boolean, clickable: boolean): string | undefined
 
 function projectRowTitle(name: string, selected: boolean): string {
   if (!canExpandProjectSessions(name)) {
-    return selected ? "收起说明" : "账号用量无项目路径，不能下钻会话";
+    return "账号用量无项目路径，说明在下方";
   }
-  return selected ? "收起该项目的会话" : "展开该项目下的会话";
+  return selected ? "会话明细已在下方打开" : "点此在下方查看该项目会话";
 }
 
 function channelClass(channel: string): string {
@@ -66,6 +66,7 @@ export const Breakdown = memo(function Breakdown({
   onError?: (error: unknown) => void;
 }) {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const sessionsPanelRef = useRef<HTMLDivElement>(null);
   const label = useCallback(
     (row: NamedAmount): string => {
       const name = projectNames ? projectLabel(row.name) : row.name;
@@ -92,17 +93,23 @@ export const Breakdown = memo(function Breakdown({
   const maxTotal = Math.max(1, ...rows.map((row) => row.total_tokens));
   const unpricedLink =
     onOpenUnpricedDiagnosis != null ? unpricedKpiLink(stats.unpricedCount) : null;
+  const firstProject = projectNames ? (rows[0]?.name ?? null) : null;
   const selectedProjectName =
-    projectNames && rows.some((row) => row.name === selectedProject) ? selectedProject : null;
+    projectNames && selectedProject && rows.some((row) => row.name === selectedProject)
+      ? selectedProject
+      : firstProject;
 
-  function toggleProject(name: string) {
-    setSelectedProject((current) => (current === name ? null : name));
+  function selectProject(name: string) {
+    setSelectedProject(name);
+    window.requestAnimationFrame(() => {
+      sessionsPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function onProjectRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, name: string) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      toggleProject(name);
+      selectProject(name);
     }
   }
 
@@ -178,11 +185,6 @@ export const Breakdown = memo(function Breakdown({
             {onProviderClick ? (
               <p className="panel-note">点击名称可只看该接口的明细调用。</p>
             ) : null}
-            {projectNames ? (
-              <p className="panel-note">
-                点一行在表内展开该项目的对话记录。Cursor 账号用量不能下钻。
-              </p>
-            ) : null}
           </div>
           <ExportButton
             filename={title}
@@ -196,6 +198,12 @@ export const Breakdown = memo(function Breakdown({
             ])}
           />
         </div>
+        {projectNames && rows.length > 0 ? (
+          <p className="session-below-bridge" role="note">
+            <Icon name="chevron" size={14} className="flip" />
+            点下面一行，该项目全部会话在页面下方显示
+          </p>
+        ) : null}
         <div className="table-scroll">
           <table>
             <thead>
@@ -217,13 +225,10 @@ export const Breakdown = memo(function Breakdown({
                   showVendorIcon={showVendorIcon}
                   showCallDetails={showCallDetails}
                   filter={filter}
-                  revision={revision}
                   selectedProjectName={selectedProjectName}
-                  onToggleProject={toggleProject}
+                  onSelectProject={selectProject}
                   onProjectRowKeyDown={onProjectRowKeyDown}
                   onProviderClick={onProviderClick}
-                  onOpenConversation={onOpenConversation}
-                  onError={onError}
                 />
               ))}
               {rows.length === 0 ? (
@@ -237,6 +242,27 @@ export const Breakdown = memo(function Breakdown({
           </table>
         </div>
       </div>
+      {projectNames && filter && selectedProjectName ? (
+        <div ref={sessionsPanelRef} className="session-below-anchor">
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <h2>{projectLabel(selectedProjectName)} 的会话</h2>
+                <p className="panel-note">
+                  这是上方选中项目的对话记录。Cursor 账号用量不能下钻。点行打开对话记录。
+                </p>
+              </div>
+            </div>
+            <BreakdownProjectSessions
+              filter={filter}
+              project={selectedProjectName}
+              revision={revision ?? ""}
+              onOpenConversation={onOpenConversation}
+              onError={onError}
+            />
+          </section>
+        </div>
+      ) : null}
       {showCallDetails && filter ? (
         <BreakdownCallTable
           filter={filter}
@@ -256,13 +282,10 @@ function BreakdownListRow({
   showVendorIcon,
   showCallDetails,
   filter,
-  revision,
   selectedProjectName,
-  onToggleProject,
+  onSelectProject,
   onProjectRowKeyDown,
   onProviderClick,
-  onOpenConversation,
-  onError,
 }: {
   row: NamedAmount;
   projectNames?: boolean;
@@ -270,22 +293,17 @@ function BreakdownListRow({
   showVendorIcon?: boolean;
   showCallDetails?: boolean;
   filter?: Filter;
-  revision?: string;
   selectedProjectName: string | null;
-  onToggleProject: (name: string) => void;
+  onSelectProject: (name: string) => void;
   onProjectRowKeyDown: (event: KeyboardEvent<HTMLTableRowElement>, name: string) => void;
   onProviderClick?: (provider: string) => void;
-  onOpenConversation?: (session: { id: string; source: string }) => void;
-  onError?: (error: unknown) => void;
 }) {
   const displayName = projectNames ? projectLabel(row.name) : row.name;
   const projectClickable = Boolean(projectNames && filter);
   const selected = projectClickable
     ? selectedProjectName === row.name
     : Boolean(
-        showCallDetails &&
-          filter != null &&
-          filter.providers.includes(rawProviderName(row.name)),
+        showCallDetails && filter != null && filter.providers.includes(rawProviderName(row.name)),
       );
   const nameCell = showVendorIcon ? (
     <ModelLabel name={row.name} fallback={displayName} />
@@ -293,68 +311,51 @@ function BreakdownListRow({
     displayName
   );
   return (
-    <Fragment>
-      <tr
-        className={rowClassName(selected, projectClickable)}
-        tabIndex={projectClickable ? 0 : undefined}
-        aria-expanded={projectClickable ? selected : undefined}
-        aria-selected={projectClickable ? selected : undefined}
-        title={projectClickable ? projectRowTitle(row.name, selected) : undefined}
-        onClick={projectClickable ? () => onToggleProject(row.name) : undefined}
-        onKeyDown={
-          projectClickable ? (event) => onProjectRowKeyDown(event, row.name) : undefined
-        }
-      >
-        <td title={row.name}>
-          {onProviderClick ? (
-            <button
-              type="button"
-              className="rank-link"
-              onClick={() => onProviderClick(rawProviderName(row.name))}
-            >
-              {nameCell}
-            </button>
-          ) : projectClickable ? (
-            <span className="breakdown-expand-toggle">
-              <Icon name="chevron" size={12} className="breakdown-expand-caret" />
-              {nameCell}
-            </span>
-          ) : (
-            nameCell
-          )}
-        </td>
-        {showProviderChannel ? (
-          <td>
-            <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
-              {providerChannel(row.name)}
-            </span>
-          </td>
-        ) : null}
-        <td>
-          <span className="cell-bar">
-            <i style={{ width: `${row.share * 100}%` }} />
+    <tr
+      className={rowClassName(selected, projectClickable)}
+      tabIndex={projectClickable ? 0 : undefined}
+      aria-expanded={projectClickable ? selected : undefined}
+      aria-selected={projectClickable ? selected : undefined}
+      title={projectClickable ? projectRowTitle(row.name, selected) : undefined}
+      onClick={projectClickable ? () => onSelectProject(row.name) : undefined}
+      onKeyDown={projectClickable ? (event) => onProjectRowKeyDown(event, row.name) : undefined}
+    >
+      <td title={row.name}>
+        {onProviderClick ? (
+          <button
+            type="button"
+            className="rank-link"
+            onClick={() => onProviderClick(rawProviderName(row.name))}
+          >
+            {nameCell}
+          </button>
+        ) : projectClickable ? (
+          <span className="breakdown-expand-toggle">
+            <Icon name="chevron" size={12} className="breakdown-expand-caret" />
+            {nameCell}
           </span>
-          <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
-        </td>
-        <td>{formatTokens(row.total_tokens)}</td>
+        ) : (
+          nameCell
+        )}
+      </td>
+      {showProviderChannel ? (
         <td>
-          {formatCost(row.cost, row.unpriced)}
-          {row.unpriced ? " · 单价未配置" : ""}
+          <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
+            {providerChannel(row.name)}
+          </span>
         </td>
-      </tr>
-      {selected && projectClickable && filter ? (
-        <tr className="breakdown-expand-row">
-          <td colSpan={showProviderChannel ? 5 : 4}>
-            <BreakdownProjectSessions
-              filter={filter}
-              project={row.name}
-              revision={revision ?? ""}
-              onOpenConversation={onOpenConversation}
-              onError={onError}
-            />
-          </td>
-        </tr>
       ) : null}
-    </Fragment>
+      <td>
+        <span className="cell-bar">
+          <i style={{ width: `${row.share * 100}%` }} />
+        </span>
+        <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
+      </td>
+      <td>{formatTokens(row.total_tokens)}</td>
+      <td>
+        {formatCost(row.cost, row.unpriced)}
+        {row.unpriced ? " · 单价未配置" : ""}
+      </td>
+    </tr>
   );
 }
