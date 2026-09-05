@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
+use super::session_store::{ensure_matching_session, load_trusted_session_files};
 use super::toolbox::ParsedConversation;
 use super::{
-    ensure_matching_session, event_index, event_index_ready, line_direct,
-    load_trusted_session_files, parse_conversation_files, prepare_detail, qwen,
+    event_index, event_index_ready, line_direct, parse_conversation_files, prepare_detail, qwen,
     raw_export_extension, rebuild_events_from_line, MAX_PAGE_SIZE,
 };
 use crate::domain::{
