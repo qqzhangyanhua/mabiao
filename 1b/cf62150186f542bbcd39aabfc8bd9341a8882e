@@ -1,0 +1,37 @@
+src/components/Trend.tsx
+  s_539c36abea1599::t_c5337bae991cd0 235-239
+  s_539c36abea1599::t_f8165d695530cb 9,60,62,66,105-106,115,230,234,241-243,245-246
+  s_539c36abea1599::t_65ef3e0d4d6999 244
+  s_539c36abea1599::t_cf2ceb8fb22585 202,284
+  s_539c36abea1599::t_f03950c0850361 1,56,107-109,191-192,201,203-206,285-293
+src/styles/views/sessions.css
+  s_539c36abea1599::t_5b875a7ca67eb9 286-288,290-297,299-301,303-304
+  s_539c36abea1599::t_cb253a4b459e69 289
+  s_539c36abea1599::t_25727d9d9c22db 285,298,302
+src/components/Breakdown.tsx
+  s_539c36abea1599::t_b00dea83078640 1,26,28
+  s_539c36abea1599::t_d87c1817867758 286,297,314-335,337-341,343-345,348-359
+  s_539c36abea1599::t_e05eabeded1325 69,96,98-100,102-106,112,201-206,229,245-265
+  s_539c36abea1599::t_98758431fcb867 306
+src/components/BreakdownProjectSessions.tsx
+  s_539c36abea1599::t_98758431fcb867 143-148,198-202
+  s_539c36abea1599::t_b44e10b9538302 109
+src/components/TrendBucketSessions.tsx
+  s_539c36abea1599::t_0a3ea96e911b0c 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1bcf62150186f542bbcd39aabfc8bd9341a8882e",
+  "prompts": {},
+  "sessions": {
+    "s_539c36abea1599": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0723e-4a7a-7470-a4c5-9221d6a7e8a0",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
