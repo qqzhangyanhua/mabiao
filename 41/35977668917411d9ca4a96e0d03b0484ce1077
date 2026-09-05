@@ -1,0 +1,25 @@
+src/report/fuseBeadPaint.ts
+  s_92b22bbc22a9e0::t_fb360cc39a8f1b 5,10,15-16,102,131-133,135-136
+  s_92b22bbc22a9e0::t_2dfb282b500add 92-101,103-112,114-123,162-169
+src/report/fuseBeadPaint.test.ts
+  s_92b22bbc22a9e0::t_8e855325d0a8c8 3-12,31,38-42
+  s_92b22bbc22a9e0::t_7ec9b120b3d750 43-44
+src/report/fuseBeadLayout.ts
+  s_92b22bbc22a9e0::t_70caff6d5cfab8 7,14-17,147-150,152-154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4135977668917411d9ca4a96e0d03b0484ce1077",
+  "prompts": {},
+  "sessions": {
+    "s_92b22bbc22a9e0": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06f16-63d7-7783-a5cc-08037083844b",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
