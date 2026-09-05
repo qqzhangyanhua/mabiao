@@ -1,0 +1,20 @@
+src-tauri/src/conversation/read.rs
+  s_744f39ff3ce13b::t_8f6f0f1a93c0fb 1-2,5,7-10,17-19
+  s_744f39ff3ce13b::t_0ab08cec40877c 11-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b9b877e4319577f5e6a7b64e2ebac2143750f206",
+  "prompts": {},
+  "sessions": {
+    "s_744f39ff3ce13b": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06f63-5584-7d20-b25b-63e0b551036a",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
