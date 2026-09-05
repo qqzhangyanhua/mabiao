@@ -1,0 +1,27 @@
+src/hooks/usage/viewRefresh.test.ts
+  s_30b845184b2f4c::t_a99b02ac3432f4 13
+  s_30b845184b2f4c::t_c39c64184b8fda 600-602
+  s_30b845184b2f4c::t_621016045db917 316-331,333-335,337-364
+  s_30b845184b2f4c::t_884bcb6d233461 580-583,585-587,645,647-653,655-657,660,662-668,671-675
+  s_30b845184b2f4c::t_0b4789be4890db 332,336,523,527,539,550,577,639
+  s_30b845184b2f4c::t_0b43cec15b0724 521-522,524-526,528-538,540-549,551-576,578-579,584,588-596,603-638,640-644,646,654,658-659,661,669-670,676-716
+  s_30b845184b2f4c::t_c58508a71d2df0 597-599
+src/hooks/usage/viewRefresh.ts
+  s_30b845184b2f4c::t_39335f00367a6e 282-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "9027fefd901cfcf6883ff15942b237c070fc4417",
+  "prompts": {},
+  "sessions": {
+    "s_30b845184b2f4c": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a070ae-544f-7682-8ce7-993810b7acc4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
