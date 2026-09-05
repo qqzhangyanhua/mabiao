@@ -15,9 +15,11 @@
 
 摄取缓存 `store::ADAPTER_VERSION` 与对话记录 `CONVERSATION_ADAPTER_VERSION` 在纯重构中**不得改动**。改了就说明动了归一化输出。
 
+「不为行数加机械门禁」与「为依赖方向加机械门禁」是两个独立决定。行数阈值会激励「把 900 行拆成两个 450 行」这类无语义收益的切分；依赖方向不会。依赖方向门禁当前只作用于对话记录目录（`src-tauri/src/conversation/`：禁止 `use super::*`，模块根不得定义白名单外的 `fn`），推广到存储层、查询层、数据模型等目录留待这条约束被验证之后。
+
 ## 后果
 
 - 加字段时先看它属于哪个 domain 子模块。
 - 新增来源时同时看编排层有没有又胀回去。
 - 不为软红线加机械 CI 门禁。
-- **已知超线文件（2026-09，待继续拆分）**：`conversation/mod.rs`、`conversation/toolbox.rs`、`ingest.rs`、`conversation/event_index.rs`、`aggregate.rs`。超线不阻断 CI，但新增逻辑应优先进子模块而非继续堆高。
+- **已知超线文件（2026-09，待继续拆分）**：`conversation/toolbox.rs`、`ingest.rs`、`aggregate.rs`。超线不阻断 CI，但新增逻辑应优先进子模块而非继续堆高。

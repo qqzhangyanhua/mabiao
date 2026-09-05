@@ -55,7 +55,82 @@ use super::{persist, read};
 }
 
 #[test]
-fn conversation_directory_has_no_super_wildcard() {
+fn inspect_reports_root_fn_outside_whitelist() {
+    let source = "\
+pub use catalog::{sessions_page, indexed_events};
+
+fn leftover_helper() {}
+
+pub fn load_events() {}
+";
+    let violations = inspect_conversation_boundary([("mod.rs", source)]);
+    assert_eq!(violations.len(), 1, "{violations:?}");
+    assert_eq!(violations[0].file, "mod.rs");
+    assert_eq!(violations[0].line, 3);
+    assert_eq!(
+        violations[0].rule,
+        ConversationBoundaryRule::RootFnWhitelist
+    );
+    assert_eq!(violations[0].symbol, "leftover_helper");
+    assert_eq!(
+        violations[0].to_string(),
+        "mod.rs:3: root_fn_whitelist (leftover_helper)"
+    );
+}
+
+#[test]
+fn inspect_allows_root_reexports_and_whitelisted_fns() {
+    let source = "\
+pub use catalog::{sessions_page, indexed_events};
+pub(crate) use persist::apply_incremental;
+pub use read::{load_detail, load_events as unused_alias};
+
+pub(crate) type ConversationDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
+pub(crate) type ConversationIndexFn =
+    fn(&Path) -> Result<ConversationIndexBatch, ConversationIndexIssue>;
+
+pub(crate) fn conversation_adapter() {}
+pub(super) fn raw_export_extension() {}
+pub fn load_events() {}
+pub(crate) fn prepare_events_read() {}
+pub(crate) fn finish_prepared_events() {}
+pub fn refresh_codex() {}
+pub fn codex_index_for_bench() {}
+pub fn codex_index_suffix_for_bench() {}
+pub(crate) fn refresh_source_in_roots() {}
+pub(crate) fn parse_conversation_file() {}
+pub(super) fn parse_conversation_files() {}
+
+// fn leftover_helper() {}
+";
+    let violations = inspect_conversation_boundary([("mod.rs", source)]);
+    assert!(
+        violations
+            .iter()
+            .all(|item| item.rule != ConversationBoundaryRule::RootFnWhitelist),
+        "含 re-export 的合规根样本不应报规则二：{violations:?}"
+    );
+    assert!(
+        violations.is_empty(),
+        "含 re-export 的合规根样本不应报任何边界违规：{violations:?}"
+    );
+}
+
+#[test]
+fn inspect_ignores_non_root_fns_for_whitelist() {
+    let source = "\
+fn leftover_helper() {}
+pub(crate) fn read_source_line() {}
+";
+    let violations = inspect_conversation_boundary([("attachments.rs", source)]);
+    assert!(
+        violations.is_empty(),
+        "叶子模块定义任意 fn 不应触发规则二：{violations:?}"
+    );
+}
+
+#[test]
+fn conversation_directory_respects_boundary_rules() {
     let files = conversation_module_sources();
     assert!(
         !files.is_empty(),
@@ -64,6 +139,14 @@ fn conversation_directory_has_no_super_wildcard() {
     assert!(
         files.iter().any(|(name, _)| name == "read.rs"),
         "扫描范围必须包含 conversation/read.rs，实际：{:?}",
+        files
+            .iter()
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        files.iter().any(|(name, _)| name == "mod.rs"),
+        "扫描范围必须包含 conversation/mod.rs，规则二才有检查对象。实际：{:?}",
         files
             .iter()
             .map(|(name, _)| name.as_str())
