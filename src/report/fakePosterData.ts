@@ -29,9 +29,20 @@ export const FAKE_POSTER: PosterViewModel = {
     { label: "Grok", pct: 17, color: "#f472b6" },
   ],
   stats: [
-    { label: "最忙的一天", value: "周三" },
-    { label: "模型 Top 3", value: "claude-opus-4.1 · gpt-5 · grok-4" },
-    { label: "最贵的一次", value: "$4.20 · 重构鉴权中间件" },
+    { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+    {
+      kind: "models",
+      label: "模型 Top 3",
+      value: "claude-opus-4.1 · gpt-5 · grok-4",
+      items: ["claude-opus-4.1", "gpt-5", "grok-4"],
+    },
+    {
+      kind: "top_session",
+      label: "最贵的一次",
+      value: "$4.20 · 重构鉴权中间件",
+      amount: "$4.20",
+      project: "重构鉴权中间件",
+    },
   ],
 };
 

@@ -28,9 +28,13 @@ describe("fake poster fixtures", () => {
       expect(item.data.days).toHaveLength(7);
       expect(item.data.sources.length).toBeGreaterThan(0);
       expect(item.data.stats).toHaveLength(3);
-      expect(item.data.stats[0]?.label).toBe("最忙的一天");
-      expect(item.data.stats[1]?.label).toMatch(/^模型( Top [23])?$/);
-      expect(item.data.stats[2]?.label).toMatch(/^(最贵的一次|消耗最多的一次)$/);
+      expect(item.data.stats.find((stat) => stat.kind === "busiest_day")?.label).toBe("最忙的一天");
+      expect(item.data.stats.find((stat) => stat.kind === "models")?.label).toMatch(
+        /^模型( Top [23])?$/,
+      );
+      expect(item.data.stats.find((stat) => stat.kind === "top_session")?.label).toMatch(
+        /^(最贵的一次|消耗最多的一次)$/,
+      );
     }
   });
 });

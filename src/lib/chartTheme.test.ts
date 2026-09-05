@@ -45,8 +45,12 @@ describe("donutOption tooltip", () => {
     if (!tooltip || Array.isArray(tooltip) || typeof tooltip.formatter !== "function") {
       throw new Error("expected a tooltip formatter");
     }
-    expect(tooltip.formatter({ name: "cursor-grok-4.6-high-fast", value: 971_668_192, percent: 19.3 }, "")).toBe(
-      "cursor-grok-4.6-high-fast<br/>971.67M (19.3%)",
-    );
+    const format = tooltip.formatter as (
+      params: { name: string; value: number; percent: number },
+      ticket: string,
+    ) => string;
+    expect(
+      format({ name: "cursor-grok-4.6-high-fast", value: 971_668_192, percent: 19.3 }, ""),
+    ).toBe("cursor-grok-4.6-high-fast<br/>971.67M (19.3%)");
   });
 });

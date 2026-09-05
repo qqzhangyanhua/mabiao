@@ -32,10 +32,15 @@ function expectSendablePoster(poster: ReturnType<typeof toPosterViewModel>) {
   expect(poster.days).toHaveLength(7);
   expect(poster.sources.length).toBeGreaterThan(0);
   expect(poster.stats).toHaveLength(3);
-  expect(poster.stats[0]?.label).toBe("最忙的一天");
-  expect(poster.stats[0]?.value).toMatch(/^周[一二三四五六日]$/);
-  expect(poster.stats[1]?.label).toMatch(/^模型( Top [23])?$/);
-  expect(poster.stats[2]?.label).toMatch(/^(最贵的一次|消耗最多的一次)$/);
+  const busiest = poster.stats.find((stat) => stat.kind === "busiest_day");
+  const models = poster.stats.find((stat) => stat.kind === "models");
+  const topSession = poster.stats.find((stat) => stat.kind === "top_session");
+  expect(busiest).toMatchObject({ kind: "busiest_day", label: "最忙的一天" });
+  expect(busiest?.value).toMatch(/^周[一二三四五六日]$/);
+  expect(models).toMatchObject({ kind: "models" });
+  expect(models?.label).toMatch(/^模型( Top [23])?$/);
+  expect(topSession).toMatchObject({ kind: "top_session" });
+  expect(topSession?.label).toMatch(/^(最贵的一次|消耗最多的一次)$/);
   for (const stat of poster.stats) {
     expect(stat.value.length).toBeGreaterThan(0);
   }
@@ -70,9 +75,20 @@ describe("extreme poster composition", () => {
       "最活跃的时段是 00:00 到 04:00。",
     ]);
     expect(poster?.stats).toEqual([
-      { label: "最忙的一天", value: "周三" },
-      { label: "模型", value: "claude-sonnet-5" },
-      { label: "消耗最多的一次", value: "80 token · a" },
+      { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+      {
+        kind: "models",
+        label: "模型",
+        value: "claude-sonnet-5",
+        items: ["claude-sonnet-5"],
+      },
+      {
+        kind: "top_session",
+        label: "消耗最多的一次",
+        value: "80 token · a",
+        amount: "80",
+        project: "a",
+      },
     ]);
   });
 
@@ -107,9 +123,20 @@ describe("extreme poster composition", () => {
     expect(poster?.days.map((day) => day.tokens)).toEqual([0, 0, 0, 80, 0, 0, 0]);
     expect(poster?.comments[1]).toBe("这个周期没有在凌晨烧过 token。");
     expect(poster?.stats).toEqual([
-      { label: "最忙的一天", value: "周四" },
-      { label: "模型", value: "claude-sonnet-5" },
-      { label: "消耗最多的一次", value: "50 token · a" },
+      { kind: "busiest_day", label: "最忙的一天", value: "周四" },
+      {
+        kind: "models",
+        label: "模型",
+        value: "claude-sonnet-5",
+        items: ["claude-sonnet-5"],
+      },
+      {
+        kind: "top_session",
+        label: "消耗最多的一次",
+        value: "50 token · a",
+        amount: "50",
+        project: "a",
+      },
     ]);
   });
 
@@ -123,7 +150,12 @@ describe("extreme poster composition", () => {
     expectSendablePoster(poster);
     expect(poster?.sources).toHaveLength(1);
     expect(poster?.sources[0]?.pct).toBe(100);
-    expect(poster?.stats[1]).toEqual({ label: "模型", value: "opus" });
+    expect(poster?.stats.find((stat) => stat.kind === "models")).toEqual({
+      kind: "models",
+      label: "模型",
+      value: "opus",
+      items: ["opus"],
+    });
   });
 
   it("does not treat a real sub-cent cost as a zero placeholder", () => {

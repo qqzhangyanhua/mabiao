@@ -310,7 +310,9 @@ describe("toPosterViewModel", () => {
         insights: [{ kind: "busiest_day", weekday: 2 }],
       }),
     );
-    expect(poster?.stats).toEqual([{ label: "最忙的一天", value: "周三" }]);
+    expect(poster?.stats).toEqual([
+      { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+    ]);
   });
 
   it("maps a single source as one 100% share slice with the source label", () => {
@@ -351,7 +353,14 @@ describe("toPosterViewModel", () => {
         models: ["claude-sonnet-5"],
       }),
     );
-    expect(poster?.stats).toEqual([{ label: "模型", value: "claude-sonnet-5" }]);
+    expect(poster?.stats).toEqual([
+      {
+        kind: "models",
+        label: "模型",
+        value: "claude-sonnet-5",
+        items: ["claude-sonnet-5"],
+      },
+    ]);
   });
 
   it("drops unlabeled models from the rank and does not print 未标注", () => {
@@ -362,7 +371,9 @@ describe("toPosterViewModel", () => {
         models: ["（未标注）", "opus", ""],
       }),
     );
-    expect(mixed?.stats).toEqual([{ label: "模型", value: "opus" }]);
+    expect(mixed?.stats).toEqual([
+      { kind: "models", label: "模型", value: "opus", items: ["opus"] },
+    ]);
     const none = toPosterViewModel(
       dto({
         has_data: true,
@@ -370,7 +381,7 @@ describe("toPosterViewModel", () => {
         models: ["（未标注）", ""],
       }),
     );
-    expect(none?.stats.some((stat) => stat.label.startsWith("模型"))).toBe(false);
+    expect(none?.stats.some((stat) => stat.kind === "models")).toBe(false);
     expect(JSON.stringify(none?.stats)).not.toContain("未标注");
   });
 
@@ -382,7 +393,9 @@ describe("toPosterViewModel", () => {
         models: ["opus", "gpt-5"],
       }),
     );
-    expect(two?.stats).toEqual([{ label: "模型 Top 2", value: "opus · gpt-5" }]);
+    expect(two?.stats).toEqual([
+      { kind: "models", label: "模型 Top 2", value: "opus · gpt-5", items: ["opus", "gpt-5"] },
+    ]);
     const three = toPosterViewModel(
       dto({
         has_data: true,
@@ -390,7 +403,14 @@ describe("toPosterViewModel", () => {
         models: ["opus", "gpt-5", "grok-4"],
       }),
     );
-    expect(three?.stats).toEqual([{ label: "模型 Top 3", value: "opus · gpt-5 · grok-4" }]);
+    expect(three?.stats).toEqual([
+      {
+        kind: "models",
+        label: "模型 Top 3",
+        value: "opus · gpt-5 · grok-4",
+        items: ["opus", "gpt-5", "grok-4"],
+      },
+    ]);
   });
 
   it("puts the model rank after busiest day in the stats row", () => {
@@ -403,8 +423,8 @@ describe("toPosterViewModel", () => {
       }),
     );
     expect(poster?.stats).toEqual([
-      { label: "最忙的一天", value: "周三" },
-      { label: "模型", value: "opus" },
+      { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+      { kind: "models", label: "模型", value: "opus", items: ["opus"] },
     ]);
   });
 
@@ -429,9 +449,15 @@ describe("toPosterViewModel", () => {
       }),
     );
     expect(priced?.stats).toEqual([
-      { label: "最忙的一天", value: "周三" },
-      { label: "模型", value: "opus" },
-      { label: "最贵的一次", value: "$4.20 · a" },
+      { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+      { kind: "models", label: "模型", value: "opus", items: ["opus"] },
+      {
+        kind: "top_session",
+        label: "最贵的一次",
+        value: "$4.20 · a",
+        amount: "$4.20",
+        project: "a",
+      },
     ]);
 
     const tokens = toPosterViewModel(
@@ -451,7 +477,78 @@ describe("toPosterViewModel", () => {
         ],
       }),
     );
-    expect(tokens?.stats).toEqual([{ label: "消耗最多的一次", value: "80 token" }]);
+    expect(tokens?.stats).toEqual([
+      {
+        kind: "top_session",
+        label: "消耗最多的一次",
+        value: "80 token",
+        amount: "80",
+        project: null,
+      },
+    ]);
+  });
+
+  it("keeps model and top-session kinds when busiest_day is missing", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 12_400_000, session_count: 1 },
+        models: ["opus", "gpt-5"],
+        insights: [
+          {
+            kind: "top_session",
+            by: "tokens",
+            source: "codex",
+            session_id: "s0",
+            project: "/proj/a",
+            cost: null,
+            total_tokens: 12_400_000,
+          },
+        ],
+      }),
+    );
+    expect(poster?.stats).toEqual([
+      { kind: "models", label: "模型 Top 2", value: "opus · gpt-5", items: ["opus", "gpt-5"] },
+      {
+        kind: "top_session",
+        label: "消耗最多的一次",
+        value: "12.4M token · a",
+        amount: "12.4M",
+        project: "a",
+      },
+    ]);
+  });
+
+  it("omits the models slot when every model is unlabeled and keeps other kinds", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        models: ["（未标注）", ""],
+        insights: [
+          { kind: "busiest_day", weekday: 2 },
+          {
+            kind: "top_session",
+            by: "tokens",
+            source: "codex",
+            session_id: "s0",
+            project: null,
+            cost: 0,
+            total_tokens: 80,
+          },
+        ],
+      }),
+    );
+    expect(poster?.stats).toEqual([
+      { kind: "busiest_day", label: "最忙的一天", value: "周三" },
+      {
+        kind: "top_session",
+        label: "消耗最多的一次",
+        value: "80 token",
+        amount: "80",
+        project: null,
+      },
+    ]);
   });
 
   it("appends night-share and peak-hours comments, including 0% and 100%", () => {

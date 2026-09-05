@@ -122,14 +122,13 @@ export function insightCopy(insight: ReportInsight): InsightCopy {
     }
     case "top_session": {
       const headline = insight.by === "cost" ? "最贵的一次" : "消耗最多的一次";
-      const amount =
-        insight.by === "cost" && insight.cost != null
-          ? formatUsdAmount(insight.cost)
-          : `${formatCompact(insight.total_tokens)} token`;
-      const project = insight.project?.trim();
+      const amount = topSessionAmount(insight);
+      const quantity =
+        insight.by === "cost" && insight.cost != null ? amount : `${amount} token`;
+      const project = topSessionProject(insight);
       return {
         headline,
-        comment: project ? `${amount} · ${projectLabel(project)}` : amount,
+        comment: project ? `${quantity} · ${project}` : quantity,
       };
     }
     default: {
@@ -157,18 +156,26 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
   const stats: PosterStat[] = [];
   if (busiest) {
     const copy = insightCopy(busiest);
-    stats.push({ label: copy.headline, value: copy.comment });
+    stats.push({ kind: "busiest_day", label: copy.headline, value: copy.comment });
   }
   const models = namedModels(dto.models);
   if (models.length > 0) {
     stats.push({
+      kind: "models",
       label: modelRankLabel(models.length),
       value: models.join(" · "),
+      items: models,
     });
   }
   if (topSession) {
     const copy = insightCopy(topSession);
-    stats.push({ label: copy.headline, value: copy.comment });
+    stats.push({
+      kind: "top_session",
+      label: copy.headline,
+      value: copy.comment,
+      amount: topSessionAmount(topSession),
+      project: topSessionProject(topSession),
+    });
   }
   const phrases = periodPhrases(dto.period_kind);
   return {
@@ -190,6 +197,18 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
     })),
     stats,
   };
+}
+
+function topSessionAmount(insight: Extract<ReportInsight, { kind: "top_session" }>): string {
+  if (insight.by === "cost" && insight.cost != null) {
+    return formatUsdAmount(insight.cost);
+  }
+  return formatCompact(insight.total_tokens);
+}
+
+function topSessionProject(insight: Extract<ReportInsight, { kind: "top_session" }>): string | null {
+  const project = insight.project?.trim();
+  return project ? projectLabel(project) : null;
 }
 
 function namedModels(models: string[]): string[] {
