@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { heatmapFilter } from "../../lib/calendar";
-import type { Filter, View } from "../../types";
+import type { Filter, Grain, View } from "../../types";
 import { isViewFresh, viewStamp, views, viewsWarmedBy } from "../viewCache";
 import type { UsageViewPatch } from "./useUsageViewState";
 import type { ViewRefreshContext } from "./viewRefresh";
@@ -132,6 +132,7 @@ function makeContext(
     dataEpochRef: { current: 0 },
     loadedStampsRef: { current: {} },
     optionsEpochRef: { current: -1 },
+    wideRefreshGenerationRef: { current: null },
     markHydrated: vi.fn(),
     apply: vi.fn<(patch: UsageViewPatch) => void>(),
     nextFilter: rangedFilter,
@@ -793,4 +794,150 @@ describe("runTrendRefresh", () => {
       cmd("get_application_analytics", { filter: rangedFilter, grain: "week" }),
     ]);
   });
+});
+
+function wideCommands(view: View, grain: Grain): CommandCall[] {
+  const found = VIEW_CASES.find((item) => item.view === view);
+  if (!found) {
+    throw new Error(`missing view case ${view}`);
+  }
+  return found.commands.map((call) => {
+    const args = payloadRecord(call.args);
+    if (call.command === "get_trend" && args?.filter === rangedFilter) {
+      return cmd("get_trend", { filter: rangedFilter, grain });
+    }
+    if (call.command === "get_application_analytics") {
+      return cmd("get_application_analytics", { filter: rangedFilter, grain });
+    }
+    return call;
+  });
+}
+
+function startHangingWide(ctx: TestContext, hangCommand: string) {
+  const gate = gateCommands([hangCommand]);
+  return { pending: runViewRefresh(ctx), gate };
+}
+
+async function finishHangingWide(
+  hanging: { pending: Promise<void>; gate: ReturnType<typeof gateCommands> },
+  hangCommand: string,
+) {
+  hanging.gate.take(hangCommand).resolve(resultFor(hangCommand, undefined));
+  await hanging.pending;
+}
+
+describe("grain change with in-flight wide refresh", () => {
+  beforeEach(stubInvoke);
+
+  it("upgrades a grain change to that view's wide command set with the new grain", async () => {
+    const ctx = makeContext({ view: "overview", grain: "week" });
+    const hanging = startHangingWide(ctx, "get_official_quota");
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expectCommandSet(wideCommands("overview", "day"));
+    await finishHangingWide(hanging, "get_official_quota");
+  });
+
+  it("keeps a grain change as a trend-only refresh when no wide refresh is in flight", async () => {
+    const ctx = makeContext({ view: "overview", grain: "week" });
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "day" })]);
+  });
+
+  it("marks the view hydrated and writes updatedAt after an upgraded wide refresh finishes", async () => {
+    const ctx = makeContext({ view: "overview", grain: "week" });
+    const hanging = startHangingWide(ctx, "get_official_quota");
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expect(ctx.markHydrated).toHaveBeenCalledWith("overview", rangedFilter, "7");
+    expect(hasUpdatedAt(ctx.apply)).toBe(true);
+    expect(loadingFlags(ctx.apply).at(-1)).toBe(false);
+    await finishHangingWide(hanging, "get_official_quota");
+  });
+
+  it("treats a later grain change as trend-only after a wide refresh finishes", async () => {
+    const ctx = makeContext({ view: "overview", grain: "week" });
+    await runViewRefresh(ctx);
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "day" })]);
+  });
+
+  it("treats a later grain change as trend-only after a wide refresh fails", async () => {
+    invokeMock.mockImplementation((command, payload) => {
+      if (command === "get_trend") {
+        return Promise.reject(new Error("boom"));
+      }
+      return Promise.resolve(resultFor(String(command), payload));
+    });
+    const ctx = makeContext({ view: "overview" });
+    await expect(runViewRefresh(ctx)).rejects.toThrow("boom");
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "day" })]);
+  });
+
+  it("treats a later grain change as trend-only after a newer generation cancels the wide refresh", async () => {
+    const ctx = makeContext({ view: "overview" });
+    const hanging = startHangingWide(ctx, "get_official_quota");
+    ctx.requestGenerationRef.current += 1;
+    await finishHangingWide(hanging, "get_official_quota");
+    expect(ctx.markHydrated).not.toHaveBeenCalled();
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "day" });
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "day" })]);
+  });
+
+  it("does not scramble consecutive grain-change upgrades", async () => {
+    const ctx = makeContext({ view: "overview", grain: "week" });
+    const hanging = startHangingWide(ctx, "get_official_quota");
+    const dayUpgrade = runTrendRefresh({ ...ctx, grain: "day" });
+    const monthUpgrade = runTrendRefresh({ ...ctx, grain: "month" });
+    const pageTrendGrains = recordedCalls()
+      .filter((call) => {
+        if (call.command !== "get_trend") {
+          return false;
+        }
+        return payloadRecord(call.args)?.filter === rangedFilter;
+      })
+      .map((call) => payloadRecord(call.args)?.grain);
+    expect(pageTrendGrains).toEqual(["week", "day", "month"]);
+    hanging.gate.take("get_official_quota").resolve(QUOTA);
+    hanging.gate.take("get_official_quota").resolve(QUOTA);
+    hanging.gate.take("get_official_quota").resolve(QUOTA);
+    await Promise.all([hanging.pending, dayUpgrade, monthUpgrade]);
+    expect(ctx.markHydrated).toHaveBeenCalledTimes(1);
+    expect(ctx.markHydrated).toHaveBeenCalledWith("overview", rangedFilter, "7");
+    stubInvoke();
+    await runTrendRefresh({ ...ctx, grain: "hour" });
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "hour" })]);
+  });
+
+  it.each([
+    {
+      view: "trend" as const,
+      hangCommand: "get_trend",
+      narrow: (grain: Grain) => [cmd("get_trend", { filter: rangedFilter, grain })],
+    },
+    {
+      view: "application" as const,
+      hangCommand: "get_application_analytics",
+      narrow: (grain: Grain) => [
+        cmd("get_application_analytics", { filter: rangedFilter, grain }),
+      ],
+    },
+  ])(
+    "upgrades grain changes on the $view view only while a wide refresh is in flight",
+    async ({ view, hangCommand, narrow }) => {
+      const ctx = makeContext({ view, grain: "week" });
+      const hanging = startHangingWide(ctx, hangCommand);
+      stubInvoke();
+      await runTrendRefresh({ ...ctx, grain: "day" });
+      expectCommandSet(wideCommands(view, "day"));
+      await finishHangingWide(hanging, hangCommand);
+      stubInvoke();
+      await runTrendRefresh({ ...ctx, grain: "month" });
+      expectCommandSet(narrow("month"));
+    },
+  );
 });

@@ -31,6 +31,7 @@ export type ViewRefreshContext = {
   dataEpochRef: { current: number };
   loadedStampsRef: { current: Partial<Record<View, string>> };
   optionsEpochRef: { current: number };
+  wideRefreshGenerationRef: { current: number | null };
   markHydrated: (target: View, nextFilter: Filter, nextPreset: string) => void;
   apply: (patch: UsageViewPatch) => void;
   nextFilter: Filter;
@@ -50,12 +51,14 @@ export async function runViewRefresh(ctx: ViewRefreshContext): Promise<void> {
     dataEpochRef,
     loadedStampsRef,
     optionsEpochRef,
+    wideRefreshGenerationRef,
     markHydrated,
     apply,
     nextFilter,
     nextPreset,
   } = ctx;
   const generation = ++requestGenerationRef.current;
+  wideRefreshGenerationRef.current = generation;
   const localOnly =
     view === "conversations" ||
     view === "cursor" ||
@@ -258,6 +261,9 @@ export async function runViewRefresh(ctx: ViewRefreshContext): Promise<void> {
       markHydrated(view, nextFilter, nextPreset);
     }
   } finally {
+    if (wideRefreshGenerationRef.current === generation) {
+      wideRefreshGenerationRef.current = null;
+    }
     if (generation === requestGenerationRef.current) {
       apply({ loading: false });
     }
@@ -274,6 +280,7 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
     requestGenerationRef,
     dataEpochRef,
     loadedStampsRef,
+    wideRefreshGenerationRef,
     markHydrated,
     apply,
     nextFilter,
@@ -288,6 +295,10 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
   );
   if (view !== "overview" && view !== "trend" && view !== "application") {
     return;
+  }
+  // 宽刷新在飞时升级，避免窄刷新取消它之后只补回趋势。
+  if (wideRefreshGenerationRef.current !== null) {
+    return runViewRefresh(ctx);
   }
   const generation = ++requestGenerationRef.current;
   const commit = (patch: UsageViewPatch) => {

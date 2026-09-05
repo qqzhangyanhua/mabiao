@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from "react";
+import { useCallback, useRef, type MutableRefObject } from "react";
 import type { Filter, Grain, View } from "../../types";
 import type { UsageViewPatch } from "./useUsageViewState";
 import { runTrendRefresh, runViewRefresh } from "./viewRefresh";
@@ -31,6 +31,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
     markHydrated,
     apply,
   } = args;
+  const wideRefreshGenerationRef = useRef<number | null>(null);
 
   const refreshViews = useCallback(
     async (nextFilter = filter, nextPreset = preset) =>
@@ -42,6 +43,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         dataEpochRef,
         loadedStampsRef,
         optionsEpochRef,
+        wideRefreshGenerationRef,
         markHydrated,
         apply,
         nextFilter,
@@ -58,6 +60,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       dataEpochRef,
       loadedStampsRef,
       optionsEpochRef,
+      wideRefreshGenerationRef,
       apply,
     ],
   );
@@ -72,6 +75,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         dataEpochRef,
         loadedStampsRef,
         optionsEpochRef,
+        wideRefreshGenerationRef,
         markHydrated,
         apply,
         nextFilter,
@@ -88,6 +92,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       dataEpochRef,
       loadedStampsRef,
       optionsEpochRef,
+      wideRefreshGenerationRef,
       apply,
     ],
   );
