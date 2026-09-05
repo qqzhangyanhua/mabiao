@@ -826,10 +826,32 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
     let codex_dir = home.join(".codex/sessions");
     std::fs::create_dir_all(&codex_dir).unwrap();
     std::fs::write(codex_dir.join("one.jsonl"), fixture("codex.jsonl")).unwrap();
+    // 根目录在、适配器钩子不认：诊断不得把 kimi 标成已检测。
+    std::fs::create_dir_all(home.join(".kimi")).unwrap();
+    // 原生 Cursor 目录不是消耗记录扫描根：诊断不得把 cursor_agent 标成已检测。
+    std::fs::create_dir_all(home.join(".cursor/chats")).unwrap();
     let conn = store::open_memory().unwrap();
-    ingest::ingest_all(&conn, home).unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
 
     let diagnostics = ingest::source_diagnostics(&conn, home).unwrap();
+    assert_eq!(diagnostics.len(), Source::ALL.len());
+    for source in Source::ALL {
+        let diagnostic = diagnostics
+            .iter()
+            .find(|row| row.source == source.as_str())
+            .unwrap_or_else(|| panic!("{} missing from diagnostics", source.as_str()));
+        let ingest_row = report
+            .sources
+            .iter()
+            .find(|row| row.source == source.as_str())
+            .unwrap_or_else(|| panic!("{} missing from ingest report", source.as_str()));
+        assert_eq!(
+            diagnostic.detected,
+            ingest_row.detected,
+            "{} diagnostics.detected must equal ingest report.detected",
+            source.as_str()
+        );
+    }
     let codex = diagnostics
         .iter()
         .find(|diagnostic| diagnostic.source == "codex")
@@ -851,6 +873,15 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
         .find(|diagnostic| diagnostic.source == "kimi")
         .unwrap();
     assert_eq!(kimi.coverage, "轮级 Token（无模型名）");
+    assert!(
+        !kimi.detected,
+        "kimi root without sessions/ must not count as detected"
+    );
+    assert!(
+        kimi.root_path.contains(".kimi"),
+        "kimi path text stays the display root: {}",
+        kimi.root_path
+    );
     let grok = diagnostics
         .iter()
         .find(|diagnostic| diagnostic.source == "grok")
@@ -868,7 +899,7 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
         .unwrap();
     assert!(
         !cursor_agent.detected,
-        "empty home should not report a fake usage directory as detected"
+        "native Cursor dirs must not count as a usage scan root"
     );
     assert_eq!(
         cursor_agent.root_path,
@@ -885,7 +916,7 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
 }
 
 #[test]
-fn cursor_agent_diagnostics_detect_shared_cursor_dirs_not_usage_dir() {
+fn cursor_agent_diagnostics_detect_usage_scan_root_not_shared_cursor_dirs() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     std::fs::create_dir_all(home.join(".cursor/chats")).unwrap();
@@ -896,7 +927,10 @@ fn cursor_agent_diagnostics_detect_shared_cursor_dirs_not_usage_dir() {
         .iter()
         .find(|diagnostic| diagnostic.source == "cursor_agent")
         .unwrap();
-    assert!(cursor_agent.detected);
+    assert!(
+        !cursor_agent.detected,
+        "native Cursor dirs are display-only; usage scan root is absent"
+    );
     assert!(cursor_agent.root_path.contains(".cursor/chats"));
     assert!(cursor_agent.root_path.contains(".cursor/projects"));
     assert!(
@@ -906,6 +940,75 @@ fn cursor_agent_diagnostics_detect_shared_cursor_dirs_not_usage_dir() {
     assert_eq!(
         ingest::source_scan_dirs_with(&ingest::PathOverrides::new(), home, Source::CursorAgent),
         vec![home.join(".cursor-agent-usage")],
+    );
+
+    std::fs::create_dir_all(home.join(".cursor-agent-usage")).unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let diagnostics = ingest::source_diagnostics(&conn, home).unwrap();
+    let cursor_agent = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "cursor_agent")
+        .unwrap();
+    let ingest_row = report
+        .sources
+        .iter()
+        .find(|row| row.source == "cursor_agent")
+        .unwrap();
+    assert!(cursor_agent.detected);
+    assert_eq!(cursor_agent.detected, ingest_row.detected);
+    assert_eq!(
+        cursor_agent.root_path,
+        format!(
+            "{}, {}, {}",
+            home.join(".cursor/chats").display(),
+            home.join(".cursor/projects").display(),
+            home.join(".cursor-agent-usage").display()
+        )
+    );
+}
+
+#[test]
+fn kimi_diagnostics_ignore_root_without_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    std::fs::create_dir_all(home.join(".kimi")).unwrap();
+    let conn = store::open_memory().unwrap();
+
+    let diagnostics = ingest::source_diagnostics(&conn, home).unwrap();
+    let kimi = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "kimi")
+        .unwrap();
+    assert!(
+        !kimi.detected,
+        "kimi root without sessions/ is not a usage scan root"
+    );
+    assert!(
+        kimi.root_path.contains(".kimi"),
+        "path text still shows the display root: {}",
+        kimi.root_path
+    );
+
+    let custom = home.join("elsewhere-kimi");
+    std::fs::create_dir_all(custom.join("sessions")).unwrap();
+    let overrides = ingest::PathOverrides::from([("KIMI_DATA_DIR", vec![custom])]);
+    let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
+    let diagnostics = ingest::source_diagnostics_with(&conn, home, &overrides).unwrap();
+    let kimi = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.source == "kimi")
+        .unwrap();
+    let ingest_row = report
+        .sources
+        .iter()
+        .find(|row| row.source == "kimi")
+        .unwrap();
+    assert!(kimi.detected);
+    assert_eq!(kimi.detected, ingest_row.detected);
+    assert!(
+        kimi.root_path.contains("elsewhere-kimi"),
+        "override must be what detection and path text both see: {}",
+        kimi.root_path
     );
 }
 
