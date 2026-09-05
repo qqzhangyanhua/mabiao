@@ -1,0 +1,28 @@
+src/hooks/usage/useViewRefresh.ts
+  s_05bafe7d000900::t_e76125e39d058f 1,34,46,63,78,95
+src/hooks/usage/viewRefresh.ts
+  s_05bafe7d000900::t_973e8b4a988d39 34
+  s_05bafe7d000900::t_cef78d0efbc875 54,61,264-266,283,300-301
+  s_05bafe7d000900::t_3dd2a1bf5be583 299
+  s_05bafe7d000900::t_b0498702bbd536 302
+src/hooks/usage/viewRefresh.test.ts
+  s_05bafe7d000900::t_864d91489fe9e6 3,135,798-930,932-935,937-942
+  s_05bafe7d000900::t_48bb0ca8f8ce78 931,936
+  s_05bafe7d000900::t_33e76c8ee05c4c 943
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "328766a3e2b801411d9d7c1729ea00d96859ac9f",
+  "prompts": {},
+  "sessions": {
+    "s_05bafe7d000900": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a070f1-e9b2-7e63-9bc6-3c6a3d5a33d3",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
