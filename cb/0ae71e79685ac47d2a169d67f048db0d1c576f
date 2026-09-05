@@ -1,0 +1,51 @@
+src/App.tsx
+  s_87201aa209d901::t_455c4d2d6c25b6 179
+src/lib/conversationDisplay.test.ts
+  s_87201aa209d901::t_7e08de97f0430f 5,13,58-93
+  s_87201aa209d901::t_49d6f521934c8f 94
+src-tauri/src/tests/query.rs
+  s_87201aa209d901::t_2679adb3cc0322 711
+  s_87201aa209d901::t_d9da6a92f62df1 680-710,712-732
+  s_87201aa209d901::t_6ceb9a38e69a3e 679
+src/lib/conversationDisplay.ts
+  s_87201aa209d901::t_baa007bc6e44e0 1,24-53
+  s_87201aa209d901::t_9a76f6d94bfa60 54
+src/lib/filterChips.ts
+  s_87201aa209d901::t_ebc4d84ad31dac 42-50,53-67
+src/components/Breakdown.tsx
+  s_87201aa209d901::t_59a3e7cec42b00 211-228
+  s_87201aa209d901::t_4c3903da5ce825 68
+  s_87201aa209d901::t_5f230b3e68d225 251-360
+  s_87201aa209d901::t_b2cb5766921071 1-2
+  s_87201aa209d901::t_c115f1aedaed6f 182-184
+  s_87201aa209d901::t_a4db37c9934e47 5,24-30
+  s_87201aa209d901::t_b68c70592e526f 10,17-23,95-107,181,185
+src/components/BreakdownProjectSessions.tsx
+  s_87201aa209d901::t_4a1bfb81799f46 48,50,67-69
+  s_87201aa209d901::t_d005d318a36ec2 3-11,13,20,36,40-47,58,88,90,106-107,118,135,152,171-172,179,183-187,190,193,199-202,204
+  s_87201aa209d901::t_7f6e24b5065492 143
+  s_87201aa209d901::t_77cf7eb268794e 1,12,14-19,21-29,31-35,37-38,49,51-52,54-57,59,61-66,70-87,89,91,103,108,110-117,119-131,137-142,144-151,153-155,158-167,169-170,173-178,180-182,188-189,191-192,194-198,203,205-207
+  s_87201aa209d901::t_a98c9ea174853c 2,30,39,53,60,92-102,104-105,109,132-134,136,156-157,168
+src/lib/filterChips.test.ts
+  s_87201aa209d901::t_fa749830bd2e9c 3,7,9,12,57-72
+  s_87201aa209d901::t_220b5277de5d9a 73
+src/styles/views/sessions.css
+  s_87201aa209d901::t_34ab09ef163c4d 227-279,281-284
+  s_87201aa209d901::t_8a4ffbe271fb98 280
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "cb0ae71e79685ac47d2a169d67f048db0d1c576f",
+  "prompts": {},
+  "sessions": {
+    "s_87201aa209d901": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07211-c41b-7e80-b1b1-e9fed3e2a4f7",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
