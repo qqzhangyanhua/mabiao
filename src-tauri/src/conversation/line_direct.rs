@@ -7,10 +7,10 @@ use super::attachments::{ensure_attachment_path_allowed, read_source_line, read_
 use super::toolbox::{attachment_candidates, AttachmentCandidate};
 use super::{
     ensure_matching_session, event_index, event_index_ready, load_trusted_session_files,
-    parse_conversation_files, prepare_detail, AttachmentKind,
+    parse_conversation_files, prepare_detail,
 };
 use crate::domain::{
-    ConversationEvent, ConversationEventContentDto,
+    ConversationAttachmentKind as AttachmentKind, ConversationEvent, ConversationEventContentDto,
     ConversationEventContentStatus as ContentStatus, Source,
 };
 
