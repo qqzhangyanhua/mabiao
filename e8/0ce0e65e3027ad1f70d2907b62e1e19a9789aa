@@ -1,0 +1,26 @@
+src/hooks/usage/useUsageViewState.test.ts
+  s_dc4ebb7c5594a5::t_64c38f35994b46 1-66
+src/hooks/usage/useUsageViewState.ts
+  s_dc4ebb7c5594a5::t_282148b6f44c12 57,88,90-94,114
+  s_dc4ebb7c5594a5::t_5230db3059a523 1-56,58-87,89,95-113,115-138
+src/hooks/useUsageData.ts
+  s_dc4ebb7c5594a5::t_beff07e95ab995 36,57-68,72-73,129,134,184,193,210,217,322,337-338,343,353-357
+src/hooks/usage/useViewRefresh.ts
+  s_dc4ebb7c5594a5::t_e765cece552846 2,25,38,53,67,69-73,86-87,96-98,104-106,115-117,120-122,124-126,129-131,133-134,136-138,143-148,150-151,157-159,161-162,170-172,179-181,188-190,197-199,203,206-208,211,217,220-222,225,232-243,252,262,266,280,287-291,295-297,305-307,313,318,335,347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e80ce0e65e3027ad1f70d2907b62e1e19a9789aa",
+  "prompts": {},
+  "sessions": {
+    "s_dc4ebb7c5594a5": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07055-6fae-75b1-8583-8174fe3a541a",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
