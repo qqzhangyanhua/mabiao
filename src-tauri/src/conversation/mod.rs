@@ -48,8 +48,8 @@ use merge::{
     IndexedAgentMetadata, IndexedFile,
 };
 use toolbox::{
-    AttachmentCandidate, FileIndexCursor, ParsedConversation, CAPABILITY_EVENTS,
-    CAPABILITY_MESSAGES, CAPABILITY_USAGE, EXPERIMENTAL,
+    AttachmentCandidate, FileIndexCursor, ParsedConversation, CAPABILITY_EVENTS, CAPABILITY_USAGE,
+    EXPERIMENTAL,
 };
 
 pub use catalog::{
