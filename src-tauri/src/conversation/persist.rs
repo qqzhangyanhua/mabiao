@@ -8,12 +8,11 @@ use crate::domain::Source;
 
 use super::conversation_adapter;
 use super::event_index;
+use super::merge::{summarize_for_index, IndexedFile};
 use super::modified_nanos;
-use super::summarize_for_index;
 use super::toolbox::{FileIndexCursor, ParsedConversation};
 use super::CachedConversationFingerprint;
 use super::ConversationIndexSuffixFn;
-use super::IndexedFile;
 use super::SessionFileCursorWrite;
 use super::CONVERSATION_ADAPTER_VERSION;
 
