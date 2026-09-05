@@ -1,10 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import {
-  useCallback,
-  type Dispatch,
-  type MutableRefObject,
-  type SetStateAction,
-} from "react";
+import { useCallback, type MutableRefObject } from "react";
 import { heatmapFilter } from "../../lib/calendar";
 import { previousFilter } from "../../lib/format";
 import type {
@@ -27,6 +22,7 @@ import type {
   View,
 } from "../../types";
 import { isViewFresh, viewStamp } from "../viewCache";
+import type { UsageViewPatch } from "./useUsageViewState";
 
 type ViewRefreshArgs = {
   view: View;
@@ -39,29 +35,7 @@ type ViewRefreshArgs = {
   loadedStampsRef: MutableRefObject<Partial<Record<View, string>>>;
   optionsEpochRef: MutableRefObject<number>;
   markHydrated: (target: View, nextFilter: Filter, nextPreset: string) => void;
-  setLoading: Dispatch<SetStateAction<boolean>>;
-  setOptions: Dispatch<SetStateAction<FilterOptions>>;
-  setOverview: Dispatch<SetStateAction<OverviewDto | null>>;
-  setTrend: Dispatch<SetStateAction<SeriesPoint[]>>;
-  setModels: Dispatch<SetStateAction<NamedAmount[]>>;
-  setProjects: Dispatch<SetStateAction<NamedAmount[]>>;
-  setSessions: Dispatch<SetStateAction<SessionRow[]>>;
-  setBillingWindows: Dispatch<SetStateAction<BillingWindowsDto | null>>;
-  setOfficialQuota: Dispatch<SetStateAction<OfficialQuotaDto | null>>;
-  setCursorAccountUsage: Dispatch<SetStateAction<CursorAccountUsageDto | null>>;
-  setBudgetStatus: Dispatch<SetStateAction<BudgetStatusDto | null>>;
-  setHeatmap: Dispatch<SetStateAction<SeriesPoint[]>>;
-  setHeatmapRange: Dispatch<SetStateAction<{ from: string; to: string }>>;
-  setPrevious: Dispatch<SetStateAction<OverviewDto | null>>;
-  setApplicationAnalytics: Dispatch<SetStateAction<ApplicationAnalyticsDto | null>>;
-  setProviderBreakdown: Dispatch<SetStateAction<NamedAmount[]>>;
-  setCodeVolume: Dispatch<SetStateAction<CodeVolumeSummary | null>>;
-  setCodeVolumeLoading: Dispatch<SetStateAction<boolean>>;
-  setCursorSessionSummary: Dispatch<SetStateAction<CursorSessionSummaryDto | null>>;
-  setCursorSessionLoading: Dispatch<SetStateAction<boolean>>;
-  setPrices: Dispatch<SetStateAction<PriceTable>>;
-  setDiagnostics: Dispatch<SetStateAction<SourceDiagnostic[]>>;
-  setUpdatedAt: Dispatch<SetStateAction<string | null>>;
+  apply: (patch: UsageViewPatch) => void;
 };
 
 export function useViewRefresh(args: ViewRefreshArgs) {
@@ -76,29 +50,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
     loadedStampsRef,
     optionsEpochRef,
     markHydrated,
-    setLoading,
-    setOptions,
-    setOverview,
-    setTrend,
-    setModels,
-    setProjects,
-    setSessions,
-    setBillingWindows,
-    setOfficialQuota,
-    setCursorAccountUsage,
-    setBudgetStatus,
-    setHeatmap,
-    setHeatmapRange,
-    setPrevious,
-    setApplicationAnalytics,
-    setProviderBreakdown,
-    setCodeVolume,
-    setCodeVolumeLoading,
-    setCursorSessionSummary,
-    setCursorSessionLoading,
-    setPrices,
-    setDiagnostics,
-    setUpdatedAt,
+    apply,
   } = args;
 
   const refreshViews = useCallback(
@@ -112,15 +64,13 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         view === "instructions" ||
         view === "settings";
       if (!localOnly && !hydratedViews.has(view)) {
-        setLoading(true);
+        apply({ loading: true });
       }
-      const commit =
-        <T>(setter: (value: T) => void) =>
-        (value: T) => {
-          if (generation === requestGenerationRef.current) {
-            setter(value);
-          }
-        };
+      const commit = (patch: UsageViewPatch) => {
+        if (generation === requestGenerationRef.current) {
+          apply(patch);
+        }
+      };
       const epoch = dataEpochRef.current;
       const overviewFresh = isViewFresh(
         loadedStampsRef.current,
@@ -133,8 +83,8 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       const paint: Array<Promise<void>> = [];
       if (optionsEpochRef.current !== epoch) {
         paint.push(
-          invoke<FilterOptions>("get_filter_options").then((value) => {
-            commit(setOptions)(value);
+          invoke<FilterOptions>("get_filter_options").then((options) => {
+            commit({ options });
             if (generation === requestGenerationRef.current) {
               optionsEpochRef.current = epoch;
             }
@@ -143,13 +93,17 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       }
       if (view !== "conversations" && !overviewFresh) {
         paint.push(
-          invoke<OverviewDto>("get_overview", { filter: nextFilter }).then(commit(setOverview)),
+          invoke<OverviewDto>("get_overview", { filter: nextFilter }).then((overview) => {
+            commit({ overview });
+          }),
         );
       }
       const tasks: Array<Promise<void>> = [];
       if (view === "overview" || view === "trend") {
         tasks.push(
-          invoke<SeriesPoint[]>("get_trend", { filter: nextFilter, grain }).then(commit(setTrend)),
+          invoke<SeriesPoint[]>("get_trend", { filter: nextFilter, grain }).then((trend) => {
+            commit({ trend });
+          }),
         );
       }
       if (view === "overview") {
@@ -158,39 +112,54 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         tasks.push(
           invoke<NamedAmount[]>("get_breakdown", {
             query: { filter: nextFilter, dimension: "model" },
-          }).then(commit(setModels)),
+          }).then((models) => {
+            commit({ models });
+          }),
           invoke<NamedAmount[]>("get_breakdown", {
             query: { filter: nextFilter, dimension: "project" },
-          }).then(commit(setProjects)),
+          }).then((projects) => {
+            commit({ projects });
+          }),
           invoke<SessionRow[]>("get_top_sessions", { filter: nextFilter, limit: 8 }).then(
-            commit(setSessions),
+            (sessions) => {
+              commit({ sessions });
+            },
           ),
           invoke<BillingWindowsDto>("get_billing_windows", { filter: nextFilter }).then(
-            commit(setBillingWindows),
+            (billingWindows) => {
+              commit({ billingWindows });
+            },
           ),
-          invoke<OfficialQuotaDto>("get_official_quota").then((value) => {
-            commit(setOfficialQuota)(value);
+          invoke<OfficialQuotaDto>("get_official_quota").then((officialQuota) => {
+            commit({ officialQuota });
             void invoke<OfficialQuotaDto>("refresh_official_quota")
-              .then(commit(setOfficialQuota))
+              .then((refreshed) => {
+                commit({ officialQuota: refreshed });
+              })
               .catch(() => undefined);
           }),
           invoke<CursorAccountUsageDto>("get_cursor_account_usage", {
             filter: nextFilter,
-          }).then(commit(setCursorAccountUsage)),
-          invoke<BudgetStatusDto>("get_budget_status").then(commit(setBudgetStatus)),
+          }).then((cursorAccountUsage) => {
+            commit({ cursorAccountUsage });
+          }),
+          invoke<BudgetStatusDto>("get_budget_status").then((budgetStatus) => {
+            commit({ budgetStatus });
+          }),
           invoke<SeriesPoint[]>("get_trend", { filter: heat.filter, grain: "day" }).then(
-            (points) => {
-              commit(setHeatmap)(points);
-              commit(setHeatmapRange)({ from: heat.fromDate, to: heat.toDate });
+            (heatmap) => {
+              commit({ heatmap, heatmapRange: { from: heat.fromDate, to: heat.toDate } });
             },
           ),
         );
         if (prev) {
           tasks.push(
-            invoke<OverviewDto>("get_overview", { filter: prev }).then(commit(setPrevious)),
+            invoke<OverviewDto>("get_overview", { filter: prev }).then((previous) => {
+              commit({ previous });
+            }),
           );
-        } else if (generation === requestGenerationRef.current) {
-          setPrevious(null);
+        } else {
+          commit({ previous: null });
         }
       }
       if (view === "application") {
@@ -198,60 +167,80 @@ export function useViewRefresh(args: ViewRefreshArgs) {
           invoke<ApplicationAnalyticsDto>("get_application_analytics", {
             filter: nextFilter,
             grain,
-          }).then(commit(setApplicationAnalytics)),
+          }).then((applicationAnalytics) => {
+            commit({ applicationAnalytics });
+          }),
         );
       }
       if (view === "model") {
         tasks.push(
           invoke<NamedAmount[]>("get_breakdown", {
             query: { filter: nextFilter, dimension: "model" },
-          }).then(commit(setModels)),
+          }).then((models) => {
+            commit({ models });
+          }),
         );
       }
       if (view === "provider") {
         tasks.push(
           invoke<NamedAmount[]>("get_breakdown", {
             query: { filter: nextFilter, dimension: "provider" },
-          }).then(commit(setProviderBreakdown)),
+          }).then((providerBreakdown) => {
+            commit({ providerBreakdown });
+          }),
         );
       }
       if (view === "project") {
         tasks.push(
           invoke<NamedAmount[]>("get_breakdown", {
             query: { filter: nextFilter, dimension: "project" },
-          }).then(commit(setProjects)),
+          }).then((projects) => {
+            commit({ projects });
+          }),
         );
       }
       if (view === "cursor") {
-        setCodeVolumeLoading(true);
+        apply({ codeVolumeLoading: true });
         tasks.push(
           invoke<CodeVolumeSummary>("get_code_volume")
-            .then(commit(setCodeVolume))
+            .then((codeVolume) => {
+              commit({ codeVolume });
+            })
             .finally(() => {
               if (generation === requestGenerationRef.current) {
-                setCodeVolumeLoading(false);
+                apply({ codeVolumeLoading: false });
               }
             }),
         );
       }
       if (view === "cursor-sessions") {
-        setCursorSessionLoading(true);
+        apply({ cursorSessionLoading: true });
         tasks.push(
           invoke<CursorSessionSummaryDto>("get_cursor_session_summary")
-            .then(commit(setCursorSessionSummary))
+            .then((cursorSessionSummary) => {
+              commit({ cursorSessionSummary });
+            })
             .finally(() => {
               if (generation === requestGenerationRef.current) {
-                setCursorSessionLoading(false);
+                apply({ cursorSessionLoading: false });
               }
             }),
         );
       }
       if (view === "settings") {
         tasks.push(
-          invoke<PriceTable>("get_prices").then(commit(setPrices)),
-          invoke<SourceDiagnostic[]>("get_source_diagnostics").then(commit(setDiagnostics)),
-          invoke<BudgetStatusDto>("get_budget_status").then(commit(setBudgetStatus)),
-          invoke<OfficialQuotaDto>("get_official_quota").then(commit(setOfficialQuota)),
+          invoke<PriceTable>("get_prices").then((prices) => {
+            commit({ prices });
+          }),
+          invoke<SourceDiagnostic[]>("get_source_diagnostics").then((diagnostics) => {
+            commit({ diagnostics });
+          }),
+          invoke<BudgetStatusDto>("get_budget_status").then((budgetStatus) => {
+            commit({ budgetStatus });
+          }),
+          invoke<OfficialQuotaDto>("get_official_quota").then((officialQuota) => {
+            commit({ officialQuota });
+          }),
         );
       }
       try {
@@ -260,7 +249,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
           generation === requestGenerationRef.current &&
           (view === "overview" || view === "cursor" || view === "cursor-sessions")
         ) {
-          setLoading(false);
+          apply({ loading: false });
         }
         if (tasks.length > 0) {
           await Promise.all(tasks);
@@ -270,11 +259,11 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         }
       } finally {
         if (generation === requestGenerationRef.current) {
-          setLoading(false);
+          apply({ loading: false });
         }
       }
       if (generation === requestGenerationRef.current) {
-        setUpdatedAt(new Date().toISOString());
+        apply({ updatedAt: new Date().toISOString() });
       }
     },
     [
@@ -288,46 +277,24 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       dataEpochRef,
       loadedStampsRef,
       optionsEpochRef,
-      setLoading,
-      setOptions,
-      setOverview,
-      setTrend,
-      setModels,
-      setProjects,
-      setSessions,
-      setBillingWindows,
-      setOfficialQuota,
-      setCursorAccountUsage,
-      setBudgetStatus,
-      setHeatmap,
-      setHeatmapRange,
-      setPrevious,
-      setApplicationAnalytics,
-      setProviderBreakdown,
-      setCodeVolume,
-      setCodeVolumeLoading,
-      setCursorSessionSummary,
-      setCursorSessionLoading,
-      setPrices,
-      setDiagnostics,
-      setUpdatedAt,
+      apply,
     ],
   );
 
   const refreshTrend = useCallback(
     async (nextFilter = filter) => {
       const generation = ++requestGenerationRef.current;
-      const commit =
-        <T>(setter: (value: T) => void) =>
-        (value: T) => {
-          if (generation === requestGenerationRef.current) {
-            setter(value);
-          }
-        };
+      const commit = (patch: UsageViewPatch) => {
+        if (generation === requestGenerationRef.current) {
+          apply(patch);
+        }
+      };
       const tasks: Array<Promise<void>> = [];
       if (view === "overview" || view === "trend") {
         tasks.push(
-          invoke<SeriesPoint[]>("get_trend", { filter: nextFilter, grain }).then(commit(setTrend)),
+          invoke<SeriesPoint[]>("get_trend", { filter: nextFilter, grain }).then((trend) => {
+            commit({ trend });
+          }),
         );
       }
       if (view === "application") {
@@ -335,18 +302,20 @@ export function useViewRefresh(args: ViewRefreshArgs) {
           invoke<ApplicationAnalyticsDto>("get_application_analytics", {
             filter: nextFilter,
             grain,
-          }).then(commit(setApplicationAnalytics)),
+          }).then((applicationAnalytics) => {
+            commit({ applicationAnalytics });
+          }),
         );
       }
       if (tasks.length === 0) {
         return;
       }
-      setLoading(true);
+      apply({ loading: true });
       try {
         await Promise.all(tasks);
       } finally {
         if (generation === requestGenerationRef.current) {
-          setLoading(false);
+          apply({ loading: false });
           if (view === "overview" || view === "trend") {
             markHydrated("trend", nextFilter, preset);
             loadedStampsRef.current.overview = viewStamp(
@@ -363,7 +332,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
         }
       }
       if (generation === requestGenerationRef.current) {
-        setUpdatedAt(new Date().toISOString());
+        apply({ updatedAt: new Date().toISOString() });
       }
     },
     [
@@ -375,10 +344,7 @@ export function useViewRefresh(args: ViewRefreshArgs) {
       requestGenerationRef,
       dataEpochRef,
       loadedStampsRef,
-      setLoading,
-      setTrend,
-      setApplicationAnalytics,
-      setUpdatedAt,
+      apply,
     ],
   );
 
