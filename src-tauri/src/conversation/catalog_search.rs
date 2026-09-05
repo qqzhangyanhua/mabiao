@@ -4,10 +4,8 @@ use crate::domain::{
     ConversationMatchField, ConversationPage, ConversationQuery, ConversationSessionRow, PriceTable,
 };
 
-use super::{
-    finish_catalog_rows, row_from_sql, CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE,
-    MAX_PAGE_SIZE,
-};
+use super::session_store::row_from_sql;
+use super::{finish_catalog_rows, CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 const TITLE_LIKE_FIELDS: usize = 7;
 const SNIPPET_RADIUS: usize = 48;
