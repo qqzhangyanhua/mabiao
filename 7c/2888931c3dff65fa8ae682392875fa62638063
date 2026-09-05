@@ -1,0 +1,46 @@
+src-tauri/src/lib.rs
+  s_539c36abea1599::t_4c5ab6825c2360 355
+src-tauri/src/commands/usage.rs
+  s_539c36abea1599::t_d2845dcdbe47b1 184
+  s_539c36abea1599::t_656c12ebeadda9 7-8,163-183,185-186
+  s_539c36abea1599::t_0ccbf3882a8d78 187-189
+src/types.ts
+  s_539c36abea1599::t_b159c1024512c4 416-422
+src/lib/format.ts
+  s_539c36abea1599::t_8d76d626fa35a9 1,304-305,322-330
+  s_539c36abea1599::t_638a4453df9d74 2,312
+  s_539c36abea1599::t_e8c99f4e08a277 306-311,313-321
+  s_539c36abea1599::t_a973f2e77a8d5e 331-332
+src/lib/format.test.ts
+  s_539c36abea1599::t_bab51510056e47 399
+  s_539c36abea1599::t_43b63e8b309f28 380-388
+  s_539c36abea1599::t_7c225c0c0fc2b9 10,362-379,389-398,400
+  s_539c36abea1599::t_0f74b32733c7cb 401-402
+src/components/TrendBucketSessions.tsx
+  s_539c36abea1599::t_3bde49c4bd6352 117
+  s_539c36abea1599::t_a6f71b302c09f2 18,29-40,51,61,107-116,123-124,126-130,156
+  s_539c36abea1599::t_733dda7f9fdfad 4-10,60,62-63,163-168,203-205,217-221
+  s_539c36abea1599::t_3ea156551e8b9c 1-3,11-17,19-28,41-50,52-59,64-106,118-122,125,131-155,157-162,169-202,206-216,222-235
+src/components/Trend.tsx
+  s_539c36abea1599::t_733dda7f9fdfad 221
+  s_539c36abea1599::t_3df65973e8dcfd 260
+  s_539c36abea1599::t_0b2f5b932b1996 9,16,31-32,35-36,42-43,46-47,54,59-62,101-104,108,184-185,216-220,259,261-269
+src/App.tsx
+  s_539c36abea1599::t_6d2514a8021a91 154-155,158-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "7c2888931c3dff65fa8ae682392875fa62638063",
+  "prompts": {},
+  "sessions": {
+    "s_539c36abea1599": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a0723e-4a7a-7470-a4c5-9221d6a7e8a0",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
