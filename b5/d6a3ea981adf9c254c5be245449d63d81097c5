@@ -1,0 +1,29 @@
+src-tauri/src/tests/mod.rs
+  s_e9eb64a0f52651::t_b50cb3a56a4598 36
+AGENTS.md
+  s_e9eb64a0f52651::t_96996c6719265c 138
+.cursor/rules/rust-backend.mdc
+  s_e9eb64a0f52651::t_bca6ec79dda3d6 21
+docs/adr/0017-rust-module-boundaries.md
+  s_e9eb64a0f52651::t_8a3760ef198aa4 5,22-23
+src-tauri/src/tests/line_budget.rs
+  s_e9eb64a0f52651::t_a848e0c5837e69 87
+  s_e9eb64a0f52651::t_af508cda3cde0a 61,173
+  s_e9eb64a0f52651::t_2dad1e90f4f935 1-60,62-86,88-172,174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b5d6a3ea981adf9c254c5be245449d63d81097c5",
+  "prompts": {},
+  "sessions": {
+    "s_e9eb64a0f52651": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07020-4dad-7380-b58a-945da7658390",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
