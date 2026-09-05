@@ -10,6 +10,7 @@ use super::{finish_catalog_rows, CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE
 const TITLE_LIKE_FIELDS: usize = 7;
 const SNIPPET_RADIUS: usize = 48;
 const FTS_MIN_CHARS: usize = 3;
+const MAX_TRIGRAM_TERMS: usize = 16;
 
 pub(super) fn sessions_page_with_search(
     conn: &Connection,
@@ -78,6 +79,7 @@ fn ranked_with_sql(predicate: &str, include_body: bool) -> String {
              AND s.session_id = e.session_id
              AND e.index_generation = s.event_index_generation
             WHERE conversation_events_fts MATCH ?
+              AND (e.text LIKE ? ESCAPE '\' OR e.name LIKE ? ESCAPE '\')
             GROUP BY e.source, e.session_id
         )
         "#
@@ -136,18 +138,47 @@ fn escape_like(value: &str) -> String {
 }
 
 fn push_search_params(params: &mut Vec<rusqlite::types::Value>, search: &str, include_body: bool) {
-    let pattern = format!("%{}%", escape_like(search));
+    let pattern = like_pattern(search);
     for _ in 0..TITLE_LIKE_FIELDS {
         params.push(rusqlite::types::Value::Text(pattern.clone()));
     }
     if include_body {
-        params.push(rusqlite::types::Value::Text(fts_match_query(search)));
+        params.push(rusqlite::types::Value::Text(fts_candidate_query(search)));
+        params.push(rusqlite::types::Value::Text(pattern.clone()));
+        params.push(rusqlite::types::Value::Text(pattern));
     }
 }
 
-fn fts_match_query(search: &str) -> String {
-    let clipped: String = search.chars().take(200).collect();
-    format!("\"{}\"", clipped.replace('"', "\"\""))
+fn like_pattern(search: &str) -> String {
+    format!("%{}%", escape_like(search))
+}
+
+/// `detail=none` 的倒排里没有位置信息，FTS5 会直接拒绝短语查询。所以不再把整个关键词交给
+/// FTS5，而是自己按字符切成 3 字窗口、每个窗口单独加引号用 AND 连起来：每个窗口被 FTS5
+/// tokenize 出的恰好是一个三元组，大小写折叠这些规则仍由 FTS5 自己决定，不必在 Rust 里
+/// 复刻一份。
+///
+/// 召回是原语义的超集——窗口都出现但不相邻的行也会进来——所以调用方必须再回表用 LIKE 复核。
+/// 这个查询形态在旧的 `detail=full` 表上同样成立，迁移期间不需要维护两套。
+fn fts_candidate_query(search: &str) -> String {
+    let chars: Vec<char> = search.chars().take(200).collect();
+    let mut terms = Vec::<String>::new();
+    for window in chars.windows(FTS_MIN_CHARS) {
+        // 少一项只是少一个交集约束，多召回的部分由回表 LIKE 兜住；不设上限的话，
+        // 粘贴一整段话就会变成上百项的 AND。
+        if terms.len() == MAX_TRIGRAM_TERMS {
+            break;
+        }
+        let term = window.iter().collect::<String>().replace('"', "\"\"");
+        if !terms.contains(&term) {
+            terms.push(term);
+        }
+    }
+    terms
+        .iter()
+        .map(|term| format!("\"{term}\""))
+        .collect::<Vec<_>>()
+        .join(" AND ")
 }
 
 fn hydrate_body_matches(
@@ -159,13 +190,20 @@ fn hydrate_body_matches(
     if !include_body {
         return Ok(());
     }
-    let match_query = fts_match_query(search);
+    let match_query = fts_candidate_query(search);
+    let pattern = like_pattern(search);
     for row in rows.iter_mut() {
         if row.match_field != Some(ConversationMatchField::Body) {
             continue;
         }
-        let Some((event_id, sequence, snippet)) =
-            first_body_hit(conn, &row.source, &row.session_id, &match_query, search)?
+        let Some((event_id, sequence, snippet)) = first_body_hit(
+            conn,
+            &row.source,
+            &row.session_id,
+            &match_query,
+            &pattern,
+            search,
+        )?
         else {
             continue;
         };
@@ -181,6 +219,7 @@ fn first_body_hit(
     source: &str,
     session_id: &str,
     match_query: &str,
+    pattern: &str,
     search: &str,
 ) -> Result<Option<(String, u32, String)>, String> {
     let mut statement = conn
@@ -195,13 +234,14 @@ fn first_body_hit(
              AND e.index_generation = s.event_index_generation
             WHERE e.source = ?1 AND e.session_id = ?2
               AND conversation_events_fts MATCH ?3
+              AND (e.text LIKE ?4 ESCAPE '\' OR e.name LIKE ?4 ESCAPE '\')
             ORDER BY e.sequence ASC
             LIMIT 1
             "#,
         )
         .map_err(|error| error.to_string())?;
     statement
-        .query_row(params![source, session_id, match_query], |row| {
+        .query_row(params![source, session_id, match_query, pattern], |row| {
             let event_id: String = row.get(0)?;
             let sequence: u32 = row.get(1)?;
             let text: Option<String> = row.get(2)?;

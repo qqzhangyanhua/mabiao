@@ -23,6 +23,7 @@ mod droid;
 mod dsh;
 mod event_index;
 mod event_page;
+mod event_tables;
 mod export;
 mod gemini;
 mod grok;

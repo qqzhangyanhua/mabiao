@@ -111,9 +111,16 @@ fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
         conn.execute("DROP TABLE conversation_events_fts", [])
             .map_err(|e| e.to_string())?;
     }
-    if table_exists(conn, "conversation_events")? {
-        conn.execute("DROP TABLE conversation_events", [])
-            .map_err(|e| e.to_string())?;
+    // 路径字典与工具汇总都是事件表的派生物，事件表不进备份，它们跟着一起走。
+    for table in [
+        "conversation_events",
+        "conversation_session_tools",
+        "conversation_files",
+    ] {
+        if table_exists(conn, table)? {
+            conn.execute(&format!("DROP TABLE {table}"), [])
+                .map_err(|e| e.to_string())?;
+        }
     }
     if table_exists(conn, "conversation_sessions")? && conversation_sessions_has_generation(conn)? {
         conn.execute(

@@ -273,7 +273,9 @@ pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgre
 
 pub(crate) fn conversation_index_bytes(conn: &Connection, complete: bool) -> u64 {
     if let Ok(bytes) = conn.query_row(
-        "SELECT COALESCE(SUM(pgsize), 0) FROM dbstat WHERE name GLOB 'conversation_events*'",
+        "SELECT COALESCE(SUM(pgsize), 0) FROM dbstat
+         WHERE name GLOB 'conversation_events*'
+            OR name IN ('conversation_files', 'conversation_session_tools')",
         [],
         |row| row.get::<_, i64>(0),
     ) {

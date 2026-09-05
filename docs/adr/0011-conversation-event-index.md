@@ -20,6 +20,19 @@
 - 详情读取按会话就绪分流：已索引走索引（不带 `details`），未索引回退整份解析；回退路径长期保留，因此索引出错时有降级开关。
 - 目录索引继续只留会话行和父子关系，不在扫描阶段囤积整份 `ParsedConversation`。
 
+## 修订：事件行不再逐行存路径与工具名索引
+
+上面「约从 125 MB 到 1 GB 量级」的估计对事件表本身是准的（真实库 106 万行、1.1 GB），但里面有两块是数据结构问题，不是「对话太多」：
+
+- 每行都存一条会话源文件的绝对路径。真实库里 `source_file` 一列 123 MB，而路径的去重基数只有 4124 条、平均 123 字符。**改为 `conversation_files(file_id, path)` 字典 + 事件行只存 `file_id`**，123 MB 降到 580 KB。
+- 目录「按工具名筛选」靠事件表上一条 `(source, session_id, generation, kind, actor, name)` 的宽索引回答，在百万行上要 83 MB。这个查询问的其实是「这个会话用过哪个工具」，是每会话每工具一行的事实。**改为 `conversation_session_tools` 汇总表**，真实库 13672 行、868 KB，`EXISTS` 直接查小表。
+
+汇总表的语义只写一份 SQL（`store::conversation_session_tools_sql`），迁移、整份重建、增量追加都调它，聚合始终覆盖该代次的全部事件，所以重跑是幂等的。三个标志位对应目录的三种筛法：`is_tool_event`（tool_call/tool_result）、`is_call`（工具名下拉）、`is_failure`（kind=error 且 actor=tool）。
+
+迁移是对既有缓存原地做的，不重新解析源文件，因此**不**递增 `CONVERSATION_ADAPTER_VERSION`；事件内容与顺序逐条不变。事件表要整份复制、外置 content 的倒排 `rowid` 会全部重排，所以倒排在同一个事务里连带重建，提交之前读连接看到的仍是完整的旧快照。真实库上迁移约 83 秒、随后一次性 VACUUM 约 17 秒，整库 4.6 GB → 1.5 GB（含 ADR 0014 修订的倒排瘦身）。
+
+**没有做**：`event_id` 仍是 `base64url(绝对路径):行号`，在真实库里占 156 MB（79% 的行是这个形态）。改成路径哈希能省约 120 MB，但那是适配器输出变了，按本仓库的规矩要递增 `CONVERSATION_ADAPTER_VERSION`、重新解析每一个会话的源文件——为 120 MB 去重读几个 GB 源文件不划算。下次某个适配器改动本来就要强制重索引时，顺路带上即可，那时它是免费的。
+
 ## 对话记录适配来源（2026-09）
 
 `conversation::CONVERSATION_ADAPTERS` 覆盖 **13 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未覆盖**：hermes。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION`**（独立于 `store::ADAPTER_VERSION`）；纯重构不得改动，改动意味着事件归一化输出变了。

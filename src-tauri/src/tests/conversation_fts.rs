@@ -170,6 +170,110 @@ fn catalog_search_skips_unindexed_bodies_and_marks_title_only() {
     );
 }
 
+/// 三元组 AND 的召回是子串语义的超集：正文里 `aut` 和 `uth` 各自出现、但不相邻，
+/// 也会被 FTS 召回。回表 LIKE 复核就是为了把这类命中挡掉。
+#[test]
+fn catalog_search_body_hit_requires_real_substring_not_scattered_trigrams() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_codex_session(
+        home,
+        "rollout-scattered.jsonl",
+        "conv-scattered",
+        "plain title one",
+        "aut zzz uth apart",
+    );
+    write_codex_session(
+        home,
+        "rollout-real.jsonl",
+        "conv-real",
+        "plain title two",
+        "we changed auth in login",
+    );
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let page = search(&conn, "auth");
+    assert_eq!(page.total, 1);
+    assert_eq!(page.rows[0].session_id, "conv-real");
+    assert_eq!(page.rows[0].match_field, Some(ConversationMatchField::Body));
+}
+
+#[test]
+fn catalog_search_matches_cjk_substring_in_body() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_codex_session(
+        home,
+        "rollout-cjk.jsonl",
+        "conv-cjk",
+        "plain title three",
+        "这次重构了鉴权中间件",
+    );
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    let page = search(&conn, "鉴权中间件");
+    assert_eq!(page.total, 1);
+    assert_eq!(page.rows[0].match_field, Some(ConversationMatchField::Body));
+}
+
+/// 旧库的正文倒排是 `detail=full`。迁移前后搜索结果必须一致——迁移在后台跑，期间旧表
+/// 还在服务查询，两种形态只要有一种搜不到就是用户可见的空窗。
+#[test]
+fn migrating_legacy_fts_keeps_body_search_results() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_codex_session(
+        home,
+        "rollout-legacy.jsonl",
+        "conv-legacy",
+        "plain title four",
+        "body mentions UniqueAuthKey once",
+    );
+    let conn = store::open_memory().unwrap();
+    conn.execute_batch(
+        r#"
+        DROP TABLE conversation_events_fts;
+        CREATE VIRTUAL TABLE conversation_events_fts USING fts5(
+            text,
+            name,
+            content='conversation_events',
+            content_rowid='rowid',
+            tokenize='trigram'
+        );
+        "#,
+    )
+    .unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    assert!(store::conversation_fts_needs_migration(&conn).unwrap());
+
+    let before = search(&conn, "UniqueAuthKey");
+    assert_eq!(before.total, 1);
+    assert_eq!(
+        before.rows[0].match_field,
+        Some(ConversationMatchField::Body)
+    );
+
+    store::migrate_conversation_events_fts(&conn).unwrap();
+    assert!(!store::conversation_fts_needs_migration(&conn).unwrap());
+
+    let after = search(&conn, "UniqueAuthKey");
+    assert_eq!(after.total, 1);
+    assert_eq!(
+        after.rows[0].match_field,
+        Some(ConversationMatchField::Body)
+    );
+    assert_eq!(after.rows[0].match_event_id, before.rows[0].match_event_id);
+    assert_eq!(after.rows[0].match_snippet, before.rows[0].match_snippet);
+}
+
+#[test]
+fn fresh_cache_needs_no_fts_migration() {
+    let conn = store::open_memory().unwrap();
+    assert!(!store::conversation_fts_needs_migration(&conn).unwrap());
+}
+
 #[test]
 fn opening_existing_cache_rebuilds_missing_fts() {
     let dir = tempfile::tempdir().unwrap();

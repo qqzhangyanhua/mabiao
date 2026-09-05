@@ -108,7 +108,7 @@ pub(crate) fn catalog_filter_sql(
         params.push(rusqlite::types::Value::Text(to.to_string()));
     }
     if let Some(event_predicate) = catalog_tool_event_predicate(query) {
-        clauses.push(catalog_event_exists_sql(&event_predicate));
+        clauses.push(catalog_tool_exists_sql(&event_predicate));
         for name in query.tool_names.iter().filter(|name| !name.is_empty()) {
             params.push(rusqlite::types::Value::Text(name.clone()));
         }
@@ -116,13 +116,15 @@ pub(crate) fn catalog_filter_sql(
     (clauses.join(" AND "), params)
 }
 
-pub(crate) fn catalog_event_exists_sql(extra: &str) -> String {
+/// 「这个会话用过哪个工具」由 `conversation_session_tools` 直接回答：每会话每工具一行，
+/// 不必再去百万行的事件表上 EXISTS。三个标志位的含义见 `store::conversation_session_tools_sql`。
+pub(crate) fn catalog_tool_exists_sql(extra: &str) -> String {
     format!(
         "EXISTS (\
-            SELECT 1 FROM conversation_events e \
-            WHERE e.source = sessions.source \
-              AND e.session_id = sessions.session_id \
-              AND e.index_generation = sessions.event_index_generation \
+            SELECT 1 FROM conversation_session_tools t \
+            WHERE t.source = sessions.source \
+              AND t.session_id = sessions.session_id \
+              AND t.index_generation = sessions.event_index_generation \
               AND ({extra})\
         )"
     )
@@ -141,21 +143,14 @@ pub(crate) fn catalog_tool_event_predicate(query: &ConversationQuery) -> Option<
     if query.tool_failed {
         // 失败的 tool_result 在 ingest 时记成 kind=error / actor=tool；
         // 事件表没有 is_error 列，目录不能靠 kind=tool_result 判断失败。
-        parts.push(catalog_tool_failure_sql().to_string());
+        parts.push("t.is_failure = 1".to_string());
     } else {
-        parts.push(format!(
-            "(e.kind IN ('tool_call', 'tool_result') OR {})",
-            catalog_tool_failure_sql()
-        ));
+        parts.push("(t.is_tool_event = 1 OR t.is_failure = 1)".to_string());
     }
     if names > 0 {
-        parts.push(format!("e.name IN ({})", sql_placeholders(names)));
+        parts.push(format!("t.name IN ({})", sql_placeholders(names)));
     }
     Some(parts.join(" AND "))
-}
-
-pub(crate) fn catalog_tool_failure_sql() -> &'static str {
-    "e.kind = 'error' AND e.actor = 'tool'"
 }
 
 pub fn catalog_tool_names(
@@ -173,17 +168,16 @@ pub fn catalog_tool_names(
     let (predicate, params) = catalog_filter_sql(&options_query);
     let sql = format!(
         r#"
-        SELECT DISTINCT e.name
-        FROM conversation_events e
+        SELECT DISTINCT t.name
+        FROM conversation_session_tools t
         JOIN conversation_sessions AS sessions
-          ON sessions.source = e.source
-         AND sessions.session_id = e.session_id
-         AND sessions.event_index_generation = e.index_generation
+          ON sessions.source = t.source
+         AND sessions.session_id = t.session_id
+         AND sessions.event_index_generation = t.index_generation
         WHERE {predicate}
-          AND e.kind = 'tool_call'
-          AND e.name IS NOT NULL
-          AND e.name != ''
-        ORDER BY e.name COLLATE NOCASE
+          AND t.is_call = 1
+          AND t.name != ''
+        ORDER BY t.name COLLATE NOCASE
         "#
     );
     let mut statement = conn.prepare(&sql).map_err(|e| e.to_string())?;

@@ -42,6 +42,13 @@ fn configure_connection(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+/// 把 freelist 里的页还给文件系统。`auto_vacuum` 是关的——它必须在建表之前就定下来，
+/// 老库改不了——所以批量释放页之后只能靠这一次全量重写。整库重写不便宜，只在确实腾出
+/// GB 级页面之后才值得调用。
+pub fn vacuum(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch("VACUUM").map_err(|e| e.to_string())
+}
+
 /// 把 SQLite 页缓存和临时分配还给系统。mimalloc 管不到 libc malloc 上的这些页。
 pub fn shrink_memory(conn: &Connection) -> Result<(), String> {
     conn.execute_batch("PRAGMA shrink_memory")

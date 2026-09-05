@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use super::LOWERCASE_MODEL_VERSION;
 
@@ -186,31 +186,6 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_conversation_session_files_session
             ON conversation_session_files(source, session_id);
 
-        CREATE TABLE IF NOT EXISTS conversation_events (
-            source TEXT NOT NULL,
-            session_id TEXT NOT NULL,
-            event_id TEXT NOT NULL,
-            sequence INTEGER,
-            source_file TEXT NOT NULL,
-            source_sequence INTEGER NOT NULL,
-            kind TEXT NOT NULL,
-            actor TEXT,
-            name TEXT,
-            occurred_at TEXT,
-            occurred_at_sort TEXT,
-            text TEXT,
-            attachments_json TEXT NOT NULL DEFAULT '[]',
-            capability_status TEXT NOT NULL,
-            content_status TEXT NOT NULL,
-            identity_hash TEXT NOT NULL,
-            identity_occurrence INTEGER NOT NULL,
-            index_generation INTEGER NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_gen
-            ON conversation_events(source, session_id, index_generation, sequence);
-        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_kind_name
-            ON conversation_events(source, session_id, index_generation, kind, actor, name);
-
         CREATE TABLE IF NOT EXISTS official_quota (
             provider TEXT PRIMARY KEY,
             windows_json TEXT NOT NULL,
@@ -382,8 +357,153 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         "#,
     )
     .map_err(|e| e.to_string())?;
+    ensure_conversation_event_tables(conn)?;
     ensure_conversation_events_fts(conn)?;
     migrate_lowercase_model(conn)
+}
+
+/// 事件表、路径字典与工具汇总表建在一起：三者是同一份派生缓存的三个部分，列定义要被
+/// `migrate_conversation_events_layout` 复用，所以拿出来单独建，不混在上面的大 batch 里。
+const CONVERSATION_EVENTS_COLUMNS: &str = r#"
+    source TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    event_id TEXT NOT NULL,
+    sequence INTEGER,
+    file_id INTEGER NOT NULL,
+    source_sequence INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    actor TEXT,
+    name TEXT,
+    occurred_at TEXT,
+    occurred_at_sort TEXT,
+    text TEXT,
+    attachments_json TEXT NOT NULL DEFAULT '[]',
+    capability_status TEXT NOT NULL,
+    content_status TEXT NOT NULL,
+    identity_hash TEXT NOT NULL,
+    identity_occurrence INTEGER NOT NULL,
+    index_generation INTEGER NOT NULL
+"#;
+
+pub(crate) const CONVERSATION_EVENT_COLUMN_LIST: &str = "source, session_id, event_id, sequence, \
+    file_id, source_sequence, kind, actor, name, occurred_at, occurred_at_sort, text, \
+    attachments_json, capability_status, content_status, identity_hash, identity_occurrence, \
+    index_generation";
+
+fn ensure_conversation_event_tables(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(&format!(
+        r#"
+        -- 事件表原先每行都带一条会话源文件的绝对路径，而路径的去重基数只有几千条：
+        -- 实测 106 万行里 source_file 一列就占 123MB。这里只存 file_id，路径留一份。
+        CREATE TABLE IF NOT EXISTS conversation_files (
+            file_id INTEGER PRIMARY KEY,
+            path TEXT NOT NULL UNIQUE
+        );
+
+        CREATE TABLE IF NOT EXISTS conversation_events ({CONVERSATION_EVENTS_COLUMNS});
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_gen
+            ON conversation_events(source, session_id, index_generation, sequence);
+
+        -- 目录按工具名筛选问的是「这个会话用过哪个工具」，本质是每会话每工具一行的事实。
+        -- 原先靠事件表上一条 (source, session_id, generation, kind, actor, name) 的宽索引
+        -- 回答，等于为几万条事实在百万行上养了 83MB 索引。
+        CREATE TABLE IF NOT EXISTS conversation_session_tools (
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            index_generation INTEGER NOT NULL,
+            -- 失败的 tool_result 可能没有工具名，用空串占位，别让它掉出汇总。
+            name TEXT NOT NULL,
+            is_tool_event INTEGER NOT NULL,
+            is_call INTEGER NOT NULL,
+            is_failure INTEGER NOT NULL,
+            PRIMARY KEY(source, session_id, index_generation, name)
+        ) WITHOUT ROWID;
+        "#
+    ))
+    .map_err(|e| e.to_string())
+}
+
+/// 工具汇总表的唯一定义：迁移、整份重建、增量追加都走这段 SQL，语义不会各写一份然后漂掉。
+/// `predicate` 限定重建范围，聚合始终覆盖该范围内的全部事件，所以重跑是幂等的。
+///
+/// 三个标志位与 `conversation::catalog` 的筛选一一对应：`is_tool_event` = tool_call/tool_result，
+/// `is_call` = 仅 tool_call（工具名下拉用），`is_failure` = kind=error 且 actor=tool
+/// （失败的 tool_result 在摄取时就是记成这个形状的）。
+pub(crate) fn conversation_session_tools_sql(predicate: &str) -> String {
+    format!(
+        r#"
+        INSERT OR REPLACE INTO conversation_session_tools(
+            source, session_id, index_generation, name, is_tool_event, is_call, is_failure
+        )
+        SELECT source, session_id, index_generation, COALESCE(name, ''),
+               MAX(kind IN ('tool_call', 'tool_result')),
+               MAX(kind = 'tool_call'),
+               MAX(kind = 'error' AND actor = 'tool')
+        FROM conversation_events
+        WHERE ({predicate})
+          AND (kind IN ('tool_call', 'tool_result') OR (kind = 'error' AND actor = 'tool'))
+        GROUP BY source, session_id, index_generation, COALESCE(name, '')
+        "#
+    )
+}
+
+/// 老库的事件表是每行存整条 `source_file`、并且没有工具汇总表。判据就看那一列还在不在。
+pub(crate) fn conversation_events_needs_layout_migration(
+    conn: &Connection,
+) -> Result<bool, String> {
+    table_columns(conn, "conversation_events")
+        .map(|columns| columns.iter().any(|c| c == "source_file"))
+}
+
+/// 把事件表换成 file_id 形态，顺带把工具汇总表灌起来。1.1GB 表要整份复制、倒排要重灌，
+/// 百万行量级要几分钟，所以和正文索引迁移一样由后台线程调用。
+///
+/// 倒排是外置 content 的，`rowid` 在复制过程中全部重排，必须在同一个事务里连带重建，
+/// 否则中途的查询会读到对不上号的行。
+pub(crate) fn migrate_conversation_events_layout(conn: &Connection) -> Result<(), String> {
+    if !conversation_events_needs_layout_migration(conn)? {
+        return Ok(());
+    }
+    let migration = conn.execute_batch(&format!(
+        r#"
+        SAVEPOINT migrate_conversation_events_layout;
+        DROP TABLE IF EXISTS conversation_events_fts;
+        DROP TRIGGER IF EXISTS conversation_events_ai;
+        DROP TRIGGER IF EXISTS conversation_events_ad;
+        DROP TRIGGER IF EXISTS conversation_events_au;
+        DROP TABLE IF EXISTS conversation_events_v2;
+        INSERT OR IGNORE INTO conversation_files(path)
+            SELECT DISTINCT source_file FROM conversation_events;
+        CREATE TABLE conversation_events_v2 ({CONVERSATION_EVENTS_COLUMNS});
+        INSERT INTO conversation_events_v2({CONVERSATION_EVENT_COLUMN_LIST})
+        SELECT e.source, e.session_id, e.event_id, e.sequence, f.file_id, e.source_sequence,
+               e.kind, e.actor, e.name, e.occurred_at, e.occurred_at_sort, e.text,
+               e.attachments_json, e.capability_status, e.content_status, e.identity_hash,
+               e.identity_occurrence, e.index_generation
+        FROM conversation_events e
+        JOIN conversation_files f ON f.path = e.source_file;
+        DROP TABLE conversation_events;
+        ALTER TABLE conversation_events_v2 RENAME TO conversation_events;
+        DROP INDEX IF EXISTS idx_conversation_events_session_kind_name;
+        CREATE INDEX IF NOT EXISTS idx_conversation_events_session_gen
+            ON conversation_events(source, session_id, index_generation, sequence);
+        DELETE FROM conversation_session_tools;
+        {tools};
+        CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
+        {triggers}
+        INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild');
+        RELEASE migrate_conversation_events_layout;
+        "#,
+        tools = conversation_session_tools_sql("1 = 1"),
+        triggers = CONVERSATION_FTS_TRIGGERS,
+    ));
+    if let Err(error) = migration {
+        let _ = conn.execute_batch(
+            "ROLLBACK TO migrate_conversation_events_layout; RELEASE migrate_conversation_events_layout;",
+        );
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 
 fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
@@ -395,35 +515,91 @@ fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
     .map_err(|e| e.to_string())
 }
 
+/// `detail=none` 只记「哪一行含这个三元组」，不记它出现在什么位置。位置表在这里是纯开销：
+/// 检索侧不用 `bm25()`/`snippet()`，排序键是手写的 0/1，片段由 Rust 从正文切。106 万事件、
+/// 400MB 正文的真实库实测倒排从 2732MB 降到 294MB，查询还快一倍。代价是 FTS5 不再接受短语
+/// 查询，调用方要自己把关键词切成三元组用 AND 连接、再回表用 LIKE 剔假阳性，
+/// 见 `conversation::catalog_search`。
+const CONVERSATION_FTS_DEFINITION: &str = r#"
+    text,
+    name,
+    content='conversation_events',
+    content_rowid='rowid',
+    tokenize='trigram',
+    detail='none',
+    columnsize=0
+"#;
+
+const CONVERSATION_FTS_TRIGGERS: &str = r#"
+CREATE TRIGGER IF NOT EXISTS conversation_events_ai AFTER INSERT ON conversation_events BEGIN
+    INSERT INTO conversation_events_fts(rowid, text, name)
+    VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS conversation_events_ad AFTER DELETE ON conversation_events BEGIN
+    INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+    VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+END;
+CREATE TRIGGER IF NOT EXISTS conversation_events_au AFTER UPDATE ON conversation_events BEGIN
+    INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+    VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+    INSERT INTO conversation_events_fts(rowid, text, name)
+    VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+END;
+"#;
+
+fn conversation_fts_sql(conn: &Connection) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversation_events_fts'",
+        [],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+/// 旧库建的是 FTS5 默认的 `detail=full`。判据就看建表语句里有没有写 `detail=`——
+/// 正文索引只有这一次形态变更，不值得为它再开一张版本表。
+pub(crate) fn conversation_fts_needs_migration(conn: &Connection) -> Result<bool, String> {
+    Ok(conversation_fts_sql(conn)?.is_some_and(|sql| !sql.contains("detail=")))
+}
+
+/// 换掉正文索引的形态。整份倒排要从头灌一遍，百万行量级要几十秒，所以调用方必须放到
+/// 后台线程（见 `lib.rs::spawn_conversation_fts_migration`）。迁移期间旧表继续服务查询：
+/// `catalog_search` 发的三元组 AND 查询在两种形态上召回一致。
+pub(crate) fn migrate_conversation_events_fts(conn: &Connection) -> Result<(), String> {
+    if !conversation_fts_needs_migration(conn)? {
+        return Ok(());
+    }
+    let migration = conn.execute_batch(&format!(
+        r#"
+        SAVEPOINT migrate_conversation_events_fts;
+        DROP TABLE conversation_events_fts;
+        CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
+        INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild');
+        RELEASE migrate_conversation_events_fts;
+        "#
+    ));
+    if let Err(error) = migration {
+        let _ = conn.execute_batch(
+            "ROLLBACK TO migrate_conversation_events_fts; RELEASE migrate_conversation_events_fts;",
+        );
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
 /// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再 rebuild。
 /// trigram 按子串匹配，对应原先目录 LIKE 的「关键字」预期；短于 3 个字符的查询只走标题。
+///
+/// 这里只负责「没有就建」。已存在的旧形态表不在这条路径上换——那要几十秒，不能挡启动。
 fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), String> {
     let existed = table_exists(conn, "conversation_events_fts")?;
-    conn.execute_batch(
+    conn.execute_batch(&format!(
         r#"
-        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_events_fts USING fts5(
-            text,
-            name,
-            content='conversation_events',
-            content_rowid='rowid',
-            tokenize='trigram'
-        );
-        CREATE TRIGGER IF NOT EXISTS conversation_events_ai AFTER INSERT ON conversation_events BEGIN
-            INSERT INTO conversation_events_fts(rowid, text, name)
-            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
-        END;
-        CREATE TRIGGER IF NOT EXISTS conversation_events_ad AFTER DELETE ON conversation_events BEGIN
-            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
-            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
-        END;
-        CREATE TRIGGER IF NOT EXISTS conversation_events_au AFTER UPDATE ON conversation_events BEGIN
-            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
-            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
-            INSERT INTO conversation_events_fts(rowid, text, name)
-            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
-        END;
-        "#,
-    )
+        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
+        {CONVERSATION_FTS_TRIGGERS}
+        "#
+    ))
     .map_err(|e| e.to_string())?;
     if existed {
         return Ok(());
@@ -522,12 +698,7 @@ fn migrate_conversation_session_files_key(conn: &Connection) -> Result<(), Strin
     Ok(())
 }
 
-fn ensure_column(
-    conn: &Connection,
-    table: &str,
-    column: &str,
-    definition: &str,
-) -> Result<(), String> {
+fn table_columns(conn: &Connection, table: &str) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table})"))
         .map_err(|e| e.to_string())?;
@@ -536,6 +707,16 @@ fn ensure_column(
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+    Ok(columns)
+}
+
+fn ensure_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    let columns = table_columns(conn, table)?;
     if !columns.iter().any(|name| name == column) {
         conn.execute_batch(&format!(
             "ALTER TABLE {table} ADD COLUMN {column} {definition}"

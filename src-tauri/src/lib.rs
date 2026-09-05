@@ -243,6 +243,51 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
     });
 }
 
+/// 对话派生缓存的两处形态迁移，都只做一次：
+///
+/// - 事件表原先每行存整条源文件绝对路径、并且靠一条宽索引回答「用过哪个工具」。换成
+///   `file_id` + 工具汇总表之后，真实库省下约 200MB。
+/// - 正文倒排原先是 FTS5 默认的 `detail=full`，位置表占了整个缓存里最大的一块，而检索侧
+///   从不读位置：片段是 Rust 自己从正文切的，排序键也是手写的。换成 `detail=none` 之后，
+///   真实库的倒排从 2.7GB 降到 0.3GB。
+///
+/// 两件事合计要几分钟（1.1GB 表整份复制 + 倒排重灌），放 `setup` 里同步做会让启动像卡死，
+/// 所以和预聚合补建一样挪到后台线程、与摄取靠写锁互斥。期间不需要任何「未就绪」状态：
+/// 形态迁移在同一个事务里连带重建倒排，提交之前读连接看到的仍是完整的旧快照。
+fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        let needs = {
+            let Ok(conn) = state.lock_read() else {
+                return;
+            };
+            store::conversation_events_needs_layout_migration(&conn).unwrap_or(false)
+                || store::conversation_fts_needs_migration(&conn).unwrap_or(false)
+        };
+        if !needs {
+            return;
+        }
+        let Ok(conn) = state.lock_write() else {
+            return;
+        };
+        if let Err(error) = store::migrate_conversation_events_layout(&conn) {
+            eprintln!("对话事件表形态迁移失败：{error}");
+            return;
+        }
+        if let Err(error) = store::migrate_conversation_events_fts(&conn) {
+            eprintln!("对话正文索引迁移失败：{error}");
+            return;
+        }
+        // 换表只是把旧结构的几 GB 页挂进 freelist，文件本身不会变小。新形态的稳态体积只有
+        // 三分之一，这些页等不到被写入复用的那天，所以顺手还给文件系统——省磁盘正是这次
+        // 改动要交付的东西。失败不回滚：迁移已经提交，空间晚点还不影响正确性。
+        if let Err(error) = store::vacuum(&conn) {
+            eprintln!("对话派生缓存迁移后回收磁盘空间失败：{error}");
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -279,6 +324,7 @@ pub fn run() {
             tray::setup(app.handle()).map_err(std::io::Error::other)?;
             spawn_rollup_backfill(app.handle());
             spawn_event_index_backfill(app.handle());
+            spawn_conversation_cache_migration(app.handle());
             #[cfg(desktop)]
             {
                 use tauri_plugin_notification::NotificationExt;

@@ -7,6 +7,7 @@ use serde_json::Value;
 
 use crate::domain::{ConversationEvent, ConversationEventAnchor, ConversationEventPage, Source};
 
+use super::event_tables::{clear_session_tools, refresh_session_tools, FileIds};
 use super::merge::event_identity;
 use super::toolbox::ParsedConversation;
 
@@ -25,17 +26,13 @@ pub fn write_file_events(
             generation
         }
     };
-    let mut statement = conn
-        .prepare(
-            r#"
-            INSERT INTO conversation_events(
-                source, session_id, event_id, sequence, source_file, source_sequence, kind, actor,
-                name, occurred_at, occurred_at_sort, text, attachments_json, capability_status,
-                content_status, identity_hash, identity_occurrence, index_generation
-            ) VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
+    let insert_sql = format!(
+        "INSERT INTO conversation_events({columns}) \
+         VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
+        columns = crate::store::CONVERSATION_EVENT_COLUMN_LIST,
+    );
+    let mut statement = conn.prepare(&insert_sql).map_err(|e| e.to_string())?;
+    let mut files = FileIds::default();
     let mut occurrences = BTreeMap::<String, i64>::new();
     for event in &parsed.events {
         let identity = identity_hash(event);
@@ -46,7 +43,7 @@ pub fn write_file_events(
                 source.as_str(),
                 session_id,
                 event.event_id,
-                event.source_file,
+                files.resolve(conn, &event.source_file)?,
                 event.source_sequence,
                 enum_token(event.kind)?,
                 event.actor.map(enum_token).transpose()?,
@@ -83,17 +80,13 @@ pub fn append_live_events(
         .map(|sequence| sequence + 1)
         .unwrap_or(0);
     let mut occurrences = identity_occurrences(conn, source.as_str(), session_id, generation)?;
-    let mut statement = conn
-        .prepare(
-            r#"
-            INSERT INTO conversation_events(
-                source, session_id, event_id, sequence, source_file, source_sequence, kind, actor,
-                name, occurred_at, occurred_at_sort, text, attachments_json, capability_status,
-                content_status, identity_hash, identity_occurrence, index_generation
-            ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
+    let insert_sql = format!(
+        "INSERT INTO conversation_events({columns}) \
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)",
+        columns = crate::store::CONVERSATION_EVENT_COLUMN_LIST,
+    );
+    let mut statement = conn.prepare(&insert_sql).map_err(|e| e.to_string())?;
+    let mut files = FileIds::default();
     for event in events {
         let identity = identity_hash(event);
         let occurrence = occurrences.entry(identity.clone()).or_insert(-1);
@@ -105,7 +98,7 @@ pub fn append_live_events(
                 session_id,
                 event.event_id,
                 next_sequence,
-                event.source_file,
+                files.resolve(conn, &event.source_file)?,
                 event.source_sequence,
                 enum_token(event.kind)?,
                 event.actor.map(enum_token).transpose()?,
@@ -123,6 +116,7 @@ pub fn append_live_events(
             .map_err(|error| error.to_string())?;
         next_sequence += 1;
     }
+    refresh_session_tools(conn, source.as_str(), session_id, generation)?;
     Ok(next_sequence.saturating_sub(1))
 }
 
@@ -203,13 +197,14 @@ pub fn finalize_session_events(
         WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
           AND rowid NOT IN (
             SELECT rowid FROM (
-              SELECT rowid,
+              SELECT e.rowid AS rowid,
                 ROW_NUMBER() OVER (
-                  PARTITION BY identity_hash, identity_occurrence
-                  ORDER BY source_file
+                  PARTITION BY e.identity_hash, e.identity_occurrence
+                  ORDER BY f.path
                 ) AS file_rank
-              FROM conversation_events
-              WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+              FROM conversation_events e
+              JOIN conversation_files f ON f.file_id = e.file_id
+              WHERE e.source = ?1 AND e.session_id = ?2 AND e.index_generation = ?3
             )
             WHERE file_rank = 1
           )
@@ -220,9 +215,10 @@ pub fn finalize_session_events(
     let mut order_statement = conn
         .prepare(
             r#"
-            SELECT rowid, occurred_at, source_file, source_sequence, event_id
-            FROM conversation_events
-            WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+            SELECT e.rowid, e.occurred_at, f.path, e.source_sequence, e.event_id
+            FROM conversation_events e
+            JOIN conversation_files f ON f.file_id = e.file_id
+            WHERE e.source = ?1 AND e.session_id = ?2 AND e.index_generation = ?3
             "#,
         )
         .map_err(|error| error.to_string())?;
@@ -270,6 +266,8 @@ pub fn finalize_session_events(
         params![source.as_str(), session_id, generation],
     )
     .map_err(|error| error.to_string())?;
+    clear_session_tools(conn, source.as_str(), session_id, Some(generation))?;
+    refresh_session_tools(conn, source.as_str(), session_id, generation)?;
     Ok(())
 }
 
@@ -304,6 +302,7 @@ pub fn clear_session_events(
         params![source.as_str(), session_id],
     )
     .map_err(|error| error.to_string())?;
+    clear_session_tools(conn, source.as_str(), session_id, None)?;
     conn.execute(
         r#"
         UPDATE conversation_sessions
@@ -317,10 +316,11 @@ pub fn clear_session_events(
 }
 
 const EVENT_SELECT: &str = r#"
-    SELECT event_id, source_file, source_sequence, kind, actor, name, occurred_at, text,
-           attachments_json, capability_status, content_status, sequence
-    FROM conversation_events
-    WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
+    SELECT e.event_id, f.path, e.source_sequence, e.kind, e.actor, e.name, e.occurred_at, e.text,
+           e.attachments_json, e.capability_status, e.content_status, e.sequence
+    FROM conversation_events e
+    JOIN conversation_files f ON f.file_id = e.file_id
+    WHERE e.source = ?1 AND e.session_id = ?2 AND e.index_generation = ?3
 "#;
 
 pub fn indexed_events(
@@ -768,6 +768,7 @@ fn next_generation(conn: &Connection, source: Source, session_id: &str) -> Resul
             params![source.as_str(), session_id, live],
         )
         .map_err(|error| error.to_string())?;
+        clear_session_tools(conn, source.as_str(), session_id, Some(live))?;
         Ok(live + 1)
     } else {
         conn.execute(
@@ -775,6 +776,7 @@ fn next_generation(conn: &Connection, source: Source, session_id: &str) -> Resul
             params![source.as_str(), session_id],
         )
         .map_err(|error| error.to_string())?;
+        clear_session_tools(conn, source.as_str(), session_id, None)?;
         Ok(1)
     }
 }

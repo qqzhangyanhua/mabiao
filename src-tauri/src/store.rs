@@ -11,9 +11,14 @@ pub mod records;
 pub mod rollup;
 mod schema;
 
-pub use connect::{open_db, open_memory, open_readonly, shrink_memory};
+pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum};
 pub use cursor_account::*;
 pub use cursor_session::*;
 pub use official_quota::*;
 pub use records::*;
 pub use rollup::*;
+pub(crate) use schema::{
+    conversation_events_needs_layout_migration, conversation_fts_needs_migration,
+    conversation_session_tools_sql, migrate_conversation_events_fts,
+    migrate_conversation_events_layout, CONVERSATION_EVENT_COLUMN_LIST,
+};
