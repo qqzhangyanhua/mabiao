@@ -13,6 +13,7 @@ use crate::domain::{
 };
 use crate::ingest;
 
+use super::agent_graph::load_agent_relations;
 use super::attachments::{
     attachment_data_url, attachment_thumbnail_data_url, ensure_attachment_path_allowed,
     read_source_payload,
@@ -31,10 +32,10 @@ use super::trusted_path::{
     session_source_paths, trusted_paths_for_session,
 };
 use super::{
-    conversation_adapter, cursor, event_index, line_direct, load_agent_relations,
-    parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
-    write_session_file_events, PreparedConversationDetail, PreparedDetailRead,
-    CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+    conversation_adapter, cursor, event_index, line_direct, parse_conversation_file,
+    parse_conversation_files, persist_session_file_cursors, write_session_file_events,
+    PreparedConversationDetail, PreparedDetailRead, CONVERSATION_ADAPTER_VERSION,
+    CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(
