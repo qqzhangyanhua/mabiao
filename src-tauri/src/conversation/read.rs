@@ -22,14 +22,17 @@ use super::toolbox::{
     attachment_candidates, compare_event_order, semantic_event, AttachmentCandidate,
     ParsedConversation,
 };
+use super::trusted_path::{
+    detail_file_revision, detail_files_revision, files_revision, modified_nanos,
+    session_source_paths, trusted_paths_for_session,
+};
 use super::{
-    conversation_adapter, cursor, detail_file_revision, detail_files_revision,
-    ensure_matching_session, event_index, files_revision, line_direct, load_agent_relations,
-    load_session, load_trusted_session_files, load_usage_records, modified_nanos,
+    conversation_adapter, cursor, ensure_matching_session, event_index, line_direct,
+    load_agent_relations, load_session, load_trusted_session_files, load_usage_records,
     parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
-    session_source_paths, trusted_paths_for_session, update_session_files, upsert_session,
-    usage_record_identity, write_session_file_events, PreparedConversationDetail,
-    PreparedDetailRead, CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+    update_session_files, upsert_session, usage_record_identity, write_session_file_events,
+    PreparedConversationDetail, PreparedDetailRead, CONVERSATION_ADAPTER_VERSION,
+    CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(

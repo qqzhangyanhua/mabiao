@@ -5,8 +5,8 @@ use crate::domain::{
 };
 
 use super::{
-    escape_like, finish_catalog_rows, row_from_sql, CONVERSATION_ADAPTER_VERSION,
-    DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE,
+    finish_catalog_rows, row_from_sql, CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
 };
 
 const TITLE_LIKE_FIELDS: usize = 7;
@@ -128,6 +128,13 @@ pub(super) fn event_index_ready_sql(alias: &str) -> String {
     format!(
         "CASE WHEN {alias}.adapter_version = {CONVERSATION_ADAPTER_VERSION} AND {alias}.event_index_generation IS NOT NULL THEN 1 ELSE 0 END"
     )
+}
+
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
 }
 
 fn push_search_params(params: &mut Vec<rusqlite::types::Value>, search: &str, include_body: bool) {

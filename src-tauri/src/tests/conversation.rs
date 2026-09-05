@@ -507,15 +507,16 @@ fn conversation_detail_file_revision_maps_canonicalize_and_metadata_not_found_to
     std::fs::create_dir_all(&root).unwrap();
     let canonical_root = std::fs::canonicalize(&root).unwrap();
 
-    let missing_during_canonicalize = crate::conversation::checked_detail_file_revision(
-        std::slice::from_ref(&root),
-        || Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
-        |_| Ok("unused".to_string()),
-    )
-    .unwrap();
+    let missing_during_canonicalize =
+        crate::conversation::trusted_path::checked_detail_file_revision(
+            std::slice::from_ref(&root),
+            || Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
+            |_| Ok("unused".to_string()),
+        )
+        .unwrap();
     assert_eq!(missing_during_canonicalize, None);
 
-    let missing_during_metadata = crate::conversation::checked_detail_file_revision(
+    let missing_during_metadata = crate::conversation::trusted_path::checked_detail_file_revision(
         std::slice::from_ref(&root),
         || Ok(canonical_root.clone()),
         |_| Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
