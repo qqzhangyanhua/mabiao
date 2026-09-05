@@ -1,0 +1,80 @@
+src-tauri/src/conversation/event_index.rs
+  s_4ce3400f37561b::t_8282454bae5619 83-89
+  s_4ce3400f37561b::t_f443f4e6dc44f2 29-35,46
+  s_4ce3400f37561b::t_3beb8dd1ca96b4 771,779
+  s_4ce3400f37561b::t_9f7bbe5bade309 200,202-203,205-207,218-221
+  s_4ce3400f37561b::t_b371b87b228735 319-323
+  s_4ce3400f37561b::t_7f1d660820e640 305
+  s_4ce3400f37561b::t_aaf36329ecd777 101
+  s_4ce3400f37561b::t_14a2fba496c904 269-270
+  s_4ce3400f37561b::t_ff1ff49913f037 10
+  s_4ce3400f37561b::t_a9208993a76915 119
+src-tauri/src/lib.rs
+  s_4ce3400f37561b::t_48c61a1721b787 247,258-264,267-273,278-279,287-290
+  s_4ce3400f37561b::t_deed28373a6ab9 246,248-257,265-266,274-277,282,284,286
+  s_4ce3400f37561b::t_02e1496ee4f711 280-281,283,285
+  s_4ce3400f37561b::t_2dae3d2e75305b 327
+src-tauri/src/conversation/read.rs
+  s_4ce3400f37561b::t_3e1967974a2975 276-278
+src-tauri/src/conversation/catalog_search.rs
+  s_4ce3400f37561b::t_4182e23718fd9f 13
+  s_4ce3400f37561b::t_d112c54a6d79c5 82
+  s_4ce3400f37561b::t_9dc26d101ffaa3 193-194,199-206
+  s_4ce3400f37561b::t_c7ac3792ad0a03 141,146-148,152-181
+  s_4ce3400f37561b::t_e195d1d32109fb 222,237,244
+src-tauri/src/store/connect.rs
+  s_4ce3400f37561b::t_bbb567b6b9874f 45-51
+src-tauri/src/tests/conversation_cache_layout.rs
+  s_4ce3400f37561b::t_10882eb9c78b78 178-179
+  s_4ce3400f37561b::t_a3373b0a3869bf 1-177,180-239
+docs/adr/0014-conversation-body-search.md
+  s_4ce3400f37561b::t_41a6db30b6e0e5 15
+  s_4ce3400f37561b::t_d3bb854a6a754e 9-14,16-23
+docs/adr/0011-conversation-event-index.md
+  s_4ce3400f37561b::t_7d2819f7be8d19 23-35
+src-tauri/src/tests/conversation_fts.rs
+  s_4ce3400f37561b::t_b8ba3a39a1e4c5 263-266
+  s_4ce3400f37561b::t_a591329fce22dd 173-262,267-276
+src-tauri/src/store.rs
+  s_4ce3400f37561b::t_050306ceaf18f2 14
+  s_4ce3400f37561b::t_0141e3fa576008 20-24
+src-tauri/src/backup.rs
+  s_4ce3400f37561b::t_6e2755754b632f 114-123
+src-tauri/src/conversation/event_tables.rs
+  s_4ce3400f37561b::t_c353c6e3bc8156 1-84
+src-tauri/src/store/schema.rs
+  s_4ce3400f37561b::t_c21bdcc242cdec 507,701,710-719
+  s_4ce3400f37561b::t_ec28ffca625344 533-549
+  s_4ce3400f37561b::t_3471e9a517b515 451-455
+  s_4ce3400f37561b::t_79d918d6589e47 519-522
+  s_4ce3400f37561b::t_fd4e59b6586636 601-602
+  s_4ce3400f37561b::t_7e3cc1b3cd511d 1
+  s_4ce3400f37561b::t_dbdc411a6d6917 600
+  s_4ce3400f37561b::t_b75326843fb2e2 518,523-532,550-590,593-594,597,599
+  s_4ce3400f37561b::t_3856a9b6b343ae 360,365-450,456-506
+  s_4ce3400f37561b::t_714477e74012cc 508
+src-tauri/src/conversation/catalog.rs
+  s_4ce3400f37561b::t_f28ee1ca1f196b 171-172,174-176,178-180
+  s_4ce3400f37561b::t_07d90231d41d12 119-121,124-127,146,148,151
+  s_4ce3400f37561b::t_51fa51fcb61c58 111
+src-tauri/src/tests/mod.rs
+  s_4ce3400f37561b::t_372f0daf797a02 15
+src-tauri/src/conversation/mod.rs
+  s_4ce3400f37561b::t_1ea17c6dfcad3a 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "bda70d616fe4e67f8a2a39444e9871db782081a7",
+  "prompts": {},
+  "sessions": {
+    "s_4ce3400f37561b": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "c372387c-ad82-4b9b-b100-9854e55ad5df",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
