@@ -4,13 +4,17 @@ export const FUSE_W = 720;
 export const FUSE_SCALE = 2;
 export const BEAD = 10;
 
-export const FONT_TITLE = 54;
+export const FONT_TITLE = 70;
 export const FONT_DATE = 16;
 export const FONT_HERO_LABEL = 14;
 export const FONT_HERO_VALUE = 48;
 export const FONT_COMMENT = 15;
 export const FONT_BODY = 14;
 export const FONT_STAT = 13;
+/** 标题豆字相对 `y.title` 的绘制起点；paint 与 layout 必须同一份。 */
+export const TITLE_OFFSET_Y = 8;
+export const TITLE_PITCH = 6;
+export const DATE_PILL_H = 32;
 
 export function snap(value: number): number {
   return Math.round(value / BEAD) * BEAD;
@@ -140,10 +144,14 @@ function layoutSourceCard(count: number): {
 }
 
 export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
+  const title = snap(36);
+  // 豆字按 FONT_TITLE 光栅，日期胶囊不能压在标题下半截上。
+  const date = snap(title + TITLE_OFFSET_Y + FONT_TITLE + BEAD);
+  const hero = snap(date + DATE_PILL_H + BEAD * 2);
   const y = {
-    title: snap(36),
-    date: snap(100),
-    hero: snap(150),
+    title,
+    date,
+    hero,
     comments: 0,
     bars: 0,
     bottom: 0,

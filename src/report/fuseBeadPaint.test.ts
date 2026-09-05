@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { FAKE_POSTER } from "./fakePosterData";
-import { BEAD, FONT_COMMENT, layoutFuseBeadPoster, snap, wrapBeadText } from "./fuseBeadLayout";
+import {
+  BEAD,
+  DATE_PILL_H,
+  FONT_COMMENT,
+  FONT_TITLE,
+  layoutFuseBeadPoster,
+  snap,
+  TITLE_OFFSET_Y,
+  wrapBeadText,
+} from "./fuseBeadLayout";
 import type { PosterSourceSlice, PosterViewModel } from "./posterTypes";
 
 function poster(overrides: Partial<PosterViewModel>): PosterViewModel {
@@ -19,10 +28,18 @@ describe("layoutFuseBeadPoster", () => {
   it("snaps section tops to the bead grid and keeps room for seven slots", () => {
     const layout = layoutFuseBeadPoster(FAKE_POSTER);
     expect(layout.y.title % BEAD).toBe(0);
+    expect(layout.y.date % BEAD).toBe(0);
     expect(layout.y.hero % BEAD).toBe(0);
     expect(layout.height).toBeGreaterThan(layout.y.footer);
     expect(layout.height % BEAD).toBe(0);
     expect(layout.y.bars).toBeGreaterThan(layout.y.comments);
+  });
+
+  it("keeps the date pill below the bead title instead of covering it", () => {
+    const layout = layoutFuseBeadPoster(FAKE_POSTER);
+    const titleBottom = layout.y.title + TITLE_OFFSET_Y + FONT_TITLE;
+    expect(layout.y.date).toBeGreaterThanOrEqual(titleBottom);
+    expect(layout.y.hero).toBeGreaterThanOrEqual(layout.y.date + DATE_PILL_H);
   });
 
   it("shrinks when comments and stats are empty", () => {

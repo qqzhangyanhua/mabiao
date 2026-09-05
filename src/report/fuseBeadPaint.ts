@@ -2,14 +2,18 @@ import { findPosterStat, type PosterViewModel } from "./posterTypes";
 import { POSTER_FRAME_HEIGHT, POSTER_FRAME_WIDTH, framePosterLayout } from "./posterFrame";
 import {
   BEAD,
+  DATE_PILL_H,
   FONT_COMMENT,
   FONT_DATE,
   FONT_HERO_LABEL,
   FONT_STAT,
+  FONT_TITLE,
   FUSE_SCALE,
   FUSE_W,
   layoutFuseBeadPoster,
   snap,
+  TITLE_OFFSET_Y,
+  TITLE_PITCH,
   type FuseBeadLayout,
 } from "./fuseBeadLayout";
 import {
@@ -84,13 +88,39 @@ function drawTitle(ctx: CanvasRenderingContext2D, kicker: string, y: number): vo
   const parts = kicker.split(" · ");
   drawStar(ctx, 78, y + 40);
   drawStar(ctx, 642, y + 40);
-  const pitch = 6;
   if (parts.length === 2 && parts[0] && parts[1]) {
-    beadText(ctx, parts[0], FUSE_W / 2 - 16, y + 8, 70, YELLOW, "right", pitch);
-    drawBead(ctx, FUSE_W / 2 - 3, y + 40, YELLOW, true, pitch);
-    beadText(ctx, parts[1], FUSE_W / 2 + 16, y + 8, 70, PURPLE, "left", pitch);
+    beadText(
+      ctx,
+      parts[0],
+      FUSE_W / 2 - 16,
+      y + TITLE_OFFSET_Y,
+      FONT_TITLE,
+      YELLOW,
+      "right",
+      TITLE_PITCH,
+    );
+    drawBead(ctx, FUSE_W / 2 - 3, y + 40, YELLOW, true, TITLE_PITCH);
+    beadText(
+      ctx,
+      parts[1],
+      FUSE_W / 2 + 16,
+      y + TITLE_OFFSET_Y,
+      FONT_TITLE,
+      PURPLE,
+      "left",
+      TITLE_PITCH,
+    );
   } else {
-    beadText(ctx, kicker, FUSE_W / 2, y + 8, 70, YELLOW, "center", pitch);
+    beadText(
+      ctx,
+      kicker,
+      FUSE_W / 2,
+      y + TITLE_OFFSET_Y,
+      FONT_TITLE,
+      YELLOW,
+      "center",
+      TITLE_PITCH,
+    );
   }
 }
 
@@ -98,11 +128,12 @@ function drawDate(ctx: CanvasRenderingContext2D, rangeLabel: string, y: number):
   ctx.font = `800 ${FONT_DATE}px ${FACE}`;
   const w = Math.max(280, ctx.measureText(rangeLabel).width + 36);
   const x0 = FUSE_W / 2 - w / 2;
-  pill(ctx, x0, y, w, 32, CARD);
-  fillLabel(ctx, rangeLabel, FUSE_W / 2, y + 16, FONT_DATE, WHITE, "center");
+  pill(ctx, x0, y, w, DATE_PILL_H, CARD);
+  fillLabel(ctx, rangeLabel, FUSE_W / 2, y + DATE_PILL_H / 2, FONT_DATE, WHITE, "center");
+  const beadY = y + DATE_PILL_H / 2 - 5;
   for (let i = 0; i < 5; i += 1) {
-    drawBead(ctx, x0 - 18 - i * 12, y + 11, PURPLE, true, 8);
-    drawBead(ctx, x0 + w + 10 + i * 12, y + 11, PURPLE, true, 8);
+    drawBead(ctx, x0 - 18 - i * 12, beadY, PURPLE, true, 8);
+    drawBead(ctx, x0 + w + 10 + i * 12, beadY, PURPLE, true, 8);
   }
 }
 
@@ -128,7 +159,14 @@ function drawHero(
       ? (data.comments[0]?.replace(/\s+\S+\s+token。$/, "") ?? data.totalUnit)
       : data.totalUnit;
   fillLabel(ctx, costTitle, right + cardW / 2, y + 28, FONT_HERO_LABEL, INK, "center");
-  drawDigitString(ctx, data.totalCostLabel ?? data.totalTokensLabel, right + cardW / 2, y + 96, PURPLE, 8);
+  drawDigitString(
+    ctx,
+    data.totalCostLabel ?? data.totalTokensLabel,
+    right + cardW / 2,
+    y + 96,
+    PURPLE,
+    8,
+  );
 }
 
 function drawComments(ctx: CanvasRenderingContext2D, layout: FuseBeadLayout): void {
