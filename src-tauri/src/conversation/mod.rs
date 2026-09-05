@@ -77,9 +77,8 @@ pub use read::{
     load_parsed_detail, parse_session_events, rebuild_events_from_line,
 };
 pub(crate) use read::{
-    backfill_event_index_step_skipping, catalog_roots, conversation_source_roots,
-    event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
-    prepare_detail_read,
+    backfill_event_index_step_skipping, catalog_roots, event_index_ready, finish_prepared_detail,
+    load_prepared_parsed, prepare_detail, prepare_detail_read,
 };
 
 pub use export::build_export;
