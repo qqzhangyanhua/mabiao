@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 
-use super::*;
+use serde_json::Value;
+
+use super::{detail, index, EventKind};
 
 #[test]
 fn adapter_projects_cursor_records_with_stable_ids_and_structural_unknowns() {

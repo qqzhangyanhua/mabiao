@@ -1,4 +1,4 @@
-use super::*;
+use super::{parse, EventActor, EventKind};
 
 #[test]
 fn adapter_maps_omp_lifecycle_and_skips_duplicate_tool_starts() {

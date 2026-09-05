@@ -1,4 +1,6 @@
-use super::*;
+use std::path::Path;
+
+use super::{detail, index, EventKind};
 
 fn write_records(path: &Path, prepend_unknown: bool) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

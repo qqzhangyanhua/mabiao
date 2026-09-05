@@ -13,7 +13,7 @@ use crate::domain::{
     ConversationAgentLinkStatus as AgentLinkStatus, ConversationAgentRelations,
     ConversationAttachmentKind as AttachmentKind, ConversationAttachmentStatus as AttachmentStatus,
     ConversationEvent, ConversationEventKind as EventKind, ConversationMatchField,
-    ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord, Source, UsageRecord,
+    ConversationSessionRow, CursorSessionRecord, Source, UsageRecord,
 };
 use crate::ingest;
 
@@ -43,11 +43,10 @@ mod read;
 mod toolbox;
 
 use toolbox::{
-    attachment_candidates, compare_event_order, compare_event_timestamps,
-    compare_optional_timestamps, compare_timestamps, semantic_event, CAPABILITY_EVENTS,
-    CAPABILITY_MESSAGES, CAPABILITY_USAGE, EXPERIMENTAL,
+    compare_event_timestamps, compare_optional_timestamps, compare_timestamps, AttachmentCandidate,
+    FileIndexCursor, ParsedConversation, CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_USAGE,
+    EXPERIMENTAL,
 };
-pub(crate) use toolbox::{AttachmentCandidate, FileIndexCursor, ParsedConversation};
 
 pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,

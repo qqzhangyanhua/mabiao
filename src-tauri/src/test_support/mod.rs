@@ -1,3 +1,4 @@
+pub mod conversation_boundary;
 mod helpers;
 mod hermes_fixture;
 

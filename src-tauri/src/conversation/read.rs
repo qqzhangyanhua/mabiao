@@ -1,20 +1,33 @@
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::domain::{
-    ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
-    ConversationEvent, ConversationEventContentDto, ConversationIndexProgressDto,
-    ConversationParsedDetail, ConversationSessionRow, Source,
-};
-
-use super::{
-    AttachmentCandidate, ParsedConversation, PreparedConversationDetail, PreparedDetailRead,
+    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
+    ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
+    ConversationEventContentDto, ConversationEventKind as EventKind, ConversationIndexProgressDto,
+    ConversationParsedDetail, ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord,
+    Source, UsageRecord,
 };
 use crate::ingest;
-use std::fs;
 
-use super::*;
+use super::toolbox::{
+    attachment_candidates, compare_event_order, semantic_event, AttachmentCandidate,
+    ParsedConversation,
+};
+use super::{
+    attachment_data_url, attachment_thumbnail_data_url, conversation_adapter, cursor,
+    detail_file_revision, detail_files_revision, ensure_attachment_path_allowed,
+    ensure_matching_session, event_index, files_revision, line_direct, load_agent_relations,
+    load_session, load_trusted_session_files, load_usage_records, merge_indexed_files,
+    modified_nanos, parse_conversation_file, parse_conversation_files,
+    persist_session_file_cursors, read_source_payload, session_source_paths, summarize_for_index,
+    trusted_paths_for_session, update_session_files, upsert_session, usage_record_identity,
+    write_session_file_events, PreparedConversationDetail, PreparedDetailRead,
+    CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+};
 
 pub fn load_detail(
     conn: &Connection,

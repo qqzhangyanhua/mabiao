@@ -1,4 +1,6 @@
-use super::*;
+use std::path::{Path, PathBuf};
+
+use super::{index, EventKind};
 
 fn seed(temp: &Path, status: &str, include_update: bool) -> PathBuf {
     let root = temp.join("kimi");

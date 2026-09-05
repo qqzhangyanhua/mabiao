@@ -1,6 +1,7 @@
 use std::io::Cursor;
+use std::path::Path;
 
-use super::*;
+use super::{index, EventKind, EventStatus};
 
 fn write_compressed(path: &Path, content: &str) {
     let compressed = zstd::stream::encode_all(Cursor::new(content.as_bytes()), 1).unwrap();

@@ -8,10 +8,12 @@ use serde_json::Value;
 use crate::conversation::event_identity;
 use crate::domain::{ConversationEvent, ConversationEventAnchor, ConversationEventPage, Source};
 
+use super::toolbox::ParsedConversation;
+
 pub fn write_file_events(
     conn: &Connection,
     source: Source,
-    parsed: &crate::conversation::ParsedConversation,
+    parsed: &ParsedConversation,
     generations: &mut BTreeMap<String, i64>,
 ) -> Result<(), String> {
     let session_id = parsed.session.session_id.as_str();

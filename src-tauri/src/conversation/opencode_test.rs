@@ -1,6 +1,6 @@
 use rusqlite::params;
 
-use super::*;
+use super::{index, EventKind};
 
 #[test]
 fn adapter_preserves_recognized_content_and_reports_body_free_degradation() {
