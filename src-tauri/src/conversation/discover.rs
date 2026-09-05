@@ -1,10 +1,10 @@
+use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::metadata_revision;
 use crate::ingest;
-use std::fs;
 
 use super::toolbox::ParsedConversation;
+use super::trusted_path::metadata_revision;
 use super::{claude, gemini, omp, pi, ConversationIndexBatch, ConversationIndexIssue};
 
 pub(crate) fn discover_extension(
