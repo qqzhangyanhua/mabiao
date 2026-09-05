@@ -8,6 +8,7 @@ import {
   hashForWorktime,
   initialViewScopes,
   isViewFresh,
+  isViewStampedForScope,
   parseConversationFocus,
   parseViewHash,
   parseWorktimeDay,
@@ -336,5 +337,59 @@ describe("isViewFresh", () => {
     expect(isViewFresh(loaded, "trend", { ...filter, from: "2026-08-01" }, "all", "day", 1)).toBe(
       false,
     );
+  });
+});
+
+describe("isViewStampedForScope", () => {
+  it("returns false when the view has never been stamped", () => {
+    expect(isViewStampedForScope({}, "overview", filter, "all", 1)).toBe(false);
+  });
+
+  it("matches the same filter, preset, and epoch across grains", () => {
+    const loaded = { overview: viewStamp("overview", filter, "all", "day", 1) };
+    expect(isViewStampedForScope(loaded, "overview", filter, "all", 1)).toBe(true);
+    expect(isViewFresh(loaded, "overview", filter, "all", "week", 1)).toBe(false);
+  });
+
+  it("returns false when the data epoch differs", () => {
+    const loaded = { overview: viewStamp("overview", filter, "all", "day", 1) };
+    expect(isViewStampedForScope(loaded, "overview", filter, "all", 2)).toBe(false);
+  });
+
+  it("returns false when the preset differs", () => {
+    const loaded = { overview: viewStamp("overview", filter, "7", "day", 1) };
+    expect(isViewStampedForScope(loaded, "overview", filter, "all", 1)).toBe(false);
+  });
+
+  it("treats filter set membership as equal regardless of order", () => {
+    const stamped = {
+      ...filter,
+      sources: ["claude", "codex"],
+      models: ["opus", "gpt"],
+      projects: ["/a", "/b"],
+      providers: ["anthropic", "openai"],
+    };
+    const shuffled = {
+      ...filter,
+      sources: ["codex", "claude"],
+      models: ["gpt", "opus"],
+      projects: ["/b", "/a"],
+      providers: ["openai", "anthropic"],
+    };
+    const loaded = { overview: viewStamp("overview", stamped, "7", "day", 1) };
+    expect(isViewStampedForScope(loaded, "overview", shuffled, "7", 1)).toBe(true);
+  });
+
+  it("matches an empty filter", () => {
+    const empty: Filter = {
+      from: null,
+      to: null,
+      sources: [],
+      models: [],
+      projects: [],
+      providers: [],
+    };
+    const loaded = { overview: viewStamp("overview", empty, "all", "week", 3) };
+    expect(isViewStampedForScope(loaded, "overview", empty, "all", 3)).toBe(true);
   });
 });
