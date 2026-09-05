@@ -1,28 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { heatmapFilter } from "../lib/calendar";
 import { clearCursorSessionDetailCache } from "../lib/cursorSessionDetailCache";
 import { customRangeFilter, humanStatus, rangeFromPreset } from "../lib/format";
 import { rangeSnapshot } from "../lib/rangeHistory";
 import type {
-  ApplicationAnalyticsDto,
-  BillingWindowsDto,
   BudgetConfig,
   BudgetStatusDto,
-  CodeVolumeSummary,
-  CursorAccountUsageDto,
-  CursorSessionSummaryDto,
   Filter,
-  FilterOptions,
   Grain,
   IngestReport,
-  NamedAmount,
-  OfficialQuotaDto,
-  OverviewDto,
-  PriceTable,
-  SeriesPoint,
-  SessionRow,
-  SourceDiagnostic,
   View,
   ConversationFocus,
 } from "../types";
@@ -43,11 +29,11 @@ import {
 } from "./viewCache";
 import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
-import { emptyFilter } from "./usage/constants";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
 import { useIngestOperations } from "./usage/useIngestOperations";
 import { useRangeHistory } from "./usage/useRangeHistory";
+import { useUsageViewState } from "./usage/useUsageViewState";
 import { useViewRefresh } from "./usage/useViewRefresh";
 
 export { viewFromHash, views } from "./viewCache";
@@ -68,53 +54,28 @@ export function useUsageData() {
     pop: popRangeHistoryState,
     clear: clearRangeHistory,
   } = useRangeHistory();
-  const [options, setOptions] = useState<FilterOptions>({
-    sources: [],
-    models: [],
-    projects: [],
-    providers: [],
-  });
-  const [overview, setOverview] = useState<OverviewDto | null>(null);
-  const [billingWindows, setBillingWindows] = useState<BillingWindowsDto | null>(null);
-  const [officialQuota, setOfficialQuota] = useState<OfficialQuotaDto | null>(null);
-  const [cursorAccountUsage, setCursorAccountUsage] = useState<CursorAccountUsageDto | null>(null);
-  const [previous, setPrevious] = useState<OverviewDto | null>(null);
-  const [trend, setTrend] = useState<SeriesPoint[]>([]);
-  const [heatmap, setHeatmap] = useState<SeriesPoint[]>([]);
-  const [heatmapRange, setHeatmapRange] = useState(() => {
-    const window = heatmapFilter(emptyFilter);
-    return { from: window.fromDate, to: window.toDate };
-  });
+  const {
+    state,
+    apply,
+    setOfficialQuota,
+    setPrices,
+    setLoading,
+    setCursorAccountUsage,
+    setBillingWindows,
+    setTrend,
+    setApplicationAnalytics,
+    setProjects,
+  } = useUsageViewState();
   const [grain, setGrain] = useState<Grain>("day");
-  const [applicationAnalytics, setApplicationAnalytics] = useState<ApplicationAnalyticsDto | null>(
-    null,
-  );
-  const [models, setModels] = useState<NamedAmount[]>([]);
-  const [projects, setProjects] = useState<NamedAmount[]>([]);
-  const [providerBreakdown, setProviderBreakdown] = useState<NamedAmount[]>([]);
   const [hydratedViews, setHydratedViews] = useState<Set<View>>(() => new Set());
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [sessionsRevision, setSessionsRevision] = useState(0);
-  const [conversationFocus, setConversationFocus] = useState<ConversationFocus | null>(
-    () => parseConversationFocus(window.location.hash),
+  const [conversationFocus, setConversationFocus] = useState<ConversationFocus | null>(() =>
+    parseConversationFocus(window.location.hash),
   );
-  const [prices, setPrices] = useState<PriceTable>({ prices: [] });
-  const [budgetStatus, setBudgetStatus] = useState<BudgetStatusDto | null>(null);
   const [savingBudget, setSavingBudget] = useState(false);
-  const [diagnostics, setDiagnostics] = useState<SourceDiagnostic[]>([]);
   const [lastIngestReport, setLastIngestReport] = useState<IngestReport | null>(null);
-  const [codeVolume, setCodeVolume] = useState<CodeVolumeSummary | null>(null);
-  const [codeVolumeLoading, setCodeVolumeLoading] = useState(() => viewFromHash() === "cursor");
-  const [cursorSessionSummary, setCursorSessionSummary] = useState<CursorSessionSummaryDto | null>(
-    null,
-  );
-  const [cursorSessionLoading, setCursorSessionLoading] = useState(
-    () => viewFromHash() === "cursor-sessions",
-  );
   const [status, setStatus] = useState("正在连接…");
   const [connected, setConnected] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const reportError = useCallback((error: unknown) => {
     setStatus(humanStatus(error));
@@ -165,38 +126,12 @@ export function useUsageData() {
     loadedStampsRef: loadedStamps,
     optionsEpochRef: optionsEpoch,
     markHydrated: markHydratedForRefresh,
-    setLoading,
-    setOptions,
-    setOverview,
-    setTrend,
-    setModels,
-    setProjects,
-    setSessions,
-    setBillingWindows,
-    setOfficialQuota,
-    setCursorAccountUsage,
-    setBudgetStatus,
-    setHeatmap,
-    setHeatmapRange,
-    setPrevious,
-    setApplicationAnalytics,
-    setProviderBreakdown,
-    setCodeVolume,
-    setCodeVolumeLoading,
-    setCursorSessionSummary,
-    setCursorSessionLoading,
-    setPrices,
-    setDiagnostics,
-    setUpdatedAt,
+    apply,
   });
-
-  const wrappedRefreshViews = useCallback(async () => {
-    await refreshViews();
-  }, [refreshViews]);
 
   const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived } =
     useIngestOperations({
-      refreshViews: wrappedRefreshViews,
+      refreshViews,
       dataEpochRef: dataEpoch,
       requestGenerationRef: requestGeneration,
       setSessionsRevision,
@@ -246,7 +181,7 @@ export function useUsageData() {
       try {
         await invoke("save_budget", { config });
         const nextStatus = await invoke<BudgetStatusDto>("get_budget_status");
-        setBudgetStatus(nextStatus);
+        apply({ budgetStatus: nextStatus });
         setStatus("预算设置已保存");
       } catch (error) {
         setStatus(`预算设置保存失败：${humanStatus(error)}`);
@@ -255,7 +190,7 @@ export function useUsageData() {
         setSavingBudget(false);
       }
     },
-    [],
+    [apply],
   );
 
   const runIngestRef = useRef(runIngestWithCacheClear);
@@ -272,14 +207,14 @@ export function useUsageData() {
           await refreshViews();
         } catch (error: unknown) {
           reportError(error);
-          setLoading(false);
+          apply({ loading: false });
         }
         return runIngestRef.current("启动摄取");
       })
       .catch((error: unknown) => {
         setConnected(false);
         setStatus(humanStatus(error));
-        setLoading(false);
+        apply({ loading: false });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在启动时拉一次缓存并后台摄取
   }, []);
@@ -384,9 +319,7 @@ export function useUsageData() {
 
   const applyViewFilter = useCallback(
     (target: View, next: Filter) => {
-      setViewScopes((current) =>
-        syncSharedFilters(current, next, current[target].preset, target),
-      );
+      setViewScopes((current) => syncSharedFilters(current, next, current[target].preset, target));
       if (target === view) {
         refreshViews(next).catch(reportError);
       }
@@ -401,55 +334,40 @@ export function useUsageData() {
     [applyViewFilter, view],
   );
 
+  const { providerBreakdown, ...viewFields } = state;
+
   return {
     view,
     filter,
     preset,
-    options,
-    overview,
-    billingWindows,
-    officialQuota,
+    ...viewFields,
     setOfficialQuota,
-    cursorAccountUsage,
     cursorAccountAutoRefresh,
     setCursorAccountAutoRefresh,
     cursorAccountRevision,
     cursorAccountRefreshError,
     refreshCursorAccount,
-    previous,
-    trend,
-    heatmap,
-    heatmapRange,
     grain,
     setGrain,
     breakdown:
-      view === "provider" ? providerBreakdown : view === "project" ? projects : models,
-    applicationAnalytics,
-    models,
-    projects,
-    sessions,
+      view === "provider"
+        ? providerBreakdown
+        : view === "project"
+          ? viewFields.projects
+          : viewFields.models,
     sessionsRevision,
     conversationFocus,
-    prices,
     setPrices,
-    budgetStatus,
     savingBudget,
     saveBudget,
-    diagnostics,
     lastIngestReport,
     rebuilding,
     purging,
-    codeVolume,
-    codeVolumeLoading,
-    cursorSessionSummary,
-    cursorSessionLoading,
     status,
     setStatus,
     connected,
     busy,
-    loading,
     viewHasData: hydratedViews.has(view),
-    updatedAt,
     autoRefresh,
     setAutoRefresh,
     navigate,
