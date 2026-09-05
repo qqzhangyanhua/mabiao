@@ -5,9 +5,9 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::conversation::event_identity;
 use crate::domain::{ConversationEvent, ConversationEventAnchor, ConversationEventPage, Source};
 
+use super::merge::event_identity;
 use super::toolbox::ParsedConversation;
 
 pub fn write_file_events(
