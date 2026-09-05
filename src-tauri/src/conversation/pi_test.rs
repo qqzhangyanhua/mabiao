@@ -1,4 +1,4 @@
-use super::*;
+use super::{parse, EventKind};
 
 #[test]
 fn adapter_maps_lifecycle_kinds_and_typeless_messages() {

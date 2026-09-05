@@ -10,11 +10,10 @@ use super::conversation_adapter;
 use super::event_index;
 use super::modified_nanos;
 use super::summarize_for_index;
+use super::toolbox::{FileIndexCursor, ParsedConversation};
 use super::CachedConversationFingerprint;
 use super::ConversationIndexSuffixFn;
-use super::FileIndexCursor;
 use super::IndexedFile;
-use super::ParsedConversation;
 use super::SessionFileCursorWrite;
 use super::CONVERSATION_ADAPTER_VERSION;
 

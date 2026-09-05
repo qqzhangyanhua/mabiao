@@ -1,4 +1,4 @@
-use super::*;
+use super::{index, EventKind, EventStatus};
 
 #[test]
 fn adapter_uses_droid_filename_identity_and_reports_partial_records_structurally() {

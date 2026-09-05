@@ -1,4 +1,4 @@
-use super::*;
+use super::{index, index_suffix, ConversationEvent, EventActor, EventKind};
 use crate::test_support::fixture;
 
 fn write_fixture(temp: &std::path::Path, name: &str) -> std::path::PathBuf {
