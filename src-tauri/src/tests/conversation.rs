@@ -230,17 +230,17 @@ fn read_source_line_rejects_an_out_of_range_index() {
     let path = temp.path().join("session.jsonl");
     std::fs::write(&path, "first\nsecond\n").unwrap();
 
-    let error = crate::conversation::read_source_line(&path, 2).unwrap_err();
+    let error = crate::conversation::attachments::read_source_line(&path, 2).unwrap_err();
     assert!(
         error.contains("未找到第 3 行"),
         "out-of-range must error instead of returning another line: {error}"
     );
     assert_eq!(
-        crate::conversation::read_source_line(&path, 0).unwrap(),
+        crate::conversation::attachments::read_source_line(&path, 0).unwrap(),
         "first"
     );
     assert_eq!(
-        crate::conversation::read_source_line(&path, 1).unwrap(),
+        crate::conversation::attachments::read_source_line(&path, 1).unwrap(),
         "second"
     );
 }
@@ -251,7 +251,7 @@ fn read_source_line_rejects_an_empty_file() {
     let path = temp.path().join("empty.jsonl");
     std::fs::write(&path, "").unwrap();
 
-    let error = crate::conversation::read_source_line(&path, 0).unwrap_err();
+    let error = crate::conversation::attachments::read_source_line(&path, 0).unwrap_err();
     assert!(
         error.contains("未找到第 1 行"),
         "empty file must error: {error}"
@@ -263,7 +263,7 @@ fn read_source_line_rejects_a_missing_file() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("missing.jsonl");
 
-    let error = crate::conversation::read_source_line(&path, 0).unwrap_err();
+    let error = crate::conversation::attachments::read_source_line(&path, 0).unwrap_err();
     assert!(
         error.contains("读取原始文件失败"),
         "missing file must use the existing Chinese error: {error}"
