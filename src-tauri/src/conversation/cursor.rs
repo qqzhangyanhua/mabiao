@@ -56,7 +56,7 @@ pub(super) fn detail(
     }
 }
 
-pub(super) fn is_native_transcript(path: &Path) -> bool {
+pub(crate) fn is_native_transcript(path: &Path) -> bool {
     session_dir_from_transcript(path).is_some()
 }
 

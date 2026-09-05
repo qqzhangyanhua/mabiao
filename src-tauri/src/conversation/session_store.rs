@@ -12,8 +12,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::domain::{ConversationMatchField, ConversationSessionRow, Source, UsageRecord};
 
 use super::conversation_adapter;
+use super::cursor_bridge::fill_empty_cursor_hash_model;
 use super::event_index;
-use super::fill_empty_cursor_hash_model;
 use super::merge::IndexedAgentMetadata;
 use super::read::conversation_source_roots;
 use super::toolbox::ParsedConversation;
