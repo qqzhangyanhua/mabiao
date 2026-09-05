@@ -325,20 +325,29 @@ fn sync_rollup(conn: &Connection, report: &IngestReport) -> Result<(), String> {
     store::rebuild_rollup_days(conn, &report.touched_days)
 }
 
+/// 路径文本用展示根；`detected` 用扫描根走适配器钩子，与摄取报告同一口径。
 pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDiagnostic>, String> {
-    let overrides = path_overrides();
+    source_diagnostics_with(conn, home, &path_overrides())
+}
+
+pub(crate) fn source_diagnostics_with(
+    conn: &Connection,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<Vec<SourceDiagnostic>, String> {
     Source::ALL
         .iter()
         .map(|source| {
             let adapter = usage_adapter(*source);
-            let dirs = adapter.display_or_scan_dirs(&overrides, home);
+            let display_dirs = adapter.display_or_scan_dirs(overrides, home);
+            let scan_dirs = (adapter.scan_dirs)(overrides, home);
             let (cached_files, record_count, total_tokens, archived_record_count) =
                 store::source_cache_stats(conn, *source)?;
             Ok(SourceDiagnostic {
                 source: source.as_str().to_string(),
                 application: source.application_name().to_string(),
-                detected: dirs.iter().any(|dir| dir.exists()),
-                root_path: dirs
+                detected: adapter.roots_detected(&scan_dirs),
+                root_path: display_dirs
                     .iter()
                     .map(|dir| dir.to_string_lossy().to_string())
                     .collect::<Vec<_>>()

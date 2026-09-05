@@ -52,7 +52,7 @@ pub(crate) struct UsageAdapter {
     pub append_log: bool,
     pub coverage: &'static str,
     pub display_dirs: Option<UsageScanDirsFn>,
-    /// 摄取报告的「已检测到」。缺省为任一扫描目录存在。
+    /// 「已检测到」：摄取报告与来源诊断共用。缺省为任一扫描目录存在。
     pub detected: Option<fn(&[PathBuf]) -> bool>,
 }
 
