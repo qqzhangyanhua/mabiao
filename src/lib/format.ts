@@ -1,4 +1,5 @@
-import type { Filter } from "../types";
+import type { Filter, Grain } from "../types";
+import { bucketToDateRange, parseDateValue } from "./calendar";
 
 export function humanStatus(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error);
@@ -298,6 +299,35 @@ export function customRangeFilter(
     return { from: null, to: null };
   }
   return { from: fromDate.toISOString(), to: toDate.toISOString() };
+}
+
+/** 把趋势 bucket 换成覆盖该时段的筛选，保留来源 / 模型等维度。 */
+export function filterForBucket(filter: Filter, grain: Grain, bucket: string): Filter | null {
+  if (grain === "hour") {
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2})$/.exec(bucket);
+    if (!match) {
+      return null;
+    }
+    const hour = Number(match[2]);
+    if (hour > 23 || !parseDateValue(match[1])) {
+      return null;
+    }
+    const fromDate = new Date(`${match[1]}T${match[2]}:00:00`);
+    const toDate = new Date(`${match[1]}T${match[2]}:59:59.999`);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      return null;
+    }
+    return { ...filter, from: fromDate.toISOString(), to: toDate.toISOString() };
+  }
+  const days = bucketToDateRange(grain, bucket);
+  if (!days) {
+    return null;
+  }
+  const range = customRangeFilter(days.from, days.to);
+  if (!range.from || !range.to) {
+    return null;
+  }
+  return { ...filter, from: range.from, to: range.to };
 }
 
 export function callRangeWindow(

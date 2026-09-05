@@ -413,6 +413,13 @@ export type SessionRow = {
   unpriced: boolean;
 };
 
+export type SessionPage = {
+  rows: SessionRow[];
+  total: number;
+  total_tokens: number;
+  last_ended: string | null;
+};
+
 export type SortDir = "asc" | "desc";
 
 export type ConversationQuery = {

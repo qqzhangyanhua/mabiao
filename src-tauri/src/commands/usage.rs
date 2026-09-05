@@ -4,8 +4,8 @@ use tauri::Manager;
 
 use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, Filter, FilterOptions, LowCacheHitSessionsDto,
-    NamedAmount, OverviewDto, ReportDto, ReportPeriod, SeriesPoint, SessionRow, UnpricedGroupDto,
-    UsageCallPage, WorkTimelineDto,
+    NamedAmount, OverviewDto, ReportDto, ReportPeriod, SeriesPoint, SessionPage, SessionQuery,
+    SessionRow, UnpricedGroupDto, UsageCallPage, WorkTimelineDto,
 };
 use crate::AppState;
 
@@ -155,6 +155,35 @@ pub async fn get_top_sessions(
         let conn = state.lock_read()?;
         let prices = state.effective_prices();
         query::top_sessions(&conn, &filter, &prices, limit.unwrap_or(20))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_sessions_page(
+    app: tauri::AppHandle,
+    filter: Filter,
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Result<SessionPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        query::sessions_page(
+            &conn,
+            &prices,
+            &SessionQuery {
+                filter,
+                sort_by: Some("time".into()),
+                sort_dir: Some("desc".into()),
+                page,
+                page_size,
+                include_cost: Some(true),
+                ..SessionQuery::default()
+            },
+        )
     })
     .await
     .map_err(|e| e.to_string())?

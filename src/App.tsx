@@ -151,8 +151,12 @@ export default function App() {
                     setGrain={data.setGrain}
                     points={data.trend}
                     theme={theme}
+                    filter={data.filter}
+                    revision={String(data.sessionsRevision)}
                     onRangeSelect={data.drillRange}
                     onRangeBack={data.canGoBack ? data.popRange : undefined}
+                    onOpenConversation={(session) => data.openConversations(session)}
+                    onError={data.reportError}
                   />
                 ) : null}
                 {view === "application" ? (

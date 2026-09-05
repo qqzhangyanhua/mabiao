@@ -7,6 +7,7 @@ import {
   callRangeWindow,
   customRangeFilter,
   deltaPct,
+  filterForBucket,
   filterWithCallRange,
   cacheHitRate,
   formatBytes,
@@ -355,6 +356,47 @@ describe("customRangeFilter", () => {
 
   it("returns nulls for unparsable input", () => {
     expect(customRangeFilter("not-a-date", "also-not")).toEqual({ from: null, to: null });
+  });
+});
+
+describe("filterForBucket", () => {
+  const scoped: Filter = {
+    ...emptyFilter,
+    sources: ["codex"],
+    models: ["gpt-5.1"],
+  };
+
+  it("covers a day bucket with the current dimension filters", () => {
+    const next = filterForBucket(scoped, "day", "2026-08-01");
+    expect(next).not.toBeNull();
+    expect(next?.sources).toEqual(["codex"]);
+    expect(next?.models).toEqual(["gpt-5.1"]);
+    expect(new Date(next!.from!).getHours()).toBe(0);
+    expect(new Date(next!.to!).getHours()).toBe(23);
+    expect(new Date(next!.from!).getDate()).toBe(1);
+    expect(new Date(next!.to!).getDate()).toBe(1);
+  });
+
+  it("covers only that local hour for an hour bucket", () => {
+    const next = filterForBucket(emptyFilter, "hour", "2026-08-01T11");
+    expect(next).not.toBeNull();
+    expect(new Date(next!.from!).getHours()).toBe(11);
+    expect(new Date(next!.to!).getHours()).toBe(11);
+    expect(new Date(next!.from!).getMinutes()).toBe(0);
+    expect(new Date(next!.to!).getMinutes()).toBe(59);
+  });
+
+  it("covers an ISO week Monday through Sunday", () => {
+    const next = filterForBucket(emptyFilter, "week", "2026-W32");
+    expect(next).not.toBeNull();
+    expect(new Date(next!.from!).getDate()).toBe(3);
+    expect(new Date(next!.to!).getDate()).toBe(9);
+  });
+
+  it("returns null for a malformed bucket", () => {
+    expect(filterForBucket(emptyFilter, "day", "08-01")).toBeNull();
+    expect(filterForBucket(emptyFilter, "hour", "2026-08-01")).toBeNull();
+    expect(filterForBucket(emptyFilter, "hour", "2026-08-01T24")).toBeNull();
   });
 });
 

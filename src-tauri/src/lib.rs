@@ -352,6 +352,7 @@ pub fn run() {
             commands::get_breakdown,
             commands::get_usage_calls_page,
             commands::get_top_sessions,
+            commands::get_sessions_page,
             commands::get_work_timeline,
             commands::get_filter_options,
             commands::get_unpriced_diagnosis,

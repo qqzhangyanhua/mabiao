@@ -6,13 +6,14 @@ import { trendSeriesTable } from "../lib/exportRows";
 import { formatCompact, formatDelta, formatTokens, formatUsd } from "../lib/format";
 import { cacheTokens, summarizeTrend, trendTableRowsNewestFirst } from "../lib/trendStats";
 import type { ResolvedTheme } from "../hooks/useTheme";
-import type { Grain, SeriesPoint } from "../types";
+import type { Filter, Grain, SeriesPoint } from "../types";
 import { EmptyState } from "./EmptyState";
 import { ExportableChart } from "./ExportableChart";
 import { ExportButton } from "./ExportButton";
 import { KpiCard } from "./Kpi";
 import { Pagination } from "./Pagination";
 import { RangeBackButton } from "./RangeBackButton";
+import { TrendBucketSessions } from "./TrendBucketSessions";
 import { GrainSwitch, grainDetailTitle, grainSparsePrev, grainUnit } from "./ui/GrainSwitch";
 
 const PAGE_SIZE = 20;
@@ -27,25 +28,38 @@ export const Trend = memo(function Trend({
   setGrain,
   points,
   theme,
+  filter,
+  revision,
   onRangeSelect,
   onRangeBack,
+  onOpenConversation,
+  onError,
 }: {
   grain: Grain;
   setGrain: (grain: Grain) => void;
   points: SeriesPoint[];
   theme: ResolvedTheme;
+  filter: Filter;
+  revision: string;
   onRangeSelect?: (from: string, to: string) => void;
   onRangeBack?: () => void;
+  onOpenConversation?: (session: { id: string; source: string }) => void;
+  onError?: (error: unknown) => void;
 }) {
   const rangeStart = points[0]?.bucket ?? "";
   const rangeEnd = points[points.length - 1]?.bucket ?? "";
   const pagingKey = `${grain}:${rangeStart}:${rangeEnd}`;
   const [page, setPage] = useState(1);
   const [pageKey, setPageKey] = useState(pagingKey);
+  const [selectedBucket, setSelectedBucket] = useState<string | null>(null);
   if (pageKey !== pagingKey) {
     setPageKey(pagingKey);
     setPage(1);
   }
+  const activeBucket =
+    selectedBucket != null && points.some((point) => point.bucket === selectedBucket)
+      ? selectedBucket
+      : null;
 
   const option = useMemo(() => areaTrendOption(points, theme), [points, theme]);
   const stats = useMemo(() => summarizeTrend(points), [points]);
@@ -84,10 +98,14 @@ export const Trend = memo(function Trend({
     [points, selectBucket],
   );
 
+  function toggleBucket(bucket: string) {
+    setSelectedBucket((current) => (current === bucket ? null : bucket));
+  }
+
   function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, bucket: string) {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      selectBucket(bucket);
+      toggleBucket(bucket);
     }
   }
 
@@ -163,7 +181,8 @@ export const Trend = memo(function Trend({
             <h2>{grainDetailTitle[grain]}</h2>
             <p className="panel-note">
               总量含缓存和推理。无用量时段不出现，环比相对{grainSparsePrev[grain]}。共{" "}
-              {points.length} 段，最新在上。
+              {points.length} 段，最新在上。点击一行查看该时段所有会话
+              {onRangeSelect ? "；图表可下钻到该时段" : ""}。
             </p>
           </div>
           <ExportButton
@@ -194,11 +213,12 @@ export const Trend = memo(function Trend({
                 return (
                   <tr
                     key={point.bucket}
-                    className={onRangeSelect ? "clickable" : undefined}
-                    onClick={onRangeSelect ? () => selectBucket(point.bucket) : undefined}
-                    onKeyDown={onRangeSelect ? (event) => onRowKeyDown(event, point.bucket) : undefined}
-                    tabIndex={onRangeSelect ? 0 : undefined}
-                    title={onRangeSelect ? "点击下钻到该时段" : undefined}
+                    className={activeBucket === point.bucket ? "clickable selected" : "clickable"}
+                    onClick={() => toggleBucket(point.bucket)}
+                    onKeyDown={(event) => onRowKeyDown(event, point.bucket)}
+                    tabIndex={0}
+                    aria-selected={activeBucket === point.bucket}
+                    title={activeBucket === point.bucket ? "收起该时段的会话" : "查看该时段的会话"}
                   >
                     <td>{formatBucket(point.bucket)}</td>
                     <td>
@@ -236,6 +256,17 @@ export const Trend = memo(function Trend({
           onPageChange={setPage}
         />
       </div>
+
+      {points.length > 0 ? (
+        <TrendBucketSessions
+          filter={filter}
+          grain={grain}
+          bucket={activeBucket}
+          revision={revision}
+          onOpenConversation={onOpenConversation}
+          onError={onError}
+        />
+      ) : null}
     </div>
   );
 });
