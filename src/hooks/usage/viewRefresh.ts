@@ -91,7 +91,7 @@ export async function runViewRefresh(ctx: ViewRefreshContext): Promise<void> {
       }),
     );
   }
-  if (view !== "conversations" && !overviewFresh) {
+  if (view === "overview" && !overviewFresh) {
     paint.push(
       invoke<OverviewDto>("get_overview", { filter: nextFilter }).then((overview) => {
         commit({ overview });
