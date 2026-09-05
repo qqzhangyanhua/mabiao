@@ -4,17 +4,35 @@
 
 use std::fmt;
 
-/// 当前已生效的依赖方向规则。后续票可在此枚举上追加变体。
+/// 模块根允许定义的编排入口。显式写死，不靠命名前缀推断。
+const ORCHESTRATION_ENTRY_FNS: &[&str] = &[
+    "refresh_source_in_roots",
+    "parse_conversation_file",
+    "parse_conversation_files",
+    "load_events",
+    "prepare_events_read",
+    "finish_prepared_events",
+    "refresh_codex",
+    "conversation_adapter",
+    "raw_export_extension",
+    "codex_index_for_bench",
+    "codex_index_suffix_for_bench",
+];
+
+/// 当前已生效的依赖方向规则。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConversationBoundaryRule {
     /// 对话记录目录下任何文件不得出现 `use super::*`。
     NoSuperWildcard,
+    /// 模块根不得定义白名单之外的 `fn`。re-export 不受此规则约束。
+    RootFnWhitelist,
 }
 
 impl ConversationBoundaryRule {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::NoSuperWildcard => "no_super_wildcard",
+            Self::RootFnWhitelist => "root_fn_whitelist",
         }
     }
 }
@@ -68,14 +86,34 @@ fn inspect_file(file: &str, source: &str, violations: &mut Vec<ConversationBound
                 symbol: symbol.to_string(),
             });
         }
+        if is_conversation_module_root(file) {
+            if let Some(name) = defined_fn_name(line) {
+                if !ORCHESTRATION_ENTRY_FNS.contains(&name) {
+                    violations.push(ConversationBoundaryViolation {
+                        file: file.to_string(),
+                        line: index + 1,
+                        rule: ConversationBoundaryRule::RootFnWhitelist,
+                        symbol: name.to_string(),
+                    });
+                }
+            }
+        }
+    }
+}
+
+fn is_conversation_module_root(file: &str) -> bool {
+    file == "mod.rs"
+}
+
+fn strip_line_comment(line: &str) -> &str {
+    match line.find("//") {
+        Some(idx) => &line[..idx],
+        None => line,
     }
 }
 
 fn super_wildcard_symbol(line: &str) -> Option<&'static str> {
-    let code = match line.find("//") {
-        Some(idx) => &line[..idx],
-        None => line,
-    };
+    let code = strip_line_comment(line);
     let tokens: Vec<&str> = code.split_whitespace().collect();
     let use_at = tokens.iter().position(|token| *token == "use")?;
     if use_at > 0 && !is_visibility(tokens[0]) {
@@ -89,4 +127,79 @@ fn super_wildcard_symbol(line: &str) -> Option<&'static str> {
 
 fn is_visibility(token: &str) -> bool {
     token == "pub" || token.starts_with("pub(")
+}
+
+/// 从一行源码里取出「正在定义的 `fn` 名」。函数指针类型与 re-export 返回 `None`。
+fn defined_fn_name(line: &str) -> Option<&str> {
+    let mut rest = strip_line_comment(line).trim();
+    if rest.is_empty() {
+        return None;
+    }
+    if let Some(after_vis) = strip_visibility(rest) {
+        rest = after_vis;
+    }
+    loop {
+        if let Some(after) = strip_keyword(rest, "async") {
+            rest = after;
+            continue;
+        }
+        if let Some(after) = strip_keyword(rest, "const") {
+            rest = after;
+            continue;
+        }
+        if let Some(after) = strip_keyword(rest, "unsafe") {
+            rest = after;
+            continue;
+        }
+        if let Some(after) = strip_extern_abi(rest) {
+            rest = after;
+            continue;
+        }
+        break;
+    }
+    let after_fn = strip_keyword(rest, "fn")?;
+    let name_end = after_fn
+        .find(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+        .unwrap_or(after_fn.len());
+    if name_end == 0 {
+        return None;
+    }
+    let name = &after_fn[..name_end];
+    let after_name = after_fn[name_end..].trim_start();
+    if after_name.starts_with('(') || after_name.starts_with('<') {
+        Some(name)
+    } else {
+        None
+    }
+}
+
+fn strip_visibility(code: &str) -> Option<&str> {
+    let rest = code.strip_prefix("pub")?;
+    if let Some(after_paren) = rest.strip_prefix('(') {
+        let close = after_paren.find(')')?;
+        return Some(after_paren[close + 1..].trim_start());
+    }
+    if rest.starts_with(|c: char| c.is_whitespace()) {
+        Some(rest.trim_start())
+    } else {
+        None
+    }
+}
+
+fn strip_keyword<'a>(code: &'a str, keyword: &str) -> Option<&'a str> {
+    let rest = code.strip_prefix(keyword)?;
+    if rest.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    Some(rest.trim_start())
+}
+
+fn strip_extern_abi(code: &str) -> Option<&str> {
+    let rest = strip_keyword(code, "extern")?;
+    if rest.starts_with('"') {
+        let after_quote = rest.get(1..)?;
+        let close = after_quote.find('"')?;
+        return Some(after_quote[close + 1..].trim_start());
+    }
+    Some(rest)
 }
