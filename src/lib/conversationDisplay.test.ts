@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConversationSessionRow } from "../types";
 import {
   capabilityLabel,
+  conversationQueryFromFilter,
   conversationSourceLabel,
   conversationDetailSummary,
   conversationFileUnavailableLabel,
@@ -9,6 +10,7 @@ import {
   conversationRangeTitle,
   conversationSessionTime,
   conversationSourceOptions,
+  conversationSourcesFromUsageFilter,
   conversationStatusLabel,
 } from "./conversationDisplay";
 
@@ -51,6 +53,43 @@ describe("conversation display labels", () => {
       "cursor_agent",
     ]);
     expect(conversationSourceOptions(["cursor_agent"])).toEqual(["cursor_agent"]);
+  });
+
+  it("maps usage-page cursor source onto conversation catalog cursor_agent", () => {
+    expect(conversationSourcesFromUsageFilter([])).toEqual([]);
+    expect(conversationSourcesFromUsageFilter(["claude", "cursor"])).toEqual([
+      "claude",
+      "cursor_agent",
+    ]);
+    expect(conversationSourcesFromUsageFilter(["cursor"])).toEqual(["cursor_agent"]);
+  });
+
+  it("builds a catalog query from the shared topbar filter", () => {
+    expect(
+      conversationQueryFromFilter(
+        {
+          from: "2026-08-01T00:00:00Z",
+          to: "2026-08-31T23:59:59Z",
+          sources: ["cursor"],
+          models: ["opus"],
+          projects: ["/old"],
+          providers: ["anthropic"],
+        },
+        { projects: ["/proj/a"], page: 2, page_size: 10 },
+      ),
+    ).toEqual({
+      search: null,
+      page: 2,
+      page_size: 10,
+      sources: ["cursor_agent"],
+      projects: ["/proj/a"],
+      models: ["opus"],
+      providers: ["anthropic"],
+      from: "2026-08-01T00:00:00Z",
+      to: "2026-08-31T23:59:59Z",
+      tool_names: [],
+      tool_failed: false,
+    });
   });
 
   it("translates experimental status and file-missing chips", () => {

@@ -161,7 +161,6 @@ pub struct SessionQuery {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SessionPage {
     pub rows: Vec<SessionRow>,
     pub total: u32,

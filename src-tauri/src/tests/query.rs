@@ -677,6 +677,60 @@ fn sessions_page_supports_search_sort_and_pagination() {
 }
 
 #[test]
+fn sessions_page_follows_project_filter_including_unlabeled() {
+    let mut records = seed_records();
+    records.push(rec(
+        "2026-08-08T12:00:00Z",
+        Source::Factory,
+        "",
+        "anthropic",
+        "",
+        "s7",
+        20,
+    ));
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    let prices = PriceTable::default();
+
+    let by_project = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: Filter {
+                projects: vec!["/proj/a".into()],
+                ..Filter::default()
+            },
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(by_project.total, 2);
+    assert!(by_project.rows.iter().all(|row| row.project == "/proj/a"));
+
+    let unlabeled = query::sessions_page(
+        &conn,
+        &prices,
+        &SessionQuery {
+            filter: Filter {
+                projects: vec!["".into()],
+                ..Filter::default()
+            },
+            include_cost: Some(true),
+            page: Some(1),
+            page_size: Some(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(unlabeled.total, 1);
+    assert_eq!(unlabeled.rows[0].session_id, "s7");
+    assert_eq!(unlabeled.rows[0].project, "");
+}
+
+#[test]
 fn sessions_page_computes_cost_only_when_requested() {
     let mut priced = rec(
         "2026-08-01T10:00:00Z",

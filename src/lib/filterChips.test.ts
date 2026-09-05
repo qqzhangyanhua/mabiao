@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
+  canExpandProjectSessions,
   clearDimensionFilters,
   filterChips,
   hasDimensionFilters,
+  projectSessionFilter,
   removeFilterChip,
+  rawProjectName,
   rawProviderName,
   withModelFilter,
+  withProjectFilter,
   withProviderFilter,
 } from "./filterChips";
 import type { Filter } from "../types";
@@ -48,6 +52,23 @@ describe("filterChips", () => {
   it("maps the unlabeled breakdown label back to an empty provider key", () => {
     expect(rawProviderName("（未标注）")).toBe("");
     expect(rawProviderName("tongban")).toBe("tongban");
+  });
+
+  it("maps the unlabeled project row back to an empty project key", () => {
+    expect(rawProjectName("（未标注）")).toBe("");
+    expect(rawProjectName("/proj/a")).toBe("/proj/a");
+  });
+
+  it("replaces the project dimension when expanding a breakdown row", () => {
+    expect(withProjectFilter(filter, "/proj/b").projects).toEqual(["/proj/b"]);
+    expect(projectSessionFilter(filter, "（未标注）").projects).toEqual([""]);
+    expect(projectSessionFilter(filter, "/proj/b").models).toEqual(["gpt-5"]);
+  });
+
+  it("does not expand Cursor account usage as a project", () => {
+    expect(canExpandProjectSessions("Cursor")).toBe(false);
+    expect(canExpandProjectSessions("/proj/Cursor")).toBe(true);
+    expect(canExpandProjectSessions("（未标注）")).toBe(true);
   });
 
   it("removes a single chip", () => {

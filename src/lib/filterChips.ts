@@ -39,9 +39,32 @@ export function withProviderFilter(filter: Filter, provider: string): Filter {
   return { ...filter, providers: [provider] };
 }
 
+export function withProjectFilter(filter: Filter, project: string): Filter {
+  return { ...filter, projects: [project] };
+}
+
+/** 聚合行展示名「（未标注）」对应库里的空字符串。 */
+export function rawUnlabeledName(name: string): string {
+  return name === "（未标注）" ? "" : name;
+}
+
 /** 聚合行展示名「（未标注）」对应库里的空 provider。 */
 export function rawProviderName(name: string): string {
-  return name === "（未标注）" ? "" : name;
+  return rawUnlabeledName(name);
+}
+
+/** 聚合行展示名「（未标注）」对应库里的空 project。 */
+export function rawProjectName(name: string): string {
+  return rawUnlabeledName(name);
+}
+
+/** 项目统计里 Cursor 账号用量那一行没有 cwd，不能下钻会话。 */
+export function canExpandProjectSessions(name: string): boolean {
+  return name !== "Cursor";
+}
+
+export function projectSessionFilter(filter: Filter, projectName: string): Filter {
+  return withProjectFilter(filter, rawProjectName(projectName));
 }
 
 export function removeFilterChip(filter: Filter, chip: FilterChip): Filter {

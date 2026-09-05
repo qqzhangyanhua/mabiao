@@ -1,17 +1,32 @@
-import { memo, useCallback, useMemo } from "react";
-import type { IconName } from "../icons";
+import { Fragment, memo, useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { Icon, type IconName } from "../icons";
 import { breakdownBarOption } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
-import { rawProviderName } from "../lib/filterChips";
+import { canExpandProjectSessions, rawProviderName } from "../lib/filterChips";
 import { formatCost, formatTokens, projectLabel, providerChannel } from "../lib/format";
 import { unpricedKpiLink } from "../lib/unpricedKpi";
 import type { Filter, NamedAmount } from "../types";
 import { BreakdownCallTable } from "./BreakdownCallTable";
+import { BreakdownProjectSessions } from "./BreakdownProjectSessions";
 import { EmptyState } from "./EmptyState";
 import { ExportableChart } from "./ExportableChart";
 import { ExportButton } from "./ExportButton";
 import { KpiCard } from "./Kpi";
 import { ModelLabel } from "./VendorIcon";
+
+function rowClassName(selected: boolean, clickable: boolean): string | undefined {
+  if (clickable) {
+    return selected ? "clickable selected" : "clickable";
+  }
+  return selected ? "selected" : undefined;
+}
+
+function projectRowTitle(name: string, selected: boolean): string {
+  if (!canExpandProjectSessions(name)) {
+    return selected ? "收起说明" : "账号用量无项目路径，不能下钻会话";
+  }
+  return selected ? "收起该项目的会话" : "展开该项目下的会话";
+}
 
 function channelClass(channel: string): string {
   if (channel === "官方") return "official";
@@ -50,6 +65,7 @@ export const Breakdown = memo(function Breakdown({
   onOpenUnpricedDiagnosis?: () => void;
   onError?: (error: unknown) => void;
 }) {
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const label = useCallback(
     (row: NamedAmount): string => {
       const name = projectNames ? projectLabel(row.name) : row.name;
@@ -76,6 +92,19 @@ export const Breakdown = memo(function Breakdown({
   const maxTotal = Math.max(1, ...rows.map((row) => row.total_tokens));
   const unpricedLink =
     onOpenUnpricedDiagnosis != null ? unpricedKpiLink(stats.unpricedCount) : null;
+  const selectedProjectName =
+    projectNames && rows.some((row) => row.name === selectedProject) ? selectedProject : null;
+
+  function toggleProject(name: string) {
+    setSelectedProject((current) => (current === name ? null : name));
+  }
+
+  function onProjectRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, name: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleProject(name);
+    }
+  }
 
   return (
     <div className="stack">
@@ -149,6 +178,11 @@ export const Breakdown = memo(function Breakdown({
             {onProviderClick ? (
               <p className="panel-note">点击名称可只看该接口的明细调用。</p>
             ) : null}
+            {projectNames ? (
+              <p className="panel-note">
+                点一行在表内展开该项目的对话记录。Cursor 账号用量不能下钻。
+              </p>
+            ) : null}
           </div>
           <ExportButton
             filename={title}
@@ -174,53 +208,24 @@ export const Breakdown = memo(function Breakdown({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const displayName = projectNames ? projectLabel(row.name) : row.name;
-                const selected =
-                  showCallDetails &&
-                  filter != null &&
-                  filter.providers.includes(rawProviderName(row.name));
-                const nameCell = showVendorIcon ? (
-                  <ModelLabel name={row.name} fallback={displayName} />
-                ) : (
-                  displayName
-                );
-                return (
-                  <tr key={row.name} className={selected ? "selected" : undefined}>
-                    <td title={row.name}>
-                      {onProviderClick ? (
-                        <button
-                          type="button"
-                          className="rank-link"
-                          onClick={() => onProviderClick(rawProviderName(row.name))}
-                        >
-                          {nameCell}
-                        </button>
-                      ) : (
-                        nameCell
-                      )}
-                    </td>
-                    {showProviderChannel ? (
-                      <td>
-                        <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
-                          {providerChannel(row.name)}
-                        </span>
-                      </td>
-                    ) : null}
-                    <td>
-                      <span className="cell-bar">
-                        <i style={{ width: `${row.share * 100}%` }} />
-                      </span>
-                      <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
-                    </td>
-                    <td>{formatTokens(row.total_tokens)}</td>
-                    <td>
-                      {formatCost(row.cost, row.unpriced)}
-                      {row.unpriced ? " · 单价未配置" : ""}
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map((row) => (
+                <BreakdownListRow
+                  key={row.name}
+                  row={row}
+                  projectNames={projectNames}
+                  showProviderChannel={showProviderChannel}
+                  showVendorIcon={showVendorIcon}
+                  showCallDetails={showCallDetails}
+                  filter={filter}
+                  revision={revision}
+                  selectedProjectName={selectedProjectName}
+                  onToggleProject={toggleProject}
+                  onProjectRowKeyDown={onProjectRowKeyDown}
+                  onProviderClick={onProviderClick}
+                  onOpenConversation={onOpenConversation}
+                  onError={onError}
+                />
+              ))}
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={showProviderChannel ? 5 : 4} className="analytics-empty">
@@ -243,3 +248,113 @@ export const Breakdown = memo(function Breakdown({
     </div>
   );
 });
+
+function BreakdownListRow({
+  row,
+  projectNames,
+  showProviderChannel,
+  showVendorIcon,
+  showCallDetails,
+  filter,
+  revision,
+  selectedProjectName,
+  onToggleProject,
+  onProjectRowKeyDown,
+  onProviderClick,
+  onOpenConversation,
+  onError,
+}: {
+  row: NamedAmount;
+  projectNames?: boolean;
+  showProviderChannel?: boolean;
+  showVendorIcon?: boolean;
+  showCallDetails?: boolean;
+  filter?: Filter;
+  revision?: string;
+  selectedProjectName: string | null;
+  onToggleProject: (name: string) => void;
+  onProjectRowKeyDown: (event: KeyboardEvent<HTMLTableRowElement>, name: string) => void;
+  onProviderClick?: (provider: string) => void;
+  onOpenConversation?: (session: { id: string; source: string }) => void;
+  onError?: (error: unknown) => void;
+}) {
+  const displayName = projectNames ? projectLabel(row.name) : row.name;
+  const projectClickable = Boolean(projectNames && filter);
+  const selected = projectClickable
+    ? selectedProjectName === row.name
+    : Boolean(
+        showCallDetails &&
+          filter != null &&
+          filter.providers.includes(rawProviderName(row.name)),
+      );
+  const nameCell = showVendorIcon ? (
+    <ModelLabel name={row.name} fallback={displayName} />
+  ) : (
+    displayName
+  );
+  return (
+    <Fragment>
+      <tr
+        className={rowClassName(selected, projectClickable)}
+        tabIndex={projectClickable ? 0 : undefined}
+        aria-expanded={projectClickable ? selected : undefined}
+        aria-selected={projectClickable ? selected : undefined}
+        title={projectClickable ? projectRowTitle(row.name, selected) : undefined}
+        onClick={projectClickable ? () => onToggleProject(row.name) : undefined}
+        onKeyDown={
+          projectClickable ? (event) => onProjectRowKeyDown(event, row.name) : undefined
+        }
+      >
+        <td title={row.name}>
+          {onProviderClick ? (
+            <button
+              type="button"
+              className="rank-link"
+              onClick={() => onProviderClick(rawProviderName(row.name))}
+            >
+              {nameCell}
+            </button>
+          ) : projectClickable ? (
+            <span className="breakdown-expand-toggle">
+              <Icon name="chevron" size={12} className="breakdown-expand-caret" />
+              {nameCell}
+            </span>
+          ) : (
+            nameCell
+          )}
+        </td>
+        {showProviderChannel ? (
+          <td>
+            <span className={`channel-badge ${channelClass(providerChannel(row.name))}`}>
+              {providerChannel(row.name)}
+            </span>
+          </td>
+        ) : null}
+        <td>
+          <span className="cell-bar">
+            <i style={{ width: `${row.share * 100}%` }} />
+          </span>
+          <span className="cell-bar-label">{(row.share * 100).toFixed(1)}%</span>
+        </td>
+        <td>{formatTokens(row.total_tokens)}</td>
+        <td>
+          {formatCost(row.cost, row.unpriced)}
+          {row.unpriced ? " · 单价未配置" : ""}
+        </td>
+      </tr>
+      {selected && projectClickable && filter ? (
+        <tr className="breakdown-expand-row">
+          <td colSpan={showProviderChannel ? 5 : 4}>
+            <BreakdownProjectSessions
+              filter={filter}
+              project={row.name}
+              revision={revision ?? ""}
+              onOpenConversation={onOpenConversation}
+              onError={onError}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
+  );
+}

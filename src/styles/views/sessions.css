@@ -224,3 +224,61 @@ tr:hover .session-id-cell .table-icon-btn,
   font-size: 12px;
 }
 
+.breakdown-expand-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.breakdown-expand-caret {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transform: rotate(180deg);
+  transition: transform 0.15s ease;
+}
+
+tr[aria-expanded="true"] .breakdown-expand-caret {
+  transform: rotate(-90deg);
+}
+
+tr.breakdown-expand-row,
+tr.breakdown-expand-row:hover {
+  background: var(--overlay-recessed);
+}
+
+tr.breakdown-expand-row > td {
+  padding: 8px 12px 12px 36px;
+}
+
+.breakdown-session-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.breakdown-session-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.breakdown-session-table {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: auto;
+  background: var(--sticky-col-bg);
+}
+
+.breakdown-session-table thead th {
+  position: static;
+}
+
+.breakdown-expand-row .pagination {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: 0;
+}
+

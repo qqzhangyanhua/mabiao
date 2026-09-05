@@ -1,4 +1,4 @@
-import type { ConversationSessionRow } from "../types";
+import type { ConversationQuery, ConversationSessionRow, Filter } from "../types";
 import { sourceLabel, formatClock, projectLabel, relativeTime } from "./format";
 
 const CAPABILITY_LABELS: Record<string, string> = {
@@ -19,6 +19,37 @@ export function conversationSourceOptions(usageSources: string[]): string[] {
   const sources = new Set(usageSources);
   sources.add("cursor_agent");
   return [...sources].sort();
+}
+
+/** 用量页来源筛选里的 `cursor` 是账号用量；对话目录对应 `cursor_agent`。 */
+export function conversationSourcesFromUsageFilter(sources: string[]): string[] {
+  if (sources.length === 0) {
+    return [];
+  }
+  return [...new Set(sources.map((source) => (source === "cursor" ? "cursor_agent" : source)))];
+}
+
+export function conversationQueryFromFilter(
+  filter: Filter,
+  overrides: {
+    projects?: string[];
+    page?: number;
+    page_size?: number;
+  } = {},
+): ConversationQuery {
+  return {
+    search: null,
+    page: overrides.page ?? 1,
+    page_size: overrides.page_size,
+    sources: conversationSourcesFromUsageFilter(filter.sources),
+    projects: overrides.projects ?? filter.projects,
+    models: filter.models,
+    providers: filter.providers,
+    from: filter.from,
+    to: filter.to,
+    tool_names: [],
+    tool_failed: false,
+  };
 }
 
 export function conversationStatusLabel(status: string): string {

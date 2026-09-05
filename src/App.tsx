@@ -176,7 +176,7 @@ export default function App() {
                     showVendorIcon={view === "model" || view === "provider"}
                     projectNames={view === "project"}
                     showCallDetails={view === "provider"}
-                    filter={view === "provider" ? data.filter : undefined}
+                    filter={view === "provider" || view === "project" ? data.filter : undefined}
                     revision={String(data.sessionsRevision)}
                     theme={theme}
                     onProviderClick={
