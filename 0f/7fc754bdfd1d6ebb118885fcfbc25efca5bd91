@@ -1,0 +1,19 @@
+src-tauri/src/conversation/mod.rs
+  s_d15786e728dcbc::t_b621136bee8690 8-9,13,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0f7fc754bdfd1d6ebb118885fcfbc25efca5bd91",
+  "prompts": {},
+  "sessions": {
+    "s_d15786e728dcbc": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06faf-5951-75b0-873a-f81d0967d715",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
