@@ -1,0 +1,25 @@
+src-tauri/src/conversation/mod.rs
+  s_4a2f51cb89fb3d::t_7b1ccf67b650a0 38,68
+  s_4a2f51cb89fb3d::t_eb819e674259fa 65-67
+  s_4a2f51cb89fb3d::t_dce533c89ede37 63-64
+src-tauri/src/conversation/path_trust.rs
+  s_4a2f51cb89fb3d::t_27cc77f7648c99 133
+  s_4a2f51cb89fb3d::t_ae71b5a2921d42 130-132
+  s_4a2f51cb89fb3d::t_78cba3ebbde749 134-136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "347981a37e36b1504fb1eb314125d8203e010b01",
+  "prompts": {},
+  "sessions": {
+    "s_4a2f51cb89fb3d": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a06f6b-e7a6-7b12-ac4d-4dbe3132417d",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
