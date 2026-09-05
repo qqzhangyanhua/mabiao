@@ -279,6 +279,9 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
     nextFilter,
     nextPreset,
   } = ctx;
+  if (view !== "overview" && view !== "trend" && view !== "application") {
+    return;
+  }
   const generation = ++requestGenerationRef.current;
   const commit = (patch: UsageViewPatch) => {
     if (generation === requestGenerationRef.current) {
@@ -302,9 +305,6 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
         commit({ applicationAnalytics });
       }),
     );
-  }
-  if (tasks.length === 0) {
-    return;
   }
   apply({ loading: true });
   try {

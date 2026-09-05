@@ -10,7 +10,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-const { runViewRefresh } = await import("./viewRefresh");
+const { runTrendRefresh, runViewRefresh } = await import("./viewRefresh");
 
 const rangedFilter: Filter = {
   from: "2026-08-08T00:00:00.000Z",
@@ -313,6 +313,55 @@ async function expectIndependentLoading(
   expect(invokeAt).toBeLessThan(events.lastIndexOf("off"));
 }
 
+type Deferred<T> = {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+};
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function gateCommands(names: string[]) {
+  const pending = new Map<string, Deferred<unknown>[]>();
+  invokeMock.mockImplementation((command, payload) => {
+    const key = String(command);
+    if (!names.includes(key)) {
+      return Promise.resolve(resultFor(key, payload));
+    }
+    const d = deferred<unknown>();
+    const list = pending.get(key) ?? [];
+    list.push(d);
+    pending.set(key, list);
+    return d.promise;
+  });
+  return {
+    take(command: string): Deferred<unknown> {
+      const d = pending.get(command)?.shift();
+      if (!d) {
+        throw new Error(`no pending ${command}`);
+      }
+      return d;
+    },
+  };
+}
+
+async function microtasks() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+function hasUpdatedAt(apply: ApplyFn): boolean {
+  return apply.mock.calls.some(([patch]) => typeof patch.updatedAt === "string");
+}
+
 describe("runViewRefresh", () => {
   beforeEach(stubInvoke);
 
@@ -468,5 +517,201 @@ describe("runViewRefresh", () => {
       expect(data.models).toBe(MODELS);
       expect(data.projects).toBe(PROJECTS);
     });
+  });
+
+  describe("generation", () => {
+    const matchedEpochs = { optionsEpochRef: { current: 0 }, dataEpochRef: { current: 0 } };
+
+    it("drops command results from a stale generation", async () => {
+      const gate = gateCommands(["get_trend"]);
+      const ctx = makeContext({ view: "trend", ...matchedEpochs });
+      const pending = runViewRefresh(ctx);
+      const callsAtStart = ctx.apply.mock.calls.length;
+      ctx.requestGenerationRef.current += 1;
+      gate.take("get_trend").resolve(TREND);
+      await pending;
+      expect(ctx.apply.mock.calls.length).toBe(callsAtStart);
+      expect(dataPatches(ctx.apply).trend).toBeUndefined();
+    });
+
+    it("does not clear loading from a stale generation", async () => {
+      const gate = gateCommands(["get_trend"]);
+      const ctx = makeContext({ view: "trend", ...matchedEpochs });
+      const pending = runViewRefresh(ctx);
+      expect(loadingFlags(ctx.apply)).toEqual([true]);
+      ctx.requestGenerationRef.current += 1;
+      gate.take("get_trend").resolve(TREND);
+      await pending;
+      expect(loadingFlags(ctx.apply)).toEqual([true]);
+    });
+
+    it("does not mark the view hydrated from a stale generation", async () => {
+      const gate = gateCommands(["get_trend"]);
+      const ctx = makeContext({ view: "trend", ...matchedEpochs });
+      const pending = runViewRefresh(ctx);
+      ctx.requestGenerationRef.current += 1;
+      gate.take("get_trend").resolve(TREND);
+      await pending;
+      expect(ctx.markHydrated).not.toHaveBeenCalled();
+    });
+
+    it("does not advance the options epoch from a stale generation", async () => {
+      const gate = gateCommands(["get_filter_options"]);
+      const ctx = makeContext({
+        view: "conversations",
+        dataEpochRef: { current: 4 },
+        optionsEpochRef: { current: -1 },
+      });
+      const pending = runViewRefresh(ctx);
+      ctx.requestGenerationRef.current += 1;
+      gate.take("get_filter_options").resolve(OPTIONS);
+      await pending;
+      expect(ctx.optionsEpochRef.current).toBe(-1);
+      expect(dataPatches(ctx.apply).options).toBeUndefined();
+    });
+
+    it("lands the latest generation and clears loading, hydrates, and writes updatedAt", async () => {
+      const staleTrend = [{ bucket: "stale" }];
+      const freshTrend = [{ bucket: "fresh" }];
+      const gate = gateCommands(["get_trend"]);
+      const ctx = makeContext({ view: "trend", ...matchedEpochs });
+      const first = runViewRefresh(ctx);
+      const second = runViewRefresh(ctx);
+      const stale = gate.take("get_trend");
+      const fresh = gate.take("get_trend");
+      fresh.resolve(freshTrend);
+      await second;
+      expect(dataPatches(ctx.apply).trend).toBe(freshTrend);
+      stale.resolve(staleTrend);
+      await first;
+      expect(dataPatches(ctx.apply).trend).toBe(freshTrend);
+      expect(ctx.markHydrated).toHaveBeenCalledTimes(1);
+      expect(ctx.markHydrated).toHaveBeenCalledWith("trend", rangedFilter, "7");
+      expect(loadingFlags(ctx.apply).at(-1)).toBe(false);
+      expect(hasUpdatedAt(ctx.apply)).toBe(true);
+    });
+
+    it.each(["overview", "cursor", "cursor-sessions"] as const)(
+      "turns off loading after the first stage on %s while later results still land",
+      async (view) => {
+        const gated =
+          view === "overview"
+            ? ["get_trend"]
+            : view === "cursor"
+              ? ["get_code_volume"]
+              : ["get_cursor_session_summary"];
+        const gate = gateCommands(gated);
+        const ctx = makeContext({ view });
+        const pending = runViewRefresh(ctx);
+        await microtasks();
+        expect(loadingFlags(ctx.apply)).toContain(false);
+        const data = dataPatches(ctx.apply);
+        if (view === "overview") {
+          expect(data.trend).toBeUndefined();
+          gate.take("get_trend").resolve(TREND);
+          gate.take("get_trend").resolve(HEATMAP);
+        } else if (view === "cursor") {
+          expect(data.codeVolume).toBeUndefined();
+          gate.take("get_code_volume").resolve(CODE_VOLUME);
+        } else {
+          expect(data.cursorSessionSummary).toBeUndefined();
+          gate.take("get_cursor_session_summary").resolve(CURSOR_SESSIONS);
+        }
+        await pending;
+        const landed = dataPatches(ctx.apply);
+        if (view === "overview") {
+          expect(landed.trend).toBe(TREND);
+        } else if (view === "cursor") {
+          expect(landed.codeVolume).toBe(CODE_VOLUME);
+        } else {
+          expect(landed.cursorSessionSummary).toBe(CURSOR_SESSIONS);
+        }
+      },
+    );
+
+    it("clears loading and rethrows when a command fails", async () => {
+      invokeMock.mockImplementation((command, payload) => {
+        if (command === "get_trend") {
+          return Promise.reject(new Error("boom"));
+        }
+        return Promise.resolve(resultFor(String(command), payload));
+      });
+      const ctx = makeContext({ view: "trend", ...matchedEpochs });
+      await expect(runViewRefresh(ctx)).rejects.toThrow("boom");
+      expect(loadingFlags(ctx.apply)).toContain(false);
+      expect(ctx.markHydrated).not.toHaveBeenCalled();
+    });
+
+    it("lets only the latest generation clear code volume loading", async () => {
+      const gate = gateCommands(["get_code_volume"]);
+      const ctx = makeContext({ view: "cursor", ...matchedEpochs });
+      const first = runViewRefresh(ctx);
+      const second = runViewRefresh(ctx);
+      const stale = gate.take("get_code_volume");
+      const fresh = gate.take("get_code_volume");
+      stale.resolve(CODE_VOLUME);
+      await first;
+      expect(ctx.apply.mock.calls.some(([patch]) => patch.codeVolumeLoading === false)).toBe(false);
+      fresh.resolve(CODE_VOLUME);
+      await second;
+      expect(ctx.apply.mock.calls.some(([patch]) => patch.codeVolumeLoading === false)).toBe(true);
+    });
+
+    it("lets only the latest generation clear cursor session loading", async () => {
+      const gate = gateCommands(["get_cursor_session_summary"]);
+      const ctx = makeContext({ view: "cursor-sessions", ...matchedEpochs });
+      const first = runViewRefresh(ctx);
+      const second = runViewRefresh(ctx);
+      const stale = gate.take("get_cursor_session_summary");
+      const fresh = gate.take("get_cursor_session_summary");
+      stale.resolve(CURSOR_SESSIONS);
+      await first;
+      expect(ctx.apply.mock.calls.some(([patch]) => patch.cursorSessionLoading === false)).toBe(
+        false,
+      );
+      fresh.resolve(CURSOR_SESSIONS);
+      await second;
+      expect(ctx.apply.mock.calls.some(([patch]) => patch.cursorSessionLoading === false)).toBe(
+        true,
+      );
+    });
+  });
+});
+
+describe("runTrendRefresh", () => {
+  beforeEach(stubInvoke);
+
+  it("does not increment generation when there is nothing to fetch", async () => {
+    const ctx = makeContext({ view: "model", requestGenerationRef: { current: 7 } });
+    await runTrendRefresh(ctx);
+    expect(ctx.requestGenerationRef.current).toBe(7);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it("does not cancel an in-flight view refresh when there is nothing to fetch", async () => {
+    const gate = gateCommands(["get_trend"]);
+    const ctx = makeContext({
+      view: "trend",
+      optionsEpochRef: { current: 0 },
+      dataEpochRef: { current: 0 },
+    });
+    const pending = runViewRefresh(ctx);
+    await runTrendRefresh({ ...ctx, view: "model" });
+    expect(ctx.requestGenerationRef.current).toBe(1);
+    gate.take("get_trend").resolve(TREND);
+    await pending;
+    expect(dataPatches(ctx.apply).trend).toBe(TREND);
+  });
+
+  it("does not write the overview stamp from a stale generation", async () => {
+    const gate = gateCommands(["get_trend"]);
+    const ctx = makeContext({ view: "overview" });
+    const pending = runTrendRefresh(ctx);
+    ctx.requestGenerationRef.current += 1;
+    gate.take("get_trend").resolve(TREND);
+    await pending;
+    expect(ctx.loadedStampsRef.current.overview).toBeUndefined();
+    expect(ctx.markHydrated).not.toHaveBeenCalled();
+    expect(dataPatches(ctx.apply).trend).toBeUndefined();
   });
 });
