@@ -11,6 +11,7 @@ import {
   visibleModuleCount,
   type OverviewLayout,
 } from "../lib/overviewLayout";
+import { Icon } from "../icons";
 import { Button } from "./ui/Button";
 import { ReportDialog } from "./ReportDialog";
 import { EmptyState } from "./EmptyState";
@@ -221,7 +222,8 @@ export const Overview = memo(function Overview({
           onChange={onLayoutChange}
         />
         <div className="overview-report-entry">
-          <Button variant="accent" onClick={() => setReportOpen(true)}>
+          <Button variant="text" className="overview-share-btn" onClick={() => setReportOpen(true)}>
+            <Icon name="share" size={13} />
             分享
           </Button>
         </div>

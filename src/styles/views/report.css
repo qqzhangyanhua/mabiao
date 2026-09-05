@@ -84,10 +84,22 @@
 
 .overview-report-entry {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  align-items: center;
   padding: 6px 2px 2px;
+}
+
+.overview-share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  color: var(--purple-fg);
+  font-weight: 600;
+}
+
+.overview-share-btn:hover:not(:disabled) {
+  color: var(--purple-fg);
+  background: var(--overlay-2);
 }
 
 .report-dialog-backdrop {

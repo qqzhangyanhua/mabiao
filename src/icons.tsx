@@ -28,6 +28,7 @@ export type IconName =
   | "close"
   | "search"
   | "copy"
+  | "share"
   | "inbox"
   | "alertTriangle";
 
@@ -192,6 +193,12 @@ const strokes: Record<IconName, ReactElement> = {
     <>
       <rect x="8" y="8" width="11" height="13" rx="1.6" />
       <path d="M6 16V5.6A1.6 1.6 0 0 1 7.6 4H16" />
+    </>
+  ),
+  share: (
+    <>
+      <path d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12" />
+      <path d="M12 15V4M8 8l4-4 4 4" />
     </>
   ),
   inbox: (
