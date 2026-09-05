@@ -20,7 +20,7 @@ import type {
   SourceDiagnostic,
   View,
 } from "../../types";
-import { isViewFresh, viewStamp } from "../viewCache";
+import { isViewFresh, isViewStampedForScope, viewStamp } from "../viewCache";
 import type { UsageViewPatch } from "./useUsageViewState";
 
 export type ViewRefreshContext = {
@@ -279,6 +279,13 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
     nextFilter,
     nextPreset,
   } = ctx;
+  const overviewStampedForScope = isViewStampedForScope(
+    loadedStampsRef.current,
+    "overview",
+    nextFilter,
+    nextPreset,
+    dataEpochRef.current,
+  );
   if (view !== "overview" && view !== "trend" && view !== "application") {
     return;
   }
@@ -314,13 +321,15 @@ export async function runTrendRefresh(ctx: ViewRefreshContext): Promise<void> {
       apply({ loading: false });
       if (view === "overview" || view === "trend") {
         markHydrated("trend", nextFilter, nextPreset);
-        loadedStampsRef.current.overview = viewStamp(
-          "overview",
-          nextFilter,
-          nextPreset,
-          grain,
-          dataEpochRef.current,
-        );
+        if (overviewStampedForScope) {
+          loadedStampsRef.current.overview = viewStamp(
+            "overview",
+            nextFilter,
+            nextPreset,
+            grain,
+            dataEpochRef.current,
+          );
+        }
       }
       if (view === "application") {
         markHydrated("application", nextFilter, nextPreset);

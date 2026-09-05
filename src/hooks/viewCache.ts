@@ -65,6 +65,14 @@ function sameItems(left: string[], right: string[]): boolean {
   return left.every((item) => other.has(item));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
 /** Topbar 筛选跨页共用。用量来源不覆盖对话记录来源：Cursor Agent 往往没有消耗记录。 */
 export function syncSharedFilters(
   scopes: Record<View, ViewScope>,
@@ -289,4 +297,69 @@ export function isViewFresh(
   epoch: number,
 ): boolean {
   return loaded[view] === viewStamp(view, filter, preset, grain, epoch);
+}
+
+/** 读出 viewStamp 写入的 JSON，忽略颗粒度。坏戳当从未落过。 */
+function readStampScope(raw: string | undefined): {
+  epoch: number;
+  preset: string;
+  filter: Filter;
+} | null {
+  if (!raw) {
+    return null;
+  }
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!isRecord(value)) {
+      return null;
+    }
+    if (typeof value.epoch !== "number" || typeof value.preset !== "string") {
+      return null;
+    }
+    if (value.from !== null && typeof value.from !== "string") {
+      return null;
+    }
+    if (value.to !== null && typeof value.to !== "string") {
+      return null;
+    }
+    if (
+      !isStringArray(value.sources) ||
+      !isStringArray(value.models) ||
+      !isStringArray(value.projects) ||
+      !isStringArray(value.providers)
+    ) {
+      return null;
+    }
+    return {
+      epoch: value.epoch,
+      preset: value.preset,
+      filter: {
+        from: value.from,
+        to: value.to,
+        sources: value.sources,
+        models: value.models,
+        projects: value.projects,
+        providers: value.providers,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** 已按同一筛选、预设、数据 epoch 落过戳（忽略颗粒度）。 */
+export function isViewStampedForScope(
+  loaded: Partial<Record<View, string>>,
+  view: View,
+  filter: Filter,
+  preset: string,
+  epoch: number,
+): boolean {
+  const scope = readStampScope(loaded[view]);
+  return (
+    scope !== null &&
+    scope.epoch === epoch &&
+    scope.preset === preset &&
+    filtersEqual(scope.filter, filter)
+  );
 }

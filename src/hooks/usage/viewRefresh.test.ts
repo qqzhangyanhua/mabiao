@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { heatmapFilter } from "../../lib/calendar";
 import type { Filter, View } from "../../types";
-import { viewStamp, views, viewsWarmedBy } from "../viewCache";
+import { isViewFresh, viewStamp, views, viewsWarmedBy } from "../viewCache";
 import type { UsageViewPatch } from "./useUsageViewState";
 import type { ViewRefreshContext } from "./viewRefresh";
 
@@ -713,5 +713,84 @@ describe("runTrendRefresh", () => {
     expect(ctx.loadedStampsRef.current.overview).toBeUndefined();
     expect(ctx.markHydrated).not.toHaveBeenCalled();
     expect(dataPatches(ctx.apply).trend).toBeUndefined();
+  });
+
+  it("leaves overview stale when it was never stamped for the current filter", async () => {
+    const ctx = makeContext({ view: "overview" });
+    await runTrendRefresh(ctx);
+    expect(ctx.loadedStampsRef.current.overview).toBeUndefined();
+    expect(
+      isViewFresh(ctx.loadedStampsRef.current, "overview", rangedFilter, "7", "week", 0),
+    ).toBe(false);
+    expect(ctx.hydratedViews.has("overview")).toBe(false);
+    expect(ctx.markHydrated).toHaveBeenCalledWith("trend", rangedFilter, "7");
+    expect(ctx.markHydrated.mock.calls.every(([target]) => target !== "overview")).toBe(true);
+  });
+
+  it("rebases the overview stamp when it already matches the current filter at another grain", async () => {
+    const epoch = 4;
+    const ctx = makeContext({
+      view: "overview",
+      grain: "week",
+      dataEpochRef: { current: epoch },
+      loadedStampsRef: {
+        current: { overview: viewStamp("overview", rangedFilter, "7", "day", epoch) },
+      },
+    });
+    await runTrendRefresh(ctx);
+    expect(
+      isViewFresh(ctx.loadedStampsRef.current, "overview", rangedFilter, "7", "week", epoch),
+    ).toBe(true);
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "week" })]);
+    expect(ctx.markHydrated).toHaveBeenCalledWith("trend", rangedFilter, "7");
+    expect(ctx.markHydrated.mock.calls.every(([target]) => target !== "overview")).toBe(true);
+  });
+
+  it("decides whether to rebase overview from the stamp present before commands", async () => {
+    const gate = gateCommands(["get_trend"]);
+    const epoch = 2;
+    const ctx = makeContext({
+      view: "overview",
+      grain: "week",
+      dataEpochRef: { current: epoch },
+      loadedStampsRef: { current: {} },
+    });
+    const pending = runTrendRefresh(ctx);
+    await microtasks();
+    ctx.loadedStampsRef.current.overview = viewStamp(
+      "overview",
+      rangedFilter,
+      "7",
+      "day",
+      epoch,
+    );
+    gate.take("get_trend").resolve(TREND);
+    await pending;
+    expect(ctx.loadedStampsRef.current.overview).toBe(
+      viewStamp("overview", rangedFilter, "7", "day", epoch),
+    );
+    expect(
+      isViewFresh(ctx.loadedStampsRef.current, "overview", rangedFilter, "7", "week", epoch),
+    ).toBe(false);
+  });
+
+  it("still hydrates the trend view itself", async () => {
+    const ctx = makeContext({ view: "trend" });
+    await runTrendRefresh(ctx);
+    expect(ctx.markHydrated).toHaveBeenCalledTimes(1);
+    expect(ctx.markHydrated).toHaveBeenCalledWith("trend", rangedFilter, "7");
+    expect(ctx.loadedStampsRef.current.overview).toBeUndefined();
+    expectCommandSet([cmd("get_trend", { filter: rangedFilter, grain: "week" })]);
+  });
+
+  it("still hydrates the application view and does not stamp overview", async () => {
+    const ctx = makeContext({ view: "application" });
+    await runTrendRefresh(ctx);
+    expect(ctx.markHydrated).toHaveBeenCalledTimes(1);
+    expect(ctx.markHydrated).toHaveBeenCalledWith("application", rangedFilter, "7");
+    expect(ctx.loadedStampsRef.current.overview).toBeUndefined();
+    expectCommandSet([
+      cmd("get_application_analytics", { filter: rangedFilter, grain: "week" }),
+    ]);
   });
 });
