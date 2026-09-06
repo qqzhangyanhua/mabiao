@@ -30,6 +30,7 @@ pub mod tray;
 pub mod tray_popup;
 pub mod user_files;
 pub mod vscode_state;
+pub mod work_notes;
 pub mod work_timeline;
 
 use std::fs;
@@ -345,6 +346,7 @@ pub fn run() {
             commands::ingest,
             commands::get_overview,
             commands::get_report,
+            commands::build_work_notes,
             commands::get_billing_windows,
             commands::get_trend,
             commands::get_application_analytics,

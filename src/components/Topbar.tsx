@@ -80,6 +80,7 @@ export function Topbar({
     view === "cursor" ||
     view === "cursor-sessions" ||
     view === "worktime" ||
+    view === "work-notes" ||
     view === "instructions" ||
     view === "settings";
   const showSharedDimensionFilters = !hideAllFilters;

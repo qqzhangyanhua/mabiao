@@ -295,6 +295,7 @@ export type View =
   | "provider"
   | "project"
   | "conversations"
+  | "work-notes"
   | "cursor"
   | "cursor-sessions"
   | "worktime"
@@ -978,4 +979,33 @@ export type ReportDto = {
   sources: ReportShareSlice[];
   models: string[];
   insights: ReportInsight[];
+};
+
+export type WorkNotesRangeKind = "this_week" | "this_month" | "custom";
+
+export type WorkNotesRange = {
+  kind: WorkNotesRangeKind;
+  from?: string | null;
+  to?: string | null;
+};
+
+export type WorkNotesEntry = {
+  title: string;
+  detail: string;
+  project: string;
+};
+
+export type WorkNotesDto = {
+  range_kind: WorkNotesRangeKind;
+  start_date: string;
+  end_date: string;
+  has_data: boolean;
+  skipped_sparse: number;
+  session_count: number;
+  project_count: number;
+  active_days: number;
+  total_tokens: number;
+  headline: string;
+  entries: WorkNotesEntry[];
+  closing: string;
 };

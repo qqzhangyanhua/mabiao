@@ -43,3 +43,7 @@ export const LazyWorkTimeline = namedLazy(
   () => import("../components/WorkTimeline"),
   "WorkTimeline",
 );
+export const LazyWorkNotes = namedLazy(
+  () => import("../components/WorkNotesPanel"),
+  "WorkNotesPanel",
+);

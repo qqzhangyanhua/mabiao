@@ -9,6 +9,7 @@ mod quota;
 mod report;
 mod stats;
 mod usage;
+mod work_notes;
 mod work_timeline;
 
 pub use billing::*;
@@ -22,4 +23,5 @@ pub use quota::*;
 pub use report::*;
 pub use stats::*;
 pub use usage::*;
+pub use work_notes::*;
 pub use work_timeline::*;

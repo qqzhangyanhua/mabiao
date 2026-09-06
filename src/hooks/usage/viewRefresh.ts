@@ -61,6 +61,7 @@ export async function runViewRefresh(ctx: ViewRefreshContext): Promise<void> {
   wideRefreshGenerationRef.current = generation;
   const localOnly =
     view === "conversations" ||
+    view === "work-notes" ||
     view === "cursor" ||
     view === "cursor-sessions" ||
     view === "worktime" ||

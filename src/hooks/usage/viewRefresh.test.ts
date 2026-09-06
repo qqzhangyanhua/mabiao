@@ -65,6 +65,7 @@ type ViewCommandCase = { view: View; commands: CommandCall[]; landed: Landed };
 
 const LOCAL_VIEWS = [
   "conversations",
+  "work-notes",
   "cursor",
   "cursor-sessions",
   "worktime",
@@ -250,6 +251,7 @@ const VIEW_CASES: ViewCommandCase[] = [
     landed: { options: OPTIONS, projects: PROJECTS },
   },
   { view: "conversations", commands: filterOptions, landed: { options: OPTIONS } },
+  { view: "work-notes", commands: filterOptions, landed: { options: OPTIONS } },
   {
     view: "cursor",
     commands: [...filterOptions, cmd("get_code_volume")],

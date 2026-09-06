@@ -23,6 +23,7 @@ import {
   LazySettings,
   LazyTrend,
   LazyWorkTimeline,
+  LazyWorkNotes,
 } from "./views/lazyViews";
 import { ViewFallback } from "./views/ViewFallback";
 
@@ -103,7 +104,8 @@ export default function App() {
               view !== "cursor" &&
               view !== "cursor-sessions" &&
               view !== "instructions" &&
-              view !== "worktime"
+              view !== "worktime" &&
+              view !== "work-notes"
             }
           >
             <ErrorBoundary fullscreen={false}>
@@ -228,6 +230,7 @@ export default function App() {
                     onError={data.reportError}
                   />
                 ) : null}
+                {view === "work-notes" ? <LazyWorkNotes /> : null}
                 {view === "worktime" ? (
                   <LazyWorkTimeline
                     initialDay={parseWorktimeDay(window.location.hash)}
