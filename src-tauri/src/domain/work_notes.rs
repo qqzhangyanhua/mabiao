@@ -215,3 +215,35 @@ pub struct WorkNotesEntry {
     pub detail: String,
     pub project: String,
 }
+
+/// 历史纪要列表的查询参数。`engine` 留空表示不筛引擎，看全部。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesHistoryQuery {
+    #[serde(default)]
+    pub engine: Option<String>,
+    #[serde(default)]
+    pub page: Option<u32>,
+    #[serde(default)]
+    pub page_size: Option<u32>,
+}
+
+/// 历史列表每一行只带列表要展示的字段；entries/closing 等大字段留到点开详情时再取。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesHistoryRow {
+    pub id: i64,
+    pub created_at: String,
+    pub range_kind: WorkNotesRangeKind,
+    pub start_date: String,
+    pub end_date: String,
+    pub engine: String,
+    pub model: String,
+    pub extra_instructions: String,
+    pub session_count: i64,
+    pub headline: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesHistoryPage {
+    pub rows: Vec<WorkNotesHistoryRow>,
+    pub total: u32,
+}

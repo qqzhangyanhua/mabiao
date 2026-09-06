@@ -1041,6 +1041,30 @@ export type WorkNotesPreviewDto = {
   cached?: WorkNotesDto | null;
 };
 
+export type WorkNotesHistoryQuery = {
+  engine?: string | null;
+  page?: number | null;
+  page_size?: number | null;
+};
+
+export type WorkNotesHistoryRow = {
+  id: number;
+  created_at: string;
+  range_kind: WorkNotesRangeKind;
+  start_date: string;
+  end_date: string;
+  engine: string;
+  model: string;
+  extra_instructions: string;
+  session_count: number;
+  headline: string;
+};
+
+export type WorkNotesHistoryPage = {
+  rows: WorkNotesHistoryRow[];
+  total: number;
+};
+
 export type WorkNotesJobStatus = "idle" | "running" | "done" | "cancelled" | "error";
 
 export type WorkNotesProgressDto = {
