@@ -42,6 +42,7 @@ export function WorkNotesPanel() {
   const [previewLoading, setPreviewLoading] = useState(true);
   const [startError, setStartError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState(false);
+  const [extraInstructions, setExtraInstructions] = useState("");
   const [preference, setPreference] = useState(loadWorkNotesPreference);
   const [pollRev, setPollRev] = useState(0);
   const progress = useWorkNotesProgress(pollRev);
@@ -70,13 +71,14 @@ export function WorkNotesPanel() {
     engineId == null;
   const estimateCopy = preview ? workNotesEstimateCopy(preview) : null;
   const rawDto = progress?.status === "done" ? progress.result : null;
-  const dto =
+  const progressDto =
     rawDto &&
     preview &&
     rawDto.start_date === preview.start_date &&
     rawDto.end_date === preview.end_date
       ? rawDto
       : null;
+  const dto = progressDto ?? preview?.cached ?? null;
 
   function persist(next: WorkNotesPreference) {
     saveWorkNotesPreference(next);
@@ -96,6 +98,9 @@ export function WorkNotesPanel() {
       .then((next) => {
         if (!cancelled) {
           setPreview(next);
+          if (next.cached) {
+            setExtraInstructions(next.cached.extra_instructions);
+          }
         }
       })
       .catch((caught: unknown) => {
@@ -117,6 +122,7 @@ export function WorkNotesPanel() {
   function resetGenerated() {
     setPendingConfirm(false);
     setStartError(null);
+    setExtraInstructions("");
   }
 
   function generate() {
@@ -133,6 +139,7 @@ export function WorkNotesPanel() {
       range,
       engine_id: engineId,
       model: model.trim() === "" ? null : model.trim(),
+      extra_instructions: extraInstructions,
       confirmed: preview?.gate === "confirm",
     })
       .then(() => {
@@ -267,6 +274,17 @@ export function WorkNotesPanel() {
             : "以只读、禁用工具的方式运行。"
           : copy.help}
       </p>
+      <label className="work-notes-extra">
+        <span className="work-notes-extra-label">补充指令</span>
+        <textarea
+          value={extraInstructions}
+          onChange={(event) => setExtraInstructions(event.target.value)}
+          placeholder="例如：我是后端，重点讲架构改动，别提 CSS"
+          rows={3}
+          disabled={running}
+          aria-label="补充指令"
+        />
+      </label>
       {previewError ? (
         <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
       ) : null}

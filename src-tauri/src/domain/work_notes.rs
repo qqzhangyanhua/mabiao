@@ -69,6 +69,42 @@ pub struct WorkNotesPreviewDto {
     pub estimated_input_tokens: i64,
     pub estimated_cost: Option<f64>,
     pub estimated_unpriced: bool,
+    /// 该区间最近一次已生成的纪要。关掉 App 再打开时直接展示，不调引擎。
+    #[serde(default)]
+    pub cached: Option<WorkNotesDto>,
+}
+
+/// `preview` / `build` 共用的请求参数。引擎、模型与补充指令计入缓存键。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesParams {
+    pub range: WorkNotesRange,
+    #[serde(default)]
+    pub extra_instructions: String,
+    #[serde(default)]
+    pub engine: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub confirmed: bool,
+}
+
+impl WorkNotesParams {
+    pub fn engine_id(&self) -> &str {
+        let trimmed = self.engine.trim();
+        if trimmed.is_empty() {
+            "codex"
+        } else {
+            trimmed
+        }
+    }
+
+    pub fn model_id(&self) -> &str {
+        self.model.trim()
+    }
+
+    pub fn extra(&self) -> &str {
+        self.extra_instructions.trim()
+    }
 }
 
 /// 纪要引擎的静态描述。一个 CLI 一个 profile。
@@ -163,6 +199,8 @@ pub struct WorkNotesDto {
     pub headline: String,
     pub entries: Vec<WorkNotesEntry>,
     pub closing: String,
+    #[serde(default)]
+    pub extra_instructions: String,
     pub failed_count: i64,
     pub failures: Vec<WorkNotesFailure>,
     pub actual_input_tokens: i64,

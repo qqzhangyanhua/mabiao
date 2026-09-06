@@ -10,7 +10,7 @@ pub fn map_prompt(compressed: &str) -> String {
     )
 }
 
-pub fn reduce_prompt(summaries: &[SessionSummary]) -> String {
+pub fn reduce_prompt(summaries: &[SessionSummary], extra: &str) -> String {
     let mut body = String::from(
         "下面是一段时间内各会话的一句话摘要。请汇总成中文工作纪要，只输出 JSON，不要其它文字。\n\
 条目数量 3 到 6，按内容多少自己决定，不要硬凑。\n\
@@ -25,6 +25,12 @@ pub fn reduce_prompt(summaries: &[SessionSummary]) -> String {
             item.title,
             item.summary
         ));
+    }
+    let extra = extra.trim();
+    if !extra.is_empty() {
+        body.push_str("\n补充指令：\n");
+        body.push_str(extra);
+        body.push('\n');
     }
     body
 }

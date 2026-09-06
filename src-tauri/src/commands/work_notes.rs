@@ -1,14 +1,33 @@
 use tauri::Manager;
 
-use crate::domain::{DetectedEngine, WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange};
+use crate::domain::{
+    DetectedEngine, WorkNotesParams, WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange,
+};
 use crate::paths;
 use crate::work_notes::{self, ProcessRunner, RecordingRunner};
 use crate::AppState;
+
+fn params(
+    range: WorkNotesRange,
+    extra_instructions: Option<String>,
+    engine: Option<String>,
+    model: Option<String>,
+    confirmed: Option<bool>,
+) -> WorkNotesParams {
+    WorkNotesParams {
+        range,
+        extra_instructions: extra_instructions.unwrap_or_default(),
+        engine: engine.unwrap_or_default(),
+        model: model.unwrap_or_default(),
+        confirmed: confirmed.unwrap_or(false),
+    }
+}
 
 #[tauri::command]
 pub async fn preview_work_notes(
     app: tauri::AppHandle,
     range: WorkNotesRange,
+    extra_instructions: Option<String>,
     engine_id: Option<String>,
     model: Option<String>,
 ) -> Result<WorkNotesPreviewDto, String> {
@@ -19,10 +38,8 @@ pub async fn preview_work_notes(
         work_notes::preview(
             &conn,
             &prices,
-            range,
+            &params(range, extra_instructions, engine_id, model, None),
             chrono::Local::now(),
-            engine_id.as_deref(),
-            model.as_deref(),
         )
     })
     .await
@@ -35,6 +52,7 @@ pub async fn start_work_notes(
     range: WorkNotesRange,
     engine_id: String,
     model: Option<String>,
+    extra_instructions: Option<String>,
     confirmed: Option<bool>,
 ) -> Result<(), String> {
     work_notes::require_engine(&engine_id)?;
@@ -42,39 +60,43 @@ pub async fn start_work_notes(
     state
         .work_notes
         .begin(&range, &engine_id, model.as_deref())?;
-    let confirmed = confirmed.unwrap_or(false);
+    let params = params(
+        range,
+        extra_instructions,
+        Some(engine_id.clone()),
+        model,
+        confirmed,
+    );
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
         let result = (|| {
             let prices = state.effective_prices();
+            let now = chrono::Local::now();
             let prepared = {
                 let conn = state.lock_read()?;
-                work_notes::prepare(
-                    &conn,
-                    &prices,
-                    range,
-                    chrono::Local::now(),
-                    confirmed,
-                    false,
-                )?
+                work_notes::prepare(&conn, &prices, &params, now, false)?
             };
             let process = ProcessRunner;
-            let runner = RecordingRunner::new(&process, &engine_id);
-            let dto = work_notes::run(
+            let runner = RecordingRunner::new(&process, params.engine_id());
+            let output = work_notes::run(
                 prepared,
                 &prices,
                 &runner,
                 &paths::app_data_dir(),
-                &engine_id,
-                model.as_deref(),
+                &params,
+                now,
                 &state.work_notes,
             );
             let records = runner.take();
-            if !records.is_empty() {
+            if !records.is_empty()
+                || output.writes.notes.is_some()
+                || !output.writes.sessions.is_empty()
+            {
                 let conn = state.lock_write()?;
                 work_notes::flush_generated(&conn, &records)?;
+                work_notes::persist_cache(&conn, &output.writes)?;
             }
-            dto
+            output.result
         })();
         let _ = state.work_notes.finish(result);
     });

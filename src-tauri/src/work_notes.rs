@@ -1,6 +1,7 @@
 //! 工作纪要：按区间读对话正文，经本机 CLI 总结成结构化条目（ADR 0021）。
 //! 主入口 `build` 对齐 `report::build`：注入连接、注入 now、注入 runner。
 
+mod cache;
 mod engines;
 mod estimate;
 mod input;
@@ -21,7 +22,7 @@ use std::sync::Mutex;
 use crate::conversation;
 use crate::domain::{
     ConversationEvent, ConversationQuery, ConversationSessionRow, EngineCommand, Filter,
-    PriceTable, WorkNotesDto, WorkNotesPreviewDto, WorkNotesRange,
+    PriceTable, WorkNotesDto, WorkNotesParams, WorkNotesPreviewDto,
 };
 use crate::query;
 
@@ -37,24 +38,37 @@ pub use engines::{
 };
 pub use job::WorkNotesJob;
 
-/// 选完区间立刻返回会话数、闸门与成本预估，不调引擎。
+pub struct EligibleSession {
+    pub session: ConversationSessionRow,
+    pub events: Vec<ConversationEvent>,
+    pub fingerprint: String,
+    pub cached_summary: Option<String>,
+}
+
+/// 选完区间立刻返回会话数、闸门、成本预估与上次纪要，不调引擎。
 pub fn preview(
     conn: &Connection,
     prices: &PriceTable,
-    range: WorkNotesRange,
+    params: &WorkNotesParams,
     now: DateTime<Local>,
-    engine_id: Option<&str>,
-    model: Option<&str>,
 ) -> Result<WorkNotesPreviewDto, String> {
-    let prepared = prepare(conn, prices, range, now, false, true)?;
-    let mut profile = match engine_id {
-        Some(id) => engines::profile(id).unwrap_or_else(|_| engines::codex_profile()),
-        None => engines::codex_profile(),
-    };
-    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
-        profile.model = model.to_string();
+    let prepared = prepare(conn, prices, params, now, true)?;
+    let mut profile =
+        engines::profile(params.engine_id()).unwrap_or_else(|_| engines::codex_profile());
+    if !params.model_id().is_empty() {
+        profile.model = params.model_id().to_string();
     }
-    let estimate = estimate::for_sessions(&prepared.eligible, &profile, prices);
+    let estimate = if prepared.exact.is_some() {
+        estimate::Estimate {
+            calls: 0,
+            secs: 0,
+            input_tokens: 0,
+            cost: None,
+            unpriced: false,
+        }
+    } else {
+        estimate::for_remaining(&prepared.eligible, params.extra(), &profile, prices)
+    };
     let (gate, message) = scale::assess(prepared.eligible.len() as i64);
     Ok(WorkNotesPreviewDto {
         range_kind: prepared.resolved.kind,
@@ -69,6 +83,7 @@ pub fn preview(
         estimated_input_tokens: estimate.input_tokens,
         estimated_cost: estimate.cost,
         estimated_unpriced: estimate.unpriced,
+        cached: prepared.latest,
     })
 }
 
@@ -77,76 +92,172 @@ pub fn require_engine(engine_id: &str) -> Result<(), String> {
 }
 
 /// 工作纪要模块的单一入口。`now`、`runner`、`job` 由调用方注入。
-#[allow(clippy::too_many_arguments)]
 pub fn build(
     conn: &Connection,
     prices: &PriceTable,
-    range: WorkNotesRange,
+    params: &WorkNotesParams,
     now: DateTime<Local>,
     runner: &dyn EngineRunner,
     app_data_dir: &Path,
-    engine_id: &str,
-    model: Option<&str>,
-    confirmed: bool,
     job: &WorkNotesJob,
 ) -> Result<WorkNotesDto, String> {
-    engines::require(engine_id)?;
-    let prepared = prepare(conn, prices, range, now, confirmed, false)?;
-    let recorder = RecordingRunner::new(runner, engine_id);
-    let result = run(
-        prepared,
-        prices,
-        &recorder,
-        app_data_dir,
-        engine_id,
-        model,
-        job,
-    );
+    engines::require(params.engine_id())?;
+    let prepared = prepare(conn, prices, params, now, false)?;
+    let recorder = RecordingRunner::new(runner, params.engine_id());
+    let output = run(prepared, prices, &recorder, app_data_dir, params, now, job);
     flush_generated(conn, &recorder.take())?;
-    result
+    persist_cache(conn, &output.writes)?;
+    output.result
 }
 
 pub fn prepare(
     conn: &Connection,
     prices: &PriceTable,
-    range: WorkNotesRange,
+    params: &WorkNotesParams,
     now: DateTime<Local>,
-    confirmed: bool,
     skip_gate: bool,
 ) -> Result<PreparedWorkNotes, String> {
-    let resolved = period::resolve(&range, now)?;
+    let engine = params.engine_id().to_string();
+    let model = params.model_id().to_string();
+    let extra = params.extra().to_string();
+    let resolved = period::resolve(&params.range, now)?;
     let filter = period::usage_filter(&resolved);
     let numbers = hard_numbers(conn, prices, &filter)?;
     let sessions = load_sessions(conn, prices, &resolved.from, &resolved.to)?;
     let (skipped_sparse, eligible_sessions) = classify_sessions(conn, sessions)?;
-    if !skip_gate {
-        scale::enforce(eligible_sessions.len() as i64, confirmed)?;
+    let latest = cache::load_latest_notes(conn, &resolved, &engine, &model)?;
+
+    let mut parts = Vec::new();
+    for session in &eligible_sessions {
+        let fingerprint = cache::session_fingerprint(conn, &session.source, &session.session_id)?;
+        parts.push((
+            session.source.clone(),
+            session.session_id.clone(),
+            fingerprint,
+        ));
     }
+    let session_set_hash = cache::session_set_hash(&parts);
+    let exact =
+        cache::load_exact_notes(conn, &resolved, &engine, &model, &extra, &session_set_hash)?;
+    if exact.is_none() && !skip_gate {
+        scale::enforce(eligible_sessions.len() as i64, params.confirmed)?;
+    }
+
     let mut eligible = Vec::new();
-    for session in eligible_sessions {
-        let events = conversation::indexed_events(conn, &session.source, &session.session_id)?;
-        eligible.push((session, events));
+    for (session, fingerprint) in eligible_sessions
+        .into_iter()
+        .zip(parts.into_iter().map(|part| part.2))
+    {
+        let key = cache::SessionCacheKey {
+            source: &session.source,
+            session_id: &session.session_id,
+            fingerprint: &fingerprint,
+            engine: &engine,
+            model: &model,
+        };
+        let cached_summary = cache::load_session_summary(conn, &key)?;
+        let events = if cached_summary.is_some() {
+            Vec::new()
+        } else {
+            conversation::indexed_events(conn, &session.source, &session.session_id)?
+        };
+        eligible.push(EligibleSession {
+            session,
+            events,
+            fingerprint,
+            cached_summary,
+        });
     }
     Ok(PreparedWorkNotes {
         resolved,
         skipped_sparse,
         numbers,
+        extra,
+        engine,
+        model,
+        session_set_hash,
+        exact,
+        latest,
         eligible,
     })
 }
 
-#[allow(clippy::too_many_arguments)]
+pub struct RunOutput {
+    pub result: Result<WorkNotesDto, String>,
+    pub writes: CacheWrites,
+}
+
+#[derive(Default)]
+pub struct CacheWrites {
+    pub sessions: Vec<FreshCache>,
+    pub notes: Option<WorkNotesDto>,
+    pub session_set_hash: String,
+    pub extra: String,
+    pub engine: String,
+    pub model: String,
+    pub created_at: String,
+}
+
+pub struct FreshCache {
+    pub source: String,
+    pub session_id: String,
+    pub fingerprint: String,
+    pub summary: String,
+}
+
 pub fn run(
     prepared: PreparedWorkNotes,
     prices: &PriceTable,
     runner: &dyn EngineRunner,
     app_data_dir: &Path,
-    engine_id: &str,
-    model: Option<&str>,
+    params: &WorkNotesParams,
+    now: DateTime<Local>,
     job: &WorkNotesJob,
+) -> RunOutput {
+    let created_at = now.to_rfc3339();
+    let mut writes = CacheWrites {
+        session_set_hash: prepared.session_set_hash.clone(),
+        extra: prepared.extra.clone(),
+        engine: prepared.engine.clone(),
+        model: prepared.model.clone(),
+        created_at,
+        ..CacheWrites::default()
+    };
+    let result = run_inner(
+        prepared,
+        prices,
+        runner,
+        app_data_dir,
+        params,
+        job,
+        &mut writes,
+    );
+    RunOutput { result, writes }
+}
+
+fn run_inner(
+    prepared: PreparedWorkNotes,
+    prices: &PriceTable,
+    runner: &dyn EngineRunner,
+    app_data_dir: &Path,
+    params: &WorkNotesParams,
+    job: &WorkNotesJob,
+    writes: &mut CacheWrites,
 ) -> Result<WorkNotesDto, String> {
+    job.clear_completed_if_idle()?;
+    if let Some(mut dto) = prepared.exact {
+        dto.skipped_sparse = prepared.skipped_sparse;
+        dto.session_count = prepared.numbers.session_count;
+        dto.project_count = prepared.numbers.project_count;
+        dto.active_days = prepared.numbers.active_days;
+        dto.total_tokens = prepared.numbers.total_tokens;
+        return Ok(dto);
+    }
+    let engine_id = params.engine_id();
+    let model = params.model_id();
+    let model_opt = if model.is_empty() { None } else { Some(model) };
     let mut profile = engines::profile(engine_id)?;
-    if let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) {
+    if let Some(model) = model_opt {
         profile.model = model.to_string();
     }
     job.set_total(prepared.eligible.len() as u32)?;
@@ -155,6 +266,7 @@ pub fn run(
             &prepared.resolved,
             prepared.skipped_sparse,
             prepared.numbers,
+            &prepared.extra,
         ));
     }
 
@@ -166,9 +278,19 @@ pub fn run(
         &work_dir,
         &profile,
         engine_id,
-        model,
+        model_opt,
         job,
     )?;
+    writes.sessions = mapped
+        .fresh
+        .into_iter()
+        .map(|item| FreshCache {
+            source: item.source,
+            session_id: item.session_id,
+            fingerprint: item.fingerprint,
+            summary: item.summary,
+        })
+        .collect();
     if mapped.cancelled {
         return Err(job::CANCELLED_MESSAGE.to_string());
     }
@@ -183,7 +305,8 @@ pub fn run(
             runner,
             &work_dir,
             engine_id,
-            model,
+            model_opt,
+            &prepared.extra,
             job,
         )?;
         usage.add(&reduced.3);
@@ -195,8 +318,7 @@ pub fn run(
     let actual_unpriced = if usage.known { priced.unpriced } else { true };
     let actual_cost = if usage.known { priced.amount } else { None };
     let has_data = !headline.is_empty() || !entries.is_empty() || !closing.is_empty();
-
-    Ok(WorkNotesDto {
+    let dto = WorkNotesDto {
         range_kind: prepared.resolved.kind,
         start_date: prepared.resolved.start_date,
         end_date: prepared.resolved.end_date,
@@ -209,20 +331,54 @@ pub fn run(
         headline,
         entries,
         closing,
+        extra_instructions: prepared.extra.clone(),
         failed_count: mapped.failures.len() as i64,
         failures: mapped.failures,
         actual_input_tokens: usage.input_tokens,
         actual_output_tokens: usage.output_tokens,
         actual_cost,
         actual_unpriced,
-    })
+    };
+    writes.notes = Some(dto.clone());
+    Ok(dto)
+}
+
+pub fn persist_cache(conn: &Connection, writes: &CacheWrites) -> Result<(), String> {
+    for item in &writes.sessions {
+        let key = cache::SessionCacheKey {
+            source: &item.source,
+            session_id: &item.session_id,
+            fingerprint: &item.fingerprint,
+            engine: &writes.engine,
+            model: &writes.model,
+        };
+        cache::store_session_summary(conn, &key, &item.summary, &writes.created_at)?;
+    }
+    if let Some(dto) = &writes.notes {
+        cache::store_notes(
+            conn,
+            dto,
+            &writes.engine,
+            &writes.model,
+            &writes.extra,
+            &writes.session_set_hash,
+            &writes.created_at,
+        )?;
+    }
+    Ok(())
 }
 
 pub struct PreparedWorkNotes {
     resolved: period::ResolvedRange,
     skipped_sparse: i64,
     numbers: HardNumbers,
-    eligible: Vec<(ConversationSessionRow, Vec<ConversationEvent>)>,
+    extra: String,
+    engine: String,
+    model: String,
+    session_set_hash: String,
+    exact: Option<WorkNotesDto>,
+    latest: Option<WorkNotesDto>,
+    eligible: Vec<EligibleSession>,
 }
 
 pub struct GeneratedRecord {
@@ -379,6 +535,7 @@ fn empty_dto(
     range: &period::ResolvedRange,
     skipped_sparse: i64,
     numbers: HardNumbers,
+    extra: &str,
 ) -> WorkNotesDto {
     WorkNotesDto {
         range_kind: range.kind,
@@ -393,6 +550,7 @@ fn empty_dto(
         headline: String::new(),
         entries: Vec::new(),
         closing: String::new(),
+        extra_instructions: extra.to_string(),
         failed_count: 0,
         failures: Vec::new(),
         actual_input_tokens: 0,

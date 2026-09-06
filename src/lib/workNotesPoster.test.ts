@@ -22,6 +22,7 @@ function dto(overrides: Partial<WorkNotesDto> = {}): WorkNotesDto {
       },
     ],
     closing: "下周把分享入口也接上。",
+    extra_instructions: "",
     failed_count: 0,
     failures: [],
     actual_input_tokens: 0,

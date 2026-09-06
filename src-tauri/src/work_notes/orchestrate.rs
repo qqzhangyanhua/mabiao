@@ -6,6 +6,8 @@ use crate::domain::{
     ConversationEvent, ConversationSessionRow, EngineProfile, WorkNotesEntry, WorkNotesFailure,
 };
 
+use super::EligibleSession;
+
 use super::engines::{self, EngineRunner, SchemaKind};
 use super::input;
 use super::job::{SessionKey, WorkNotesJob, CANCELLED_MESSAGE};
@@ -18,15 +20,23 @@ struct MapOut {
     summary: String,
 }
 
+pub struct FreshSummary {
+    pub source: String,
+    pub session_id: String,
+    pub fingerprint: String,
+    pub summary: String,
+}
+
 pub struct MapPhase {
     pub summaries: Vec<SessionSummary>,
     pub failures: Vec<WorkNotesFailure>,
     pub usage: EngineUsage,
     pub cancelled: bool,
+    pub fresh: Vec<FreshSummary>,
 }
 
 pub fn map_sessions(
-    sessions: &[(ConversationSessionRow, Vec<ConversationEvent>)],
+    sessions: &[EligibleSession],
     runner: &dyn EngineRunner,
     work_dir: &Path,
     profile: &EngineProfile,
@@ -34,21 +44,31 @@ pub fn map_sessions(
     model: Option<&str>,
     job: &WorkNotesJob,
 ) -> Result<MapPhase, String> {
+    let model_key = model.unwrap_or("");
     let mut summaries = Vec::new();
     let mut remaining = Vec::new();
-    for (session, events) in sessions {
+    for item in sessions {
         let key = SessionKey {
-            source: session.source.clone(),
-            session_id: session.session_id.clone(),
+            source: item.session.source.clone(),
+            session_id: item.session.session_id.clone(),
+            engine: engine_id.to_string(),
+            model: model_key.to_string(),
         };
         if let Some(summary) = job.completed_summary(&key)? {
             summaries.push(SessionSummary {
-                project: input::project_dir_name(&session.project),
-                title: session.title.clone(),
+                project: input::project_dir_name(&item.session.project),
+                title: item.session.title.clone(),
+                summary,
+            });
+        } else if let Some(summary) = item.cached_summary.clone() {
+            let _ = job.record_completed(key, summary.clone());
+            summaries.push(SessionSummary {
+                project: input::project_dir_name(&item.session.project),
+                title: item.session.title.clone(),
                 summary,
             });
         } else {
-            remaining.push((session, events));
+            remaining.push(item);
         }
     }
 
@@ -58,6 +78,7 @@ pub fn map_sessions(
         failures: Vec::new(),
         usage: EngineUsage::default(),
         cancelled: false,
+        fresh: Vec::new(),
     });
     let workers = profile.concurrency.max(1) as usize;
     thread::scope(|scope| {
@@ -70,11 +91,19 @@ pub fn map_sessions(
                     break;
                 }
                 let next = queue.lock().ok().and_then(|mut guard| guard.next());
-                let Some((session, events)) = next else {
+                let Some(item) = next else {
                     break;
                 };
-                let _ = job.set_current(&session.title);
-                match map_one(session, events, runner, work_dir, engine_id, model, job) {
+                let _ = job.set_current(&item.session.title);
+                match map_one(
+                    &item.session,
+                    &item.events,
+                    runner,
+                    work_dir,
+                    engine_id,
+                    model,
+                    job,
+                ) {
                     MapOne::Cancelled => {
                         if let Ok(mut partial) = collected.lock() {
                             partial.cancelled = true;
@@ -90,12 +119,20 @@ pub fn map_sessions(
                     }
                     MapOne::Ok(done) => {
                         let key = SessionKey {
-                            source: session.source.clone(),
-                            session_id: session.session_id.clone(),
+                            source: item.session.source.clone(),
+                            session_id: item.session.session_id.clone(),
+                            engine: engine_id.to_string(),
+                            model: model_key.to_string(),
                         };
                         let _ = job.record_completed(key, done.summary.summary.clone());
                         if let Ok(mut partial) = collected.lock() {
                             partial.usage.add(&done.usage);
+                            partial.fresh.push(FreshSummary {
+                                source: item.session.source.clone(),
+                                session_id: item.session.session_id.clone(),
+                                fingerprint: item.fingerprint.clone(),
+                                summary: done.summary.summary.clone(),
+                            });
                             partial.summaries.push(done.summary);
                         }
                     }
@@ -111,6 +148,7 @@ pub fn map_sessions(
         failures: partial.failures,
         usage: partial.usage,
         cancelled: partial.cancelled || job.is_cancelled(),
+        fresh: partial.fresh,
     })
 }
 
@@ -119,6 +157,7 @@ struct PartialMap {
     failures: Vec<WorkNotesFailure>,
     usage: EngineUsage,
     cancelled: bool,
+    fresh: Vec<FreshSummary>,
 }
 
 struct Mapped {
@@ -195,13 +234,14 @@ pub fn reduce_summaries(
     work_dir: &Path,
     engine_id: &str,
     model: Option<&str>,
+    extra: &str,
     job: &WorkNotesJob,
 ) -> Result<(String, Vec<WorkNotesEntry>, String, EngineUsage), String> {
     if job.is_cancelled() {
         return Err(CANCELLED_MESSAGE.to_string());
     }
     let _ = job.set_current("正在汇总");
-    let reduce_prompt = prompt::reduce_prompt(summaries);
+    let reduce_prompt = prompt::reduce_prompt(summaries, extra);
     let parsed = parse::run_with(
         runner,
         || {

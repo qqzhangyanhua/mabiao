@@ -6,7 +6,8 @@ use rusqlite::{params, Connection};
 use crate::conversation;
 use crate::domain::{
     ConversationQuery, EngineCommand, PriceEntry, PriceOrigin, PriceTable, Source, WorkNotesDto,
-    WorkNotesGate, WorkNotesJobStatus, WorkNotesPreviewDto, WorkNotesRange, WorkNotesRangeKind,
+    WorkNotesGate, WorkNotesJobStatus, WorkNotesParams, WorkNotesPreviewDto, WorkNotesRange,
+    WorkNotesRangeKind,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner, WorkNotesJob};
@@ -93,22 +94,78 @@ impl Harness {
         engine_id: &str,
         model: Option<&str>,
     ) -> Result<WorkNotesDto, String> {
+        self.try_params_at(
+            WorkNotesParams {
+                range,
+                extra_instructions: String::new(),
+                engine: engine_id.to_string(),
+                model: model.unwrap_or("").to_string(),
+                confirmed,
+            },
+            now(),
+        )
+    }
+
+    fn try_params(&self, params: WorkNotesParams) -> Result<WorkNotesDto, String> {
+        self.try_params_at(params, now())
+    }
+
+    fn try_params_at(
+        &self,
+        params: WorkNotesParams,
+        at: DateTime<Local>,
+    ) -> Result<WorkNotesDto, String> {
         work_notes::build(
             &self.conn,
             &self.prices,
-            range,
-            now(),
+            &params,
+            at,
             &self.runner,
             self.app_dir.path(),
-            engine_id,
-            model,
-            confirmed,
             &self.job,
         )
     }
 
     fn preview(&self, range: WorkNotesRange) -> Result<WorkNotesPreviewDto, String> {
-        work_notes::preview(&self.conn, &self.prices, range, now(), None, None)
+        work_notes::preview(
+            &self.conn,
+            &self.prices,
+            &WorkNotesParams {
+                range,
+                extra_instructions: String::new(),
+                engine: String::new(),
+                model: String::new(),
+                confirmed: false,
+            },
+            now(),
+        )
+    }
+
+    fn set_revision(&self, session_id: &str, revision: &str) {
+        self.conn
+            .execute(
+                "UPDATE conversation_sessions SET source_revision = ?1 WHERE session_id = ?2",
+                params![revision, session_id],
+            )
+            .unwrap();
+    }
+
+    fn map_count(&self) -> usize {
+        map_count(self)
+    }
+
+    fn reduce_stdin(&self) -> Vec<String> {
+        self.runner
+            .recorded()
+            .into_iter()
+            .filter(|cmd| {
+                cmd.args
+                    .iter()
+                    .any(|arg| arg.ends_with("reduce.schema.json"))
+                    || cmd.stdin.contains("下面是一段时间内各会话的一句话摘要")
+            })
+            .map(|cmd| cmd.stdin)
+            .collect()
     }
 
     fn insert_session(&self, seed: SeedSession) {
@@ -1124,20 +1181,16 @@ fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() 
         .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
         .unwrap();
     assert_eq!(dto.total_tokens, 5000);
-    let later_maps: Vec<String> = h
+    let later_maps: Vec<_> = h
         .runner
         .recorded()
         .into_iter()
         .skip(2)
         .filter(is_map_command)
-        .map(|cmd| prompt_of(&cmd))
         .collect();
-    assert_eq!(later_maps.len(), 1, "{later_maps:?}");
-    assert!(later_maps[0].contains("对齐口径"), "{}", later_maps[0]);
     assert!(
-        !later_maps[0].contains("码表自己生成的"),
-        "{}",
-        later_maps[0]
+        later_maps.is_empty(),
+        "eligible 未变应命中纪要缓存，不应再调引擎：{later_maps:?}"
     );
     let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
     let generated = page
@@ -1210,8 +1263,7 @@ fn cursor_agent_generated_session_is_identified_by_workdir_not_time_window() {
         .map(|cmd| prompt_of(&cmd))
         .collect();
     let joined = later_maps.join("\n");
-    assert_eq!(later_maps.len(), 2, "{joined}");
-    assert!(joined.contains("对齐口径"), "{joined}");
+    assert_eq!(later_maps.len(), 1, "{joined}");
     assert!(joined.contains("用户自己的活"), "{joined}");
     assert!(!joined.contains("码表生成的会话"), "{joined}");
     let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
@@ -1353,7 +1405,7 @@ fn map_count(h: &Harness) -> usize {
     h.runner
         .recorded()
         .iter()
-        .filter(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .filter(|cmd| is_map_command(cmd))
         .count()
 }
 
@@ -1538,4 +1590,179 @@ fn progress_tracks_completed_and_total() {
     assert_eq!(progress.total, 2, "map + reduce");
     assert_eq!(progress.done, 2);
     assert_eq!(progress.current_title, "正在汇总");
+}
+
+fn extra_params(extra: &str, engine: &str, model: &str) -> WorkNotesParams {
+    WorkNotesParams {
+        range: WorkNotesRange::this_week(),
+        extra_instructions: extra.to_string(),
+        engine: engine.to_string(),
+        model: model.to_string(),
+        confirmed: false,
+    }
+}
+
+fn reduce_json_backend() -> String {
+    serde_json::json!({
+        "headline": "后端架构主线",
+        "entries": [
+            {"title": "接口层", "detail": "把口径收口到聚合", "project": "statistics"},
+            {"title": "缓存键", "detail": "补充指令进 reduce", "project": "statistics"},
+            {"title": "增量", "detail": "只总结新会话", "project": "statistics"}
+        ],
+        "closing": "CSS 略过"
+    })
+    .to_string()
+}
+
+#[test]
+fn same_week_next_day_reuses_notes_when_sessions_unchanged() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_params_at(extra_params("", "", ""), now_on(day(2026, 8, 19)))
+        .unwrap();
+    assert_eq!(h.runner.recorded().len(), 2);
+    h.try_params_at(extra_params("", "", ""), now_on(day(2026, 8, 20)))
+        .unwrap();
+    assert_eq!(h.runner.recorded().len(), 2);
+}
+
+#[test]
+fn second_build_reuses_session_and_notes_cache() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let first = h.build();
+    assert!(first.has_data);
+    assert_eq!(h.runner.recorded().len(), 2);
+    let second = h.build();
+    assert_eq!(second.headline, first.headline);
+    assert_eq!(second.entries, first.entries);
+    assert_eq!(h.runner.recorded().len(), 2);
+}
+
+#[test]
+fn preview_returns_cached_notes_without_calling_engine() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let built = h.build();
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    let cached = preview.cached.expect("应直接看到上次纪要");
+    assert_eq!(cached.headline, built.headline);
+    assert_eq!(cached.entries, built.entries);
+    assert_eq!(h.runner.recorded().len(), 2);
+}
+
+#[test]
+fn incremental_build_only_maps_new_sessions() {
+    let h = Harness::new(replies(
+        &[&map_json("旧摘要"), &map_json("新摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
+    seed_eligible_at(
+        &h,
+        "old",
+        "旧会话",
+        "/proj/statistics",
+        day(2026, 8, 18),
+        10,
+    );
+    h.build();
+    assert_eq!(h.map_count(), 1);
+    seed_eligible_at(&h, "new", "新会话", "/proj/other", day(2026, 8, 18), 12);
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(h.map_count(), 2);
+    assert_eq!(h.runner.recorded().len(), 4);
+    let maps: Vec<String> = h
+        .runner
+        .recorded()
+        .into_iter()
+        .filter(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .map(|cmd| cmd.stdin)
+        .collect();
+    assert_eq!(maps.len(), 2);
+    assert!(maps[0].contains("旧会话"), "{}", maps[0]);
+    assert!(maps[1].contains("新会话"), "{}", maps[1]);
+    assert!(!maps[1].contains("旧会话"), "{}", maps[1]);
+}
+
+#[test]
+fn rewritten_session_invalidates_session_cache() {
+    let h = Harness::new(replies(
+        &[&map_json("旧摘要"), &map_json("续写后的摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.set_revision("ok", "rev-1");
+    h.build();
+    assert_eq!(h.map_count(), 1);
+    h.set_revision("ok", "rev-2");
+    h.build();
+    assert_eq!(h.map_count(), 2);
+    assert_eq!(h.runner.recorded().len(), 4);
+}
+
+#[test]
+fn switching_engine_does_not_reuse_session_cache() {
+    let h = Harness::new(replies(
+        &[&map_json("codex 摘要"), &map_json("claude 摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_params(extra_params("", "codex", "")).unwrap();
+    assert_eq!(h.map_count(), 1);
+    h.try_params(extra_params("", "claude", "")).unwrap();
+    assert_eq!(h.map_count(), 2);
+    assert_eq!(h.runner.recorded().len(), 4);
+}
+
+#[test]
+fn switching_model_does_not_reuse_session_cache() {
+    let h = Harness::new(replies(
+        &[&map_json("默认模型"), &map_json("指定模型")],
+        &[&reduce_json(), &reduce_json()],
+    ));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_params(extra_params("", "codex", "")).unwrap();
+    h.try_params(extra_params("", "codex", "gpt-5.1-codex"))
+        .unwrap();
+    assert_eq!(h.map_count(), 2);
+    assert_eq!(h.runner.recorded().len(), 4);
+}
+
+#[test]
+fn extra_instructions_are_appended_to_reduce_prompt() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json_backend()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let dto = h
+        .try_params(extra_params("我是后端，重点讲架构改动，别提 CSS", "", ""))
+        .unwrap();
+    assert_eq!(dto.extra_instructions, "我是后端，重点讲架构改动，别提 CSS");
+    assert_eq!(dto.headline, "后端架构主线");
+    let reduce = h.reduce_stdin();
+    assert_eq!(reduce.len(), 1);
+    assert!(
+        reduce[0].contains("我是后端，重点讲架构改动，别提 CSS"),
+        "{}",
+        reduce[0]
+    );
+}
+
+#[test]
+fn changing_extra_instructions_reruns_reduce_not_maps() {
+    let h = Harness::new(replies(
+        &[&map_json("摘要")],
+        &[&reduce_json(), &reduce_json_backend()],
+    ));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_params(extra_params("", "", "")).unwrap();
+    assert_eq!(h.map_count(), 1);
+    assert_eq!(h.reduce_stdin().len(), 1);
+    let dto = h
+        .try_params(extra_params("我是后端，重点讲架构改动，别提 CSS", "", ""))
+        .unwrap();
+    assert_eq!(h.map_count(), 1);
+    assert_eq!(h.reduce_stdin().len(), 2);
+    assert_eq!(dto.headline, "后端架构主线");
+    assert!(h.reduce_stdin()[1].contains("我是后端，重点讲架构改动，别提 CSS"));
 }

@@ -63,6 +63,7 @@ function dto(overrides: Partial<WorkNotesDto> = {}): WorkNotesDto {
     headline: "主线",
     entries: [],
     closing: "",
+    extra_instructions: "",
     failed_count: 0,
     failures: [],
     actual_input_tokens: 150,

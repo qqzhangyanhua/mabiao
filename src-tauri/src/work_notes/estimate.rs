@@ -1,11 +1,9 @@
 use crate::cost;
-use crate::domain::{
-    ConversationEvent, ConversationSessionRow, DerivedCost, EngineProfile, PriceTable, Source,
-    UsageRecord,
-};
+use crate::domain::{DerivedCost, EngineProfile, PriceTable, Source, UsageRecord};
 
 use super::input;
 use super::prompt::{self, SessionSummary};
+use super::EligibleSession;
 
 pub const CHARS_PER_TOKEN: usize = 4;
 
@@ -21,8 +19,9 @@ pub fn chars_to_tokens(chars: usize) -> i64 {
     chars.div_ceil(CHARS_PER_TOKEN) as i64
 }
 
-pub fn for_sessions(
-    sessions: &[(ConversationSessionRow, Vec<ConversationEvent>)],
+pub fn for_remaining(
+    sessions: &[EligibleSession],
+    extra: &str,
     profile: &EngineProfile,
     prices: &PriceTable,
 ) -> Estimate {
@@ -37,20 +36,39 @@ pub fn for_sessions(
     }
     let mut input_tokens = 0i64;
     let mut reduce_summaries = Vec::with_capacity(sessions.len());
-    for (session, events) in sessions {
-        let compressed = input::compress(session, events);
+    let mut map_calls = 0i64;
+    for item in sessions {
+        if let Some(summary) = &item.cached_summary {
+            reduce_summaries.push(SessionSummary {
+                project: input::project_dir_name(&item.session.project),
+                title: item.session.title.clone(),
+                summary: summary.clone(),
+            });
+            continue;
+        }
+        map_calls += 1;
+        let compressed = input::compress(&item.session, &item.events);
         input_tokens += chars_to_tokens(prompt::map_prompt(&compressed).chars().count());
         reduce_summaries.push(SessionSummary {
-            project: input::project_dir_name(&session.project),
-            title: session.title.clone(),
-            summary: session.title.clone(),
+            project: input::project_dir_name(&item.session.project),
+            title: item.session.title.clone(),
+            summary: item.session.title.clone(),
         });
     }
-    input_tokens += chars_to_tokens(prompt::reduce_prompt(&reduce_summaries).chars().count());
+    input_tokens += chars_to_tokens(
+        prompt::reduce_prompt(&reduce_summaries, extra)
+            .chars()
+            .count(),
+    );
     let priced = price_tokens(profile, input_tokens, 0, prices);
+    let secs = if map_calls == 0 {
+        i64::from(profile.secs_per_call)
+    } else {
+        estimated_secs(map_calls, profile)
+    };
     Estimate {
-        calls: sessions.len() as i64 + 1,
-        secs: estimated_secs(sessions.len() as i64, profile),
+        calls: map_calls + 1,
+        secs,
         input_tokens,
         cost: priced.amount,
         unpriced: priced.unpriced,
