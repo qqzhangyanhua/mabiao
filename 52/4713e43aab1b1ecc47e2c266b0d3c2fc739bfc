@@ -1,0 +1,64 @@
+src/lib/workNotesPosterPreference.test.ts
+  s_3d435da9c816e0::t_62afa4356c68c0 1-49,53-64,68,72-86,90-99
+  s_3d435da9c816e0::t_47169d2b03d0cb 50-52,65-67,69-71,87-89
+src/lib/workNotesPoster.test.ts
+  s_3d435da9c816e0::t_d863bd383dafcb 1-151
+src/components/WorkNotesShare.tsx
+  s_3d435da9c816e0::t_6d4b6965f8ddf9 1-119
+src/workNotes/WorkNotesPoster.tsx
+  s_3d435da9c816e0::t_119006ee8864d2 1-12
+src/lib/sharePreference.test.ts
+  s_3d435da9c816e0::t_b5d55f29a01731 99-102
+src/components/WorkNotesPanel.tsx
+  s_3d435da9c816e0::t_b9e5c87b2ed4ae 3,23
+  s_3d435da9c816e0::t_4f500c0f02d6e3 305
+src/styles/views/work-notes.css
+  s_3d435da9c816e0::t_6ceb1d1e65fd2f 83,85,88-93,96-116,118,121,123-124,127-131,133-135,138-140,143-144,147-149,152-154,157-161,164-175,178-200
+src/lib/workNotesPoster.ts
+  s_3d435da9c816e0::t_f9982acece8ae1 1-52
+src/workNotes/duskBriefPoster.tsx
+  s_3d435da9c816e0::t_96d086e7b6ee99 1-40
+src/workNotes/posterTypes.ts
+  s_3d435da9c816e0::t_23987efdfd6026 1-23
+src/components/WorkNotesPosterStyles.tsx
+  s_3d435da9c816e0::t_51ef8e5a661ed1 1-52
+src/report/posterCssCoverage.ts
+  s_3d435da9c816e0::t_e95e6c642c61b5 7-10,16,21-28,30,38-39,53-64,76-77,85-88,92,111-112,120,129,138-139,147,155,161-162,188-205,207,215,221-224,229-230
+src/report/posterCss.test.ts
+  s_3d435da9c816e0::t_ed2c88b4dd20c6 10,94-104
+  s_3d435da9c816e0::t_2c36692ee4007b 105-106
+src/workNotes/cinnabarSlipPoster.css
+  s_3d435da9c816e0::t_1dbc3c4ebfc142 1-179
+src/lib/workNotesPosterPreference.ts
+  s_3d435da9c816e0::t_c974f20591256c 1-56
+src/workNotes/posterStyleRegistry.test.ts
+  s_3d435da9c816e0::t_974d7300daa506 1-98
+src/workNotes/cinnabarSlipPoster.tsx
+  s_3d435da9c816e0::t_0a4d0a0d91056a 1-49
+src/workNotes/duskBriefPoster.css
+  s_3d435da9c816e0::t_41a90b6164f63a 1-15,17-162
+  s_3d435da9c816e0::t_47169d2b03d0cb 16
+src/workNotes/posterStyleRegistry.ts
+  s_3d435da9c816e0::t_8fc0222aa630bc 1-82
+src/workNotes/folioRuledPoster.tsx
+  s_3d435da9c816e0::t_641b9e2587c87c 1-38
+src/workNotes/folioRuledPoster.css
+  s_3d435da9c816e0::t_47169d2b03d0cb 15-16,21-24
+  s_3d435da9c816e0::t_5495e55e312442 1-14,17-20,25-154
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "524713e43aab1b1ecc47e2c266b0d3c2fc739bfc",
+  "prompts": {},
+  "sessions": {
+    "s_3d435da9c816e0": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07548-15e0-75b1-9bcf-3f99627ce6bc",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
