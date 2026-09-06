@@ -65,6 +65,29 @@
   font-size: 12px;
 }
 
+.work-notes-extra {
+  display: grid;
+  gap: 6px;
+}
+
+.work-notes-extra-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.work-notes-extra textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 .work-notes-gate-confirm,
 .work-notes-gate-reject {
   margin: 0;

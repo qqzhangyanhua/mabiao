@@ -8,6 +8,8 @@ use crate::domain::{WorkNotesDto, WorkNotesJobStatus, WorkNotesProgressDto, Work
 pub struct SessionKey {
     pub source: String,
     pub session_id: String,
+    pub engine: String,
+    pub model: String,
 }
 
 struct JobState {
@@ -70,6 +72,14 @@ impl WorkNotesJob {
 
     pub fn request_cancel(&self) {
         self.cancel.store(true, Ordering::SeqCst);
+    }
+
+    pub fn clear_completed_if_idle(&self) -> Result<(), String> {
+        let mut state = self.lock()?;
+        if state.status != WorkNotesJobStatus::Running {
+            state.completed.clear();
+        }
+        Ok(())
     }
 
     pub fn begin(

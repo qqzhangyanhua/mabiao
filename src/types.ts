@@ -1014,6 +1014,7 @@ export type WorkNotesDto = {
   headline: string;
   entries: WorkNotesEntry[];
   closing: string;
+  extra_instructions: string;
   failed_count: number;
   failures: WorkNotesFailure[];
   actual_input_tokens: number;
@@ -1037,6 +1038,7 @@ export type WorkNotesPreviewDto = {
   estimated_input_tokens: number;
   estimated_cost: number | null;
   estimated_unpriced: boolean;
+  cached?: WorkNotesDto | null;
 };
 
 export type WorkNotesJobStatus = "idle" | "running" | "done" | "cancelled" | "error";
