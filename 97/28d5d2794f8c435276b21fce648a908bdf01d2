@@ -1,0 +1,75 @@
+src-tauri/src/work_notes/engines.rs
+  s_a8684a980df2ea::t_0f3193d2ea4da1 13-14
+  s_4ef8f52392351e::t_195357d85141e4 204,602-603,615,617
+  s_a8684a980df2ea::t_86927485919d5d 288
+  s_a8684a980df2ea::t_dd06ebf861fb45 282
+  s_a8684a980df2ea::t_33ff7f9ec7ea3f 6,19-20,23,68-69,157-170,174-175,181-182,188-189,191-196,201-203,206-207,209-214,218-243,247-256,262,267-281,283-287,289-292,295-307,539,547,551,555,559,563,579-581,584-596,604,609,612,614,616
+src-tauri/src/lib.rs
+  s_a8684a980df2ea::t_9a15425bd99c28 127,325,352-354
+src/styles/views/work-notes.css
+  s_a8684a980df2ea::t_aaa2848755bccb 202-207,211-237
+  s_a8684a980df2ea::t_8bb33092d404d6 208-210
+src-tauri/src/work_notes/usage.rs
+  s_4ef8f52392351e::t_62aff659724cab 1-58,60-138
+  s_a8684a980df2ea::t_3788594e8a1137 59
+src/components/WorkNotesPanel.tsx
+  s_a8684a980df2ea::t_bc61bc0add38c9 340
+  s_a8684a980df2ea::t_b8e58cefb975d4 4-5,43,46-48,64,71,119,131-132,138-139,142-149,151-152,160-161,164-183,185-216,251-261,270-313,328-335,338-339,341-348,351-365,370
+src/types.ts
+  s_a8684a980df2ea::t_1ceb4807cb0d4c 999-1003,1017-1022,1035-1050
+src-tauri/src/work_notes.rs
+  s_a8684a980df2ea::t_bf7d9721c72e75 180,190
+  s_4ef8f52392351e::t_704f6481b0a76d 5,7-8,13,38,40,49,57-58,60-64,67-71,79,91,94,107-116,122-123,125,130-137,139-143,146-147,152-159,172-173,176-179,189,191,196-198,200-208,212-217,221-225,396-401
+  s_a8684a980df2ea::t_86927485919d5d 194-195
+src-tauri/src/work_notes/job.rs
+  s_4ef8f52392351e::t_62aff659724cab 1-15,18-30,33-74,81-84,89-91,95-98,101-204
+src-tauri/src/work_notes/estimate.rs
+  s_a8684a980df2ea::t_58413a916c1916 46
+  s_4ef8f52392351e::t_62aff659724cab 1-45,47-68,78-86,88-103
+docs/agent-layers.md
+  s_a8684a980df2ea::t_ca234460b89d15 101
+src-tauri/src/tests/work_notes.rs
+  s_a8684a980df2ea::t_e2a76b1c7feee7 498,519,529,558,625,735,791,819,892,915,926,937,947,972,981,1005,1020
+  s_a8684a980df2ea::t_86927485919d5d 761-764,1521-1522
+  s_a8684a980df2ea::t_5c273ecfff163d 12,49-50,57-58,67-68,72-76,98,106
+  s_a8684a980df2ea::t_af036e7c7d45e1 324-328
+  s_a8684a980df2ea::t_49eda7c255485e 752,773-776,857-860,994
+  s_a8684a980df2ea::t_ce63ebc10ccae4 1329-1478,1482,1488-1494,1495,1498-1499,1513-1520,1523-1537,1541
+  s_a8684a980df2ea::t_5dae7467fc1882 1479,1481,1483-1487,1497,1538-1540
+src-tauri/src/domain/work_notes.rs
+  s_4ef8f52392351e::t_62aff659724cab 58,67-71,80-86,97-134,166-171
+src/lib/workNotesCopy.test.ts
+  s_a8684a980df2ea::t_3bfbaeff381634 3-88
+  s_a8684a980df2ea::t_4d752ae658a1de 1-2
+src/lib/workNotesCopy.ts
+  s_a8684a980df2ea::t_fe5e0ee015e022 2-34
+  s_a8684a980df2ea::t_9f5e0730a4b05a 1
+src-tauri/src/work_notes/orchestrate.rs
+  s_a8684a980df2ea::t_86927485919d5d 52,65-76,78-144,147-149,164-195,198-203,219-224,228
+  s_a8684a980df2ea::t_f0ff0e8ba52fff 16,232
+  s_a8684a980df2ea::t_be198b32b5f7c0 1-8,10-15,17-32,35-51,53-64,225-227,229-231,233-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "9728d5d2794f8c435276b21fce648a908bdf01d2",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8f52392351e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07521-9f6e-7ff0-9fd2-0d7955951dd9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_a8684a980df2ea": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07521-24e1-73e2-8b3d-fc5de0d1e444",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
