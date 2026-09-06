@@ -73,6 +73,16 @@ impl Harness {
     }
 
     fn try_build(&self, range: WorkNotesRange, confirmed: bool) -> Result<WorkNotesDto, String> {
+        self.try_build_with(range, confirmed, "codex", None)
+    }
+
+    fn try_build_with(
+        &self,
+        range: WorkNotesRange,
+        confirmed: bool,
+        engine_id: &str,
+        model: Option<&str>,
+    ) -> Result<WorkNotesDto, String> {
         work_notes::build(
             &self.conn,
             &PriceTable::default(),
@@ -80,6 +90,8 @@ impl Harness {
             now(),
             &self.runner,
             self.app_dir.path(),
+            engine_id,
+            model,
             confirmed,
         )
     }
@@ -305,6 +317,42 @@ fn assert_codex_switches(cmd: &EngineCommand, work_dir: &Path) {
     assert_eq!(cmd.args.last().map(String::as_str), Some("-"));
 }
 
+fn assert_claude_switches(cmd: &EngineCommand, work_dir: &Path) {
+    assert_eq!(cmd.program, "claude");
+    assert_eq!(cmd.cwd, work_dir);
+    assert!(
+        cmd.args.iter().any(|arg| arg == "-p"),
+        "缺 -p：{:?}",
+        cmd.args
+    );
+    assert!(
+        cmd.args.iter().any(|arg| arg == "--no-session-persistence"),
+        "缺 --no-session-persistence：{:?}",
+        cmd.args
+    );
+    let tools_at = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "--tools")
+        .expect("缺 --tools");
+    assert_eq!(
+        cmd.args.get(tools_at + 1).map(String::as_str),
+        Some(""),
+        "禁工具必须是空字符串：{:?}",
+        cmd.args
+    );
+    let schema_at = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "--json-schema")
+        .expect("缺 --json-schema");
+    let schema = cmd.args.get(schema_at + 1).expect("缺 json-schema 内容");
+    assert!(
+        schema.contains("\"type\""),
+        "json-schema 应是 JSON：{schema}"
+    );
+}
+
 #[test]
 fn this_week_is_monday_to_now_not_last_completed_week() {
     let h = Harness::new(replies(&[]));
@@ -450,6 +498,90 @@ fn codex_command_is_readonly_no_approval_ephemeral_in_dedicated_workdir() {
     }
     assert!(work_dir.join("map.schema.json").is_file());
     assert!(work_dir.join("reduce.schema.json").is_file());
+}
+
+#[test]
+fn claude_command_is_print_no_persist_no_tools_json_schema() {
+    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    seed_eligible(&h, "ok", "/Users/me/src/statistics");
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "claude", None)
+        .unwrap();
+    assert!(dto.has_data);
+    let work_dir = h.work_dir();
+    let commands = h.runner.recorded();
+    assert!(
+        commands.len() >= 2,
+        "至少一次 map、一次 reduce，实际 {}",
+        commands.len()
+    );
+    for cmd in &commands {
+        assert_claude_switches(cmd, &work_dir);
+        assert!(
+            !cmd.args.iter().any(|arg| arg == "--model"),
+            "未指定模型时不应带 --model：{:?}",
+            cmd.args
+        );
+    }
+}
+
+#[test]
+fn switching_engine_uses_the_matching_profile() {
+    let h = Harness::new(replies(&[
+        &map_json("摘要"),
+        &reduce_json(),
+        &map_json("摘要"),
+        &reduce_json(),
+    ]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_build_with(WorkNotesRange::this_week(), false, "codex", None)
+        .unwrap();
+    h.try_build_with(WorkNotesRange::this_week(), false, "claude", Some("sonnet"))
+        .unwrap();
+    let commands = h.runner.recorded();
+    assert_eq!(commands.len(), 4, "{commands:?}");
+    let work_dir = h.work_dir();
+    for cmd in &commands[..2] {
+        assert_codex_switches(cmd, &work_dir);
+    }
+    for cmd in &commands[2..] {
+        assert_claude_switches(cmd, &work_dir);
+        assert!(
+            cmd.args
+                .windows(2)
+                .any(|pair| pair == ["--model", "sonnet"]),
+            "换引擎后应带上指定模型：{:?}",
+            cmd.args
+        );
+    }
+}
+
+#[test]
+fn unknown_engine_is_rejected_before_spawn() {
+    let h = Harness::new(replies(&[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let error = h
+        .try_build_with(WorkNotesRange::this_week(), false, "nope", None)
+        .unwrap_err();
+    assert!(error.contains("未知"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn detect_marks_missing_cli_uninstalled() {
+    let rows = work_notes::detect_with(
+        |name| (name == "claude").then(|| PathBuf::from("/bin/claude")),
+        |path| Ok(format!("ver-{}", path.display())),
+    );
+    assert_eq!(rows.len(), 2);
+    let claude = rows.iter().find(|row| row.id == "claude").unwrap();
+    assert!(claude.installed);
+    assert_eq!(claude.version.as_deref(), Some("ver-/bin/claude"));
+    assert!(!claude.writes_session_dir);
+    let codex = rows.iter().find(|row| row.id == "codex").unwrap();
+    assert!(!codex.installed);
+    assert!(codex.version.is_none());
+    assert!(!codex.writes_session_dir);
 }
 
 #[test]
@@ -777,10 +909,31 @@ fn work_notes_codex_spawn_smoke() {
         &work_dir,
         work_notes::SchemaKind::Map,
         "只输出 JSON：{\"summary\":\"ok\"}".into(),
+        None,
     )
     .unwrap();
     let out = work_notes::ProcessRunner
         .run(&cmd)
         .expect("codex spawn 失败");
+    assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
+}
+
+/// `cargo test --manifest-path src-tauri/Cargo.toml work_notes_claude_spawn_smoke -- --ignored --nocapture`
+#[test]
+#[ignore = "需要本机已登录的 Claude CLI"]
+fn work_notes_claude_spawn_smoke() {
+    let dir = tempfile::tempdir().unwrap();
+    let work_dir = work_notes::ensure_work_dir(dir.path()).unwrap();
+    work_notes::write_schemas(&work_dir).unwrap();
+    let cmd = work_notes::claude_command(
+        &work_dir,
+        work_notes::SchemaKind::Map,
+        "只输出 JSON：{\"summary\":\"ok\"}".into(),
+        None,
+    )
+    .unwrap();
+    let out = work_notes::ProcessRunner
+        .run(&cmd)
+        .expect("claude spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
 }

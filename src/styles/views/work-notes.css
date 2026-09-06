@@ -29,6 +29,35 @@
   font-size: 12px;
 }
 
+.work-notes-engine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-notes-model {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-notes-model input {
+  width: 140px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
 .work-notes-help,
 .work-notes-scale {
   margin: 0;

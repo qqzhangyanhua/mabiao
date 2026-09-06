@@ -72,6 +72,17 @@ pub struct EngineProfile {
     pub id: String,
     pub program: String,
     pub writes_session_dir: bool,
+    pub concurrency: u32,
+}
+
+/// 设置页手动探测的结果。未安装的项 `installed = false`，不进生成选项。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DetectedEngine {
+    pub id: String,
+    pub program: String,
+    pub writes_session_dir: bool,
+    pub installed: bool,
+    pub version: Option<String>,
 }
 
 /// 已经拼好、交给 runner 执行的一条 CLI 调用。

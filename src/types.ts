@@ -1021,3 +1021,11 @@ export type WorkNotesPreviewDto = {
   gate: WorkNotesGate;
   message: string;
 };
+
+export type DetectedEngine = {
+  id: string;
+  program: string;
+  writes_session_dir: boolean;
+  installed: boolean;
+  version: string | null;
+};

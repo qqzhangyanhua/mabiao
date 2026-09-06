@@ -11,6 +11,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
       "settings-scan-paths",
       "settings-diagnostics",
       "settings-conversation-index",
+      "settings-work-notes-engines",
       "settings-backup",
     ],
   },

@@ -11,17 +11,96 @@ use std::collections::VecDeque;
 #[cfg(test)]
 use std::sync::Mutex;
 
-use crate::domain::{EngineCommand, EngineProfile};
+use crate::domain::{DetectedEngine, EngineCommand, EngineProfile};
 
 const TIMEOUT: Duration = Duration::from_secs(180);
+const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
 const WORK_DIR_NAME: &str = "work-notes-engine";
 
-pub fn codex_profile() -> EngineProfile {
-    EngineProfile {
-        id: "codex".to_string(),
-        program: "codex".to_string(),
-        writes_session_dir: false,
+struct EngineSpec {
+    id: &'static str,
+    program: &'static str,
+    writes_session_dir: bool,
+    concurrency: u32,
+    build: fn(&Path, SchemaKind, String, Option<&str>) -> Result<EngineCommand, String>,
+}
+
+impl EngineSpec {
+    fn profile(&self) -> EngineProfile {
+        EngineProfile {
+            id: self.id.to_string(),
+            program: self.program.to_string(),
+            writes_session_dir: self.writes_session_dir,
+            concurrency: self.concurrency,
+        }
     }
+
+    fn detected(&self, installed: bool, version: Option<String>) -> DetectedEngine {
+        let profile = self.profile();
+        DetectedEngine {
+            id: profile.id,
+            program: profile.program,
+            writes_session_dir: profile.writes_session_dir,
+            installed,
+            version,
+        }
+    }
+}
+
+const ENGINES: &[EngineSpec] = &[
+    EngineSpec {
+        id: "codex",
+        program: "codex",
+        writes_session_dir: false,
+        concurrency: 3,
+        build: codex_command,
+    },
+    EngineSpec {
+        id: "claude",
+        program: "claude",
+        writes_session_dir: false,
+        concurrency: 3,
+        build: claude_command,
+    },
+];
+
+fn spec(engine_id: &str) -> Result<&'static EngineSpec, String> {
+    ENGINES
+        .iter()
+        .find(|item| item.id == engine_id)
+        .ok_or_else(|| format!("未知的纪要引擎：{engine_id}"))
+}
+
+pub fn require(engine_id: &str) -> Result<(), String> {
+    spec(engine_id).map(|_| ())
+}
+
+pub fn command(
+    engine_id: &str,
+    work_dir: &Path,
+    schema: SchemaKind,
+    stdin: String,
+    model: Option<&str>,
+) -> Result<EngineCommand, String> {
+    let spec = spec(engine_id)?;
+    (spec.build)(work_dir, schema, stdin, model)
+}
+
+pub fn detect_engines() -> Vec<DetectedEngine> {
+    detect_with(which_named, read_version)
+}
+
+pub fn detect_with(
+    which: impl Fn(&str) -> Option<PathBuf>,
+    version: impl Fn(&Path) -> Result<String, String>,
+) -> Vec<DetectedEngine> {
+    ENGINES
+        .iter()
+        .map(|item| match which(item.program) {
+            Some(path) => item.detected(true, version(&path).ok().map(|raw| first_line(&raw))),
+            None => item.detected(false, None),
+        })
+        .collect()
 }
 
 pub trait EngineRunner {
@@ -90,10 +169,34 @@ pub fn write_schemas(work_dir: &Path) -> Result<(), String> {
     Ok(())
 }
 
+pub fn claude_command(
+    work_dir: &Path,
+    schema: SchemaKind,
+    stdin: String,
+    model: Option<&str>,
+) -> Result<EngineCommand, String> {
+    let mut args = vec![
+        "-p".to_string(),
+        "--no-session-persistence".to_string(),
+        "--tools".to_string(),
+        String::new(),
+        "--json-schema".to_string(),
+        schema_json(schema).to_string(),
+    ];
+    push_model(&mut args, model);
+    Ok(EngineCommand {
+        program: "claude".to_string(),
+        args,
+        stdin,
+        cwd: work_dir.to_path_buf(),
+    })
+}
+
 pub fn codex_command(
     work_dir: &Path,
     schema: SchemaKind,
     stdin: String,
+    model: Option<&str>,
 ) -> Result<EngineCommand, String> {
     let schema_name = match schema {
         SchemaKind::Map => "map.schema.json",
@@ -104,25 +207,103 @@ pub fn codex_command(
         .to_str()
         .ok_or_else(|| "纪要工作目录路径不是合法 UTF-8".to_string())?
         .to_string();
+    let mut args = vec![
+        "-a".to_string(),
+        "never".to_string(),
+        "exec".to_string(),
+        "--ephemeral".to_string(),
+        "-s".to_string(),
+        "read-only".to_string(),
+        "--skip-git-repo-check".to_string(),
+        "--color".to_string(),
+        "never".to_string(),
+        "--output-schema".to_string(),
+        schema_arg,
+    ];
+    push_model(&mut args, model);
+    args.push("-".to_string());
     Ok(EngineCommand {
-        program: codex_profile().program,
-        args: vec![
-            "-a".to_string(),
-            "never".to_string(),
-            "exec".to_string(),
-            "--ephemeral".to_string(),
-            "-s".to_string(),
-            "read-only".to_string(),
-            "--skip-git-repo-check".to_string(),
-            "--color".to_string(),
-            "never".to_string(),
-            "--output-schema".to_string(),
-            schema_arg,
-            "-".to_string(),
-        ],
+        program: "codex".to_string(),
+        args,
         stdin,
         cwd: work_dir.to_path_buf(),
     })
+}
+
+fn schema_json(schema: SchemaKind) -> &'static str {
+    match schema {
+        SchemaKind::Map => MAP_SCHEMA,
+        SchemaKind::Reduce => REDUCE_SCHEMA,
+    }
+}
+
+fn push_model(args: &mut Vec<String>, model: Option<&str>) {
+    let Some(model) = model.map(str::trim).filter(|value| !value.is_empty()) else {
+        return;
+    };
+    args.push("--model".to_string());
+    args.push(model.to_string());
+}
+
+fn which_named(name: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    let mut names = vec![name.to_string()];
+    if cfg!(windows) && !name.ends_with(".exe") && !name.ends_with(".cmd") {
+        names.push(format!("{name}.exe"));
+        names.push(format!("{name}.cmd"));
+    }
+    for dir in std::env::split_paths(&path) {
+        for candidate in &names {
+            let file = dir.join(candidate);
+            if file.is_file() {
+                return Some(file);
+            }
+        }
+    }
+    None
+}
+
+fn read_version(program: &Path) -> Result<String, String> {
+    let mut child = Command::new(program)
+        .arg("--version")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "无法读取 --version stdout".to_string())?;
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let mut buf = String::new();
+        let _ = stdout.read_to_string(&mut buf);
+        let _ = tx.send(buf);
+    });
+    match rx.recv_timeout(VERSION_TIMEOUT) {
+        Ok(buf) => {
+            let _ = child.wait();
+            if buf.trim().is_empty() {
+                Err("空的版本输出".to_string())
+            } else {
+                Ok(buf)
+            }
+        }
+        Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            Err("版本探测超时".to_string())
+        }
+    }
+}
+
+fn first_line(raw: &str) -> String {
+    raw.lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or(raw.trim())
+        .to_string()
 }
 
 fn spawn(command: &EngineCommand) -> Result<String, String> {

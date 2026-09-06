@@ -103,6 +103,7 @@
 3. 本机 CLI 只读、禁工具，工作目录固定在应用数据目录下的专用空目录。不自建模型 HTTP 通路，不存密钥。
 4. 硬数字只复用现有 `query` 函数，不新增聚合。
 5. 读 ADR 0021、0011、0002。`cargo test work_notes` 绿。真 spawn 冒烟 `#[ignore]`，不进 CI。
+6. 引擎清单只列 `which` 探测到的。探测只走设置页手动按钮（`which` + `--version`），启动时不 spawn。加引擎只改 `work_notes::engines` 的 profile 表，不改编排。
 
 ## 样式
 

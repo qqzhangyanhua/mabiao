@@ -21,8 +21,11 @@ use crate::domain::{
 use crate::query;
 
 #[cfg(test)]
-pub use engines::{codex_command, ensure_work_dir, write_schemas, SchemaKind, ScriptedRunner};
-pub use engines::{EngineRunner, ProcessRunner};
+pub use engines::{
+    claude_command, codex_command, detect_with, ensure_work_dir, write_schemas, SchemaKind,
+    ScriptedRunner,
+};
+pub use engines::{detect_engines, EngineRunner, ProcessRunner};
 
 #[derive(Debug, Deserialize)]
 struct MapOut {
@@ -68,8 +71,11 @@ pub fn build(
     now: DateTime<Local>,
     runner: &dyn EngineRunner,
     app_data_dir: &Path,
+    engine_id: &str,
+    model: Option<&str>,
     confirmed: bool,
 ) -> Result<WorkNotesDto, String> {
+    engines::require(engine_id)?;
     let resolved = period::resolve(&range, now)?;
     let filter = period::usage_filter(&resolved);
     let numbers = hard_numbers(conn, prices, &filter)?;
@@ -93,10 +99,12 @@ pub fn build(
     let mut summaries = Vec::new();
     for (session, events) in &eligible {
         let compressed = input::compress(session, events);
-        let command = engines::codex_command(
+        let command = engines::command(
+            engine_id,
             &work_dir,
             engines::SchemaKind::Map,
             prompt::map_prompt(&compressed),
+            model,
         )?;
         let summary = match parse::run::<MapOut>(runner, &command) {
             parse::ParseOutcome::Parsed(value) => value.summary,
@@ -110,10 +118,12 @@ pub fn build(
         });
     }
 
-    let command = engines::codex_command(
+    let command = engines::command(
+        engine_id,
         &work_dir,
         engines::SchemaKind::Reduce,
         prompt::reduce_prompt(&summaries),
+        model,
     )?;
     let (headline, entries, closing) = match parse::run_with(runner, &command, parse_reduce) {
         parse::ParseOutcome::Parsed(value) => (value.headline, value.entries, value.closing),

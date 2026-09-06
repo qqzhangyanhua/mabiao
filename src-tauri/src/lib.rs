@@ -348,6 +348,7 @@ pub fn run() {
             commands::get_report,
             commands::preview_work_notes,
             commands::build_work_notes,
+            commands::detect_work_note_engines,
             commands::get_billing_windows,
             commands::get_trend,
             commands::get_application_analytics,
