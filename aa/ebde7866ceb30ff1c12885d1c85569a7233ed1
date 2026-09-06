@@ -1,15 +1,24 @@
 src/components/WorkNotesPanel.tsx
   s_4ef8f52392351e::t_a2dbf05a0ef862 125
   s_4ef8f52392351e::t_b26d9efddc5833 45,101,102-103,142
+  s_fea9b27cb3f733::t_cb4acf852c1bf1 74,81,277-287
 src-tauri/src/work_notes.rs
   s_4ef8f52392351e::t_eac3c13683ab72 151-153,161
   s_4ef8f52392351e::t_084133af0d3ae2 4,52,98,123,130-137,139,144,147,150,321,341,343,538,553
   s_4ef8f52392351e::t_69c779e5a2e26f 157
+  s_fea9b27cb3f733::t_d201ac9c9c30bd 129,138,145,163,169,176-177
+  s_fea9b27cb3f733::t_bfe19b5f8fadfc 159
+  s_fea9b27cb3f733::t_ad9078eb5ced6c 247-253
+  s_fea9b27cb3f733::t_a22254f507a11d 56-57,140-141,226-234
+  s_fea9b27cb3f733::t_923c31a1e83362 25,41-48,55,58-59,61-71,86,104-107,109-110,116,120-122,128,142-143,148-149,154-156,158,160,162,164-168,175,178-180,185-207,213-214,216-225,235-245,254-258,260,269,281,284-293,308-309,334,342,344-368,375-381
 src-tauri/src/tests/work_notes.rs
   s_4ef8f52392351e::t_817a9e523420d6 1661-1668,1671,1684-1686
   s_4ef8f52392351e::t_95eeb95bf3213d 110-117,122,1616-1619,1621-1627
   s_4ef8f52392351e::t_5b51e0617f5d75 1631,1644
   s_4ef8f52392351e::t_cc0002acd09690 107-109,121,130-131,133-153,155-164,166-168,1595-1615,1628-1630,1633-1643,1646-1656,1669-1670,1672-1683,1687-1690,1695-1706,1711-1720,1725-1734,1736-1752,1757-1768
+  s_fea9b27cb3f733::t_46d61215d19d8b 1408
+  s_fea9b27cb3f733::t_460c2fe32ed84c 9-10,96-106,132,154,165,1594,1620,1632,1645,1657-1660,1691-1694,1707-1710,1721-1724,1735,1753-1756
+  s_fea9b27cb3f733::t_1b0a7475e57a50 1184,1192-1193,1266
 src/styles/views/work-notes.css
   s_4ef8f52392351e::t_a449f34c3a0baa 68-90
 src-tauri/src/work_notes/prompt.rs
@@ -27,14 +36,38 @@ src-tauri/src/work_notes/cache.rs
   s_4ef8f52392351e::t_40afd72af040ec 104-106,108-110
   s_4ef8f52392351e::t_86f74f73d119e9 112-114
   s_4ef8f52392351e::t_09b9bc80656cfb 271-272
+  s_fea9b27cb3f733::t_d201ac9c9c30bd 1-2,4-8,11-18,27-28,90-99,107
+  s_fea9b27cb3f733::t_a22254f507a11d 225-232
+  s_fea9b27cb3f733::t_40dfc7262024ff 150,156-159,171-177,195-201,224,233,248-253
+  s_fea9b27cb3f733::t_a3de8ab47f9248 3,9-10
 src/types.ts
   s_4ef8f52392351e::t_5d02ad992dc075 1017,1041
 src-tauri/src/store/schema.rs
   s_4ef8f52392351e::t_d03f62211738ff 370,374-390,392-406,414-415,417-419
   s_4ef8f52392351e::t_4b0b16d34f11d2 391,413,416
   s_4ef8f52392351e::t_50fcee9f5b60c0 420-421
+  s_fea9b27cb3f733::t_7a60ecdabd4a5c 407-412
 src-tauri/src/domain/work_notes.rs
   s_4ef8f52392351e::t_303e105c0106af 72-76,78-107,202-203
+  s_fea9b27cb3f733::t_825f7f53a74659 77
+src-tauri/src/commands/work_notes.rs
+  s_fea9b27cb3f733::t_a22254f507a11d 91-93
+  s_fea9b27cb3f733::t_d201ac9c9c30bd 10-25,30
+  s_fea9b27cb3f733::t_be6a089fab886e 3-5,41,55,63-69,74,77,80-81,86-87,94,97,99
+src-tauri/src/work_notes/orchestrate.rs
+  s_fea9b27cb3f733::t_f4c5a3a9275957 81,94,97,237,244
+  s_fea9b27cb3f733::t_257b6ffd3db792 9-10,23-29,35,39,47,50,52-55,59-67,71,98-106,122-125,130-135,151,160
+src-tauri/src/work_notes/estimate.rs
+  s_fea9b27cb3f733::t_a22254f507a11d 58-62
+  s_fea9b27cb3f733::t_cbe1f8bf9b3b64 64-68,71
+  s_fea9b27cb3f733::t_86d763072eecf8 2,6,22-24,39-50,53-55,70
+src/lib/workNotesPoster.test.ts
+  s_fea9b27cb3f733::t_80cd1a2da1e553 25
+src/lib/workNotesCopy.test.ts
+  s_fea9b27cb3f733::t_ca3b85c108af3d 66
+src-tauri/src/work_notes/job.rs
+  s_fea9b27cb3f733::t_a850562c52a297 11-12
+  s_fea9b27cb3f733::t_994c54cd980399 77-84
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -46,6 +79,14 @@ src-tauri/src/domain/work_notes.rs
       "agent_id": {
         "tool": "grok",
         "id": "01a07521-9f6e-7ff0-9fd2-0d7955951dd9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_fea9b27cb3f733": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07627-5cc4-7f93-a6ff-4e040b5316a2",
         "model": "grok-4.6"
       },
       "human_author": "张艳华 <939593210@qq.com>"
