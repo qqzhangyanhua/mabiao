@@ -4,7 +4,8 @@ use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::{params, Connection};
 
 use crate::domain::{
-    EngineCommand, PriceTable, Source, WorkNotesDto, WorkNotesRange, WorkNotesRangeKind,
+    EngineCommand, PriceTable, Source, WorkNotesDto, WorkNotesGate, WorkNotesPreviewDto,
+    WorkNotesRange, WorkNotesRangeKind,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner};
@@ -68,15 +69,23 @@ impl Harness {
     }
 
     fn build(&self) -> WorkNotesDto {
+        self.try_build(WorkNotesRange::this_week(), false).unwrap()
+    }
+
+    fn try_build(&self, range: WorkNotesRange, confirmed: bool) -> Result<WorkNotesDto, String> {
         work_notes::build(
             &self.conn,
             &PriceTable::default(),
-            WorkNotesRange::this_week(),
+            range,
             now(),
             &self.runner,
             self.app_dir.path(),
+            confirmed,
         )
-        .unwrap()
+    }
+
+    fn preview(&self, range: WorkNotesRange) -> Result<WorkNotesPreviewDto, String> {
+        work_notes::preview(&self.conn, &PriceTable::default(), range, now())
     }
 
     fn insert_session(&self, seed: SeedSession) {
@@ -226,16 +235,43 @@ fn eligible_events() -> Vec<SeedEvent> {
 }
 
 fn seed_eligible(h: &Harness, session_id: &str, project: &str) {
+    seed_eligible_at(h, session_id, "对齐口径", project, day(2026, 8, 18), 10);
+}
+
+fn seed_eligible_at(
+    h: &Harness,
+    session_id: &str,
+    title: &str,
+    project: &str,
+    started: NaiveDate,
+    hour: u32,
+) {
     let events = eligible_events();
     h.insert_session(SeedSession {
         session_id,
-        title: "对齐口径",
+        title,
         project,
-        started: day(2026, 8, 18),
-        hour: 10,
+        started,
+        hour,
         tokens: 2000,
         events: &events,
     });
+}
+
+fn seed_eligible_n(h: &Harness, n: usize) {
+    let events = eligible_events();
+    for index in 0..n {
+        let session_id = format!("bulk-{index}");
+        h.insert_session(SeedSession {
+            session_id: &session_id,
+            title: "对齐口径",
+            project: "/proj/statistics",
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 2000,
+            events: &events,
+        });
+    }
 }
 
 fn assert_codex_switches(cmd: &EngineCommand, work_dir: &Path) {
@@ -491,6 +527,243 @@ fn skipped_sparse_still_counted_when_other_sessions_summarize() {
     let dto = h.build();
     assert!(dto.has_data);
     assert_eq!(dto.skipped_sparse, 1);
+}
+
+fn map_stdin(h: &Harness) -> String {
+    h.runner
+        .recorded()
+        .into_iter()
+        .find(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .map(|cmd| cmd.stdin)
+        .unwrap_or_default()
+}
+
+#[test]
+fn this_month_is_first_to_now_not_last_completed_month() {
+    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    seed_eligible_at(
+        &h,
+        "last-month",
+        "上月的活",
+        "/proj/old",
+        day(2026, 7, 31),
+        10,
+    );
+    seed_eligible_at(
+        &h,
+        "in-month",
+        "本月的活",
+        "/proj/statistics",
+        day(2026, 8, 1),
+        10,
+    );
+    seed_eligible_at(
+        &h,
+        "tonight",
+        "今晚的活",
+        "/proj/statistics",
+        day(2026, 8, 19),
+        16,
+    );
+    let dto = h.try_build(WorkNotesRange::this_month(), false).unwrap();
+    assert_eq!(dto.range_kind, WorkNotesRangeKind::ThisMonth);
+    assert_eq!(dto.start_date, "2026-08-01");
+    assert_eq!(dto.end_date, "2026-08-19");
+    assert!(dto.has_data);
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("本月的活"), "{stdin}");
+    assert!(!stdin.contains("上月的活"), "{stdin}");
+    assert!(!stdin.contains("今晚的活"), "{stdin}");
+}
+
+#[test]
+fn custom_range_is_closed_local_days() {
+    let h = Harness::new(replies(&[
+        &map_json("摘要一"),
+        &map_json("摘要二"),
+        &reduce_json(),
+    ]));
+    seed_eligible_at(&h, "before", "区间前", "/proj/a", day(2026, 8, 9), 10);
+    seed_eligible_at(&h, "start", "起始日", "/proj/a", day(2026, 8, 10), 10);
+    seed_eligible_at(&h, "end", "结束日", "/proj/a", day(2026, 8, 12), 22);
+    seed_eligible_at(&h, "after", "区间后", "/proj/a", day(2026, 8, 13), 10);
+    let dto = h
+        .try_build(WorkNotesRange::custom("2026-08-10", "2026-08-12"), false)
+        .unwrap();
+    assert_eq!(dto.range_kind, WorkNotesRangeKind::Custom);
+    assert_eq!(dto.start_date, "2026-08-10");
+    assert_eq!(dto.end_date, "2026-08-12");
+    assert!(dto.has_data);
+    let commands = h.runner.recorded();
+    let maps = commands
+        .iter()
+        .filter(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .count();
+    assert_eq!(maps, 2);
+    let stdin = commands
+        .iter()
+        .filter(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .map(|cmd| cmd.stdin.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(stdin.contains("起始日"), "{stdin}");
+    assert!(stdin.contains("结束日"), "{stdin}");
+    assert!(!stdin.contains("区间前"), "{stdin}");
+    assert!(!stdin.contains("区间后"), "{stdin}");
+}
+
+#[test]
+fn custom_range_ending_today_stops_at_now() {
+    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    seed_eligible_at(
+        &h,
+        "this-afternoon",
+        "此刻之前",
+        "/proj/a",
+        day(2026, 8, 19),
+        10,
+    );
+    seed_eligible_at(&h, "tonight", "此刻之后", "/proj/a", day(2026, 8, 19), 16);
+    let dto = h
+        .try_build(WorkNotesRange::custom("2026-08-19", "2026-08-19"), false)
+        .unwrap();
+    assert_eq!(dto.start_date, "2026-08-19");
+    assert_eq!(dto.end_date, "2026-08-19");
+    assert!(dto.has_data);
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("此刻之前"), "{stdin}");
+    assert!(!stdin.contains("此刻之后"), "{stdin}");
+}
+
+#[test]
+fn custom_range_allows_31_days() {
+    let h = Harness::new(replies(&[]));
+    let dto = h
+        .try_build(WorkNotesRange::custom("2026-07-20", "2026-08-19"), false)
+        .unwrap();
+    assert_eq!(dto.start_date, "2026-07-20");
+    assert_eq!(dto.end_date, "2026-08-19");
+    assert!(!dto.has_data);
+}
+
+#[test]
+fn custom_range_rejects_more_than_31_days() {
+    let h = Harness::new(replies(&[]));
+    let error = h
+        .try_build(WorkNotesRange::custom("2026-07-19", "2026-08-19"), false)
+        .unwrap_err();
+    assert!(error.contains("31"), "{error}");
+    assert!(error.contains("收窄"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn custom_range_rejects_future_dates() {
+    let h = Harness::new(replies(&[]));
+    let error = h
+        .try_build(WorkNotesRange::custom("2026-08-19", "2026-08-20"), false)
+        .unwrap_err();
+    assert!(error.contains("今天"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn preview_counts_sessions_without_calling_engine() {
+    let h = Harness::new(replies(&[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let tiny = [user_msg("?"), assistant_msg(".")];
+    h.insert_session(SeedSession {
+        session_id: "tiny",
+        title: "误触",
+        project: "/proj/other",
+        started: day(2026, 8, 18),
+        hour: 12,
+        tokens: 80,
+        events: &tiny,
+    });
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.range_kind, WorkNotesRangeKind::ThisWeek);
+    assert_eq!(preview.start_date, "2026-08-17");
+    assert_eq!(preview.end_date, "2026-08-19");
+    assert_eq!(preview.session_count, 1);
+    assert_eq!(preview.skipped_sparse, 1);
+    assert_eq!(preview.gate, WorkNotesGate::Ok);
+    assert!(preview.message.is_empty());
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn sixty_eligible_sessions_do_not_require_confirmation() {
+    let h = Harness::new(replies(&[]));
+    seed_eligible_n(&h, 60);
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 60);
+    assert_eq!(preview.gate, WorkNotesGate::Ok);
+}
+
+#[test]
+fn more_than_60_eligible_sessions_require_confirmation() {
+    let h = Harness::new(replies(&[]));
+    seed_eligible_n(&h, 61);
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 61);
+    assert_eq!(preview.gate, WorkNotesGate::Confirm);
+    assert!(preview.message.contains("60"), "{}", preview.message);
+    let error = h.try_build(WorkNotesRange::this_week(), false).unwrap_err();
+    assert!(error.contains("60"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn more_than_60_eligible_sessions_run_after_confirmation() {
+    let h = Harness::new(replies(&[&map_json("摘要")]));
+    seed_eligible_n(&h, 61);
+    let error = h.try_build(WorkNotesRange::this_week(), true).unwrap_err();
+    assert!(
+        !h.runner.recorded().is_empty(),
+        "确认后应开跑，实际未调用引擎：{error}"
+    );
+}
+
+#[test]
+fn more_than_150_eligible_sessions_are_rejected() {
+    let h = Harness::new(replies(&[]));
+    seed_eligible_n(&h, 151);
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 151);
+    assert_eq!(preview.gate, WorkNotesGate::Rejected);
+    assert!(preview.message.contains("150"), "{}", preview.message);
+    assert!(preview.message.contains("收窄"), "{}", preview.message);
+    let error = h.try_build(WorkNotesRange::this_week(), true).unwrap_err();
+    assert!(error.contains("150"), "{error}");
+    assert!(error.contains("收窄"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn sparse_sessions_do_not_count_toward_the_gate() {
+    let h = Harness::new(replies(&[]));
+    let few = [user_msg("hi"), assistant_msg("ok")];
+    for index in 0..61 {
+        let session_id = format!("sparse-{index}");
+        h.insert_session(SeedSession {
+            session_id: &session_id,
+            title: "误触",
+            project: "/proj/a",
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 500,
+            events: &few,
+        });
+    }
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 0);
+    assert_eq!(preview.skipped_sparse, 61);
+    assert_eq!(preview.gate, WorkNotesGate::Ok);
+    let dto = h.build();
+    assert!(!dto.has_data);
+    assert_eq!(dto.skipped_sparse, 61);
+    assert!(h.runner.recorded().is_empty());
 }
 
 /// `cargo test --manifest-path src-tauri/Cargo.toml work_notes_codex_spawn_smoke -- --ignored --nocapture`

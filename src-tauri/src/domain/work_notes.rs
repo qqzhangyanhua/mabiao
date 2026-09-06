@@ -27,6 +27,43 @@ impl WorkNotesRange {
             to: None,
         }
     }
+
+    pub fn this_month() -> Self {
+        Self {
+            kind: WorkNotesRangeKind::ThisMonth,
+            from: None,
+            to: None,
+        }
+    }
+
+    pub fn custom(from: impl Into<String>, to: impl Into<String>) -> Self {
+        Self {
+            kind: WorkNotesRangeKind::Custom,
+            from: Some(from.into()),
+            to: Some(to.into()),
+        }
+    }
+}
+
+/// 规模闸门判定。阈值只在 Rust 计算，webview 只呈现。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkNotesGate {
+    Ok,
+    Confirm,
+    Rejected,
+}
+
+/// 选完区间立刻返回的规模预览，不调引擎。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesPreviewDto {
+    pub range_kind: WorkNotesRangeKind,
+    pub start_date: String,
+    pub end_date: String,
+    pub session_count: i64,
+    pub skipped_sparse: i64,
+    pub gate: WorkNotesGate,
+    pub message: String,
 }
 
 /// 纪要引擎的静态描述。一个 CLI 一个 profile。

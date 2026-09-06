@@ -6,6 +6,7 @@ mod input;
 mod parse;
 mod period;
 mod prompt;
+mod scale;
 
 use chrono::{DateTime, Local};
 use rusqlite::Connection;
@@ -15,7 +16,7 @@ use std::path::Path;
 use crate::conversation;
 use crate::domain::{
     ConversationEvent, ConversationQuery, ConversationSessionRow, Filter, PriceTable, WorkNotesDto,
-    WorkNotesEntry, WorkNotesRange,
+    WorkNotesEntry, WorkNotesPreviewDto, WorkNotesRange,
 };
 use crate::query;
 
@@ -35,7 +36,31 @@ struct ReduceOut {
     closing: String,
 }
 
+/// 选完区间立刻返回会话数与闸门，不调引擎。
+pub fn preview(
+    conn: &Connection,
+    prices: &PriceTable,
+    range: WorkNotesRange,
+    now: DateTime<Local>,
+) -> Result<WorkNotesPreviewDto, String> {
+    let resolved = period::resolve(&range, now)?;
+    let sessions = load_sessions(conn, prices, &resolved.from, &resolved.to)?;
+    let (skipped_sparse, eligible) = classify_sessions(conn, sessions)?;
+    let session_count = eligible.len() as i64;
+    let (gate, message) = scale::assess(session_count);
+    Ok(WorkNotesPreviewDto {
+        range_kind: resolved.kind,
+        start_date: resolved.start_date,
+        end_date: resolved.end_date,
+        session_count,
+        skipped_sparse,
+        gate,
+        message,
+    })
+}
+
 /// 工作纪要模块的单一入口。`now` 与 `runner` 由调用方注入。
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     conn: &Connection,
     prices: &PriceTable,
@@ -43,25 +68,23 @@ pub fn build(
     now: DateTime<Local>,
     runner: &dyn EngineRunner,
     app_data_dir: &Path,
+    confirmed: bool,
 ) -> Result<WorkNotesDto, String> {
     let resolved = period::resolve(&range, now)?;
     let filter = period::usage_filter(&resolved);
     let numbers = hard_numbers(conn, prices, &filter)?;
     let sessions = load_sessions(conn, prices, &resolved.from, &resolved.to)?;
+    let (skipped_sparse, eligible_sessions) = classify_sessions(conn, sessions)?;
+    scale::enforce(eligible_sessions.len() as i64, confirmed)?;
 
-    let mut skipped_sparse = 0i64;
-    let mut eligible: Vec<(ConversationSessionRow, Vec<ConversationEvent>)> = Vec::new();
-    for session in sessions {
-        let events = conversation::indexed_events(conn, &session.source, &session.session_id)?;
-        if input::is_sparse(events.len(), session.total_tokens) {
-            skipped_sparse += 1;
-            continue;
-        }
-        eligible.push((session, events));
+    if eligible_sessions.is_empty() {
+        return Ok(empty_dto(&resolved, skipped_sparse, numbers));
     }
 
-    if eligible.is_empty() {
-        return Ok(empty_dto(&resolved, skipped_sparse, numbers));
+    let mut eligible: Vec<(ConversationSessionRow, Vec<ConversationEvent>)> = Vec::new();
+    for session in eligible_sessions {
+        let events = conversation::indexed_events(conn, &session.source, &session.session_id)?;
+        eligible.push((session, events));
     }
 
     let work_dir = engines::ensure_work_dir(app_data_dir)?;
@@ -146,6 +169,24 @@ fn hard_numbers(
         active_days,
         total_tokens: overview.total_tokens,
     })
+}
+
+fn classify_sessions(
+    conn: &Connection,
+    sessions: Vec<ConversationSessionRow>,
+) -> Result<(i64, Vec<ConversationSessionRow>), String> {
+    let mut skipped_sparse = 0i64;
+    let mut eligible = Vec::new();
+    for session in sessions {
+        let event_count =
+            conversation::indexed_event_count(conn, &session.source, &session.session_id)? as usize;
+        if input::is_sparse(event_count, session.total_tokens) {
+            skipped_sparse += 1;
+            continue;
+        }
+        eligible.push(session);
+    }
+    Ok((skipped_sparse, eligible))
 }
 
 fn load_sessions(

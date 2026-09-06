@@ -346,6 +346,7 @@ pub fn run() {
             commands::ingest,
             commands::get_overview,
             commands::get_report,
+            commands::preview_work_notes,
             commands::build_work_notes,
             commands::get_billing_windows,
             commands::get_trend,

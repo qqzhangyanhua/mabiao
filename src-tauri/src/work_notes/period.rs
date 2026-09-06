@@ -1,7 +1,9 @@
-use chrono::{DateTime, Datelike, Duration, Local, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
 
 use crate::domain::{Filter, WorkNotesRange, WorkNotesRangeKind};
 use crate::work_timeline;
+
+const CUSTOM_MAX_DAYS: i64 = 31;
 
 pub struct ResolvedRange {
     pub kind: WorkNotesRangeKind,
@@ -16,19 +18,15 @@ pub fn resolve(range: &WorkNotesRange, now: DateTime<Local>) -> Result<ResolvedR
         WorkNotesRangeKind::ThisWeek => {
             let today = now.date_naive();
             let monday = today - Duration::days(i64::from(today.weekday().num_days_from_monday()));
-            let from = work_timeline::rfc3339_millis(work_timeline::local_midnight_utc(monday));
-            let to = work_timeline::rfc3339_millis(now.with_timezone(&Utc));
-            Ok(ResolvedRange {
-                kind: range.kind,
-                start_date: monday.format("%Y-%m-%d").to_string(),
-                end_date: today.format("%Y-%m-%d").to_string(),
-                from,
-                to,
-            })
+            Ok(until_now(WorkNotesRangeKind::ThisWeek, monday, now))
         }
-        WorkNotesRangeKind::ThisMonth | WorkNotesRangeKind::Custom => {
-            Err("目前只支持本周".to_string())
+        WorkNotesRangeKind::ThisMonth => {
+            let today = now.date_naive();
+            let start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
+                .ok_or_else(|| "无法解析本月起始日".to_string())?;
+            Ok(until_now(WorkNotesRangeKind::ThisMonth, start, now))
         }
+        WorkNotesRangeKind::Custom => resolve_custom(range, now),
     }
 }
 
@@ -41,4 +39,69 @@ pub fn usage_filter(range: &ResolvedRange) -> Filter {
         projects: Vec::new(),
         providers: Vec::new(),
     }
+}
+
+fn until_now(kind: WorkNotesRangeKind, start: NaiveDate, now: DateTime<Local>) -> ResolvedRange {
+    let today = now.date_naive();
+    ResolvedRange {
+        kind,
+        start_date: start.format("%Y-%m-%d").to_string(),
+        end_date: today.format("%Y-%m-%d").to_string(),
+        from: work_timeline::rfc3339_millis(work_timeline::local_midnight_utc(start)),
+        to: work_timeline::rfc3339_millis(now.with_timezone(&Utc)),
+    }
+}
+
+fn resolve_custom(range: &WorkNotesRange, now: DateTime<Local>) -> Result<ResolvedRange, String> {
+    let today = now.date_naive();
+    let start = parse_iso_date(
+        range
+            .from
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or("自定义区间缺少起始日")?,
+    )?;
+    let end_inclusive = parse_iso_date(
+        range
+            .to
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or("自定义区间缺少结束日")?,
+    )?;
+    if start > today {
+        return Err("起始日不能晚于今天".to_string());
+    }
+    if end_inclusive > today {
+        return Err("结束日不能晚于今天".to_string());
+    }
+    if start > end_inclusive {
+        return Err("起始日不能晚于结束日".to_string());
+    }
+    let days = (end_inclusive - start).num_days() + 1;
+    if days > CUSTOM_MAX_DAYS {
+        return Err(format!("自定义区间最多 {CUSTOM_MAX_DAYS} 天，请收窄后再试"));
+    }
+    let to = if end_inclusive == today {
+        work_timeline::rfc3339_millis(now.with_timezone(&Utc))
+    } else {
+        let end_exclusive = end_inclusive
+            .checked_add_signed(Duration::days(1))
+            .ok_or_else(|| "区间超出范围".to_string())?;
+        work_timeline::rfc3339_millis(
+            work_timeline::local_midnight_utc(end_exclusive) - Duration::milliseconds(1),
+        )
+    };
+    Ok(ResolvedRange {
+        kind: WorkNotesRangeKind::Custom,
+        start_date: start.format("%Y-%m-%d").to_string(),
+        end_date: end_inclusive.format("%Y-%m-%d").to_string(),
+        from: work_timeline::rfc3339_millis(work_timeline::local_midnight_utc(start)),
+        to,
+    })
+}
+
+fn parse_iso_date(value: &str) -> Result<NaiveDate, String> {
+    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| format!("无法解析日期：{value}"))
 }

@@ -61,6 +61,7 @@ pub(crate) use discover::{
     discover_opencode, index_claude, index_gemini, index_omp, index_pi, regular_source_revision,
     single_detail,
 };
+pub(crate) use event_index::indexed_event_count;
 pub(crate) use persist::{
     apply_incremental, persist_session_file_cursors, prepare_incremental, record_full_parse,
     write_session_file_events, IncrementalPrepare, PendingIncremental,

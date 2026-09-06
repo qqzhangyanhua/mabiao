@@ -98,7 +98,7 @@
 
 读区间内的对话正文，经本机 CLI 总结成结构化条目。不是报告，不复用 `ReportPeriod`。
 
-1. 入口是 `work_notes::build`：注入连接、注入 `now`、注入 runner，返回完整 DTO。Tauri command 只取 state、锁 conn、委托。
+1. 入口是 `work_notes::preview` 与 `work_notes::build`：注入连接、注入 `now`；`build` 再注入 runner。Tauri command 只取 state、锁 conn、委托。三种区间与 60/150 规模闸门在 Rust 判定，webview 只呈现。
 2. runner 边界是「执行一条已经拼好的 `EngineCommand`，回一段 stdout」。argv 拼装（只读、禁审批、不落盘、schema）必须跑在这条缝里。
 3. 本机 CLI 只读、禁工具，工作目录固定在应用数据目录下的专用空目录。不自建模型 HTTP 通路，不存密钥。
 4. 硬数字只复用现有 `query` 函数，不新增聚合。

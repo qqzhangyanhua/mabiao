@@ -1,25 +1,98 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatCompact, formatTokens, humanStatus } from "../lib/format";
-import type { WorkNotesDto, WorkNotesRangeKind } from "../types";
+import {
+  clampWorkNotesCustomRange,
+  thisWeekStartDate,
+  todayDateValue,
+  workNotesCustomPickerBounds,
+  workNotesRangeCopy,
+  workNotesRangePayload,
+} from "../lib/workNotesRange";
+import type { WorkNotesDto, WorkNotesPreviewDto, WorkNotesRangeKind } from "../types";
 import { EmptyState } from "./EmptyState";
 import { KpiCard } from "./Kpi";
 import { LoadingOverlay } from "./LoadingOverlay";
 import { Button } from "./ui/Button";
+import { DatePicker } from "./ui/DatePicker";
 import { Segmented } from "./ui/Segmented";
 
-const RANGE_OPTIONS = [{ value: "this_week" as const, label: "本周" }];
+const RANGE_OPTIONS = [
+  { value: "this_week" as const, label: "本周" },
+  { value: "this_month" as const, label: "本月" },
+  { value: "custom" as const, label: "区间" },
+];
 
 export function WorkNotesPanel() {
   const [rangeKind, setRangeKind] = useState<WorkNotesRangeKind>("this_week");
+  const [customFrom, setCustomFrom] = useState(() => thisWeekStartDate());
+  const [customTo, setCustomTo] = useState(() => todayDateValue());
+  const [preview, setPreview] = useState<WorkNotesPreviewDto | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
   const [dto, setDto] = useState<WorkNotesDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState(false);
+
+  const range = useMemo(
+    () => workNotesRangePayload(rangeKind, customFrom, customTo),
+    [customFrom, customTo, rangeKind],
+  );
+  const copy = workNotesRangeCopy(rangeKind);
+  const customBounds = workNotesCustomPickerBounds(customFrom, customTo);
+  const generateDisabled =
+    busy ||
+    previewLoading ||
+    previewError !== null ||
+    preview == null ||
+    preview.gate === "rejected" ||
+    preview.session_count === 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 切区间时先置 loading，避免沿用上一档会话数
+    setPreviewLoading(true);
+    setPreviewError(null);
+    void invoke<WorkNotesPreviewDto>("preview_work_notes", { range })
+      .then((next) => {
+        if (!cancelled) {
+          setPreview(next);
+        }
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setPreview(null);
+          setPreviewError(humanStatus(caught));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setPreviewLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range]);
+
+  function resetGenerated() {
+    setPendingConfirm(false);
+    setDto(null);
+    setError(null);
+  }
 
   function generate() {
+    if (preview?.gate === "confirm" && !pendingConfirm) {
+      setPendingConfirm(true);
+      return;
+    }
     setBusy(true);
     setError(null);
-    void invoke<WorkNotesDto>("build_work_notes", { range: { kind: rangeKind } })
+    void invoke<WorkNotesDto>("build_work_notes", {
+      range,
+      confirmed: preview?.gate === "confirm",
+    })
       .then((next) => {
         setDto(next);
       })
@@ -32,39 +105,116 @@ export function WorkNotesPanel() {
       });
   }
 
+  const emptyHint =
+    preview && preview.skipped_sparse > 0
+      ? `已略过 ${preview.skipped_sparse} 个零星会话`
+      : copy.emptyHint;
+
   return (
     <LoadingOverlay active={busy} label="正在生成工作纪要…">
       <div className="work-notes">
         <div className="work-notes-head">
-          <Segmented
-            value={rangeKind}
-            options={RANGE_OPTIONS}
-            ariaLabel="工作纪要区间"
-            disabled={busy}
-            onChange={setRangeKind}
-          />
-          <Button variant="accent" disabled={busy} onClick={generate}>
-            生成
+          <div className="work-notes-range">
+            <Segmented
+              value={rangeKind}
+              options={RANGE_OPTIONS}
+              ariaLabel="工作纪要区间"
+              disabled={busy}
+              onChange={(next) => {
+                if (next === "custom") {
+                  const seeded = clampWorkNotesCustomRange(
+                    preview?.start_date ?? thisWeekStartDate(),
+                    preview?.end_date ?? todayDateValue(),
+                  );
+                  setCustomFrom(seeded.from);
+                  setCustomTo(seeded.to);
+                }
+                setRangeKind(next);
+                resetGenerated();
+              }}
+            />
+            {rangeKind === "custom" ? (
+              <div className="work-notes-custom-range">
+                <DatePicker
+                  ariaLabel="区间起始日"
+                  value={customFrom}
+                  min={customBounds.fromMin}
+                  max={customBounds.fromMax}
+                  disabled={busy || previewLoading}
+                  onChange={(day) => {
+                    const nextRange = clampWorkNotesCustomRange(day, customTo, new Date(), "from");
+                    setCustomFrom(nextRange.from);
+                    setCustomTo(nextRange.to);
+                    resetGenerated();
+                  }}
+                />
+                <span>至</span>
+                <DatePicker
+                  ariaLabel="区间结束日"
+                  value={customTo}
+                  min={customBounds.toMin}
+                  max={customBounds.toMax}
+                  disabled={busy || previewLoading}
+                  onChange={(day) => {
+                    const nextRange = clampWorkNotesCustomRange(customFrom, day, new Date(), "to");
+                    setCustomFrom(nextRange.from);
+                    setCustomTo(nextRange.to);
+                    resetGenerated();
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+          <Button variant="accent" disabled={generateDisabled} onClick={generate}>
+            {pendingConfirm ? "确认生成" : "生成"}
           </Button>
         </div>
+        <p className="work-notes-help">{copy.help}</p>
+        {previewError ? (
+          <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
+        ) : null}
+        {previewLoading ? <p className="work-notes-scale">正在统计会话数…</p> : null}
+        {!previewLoading && preview && !previewError ? (
+          <p className="work-notes-scale">
+            {preview.start_date} 至 {preview.end_date}，有 {preview.session_count} 个会话
+            {preview.skipped_sparse > 0 ? `，已略过 ${preview.skipped_sparse} 个零星会话` : ""}
+          </p>
+        ) : null}
+        {!previewLoading && preview?.message ? (
+          <p
+            className={
+              preview.gate === "rejected" ? "work-notes-gate-reject" : "work-notes-gate-confirm"
+            }
+          >
+            {preview.message}
+          </p>
+        ) : null}
         {error ? (
           <EmptyState icon="alertTriangle" tone="warn" title="生成失败" hint={error} />
         ) : null}
-        {!error && !dto ? (
-          <EmptyState
-            icon="notes"
-            title="还没有生成工作纪要"
-            hint="选「本周」后点生成。本周一到此刻的对话会交给本机 Codex 总结。"
-          />
+        {!previewLoading &&
+        !error &&
+        !previewError &&
+        preview &&
+        preview.session_count === 0 &&
+        !dto ? (
+          <EmptyState icon="notes" title="这段时间没有可总结的会话" hint={emptyHint} />
+        ) : null}
+        {!previewLoading &&
+        !error &&
+        !previewError &&
+        !dto &&
+        preview &&
+        preview.session_count > 0 &&
+        preview.gate !== "rejected" ? (
+          <EmptyState icon="notes" title="还没有生成工作纪要" hint={copy.emptyHint} />
         ) : null}
         {dto && !dto.has_data ? (
           <EmptyState
             icon="notes"
             title="这段时间没有可总结的会话"
             hint={
-              dto.skipped_sparse > 0
-                ? `已略过 ${dto.skipped_sparse} 个零星会话`
-                : "换一段时间再试，或先去对话记录确认有正文。"
+              dto.skipped_sparse > 0 ? `已略过 ${dto.skipped_sparse} 个零星会话` : copy.emptyHint
             }
           />
         ) : null}
@@ -78,18 +228,8 @@ function WorkNotesResult({ dto }: { dto: WorkNotesDto }) {
   return (
     <div className="work-notes-result">
       <div className="kpi-row work-notes-kpis">
-        <KpiCard
-          icon="chat"
-          tone="purple"
-          label="会话"
-          value={formatCompact(dto.session_count)}
-        />
-        <KpiCard
-          icon="project"
-          tone="cyan"
-          label="项目"
-          value={formatCompact(dto.project_count)}
-        />
+        <KpiCard icon="chat" tone="purple" label="会话" value={formatCompact(dto.session_count)} />
+        <KpiCard icon="project" tone="cyan" label="项目" value={formatCompact(dto.project_count)} />
         <KpiCard
           icon="calendar"
           tone="orange"

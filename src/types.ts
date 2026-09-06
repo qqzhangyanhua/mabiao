@@ -1009,3 +1009,15 @@ export type WorkNotesDto = {
   entries: WorkNotesEntry[];
   closing: string;
 };
+
+export type WorkNotesGate = "ok" | "confirm" | "rejected";
+
+export type WorkNotesPreviewDto = {
+  range_kind: WorkNotesRangeKind;
+  start_date: string;
+  end_date: string;
+  session_count: number;
+  skipped_sparse: number;
+  gate: WorkNotesGate;
+  message: string;
+};

@@ -11,6 +11,46 @@
   gap: 12px;
 }
 
+.work-notes-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.work-notes-custom-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.work-notes-custom-range > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-notes-help,
+.work-notes-scale {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-notes-gate-confirm,
+.work-notes-gate-reject {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.work-notes-gate-confirm {
+  color: var(--text-soft);
+}
+
+.work-notes-gate-reject {
+  color: var(--orange-fg);
+}
+
 .work-notes-result {
   display: grid;
   gap: 16px;
