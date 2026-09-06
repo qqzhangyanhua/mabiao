@@ -1,0 +1,84 @@
+src/components/WorkNotesPanel.tsx
+  s_0446ee94707477::t_291f62589f0bf2 283
+src/types.ts
+  s_0446ee94707477::t_22ebfba6a9e137 463
+src-tauri/src/work_notes.rs
+  s_3d435da9c816e0::t_16ea8303ad046c 129,141
+  s_0446ee94707477::t_1a01c7ef94b228 98-102,108-109,130-132,168-190,238
+  s_0446ee94707477::t_44c98c9ac27672 107
+  s_0446ee94707477::t_7ec7700863fec8 110-112
+  s_3d435da9c816e0::t_16150cf519f331 128
+  s_0446ee94707477::t_6f8d9e6ddaa184 191-193
+  s_0446ee94707477::t_630886aaf61f59 235-237
+src-tauri/src/store/work_notes_generated.rs
+  s_0446ee94707477::t_a5bdf59c1ce16e 20-21,32-33
+  s_3d435da9c816e0::t_60aad8dacf32be 1-19,22-31,34-43,45-51,54-114
+  s_3d435da9c816e0::t_70582b1ee72ece 44
+  s_3d435da9c816e0::t_1c29ae8d676008 52-53
+src/components/ConversationCatalogRow.tsx
+  s_0446ee94707477::t_b1857d18e6f40b 9,84-86
+docs/agent-layers.md
+  s_0446ee94707477::t_d19be3ac7216e4 102,107
+src/lib/conversationDisplay.ts
+  s_0446ee94707477::t_a9fe0d6e642896 59-62
+src-tauri/src/domain/conversation.rs
+  s_0446ee94707477::t_9b514cac885a66 72-74
+src/lib/workNotesPreference.test.ts
+  s_0446ee94707477::t_2075487d26cc5b 135-136,138
+src-tauri/src/conversation/catalog.rs
+  s_0446ee94707477::t_250c9994196511 312
+src/components/ConversationDetailHead.tsx
+  s_0446ee94707477::t_d53fdd2c3ef165 8,48-52
+src-tauri/src/work_notes/engines.rs
+  s_0446ee94707477::t_4a6132da5577c4 227
+  s_0446ee94707477::t_15c54ba16c4b31 239,258,262
+  s_0446ee94707477::t_24bef07fc5c2ba 5,8,15,19-20,67-80,83-88,214-226,228-238,240-257,259-261,263-264,303,314-331
+  s_0446ee94707477::t_e0b7dfa800fe54 332
+src-tauri/src/conversation/session_store.rs
+  s_0446ee94707477::t_250c9994196511 253
+src-tauri/src/store.rs
+  s_0446ee94707477::t_b86a05b88f1577 13,26-28
+  s_3d435da9c816e0::t_25d66a58a1b33f 29
+src-tauri/src/tests/work_notes.rs
+  s_0446ee94707477::t_75e871fb475fd2 6,8-9,105-108,111,119,122,157-160,164,184,363-415,427-477,701,710-715,1032-1231,1273-1310
+  s_0446ee94707477::t_a5bcc91cc13426 416-426,478-480
+  s_0446ee94707477::t_2e12212d834d74 1311-1312
+  s_0446ee94707477::t_8f4651911d78c5 1232-1233
+src-tauri/src/domain/work_notes.rs
+  s_0446ee94707477::t_3fc98967b6b3a5 88-90,98-99
+src/components/WorkNotesEnginePanel.tsx
+  s_0446ee94707477::t_696b12836d2306 62
+src/lib/conversationDisplay.test.ts
+  s_0446ee94707477::t_e7a5e3d52c693c 15,45-46
+  s_0446ee94707477::t_246493b80e55a7 47-48
+src-tauri/src/store/schema.rs
+  s_0446ee94707477::t_1e829407dfc290 198-205
+src/lib/workNotesPreference.ts
+  s_0446ee94707477::t_73214ab3e9c28c 23-28
+src/styles/views/conversation-catalog.css
+  s_0446ee94707477::t_daa150841bc6e5 127-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "18b9bb067e76a662da0f16e34d735ac80fe3ce71",
+  "prompts": {},
+  "sessions": {
+    "s_0446ee94707477": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07547-be47-7271-9136-586125d44c5d",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_3d435da9c816e0": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07548-15e0-75b1-9bcf-3f99627ce6bc",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
