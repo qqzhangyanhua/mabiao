@@ -7,6 +7,7 @@ import {
   parseCssCustomPropertyNames,
   stripCssComments,
 } from "./posterCssGuard";
+import { WORK_NOTES_POSTER_STYLES } from "../workNotes/posterStyleRegistry";
 import { REPORT_POSTER_STYLES } from "./posterStyleRegistry";
 
 const APP_TOKENS = parseCssCustomPropertyNames(`
@@ -88,6 +89,19 @@ describe("poster CSS coverage", () => {
 
     const weekly = coverage.files.filter((file) => file.kind === "weekly-report");
     expect(weekly.length).toBeGreaterThanOrEqual(REPORT_POSTER_STYLES.length);
+  });
+
+  it("covers every registered work notes style", () => {
+    const coverage = collectPosterCssCoverage();
+    expect(coverage.errors, JSON.stringify(coverage.errors)).toEqual([]);
+
+    const names = coverage.files.map((file) => file.name);
+    for (const style of WORK_NOTES_POSTER_STYLES) {
+      expect(names, `missing CSS for ${style.id}`).toContain(style.stylesheet);
+    }
+
+    const notes = coverage.files.filter((file) => file.kind === "work-notes");
+    expect(notes.length).toBeGreaterThanOrEqual(WORK_NOTES_POSTER_STYLES.length);
   });
 
   it("enforces isolation on every covered file", () => {

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
-import { formatCompact, formatTokens, humanStatus } from "../lib/format";
+import { humanStatus } from "../lib/format";
 import {
   clampWorkNotesCustomRange,
   thisWeekStartDate,
@@ -19,8 +19,8 @@ import {
 } from "../lib/workNotesPreference";
 import type { WorkNotesDto, WorkNotesPreviewDto, WorkNotesRangeKind } from "../types";
 import { EmptyState } from "./EmptyState";
-import { KpiCard } from "./Kpi";
 import { LoadingOverlay } from "./LoadingOverlay";
+import { WorkNotesShare } from "./WorkNotesShare";
 import { Button } from "./ui/Button";
 import { DatePicker } from "./ui/DatePicker";
 import { Segmented } from "./ui/Segmented";
@@ -302,45 +302,8 @@ export function WorkNotesPanel() {
             }
           />
         ) : null}
-        {dto?.has_data ? <WorkNotesResult dto={dto} /> : null}
+        {dto?.has_data ? <WorkNotesShare dto={dto} /> : null}
       </div>
     </LoadingOverlay>
-  );
-}
-
-function WorkNotesResult({ dto }: { dto: WorkNotesDto }) {
-  return (
-    <div className="work-notes-result">
-      <div className="kpi-row work-notes-kpis">
-        <KpiCard icon="chat" tone="purple" label="会话" value={formatCompact(dto.session_count)} />
-        <KpiCard icon="project" tone="cyan" label="项目" value={formatCompact(dto.project_count)} />
-        <KpiCard
-          icon="calendar"
-          tone="orange"
-          label="活跃天数"
-          value={formatCompact(dto.active_days)}
-        />
-        <KpiCard
-          icon="tokens"
-          tone="blue"
-          label="区间 Token"
-          value={formatTokens(dto.total_tokens)}
-        />
-      </div>
-      {dto.headline ? <h2 className="work-notes-headline">{dto.headline}</h2> : null}
-      <ol className="work-notes-entries">
-        {dto.entries.map((entry, index) => (
-          <li key={`${entry.title}-${index}`} className="work-notes-entry">
-            <div className="work-notes-entry-title">{entry.title}</div>
-            <div className="work-notes-entry-detail">{entry.detail}</div>
-            {entry.project ? <div className="work-notes-entry-project">{entry.project}</div> : null}
-          </li>
-        ))}
-      </ol>
-      {dto.closing ? <p className="work-notes-closing">{dto.closing}</p> : null}
-      {dto.skipped_sparse > 0 ? (
-        <p className="work-notes-skipped">已略过 {dto.skipped_sparse} 个零星会话</p>
-      ) : null}
-    </div>
   );
 }
