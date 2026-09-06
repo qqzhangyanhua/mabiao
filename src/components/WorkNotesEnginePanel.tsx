@@ -59,7 +59,7 @@ export function WorkNotesEnginePanel() {
                 <h3>{workNotesEngineLabel(engine.id)}</h3>
                 <p>
                   {engine.program}
-                  {engine.writes_session_dir ? " · 会写入会话目录" : ""}
+                  {engine.writes_session_dir ? " · 会在你的会话记录里留下一条" : ""}
                 </p>
               </div>
               {engine.installed ? (

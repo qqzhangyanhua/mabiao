@@ -6,6 +6,7 @@ import {
   conversationRangeLabel,
   conversationRangeTitle,
   conversationStatusLabel,
+  workNotesGeneratedLabel,
 } from "../lib/conversationDisplay";
 import { formatCost, formatTokens, projectLabel } from "../lib/format";
 import { HighlightedSnippet } from "../lib/highlightMatch";
@@ -80,6 +81,9 @@ export function ConversationCatalogRow({
           <span className={`conversation-status status-${row.support_status}`}>
             {conversationStatusLabel(row.support_status)}
           </span>
+          {row.generated_by_work_notes ? (
+            <span className="conversation-status status-generated">{workNotesGeneratedLabel()}</span>
+          ) : null}
           {row.file_available ? null : (
             <span className="conversation-file-unavailable">
               <Icon name="alertTriangle" size={12} />

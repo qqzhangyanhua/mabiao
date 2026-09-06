@@ -15,15 +15,15 @@ use std::path::Path;
 
 use crate::conversation;
 use crate::domain::{
-    ConversationEvent, ConversationQuery, ConversationSessionRow, Filter, PriceTable, WorkNotesDto,
-    WorkNotesEntry, WorkNotesPreviewDto, WorkNotesRange,
+    ConversationEvent, ConversationQuery, ConversationSessionRow, EngineCommand, Filter,
+    PriceTable, WorkNotesDto, WorkNotesEntry, WorkNotesPreviewDto, WorkNotesRange,
 };
 use crate::query;
 
 #[cfg(test)]
 pub use engines::{
-    claude_command, codex_command, detect_with, ensure_work_dir, write_schemas, SchemaKind,
-    ScriptedRunner,
+    claude_command, codex_command, cursor_agent_command, detect_with, ensure_work_dir,
+    grok_command, write_schemas, SchemaKind, ScriptedRunner,
 };
 pub use engines::{detect_engines, EngineRunner, ProcessRunner};
 
@@ -95,18 +95,25 @@ pub fn build(
 
     let work_dir = engines::ensure_work_dir(app_data_dir)?;
     engines::write_schemas(&work_dir)?;
+    let runner = RecordingRunner {
+        inner: runner,
+        conn,
+        engine_id,
+    };
 
     let mut summaries = Vec::new();
     for (session, events) in &eligible {
         let compressed = input::compress(session, events);
-        let command = engines::command(
-            engine_id,
-            &work_dir,
-            engines::SchemaKind::Map,
-            prompt::map_prompt(&compressed),
-            model,
-        )?;
-        let summary = match parse::run::<MapOut>(runner, &command) {
+        let map_prompt = prompt::map_prompt(&compressed);
+        let summary = match parse::run::<MapOut>(&runner, || {
+            engines::command(
+                engine_id,
+                &work_dir,
+                engines::SchemaKind::Map,
+                map_prompt.clone(),
+                model,
+            )
+        }) {
             parse::ParseOutcome::Parsed(value) => value.summary,
             parse::ParseOutcome::Plain(raw) => input::take_chars(raw.trim(), 200),
             parse::ParseOutcome::Failed(error) => return Err(error),
@@ -118,14 +125,20 @@ pub fn build(
         });
     }
 
-    let command = engines::command(
-        engine_id,
-        &work_dir,
-        engines::SchemaKind::Reduce,
-        prompt::reduce_prompt(&summaries),
-        model,
-    )?;
-    let (headline, entries, closing) = match parse::run_with(runner, &command, parse_reduce) {
+    let reduce_prompt = prompt::reduce_prompt(&summaries);
+    let (headline, entries, closing) = match parse::run_with(
+        &runner,
+        || {
+            engines::command(
+                engine_id,
+                &work_dir,
+                engines::SchemaKind::Reduce,
+                reduce_prompt.clone(),
+                model,
+            )
+        },
+        parse_reduce,
+    ) {
         parse::ParseOutcome::Parsed(value) => (value.headline, value.entries, value.closing),
         parse::ParseOutcome::Plain(raw) => parse::degrade_reduce(&raw),
         parse::ParseOutcome::Failed(error) => return Err(error),
@@ -150,6 +163,32 @@ pub fn build(
 fn parse_reduce(raw: &str) -> Option<ReduceOut> {
     let value: ReduceOut = parse::parse_structured(raw)?;
     (3..=6).contains(&value.entries.len()).then_some(value)
+}
+
+struct RecordingRunner<'a> {
+    inner: &'a dyn EngineRunner,
+    conn: &'a Connection,
+    engine_id: &'a str,
+}
+
+impl EngineRunner for RecordingRunner<'_> {
+    fn run(&self, command: &EngineCommand) -> Result<String, String> {
+        if !engines::writes_session_dir(self.engine_id) {
+            return self.inner.run(command);
+        }
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let result = self.inner.run(command);
+        let ended_at = chrono::Utc::now().to_rfc3339();
+        crate::store::record_generated_session(
+            self.conn,
+            self.engine_id,
+            command.session_id.as_deref(),
+            &command.cwd,
+            &started_at,
+            &ended_at,
+        )?;
+        result
+    }
 }
 
 struct HardNumbers {
@@ -185,9 +224,18 @@ fn classify_sessions(
     conn: &Connection,
     sessions: Vec<ConversationSessionRow>,
 ) -> Result<(i64, Vec<ConversationSessionRow>), String> {
+    let generated = crate::store::load_generated_sessions(conn)?;
     let mut skipped_sparse = 0i64;
     let mut eligible = Vec::new();
     for session in sessions {
+        if crate::store::session_is_generated(
+            &generated,
+            &session.source,
+            &session.session_id,
+            &session.project,
+        ) {
+            continue;
+        }
         let event_count =
             conversation::indexed_event_count(conn, &session.source, &session.session_id)? as usize;
         if input::is_sparse(event_count, session.total_tokens) {

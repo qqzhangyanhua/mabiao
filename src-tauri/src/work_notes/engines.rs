@@ -2,20 +2,22 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(test)]
 use std::collections::VecDeque;
 #[cfg(test)]
 use std::sync::Mutex;
 
-use crate::domain::{DetectedEngine, EngineCommand, EngineProfile};
+use crate::domain::{DetectedEngine, EngineCommand, EngineProfile, WORK_NOTES_ENGINE_DIR};
 
 const TIMEOUT: Duration = Duration::from_secs(180);
 const VERSION_TIMEOUT: Duration = Duration::from_secs(5);
-const WORK_DIR_NAME: &str = "work-notes-engine";
+const WORK_DIR_NAME: &str = WORK_NOTES_ENGINE_DIR;
+const GROK_DISALLOWED_TOOLS: &str = "read_file,search_replace,grep,list_dir,run_terminal_command,run_terminal_cmd,web_search,web_fetch,todo_write,spawn_subagent,memory_search,Agent";
 
 struct EngineSpec {
     id: &'static str,
@@ -62,7 +64,27 @@ const ENGINES: &[EngineSpec] = &[
         concurrency: 3,
         build: claude_command,
     },
+    EngineSpec {
+        id: "grok",
+        program: "grok",
+        writes_session_dir: true,
+        concurrency: 3,
+        build: grok_command,
+    },
+    EngineSpec {
+        id: "cursor-agent",
+        program: "cursor-agent",
+        writes_session_dir: true,
+        concurrency: 3,
+        build: cursor_agent_command,
+    },
 ];
+
+pub fn writes_session_dir(engine_id: &str) -> bool {
+    spec(engine_id)
+        .map(|item| item.writes_session_dir)
+        .unwrap_or(false)
+}
 
 fn spec(engine_id: &str) -> Result<&'static EngineSpec, String> {
     ENGINES
@@ -189,6 +211,57 @@ pub fn claude_command(
         args,
         stdin,
         cwd: work_dir.to_path_buf(),
+        session_id: None,
+    })
+}
+
+pub fn grok_command(
+    work_dir: &Path,
+    schema: SchemaKind,
+    stdin: String,
+    model: Option<&str>,
+) -> Result<EngineCommand, String> {
+    let session_id = new_session_uuid();
+    let mut args = vec![
+        "-p".to_string(),
+        stdin,
+        "--json-schema".to_string(),
+        schema_json(schema).to_string(),
+        "--disallowed-tools".to_string(),
+        GROK_DISALLOWED_TOOLS.to_string(),
+        "-s".to_string(),
+        session_id.clone(),
+    ];
+    push_model(&mut args, model);
+    Ok(EngineCommand {
+        program: "grok".to_string(),
+        args,
+        stdin: String::new(),
+        cwd: work_dir.to_path_buf(),
+        session_id: Some(session_id),
+    })
+}
+
+pub fn cursor_agent_command(
+    work_dir: &Path,
+    _schema: SchemaKind,
+    stdin: String,
+    model: Option<&str>,
+) -> Result<EngineCommand, String> {
+    let mut args = vec![
+        "-p".to_string(),
+        "--mode".to_string(),
+        "ask".to_string(),
+        "--trust".to_string(),
+    ];
+    push_model(&mut args, model);
+    args.push(stdin);
+    Ok(EngineCommand {
+        program: "cursor-agent".to_string(),
+        args,
+        stdin: String::new(),
+        cwd: work_dir.to_path_buf(),
+        session_id: None,
     })
 }
 
@@ -227,6 +300,7 @@ pub fn codex_command(
         args,
         stdin,
         cwd: work_dir.to_path_buf(),
+        session_id: None,
     })
 }
 
@@ -235,6 +309,25 @@ fn schema_json(schema: SchemaKind) -> &'static str {
         SchemaKind::Map => MAP_SCHEMA,
         SchemaKind::Reduce => REDUCE_SCHEMA,
     }
+}
+
+fn new_session_uuid() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(1);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos() as u64)
+        .unwrap_or(0);
+    let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut bytes = [0u8; 16];
+    bytes[..8].copy_from_slice(&nanos.to_be_bytes());
+    bytes[8..].copy_from_slice(&n.to_be_bytes());
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+    )
 }
 
 fn push_model(args: &mut Vec<String>, model: Option<&str>) {

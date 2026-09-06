@@ -3,9 +3,10 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Local, NaiveDate};
 use rusqlite::{params, Connection};
 
+use crate::conversation;
 use crate::domain::{
-    EngineCommand, PriceTable, Source, WorkNotesDto, WorkNotesGate, WorkNotesPreviewDto,
-    WorkNotesRange, WorkNotesRangeKind,
+    ConversationQuery, EngineCommand, PriceTable, Source, WorkNotesDto, WorkNotesGate,
+    WorkNotesPreviewDto, WorkNotesRange, WorkNotesRangeKind,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner};
@@ -101,9 +102,13 @@ impl Harness {
     }
 
     fn insert_session(&self, seed: SeedSession) {
+        self.insert_named("codex", Source::Codex, seed);
+    }
+
+    fn insert_named(&self, source: &str, usage: Source, seed: SeedSession) {
         let started_at = local_time_iso(seed.started, seed.hour, 0, 0);
         let ended_at = local_time_iso(seed.started, seed.hour + 1, 0, 0);
-        let source_file = format!("/tmp/{}.jsonl", seed.session_id);
+        let source_file = format!("/tmp/{source}-{}.jsonl", seed.session_id);
         self.conn
             .execute(
                 r#"
@@ -111,9 +116,10 @@ impl Harness {
                     source, session_id, title, project, model, started_at, ended_at,
                     source_file, capabilities_json, support_status, file_available,
                     is_top_level, event_index_generation
-                ) VALUES('codex', ?1, ?2, ?3, '', ?4, ?5, ?6, '[]', 'ok', 1, 1, 1)
+                ) VALUES(?1, ?2, ?3, ?4, '', ?5, ?6, ?7, '[]', 'ok', 1, 1, 1)
                 "#,
                 params![
+                    source,
                     seed.session_id,
                     seed.title,
                     seed.project,
@@ -148,13 +154,14 @@ impl Harness {
                         attachments_json, capability_status, content_status,
                         identity_hash, identity_occurrence, index_generation
                     ) VALUES(
-                        'codex', ?1, ?2, ?3, ?4, ?3,
-                        ?5, ?6, ?7, ?8, ?8, ?9,
-                        '[]', 'complete', ?10,
-                        ?2, 0, 1
+                        ?1, ?2, ?3, ?4, ?5, ?4,
+                        ?6, ?7, ?8, ?9, ?9, ?10,
+                        '[]', 'complete', ?11,
+                        ?3, 0, 1
                     )
                     "#,
                     params![
+                        source,
                         seed.session_id,
                         event_id,
                         sequence as i64,
@@ -174,7 +181,7 @@ impl Harness {
                 &self.conn,
                 &[rec(
                     &started_at,
-                    Source::Codex,
+                    usage,
                     "gpt-5.1-codex",
                     "official",
                     seed.project,
@@ -350,6 +357,124 @@ fn assert_claude_switches(cmd: &EngineCommand, work_dir: &Path) {
     assert!(
         schema.contains("\"type\""),
         "json-schema 应是 JSON：{schema}"
+    );
+}
+
+fn looks_like_uuid(value: &str) -> bool {
+    let parts: Vec<_> = value.split('-').collect();
+    parts.len() == 5
+        && parts[0].len() == 8
+        && parts[1].len() == 4
+        && parts[2].len() == 4
+        && parts[3].len() == 4
+        && parts[4].len() == 12
+        && value.chars().all(|ch| ch.is_ascii_hexdigit() || ch == '-')
+}
+
+fn pinned_session_id(cmd: &EngineCommand) -> Option<&str> {
+    let at = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "-s" || arg == "--session-id")?;
+    cmd.args.get(at + 1).map(String::as_str)
+}
+
+fn prompt_of(cmd: &EngineCommand) -> String {
+    if !cmd.stdin.is_empty() {
+        return cmd.stdin.clone();
+    }
+    if let Some(at) = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "-p" || arg == "--single")
+    {
+        if let Some(next) = cmd.args.get(at + 1) {
+            if !next.starts_with('-') {
+                return next.clone();
+            }
+        }
+    }
+    cmd.args
+        .iter()
+        .rev()
+        .find(|arg| arg.contains("请用一句中文概括") || arg.contains("下面是一段时间内"))
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn is_map_command(cmd: &EngineCommand) -> bool {
+    cmd.args.iter().any(|arg| arg.ends_with("map.schema.json"))
+        || prompt_of(cmd).contains("请用一句中文概括")
+}
+
+fn assert_grok_switches(cmd: &EngineCommand, work_dir: &Path) {
+    assert_eq!(cmd.program, "grok");
+    assert_eq!(cmd.cwd, work_dir);
+    assert!(
+        cmd.args.iter().any(|arg| arg == "-p"),
+        "缺 -p：{:?}",
+        cmd.args
+    );
+    let schema_at = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "--json-schema")
+        .expect("缺 --json-schema");
+    let schema = cmd.args.get(schema_at + 1).expect("缺 json-schema 内容");
+    assert!(
+        schema.contains("\"type\""),
+        "json-schema 应是 JSON：{schema}"
+    );
+    let denied_at = cmd
+        .args
+        .iter()
+        .position(|arg| arg == "--disallowed-tools")
+        .expect("缺 --disallowed-tools");
+    let denied = cmd
+        .args
+        .get(denied_at + 1)
+        .expect("缺 disallowed-tools 内容");
+    assert!(
+        !denied.is_empty(),
+        "--disallowed-tools 不能为空：{:?}",
+        cmd.args
+    );
+    let session_id = pinned_session_id(cmd).expect("grok 必须钉 session id");
+    assert!(
+        looks_like_uuid(session_id),
+        "session id 必须是 UUID：{session_id}"
+    );
+}
+
+fn assert_cursor_agent_switches(cmd: &EngineCommand, work_dir: &Path) {
+    assert_eq!(cmd.program, "cursor-agent");
+    assert_eq!(cmd.cwd, work_dir);
+    assert!(
+        cmd.args.iter().any(|arg| arg == "-p"),
+        "缺 -p：{:?}",
+        cmd.args
+    );
+    assert!(
+        cmd.args.windows(2).any(|pair| pair == ["--mode", "ask"]),
+        "缺 --mode ask：{:?}",
+        cmd.args
+    );
+    assert!(
+        !cmd.args
+            .iter()
+            .any(|arg| arg == "--json-schema" || arg == "--output-schema"),
+        "cursor-agent 没有结构化输出开关：{:?}",
+        cmd.args
+    );
+    assert!(
+        pinned_session_id(cmd).is_none(),
+        "cursor-agent 不得靠 session id 判定：{:?}",
+        cmd.args
+    );
+    let prompt = prompt_of(cmd);
+    assert!(
+        prompt.contains("只输出 JSON"),
+        "无 schema 时必须靠 prompt 约束：{prompt}"
     );
 }
 
@@ -573,7 +698,7 @@ fn detect_marks_missing_cli_uninstalled() {
         |name| (name == "claude").then(|| PathBuf::from("/bin/claude")),
         |path| Ok(format!("ver-{}", path.display())),
     );
-    assert_eq!(rows.len(), 2);
+    assert_eq!(rows.len(), 4);
     let claude = rows.iter().find(|row| row.id == "claude").unwrap();
     assert!(claude.installed);
     assert_eq!(claude.version.as_deref(), Some("ver-/bin/claude"));
@@ -582,6 +707,12 @@ fn detect_marks_missing_cli_uninstalled() {
     assert!(!codex.installed);
     assert!(codex.version.is_none());
     assert!(!codex.writes_session_dir);
+    let grok = rows.iter().find(|row| row.id == "grok").unwrap();
+    assert!(!grok.installed);
+    assert!(grok.writes_session_dir);
+    let cursor = rows.iter().find(|row| row.id == "cursor-agent").unwrap();
+    assert!(!cursor.installed);
+    assert!(cursor.writes_session_dir);
 }
 
 #[test]
@@ -898,6 +1029,208 @@ fn sparse_sessions_do_not_count_toward_the_gate() {
     assert!(h.runner.recorded().is_empty());
 }
 
+#[test]
+fn grok_command_pins_session_id_and_uses_print_json_schema_disallowed_tools() {
+    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    seed_eligible(&h, "ok", "/Users/me/src/statistics");
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
+        .unwrap();
+    assert!(dto.has_data);
+    let work_dir = h.work_dir();
+    let commands = h.runner.recorded();
+    assert!(
+        commands.len() >= 2,
+        "至少一次 map、一次 reduce，实际 {}",
+        commands.len()
+    );
+    let mut session_ids = Vec::new();
+    for cmd in &commands {
+        assert_grok_switches(cmd, &work_dir);
+        session_ids.push(pinned_session_id(cmd).unwrap().to_string());
+    }
+    session_ids.sort();
+    session_ids.dedup();
+    assert_eq!(
+        session_ids.len(),
+        commands.len(),
+        "每次 grok 调用必须钉不同的新 session id：{session_ids:?}"
+    );
+}
+
+#[test]
+fn cursor_agent_command_is_print_ask_mode_in_dedicated_workdir_without_schema() {
+    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    seed_eligible(&h, "ok", "/Users/me/src/statistics");
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
+        .unwrap();
+    assert!(dto.has_data);
+    let work_dir = h.work_dir();
+    let commands = h.runner.recorded();
+    assert!(
+        commands.len() >= 2,
+        "至少一次 map、一次 reduce，实际 {}",
+        commands.len()
+    );
+    for cmd in &commands {
+        assert_cursor_agent_switches(cmd, &work_dir);
+    }
+}
+
+#[test]
+fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() {
+    let h = Harness::new(replies(&[
+        &map_json("摘要"),
+        &reduce_json(),
+        &map_json("摘要"),
+        &reduce_json(),
+    ]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_build_with(WorkNotesRange::this_week(), false, "grok", None)
+        .unwrap();
+    let generated_id = pinned_session_id(&h.runner.recorded()[0])
+        .expect("grok 应钉 session id")
+        .to_string();
+    let events = eligible_events();
+    h.insert_named(
+        "grok",
+        Source::Grok,
+        SeedSession {
+            session_id: &generated_id,
+            title: "码表自己生成的",
+            project: h.work_dir().to_str().unwrap(),
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 3000,
+            events: &events,
+        },
+    );
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 1);
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
+        .unwrap();
+    assert_eq!(dto.total_tokens, 5000);
+    let later_maps: Vec<String> = h
+        .runner
+        .recorded()
+        .into_iter()
+        .skip(2)
+        .filter(is_map_command)
+        .map(|cmd| prompt_of(&cmd))
+        .collect();
+    assert_eq!(later_maps.len(), 1, "{later_maps:?}");
+    assert!(later_maps[0].contains("对齐口径"), "{}", later_maps[0]);
+    assert!(
+        !later_maps[0].contains("码表自己生成的"),
+        "{}",
+        later_maps[0]
+    );
+    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let generated = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == generated_id)
+        .expect("自造会话应出现在对话记录里");
+    assert!(
+        generated.generated_by_work_notes,
+        "对话记录应打上码表生成标记"
+    );
+    let user = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    assert!(!user.generated_by_work_notes);
+}
+
+#[test]
+fn cursor_agent_generated_session_is_identified_by_workdir_not_time_window() {
+    let h = Harness::new(replies(&[
+        &map_json("摘要"),
+        &reduce_json(),
+        &map_json("摘要一"),
+        &map_json("摘要二"),
+        &reduce_json(),
+    ]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
+        .unwrap();
+    let events = eligible_events();
+    h.insert_named(
+        "cursor_agent",
+        Source::CursorAgent,
+        SeedSession {
+            session_id: "same-hour-user",
+            title: "用户自己的活",
+            project: "/Users/me/real-project",
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 2000,
+            events: &events,
+        },
+    );
+    h.insert_named(
+        "cursor_agent",
+        Source::CursorAgent,
+        SeedSession {
+            session_id: "unknown-generated-id",
+            title: "码表生成的会话",
+            project: h.work_dir().to_str().unwrap(),
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 4000,
+            events: &events,
+        },
+    );
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 2, "同小时的真实会话不得被时间窗误杀");
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
+        .unwrap();
+    assert_eq!(dto.total_tokens, 8000);
+    let later_maps: Vec<String> = h
+        .runner
+        .recorded()
+        .into_iter()
+        .skip(2)
+        .filter(is_map_command)
+        .map(|cmd| prompt_of(&cmd))
+        .collect();
+    let joined = later_maps.join("\n");
+    assert_eq!(later_maps.len(), 2, "{joined}");
+    assert!(joined.contains("对齐口径"), "{joined}");
+    assert!(joined.contains("用户自己的活"), "{joined}");
+    assert!(!joined.contains("码表生成的会话"), "{joined}");
+    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let generated = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "unknown-generated-id")
+        .unwrap();
+    assert!(generated.generated_by_work_notes);
+    let sibling = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "same-hour-user")
+        .unwrap();
+    assert!(!sibling.generated_by_work_notes);
+}
+
+#[test]
+fn cursor_agent_without_schema_still_parses_fenced_json_to_three_to_six_entries() {
+    let fenced = format!("好的，结果如下：\n```json\n{}\n```\n完", reduce_json());
+    let h = Harness::new(replies(&[&map_json("修口径"), &fenced]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let dto = h
+        .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
+        .unwrap();
+    assert_eq!(dto.headline, "本周主线是修统计口径");
+    assert_eq!(dto.entries.len(), 3);
+    assert_eq!(dto.closing, "下周继续补区间和引擎");
+}
+
 /// `cargo test --manifest-path src-tauri/Cargo.toml work_notes_codex_spawn_smoke -- --ignored --nocapture`
 #[test]
 #[ignore = "需要本机已登录的 Codex CLI"]
@@ -935,5 +1268,45 @@ fn work_notes_claude_spawn_smoke() {
     let out = work_notes::ProcessRunner
         .run(&cmd)
         .expect("claude spawn 失败");
+    assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
+}
+
+/// `cargo test --manifest-path src-tauri/Cargo.toml work_notes_grok_spawn_smoke -- --ignored --nocapture`
+#[test]
+#[ignore = "需要本机已登录的 Grok CLI"]
+fn work_notes_grok_spawn_smoke() {
+    let dir = tempfile::tempdir().unwrap();
+    let work_dir = work_notes::ensure_work_dir(dir.path()).unwrap();
+    work_notes::write_schemas(&work_dir).unwrap();
+    let cmd = work_notes::grok_command(
+        &work_dir,
+        work_notes::SchemaKind::Map,
+        "只输出 JSON：{\"summary\":\"ok\"}".into(),
+        None,
+    )
+    .unwrap();
+    let out = work_notes::ProcessRunner
+        .run(&cmd)
+        .expect("grok spawn 失败");
+    assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
+}
+
+/// `cargo test --manifest-path src-tauri/Cargo.toml work_notes_cursor_agent_spawn_smoke -- --ignored --nocapture`
+#[test]
+#[ignore = "需要本机已登录的 Cursor Agent CLI"]
+fn work_notes_cursor_agent_spawn_smoke() {
+    let dir = tempfile::tempdir().unwrap();
+    let work_dir = work_notes::ensure_work_dir(dir.path()).unwrap();
+    work_notes::write_schemas(&work_dir).unwrap();
+    let cmd = work_notes::cursor_agent_command(
+        &work_dir,
+        work_notes::SchemaKind::Map,
+        "只输出 JSON：{\"summary\":\"ok\"}".into(),
+        None,
+    )
+    .unwrap();
+    let out = work_notes::ProcessRunner
+        .run(&cmd)
+        .expect("cursor-agent spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
 }

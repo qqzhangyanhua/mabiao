@@ -195,6 +195,14 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             prev_windows_json TEXT,
             prev_captured_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS work_notes_generated_sessions (
+            engine TEXT NOT NULL,
+            session_id TEXT NOT NULL DEFAULT '',
+            work_dir TEXT NOT NULL DEFAULT '',
+            started_at TEXT NOT NULL,
+            ended_at TEXT NOT NULL
+        );
         "#,
     )
     .map_err(|e| e.to_string())?;

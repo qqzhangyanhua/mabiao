@@ -12,6 +12,7 @@ import {
   conversationSourceOptions,
   conversationSourcesFromUsageFilter,
   conversationStatusLabel,
+  workNotesGeneratedLabel,
 } from "./conversationDisplay";
 
 function session(overrides: Partial<ConversationSessionRow> = {}): ConversationSessionRow {
@@ -39,6 +40,10 @@ describe("conversation display labels", () => {
   it("maps known capabilities and leaves unknown ids unchanged", () => {
     expect(capabilityLabel("events")).toBe("完整事件");
     expect(capabilityLabel("custom")).toBe("custom");
+  });
+
+  it("labels work-notes generated sessions", () => {
+    expect(workNotesGeneratedLabel()).toBe("码表生成");
   });
 
   it("keeps Cursor Agent grouped with Cursor", () => {

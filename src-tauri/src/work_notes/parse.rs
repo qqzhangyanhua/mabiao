@@ -13,24 +13,32 @@ pub enum ParseOutcome<T> {
 
 pub fn run<T: DeserializeOwned>(
     runner: &dyn EngineRunner,
-    command: &EngineCommand,
+    make: impl FnMut() -> Result<EngineCommand, String>,
 ) -> ParseOutcome<T> {
-    run_with(runner, command, parse_structured)
+    run_with(runner, make, parse_structured)
 }
 
 pub fn run_with<T>(
     runner: &dyn EngineRunner,
-    command: &EngineCommand,
+    mut make: impl FnMut() -> Result<EngineCommand, String>,
     parse: impl Fn(&str) -> Option<T>,
 ) -> ParseOutcome<T> {
-    let first = match runner.run(command) {
+    let first_command = match make() {
+        Ok(command) => command,
+        Err(error) => return ParseOutcome::Failed(error),
+    };
+    let first = match runner.run(&first_command) {
         Ok(stdout) => stdout,
         Err(error) => return ParseOutcome::Failed(error),
     };
     if let Some(value) = parse(&first) {
         return ParseOutcome::Parsed(value);
     }
-    let second = match runner.run(command) {
+    let second_command = match make() {
+        Ok(command) => command,
+        Err(error) => return ParseOutcome::Failed(error),
+    };
+    let second = match runner.run(&second_command) {
         Ok(stdout) => stdout,
         Err(error) => return ParseOutcome::Failed(error),
     };

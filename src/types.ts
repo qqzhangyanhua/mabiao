@@ -460,6 +460,7 @@ export type ConversationSessionRow = {
   match_snippet?: string | null;
   match_event_id?: string | null;
   match_sequence?: number | null;
+  generated_by_work_notes?: boolean;
 };
 
 export type ConversationPage = {

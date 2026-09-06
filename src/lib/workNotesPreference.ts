@@ -20,6 +20,12 @@ export function workNotesEngineLabel(id: string): string {
   if (id === "claude") {
     return "Claude";
   }
+  if (id === "grok") {
+    return "Grok";
+  }
+  if (id === "cursor-agent") {
+    return "Cursor Agent";
+  }
   return id;
 }
 

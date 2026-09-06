@@ -132,8 +132,10 @@ describe("engine labels", () => {
   it("names known engines and marks ones that write sessions", () => {
     expect(workNotesEngineLabel("codex")).toBe("Codex");
     expect(workNotesEngineLabel("claude")).toBe("Claude");
+    expect(workNotesEngineLabel("grok")).toBe("Grok");
+    expect(workNotesEngineLabel("cursor-agent")).toBe("Cursor Agent");
     expect(engineSelectLabel(CLAUDE)).toBe("Claude");
-    expect(engineSelectLabel(GROK_WRITES)).toBe("grok（会写会话）");
+    expect(engineSelectLabel(GROK_WRITES)).toBe("Grok（会写会话）");
   });
 });
 

@@ -99,11 +99,12 @@
 读区间内的对话正文，经本机 CLI 总结成结构化条目。不是报告，不复用 `ReportPeriod`。
 
 1. 入口是 `work_notes::preview` 与 `work_notes::build`：注入连接、注入 `now`；`build` 再注入 runner。Tauri command 只取 state、锁 conn、委托。三种区间与 60/150 规模闸门在 Rust 判定，webview 只呈现。
-2. runner 边界是「执行一条已经拼好的 `EngineCommand`，回一段 stdout」。argv 拼装（只读、禁审批、不落盘、schema）必须跑在这条缝里。
+2. runner 边界是「执行一条已经拼好的 `EngineCommand`，回一段 stdout」。argv 拼装（只读、禁审批、不落盘、schema、会落盘引擎的 session id）必须跑在这条缝里。
 3. 本机 CLI 只读、禁工具，工作目录固定在应用数据目录下的专用空目录。不自建模型 HTTP 通路，不存密钥。
 4. 硬数字只复用现有 `query` 函数，不新增聚合。
 5. 读 ADR 0021、0011、0002。`cargo test work_notes` 绿。真 spawn 冒烟 `#[ignore]`，不进 CI。
 6. 引擎清单只列 `which` 探测到的。探测只走设置页手动按钮（`which` + `--version`），启动时不 spawn。加引擎只改 `work_notes::engines` 的 profile 表，不改编排。
+7. 会落盘的引擎必须可识别：能钉 session id 就钉死，否则靠专用工作目录。识别后只从后续纪要输入剔除、在对话记录打「码表生成」标记；不从 token KPI 扣除，不删改用户会话文件。
 
 ## 样式
 

@@ -280,7 +280,7 @@ export function WorkNotesPanel() {
           <EmptyState
             icon="notes"
             title="本机没有可用的纪要引擎"
-            hint="设置里已经检测过，但没有找到 Codex 或 Claude。装好后再点「检测」。"
+            hint="设置里已经检测过，但没有找到 Codex、Claude、Grok 或 Cursor Agent。装好后再点「检测」。"
           />
         ) : null}
         {!previewLoading &&

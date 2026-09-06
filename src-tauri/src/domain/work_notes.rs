@@ -85,6 +85,9 @@ pub struct DetectedEngine {
     pub version: Option<String>,
 }
 
+/// 应用数据目录下纪要引擎的专用空目录名。会落盘的引擎把它当作项目路径，用来识别自造会话。
+pub const WORK_NOTES_ENGINE_DIR: &str = "work-notes-engine";
+
 /// 已经拼好、交给 runner 执行的一条 CLI 调用。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineCommand {
@@ -92,6 +95,8 @@ pub struct EngineCommand {
     pub args: Vec<String>,
     pub stdin: String,
     pub cwd: PathBuf,
+    /// grok 钉死的新会话 UUID。其它引擎为 None。
+    pub session_id: Option<String>,
 }
 
 /// 工作纪要入口 DTO。叙事来自对话正文；硬数字只复用消耗记录查询。
