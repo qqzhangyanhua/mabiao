@@ -5,11 +5,11 @@ use rusqlite::{params, Connection};
 
 use crate::conversation;
 use crate::domain::{
-    ConversationQuery, EngineCommand, PriceTable, Source, WorkNotesDto, WorkNotesGate,
-    WorkNotesPreviewDto, WorkNotesRange, WorkNotesRangeKind,
+    ConversationQuery, EngineCommand, PriceEntry, PriceOrigin, PriceTable, Source, WorkNotesDto,
+    WorkNotesGate, WorkNotesJobStatus, WorkNotesPreviewDto, WorkNotesRange, WorkNotesRangeKind,
 };
 use crate::test_support::*;
-use crate::work_notes::{self, EngineRunner, ScriptedRunner};
+use crate::work_notes::{self, EngineRunner, ScriptedRunner, WorkNotesJob};
 
 fn day(year: i32, month: u32, day: u32) -> NaiveDate {
     NaiveDate::from_ymd_opt(year, month, day).expect("valid date")
@@ -46,14 +46,16 @@ fn reduce_json() -> String {
     .to_string()
 }
 
-fn replies(items: &[&str]) -> ScriptedRunner {
-    ScriptedRunner::succeeding(items.iter().copied())
+fn replies(maps: &[&str], reduce: &[&str]) -> ScriptedRunner {
+    ScriptedRunner::succeeding(maps.iter().copied(), reduce.iter().copied())
 }
 
 struct Harness {
     conn: Connection,
     app_dir: tempfile::TempDir,
     runner: ScriptedRunner,
+    prices: PriceTable,
+    job: WorkNotesJob,
 }
 
 impl Harness {
@@ -62,7 +64,14 @@ impl Harness {
             conn: store::open_memory().unwrap(),
             app_dir: tempfile::tempdir().unwrap(),
             runner,
+            prices: PriceTable::default(),
+            job: WorkNotesJob::new(),
         }
+    }
+
+    fn with_prices(mut self, prices: PriceTable) -> Self {
+        self.prices = prices;
+        self
     }
 
     fn work_dir(&self) -> PathBuf {
@@ -86,7 +95,7 @@ impl Harness {
     ) -> Result<WorkNotesDto, String> {
         work_notes::build(
             &self.conn,
-            &PriceTable::default(),
+            &self.prices,
             range,
             now(),
             &self.runner,
@@ -94,11 +103,12 @@ impl Harness {
             engine_id,
             model,
             confirmed,
+            &self.job,
         )
     }
 
     fn preview(&self, range: WorkNotesRange) -> Result<WorkNotesPreviewDto, String> {
-        work_notes::preview(&self.conn, &PriceTable::default(), range, now())
+        work_notes::preview(&self.conn, &self.prices, range, now(), None, None)
     }
 
     fn insert_session(&self, seed: SeedSession) {
@@ -311,6 +321,11 @@ fn assert_codex_switches(cmd: &EngineCommand, work_dir: &Path) {
         "缺 --ephemeral：{:?}",
         cmd.args
     );
+    assert!(
+        cmd.args.iter().any(|arg| arg == "--json"),
+        "缺 --json：{:?}",
+        cmd.args
+    );
     let schema_at = cmd
         .args
         .iter()
@@ -480,7 +495,7 @@ fn assert_cursor_agent_switches(cmd: &EngineCommand, work_dir: &Path) {
 
 #[test]
 fn this_week_is_monday_to_now_not_last_completed_week() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let events = eligible_events();
     h.insert_session(SeedSession {
         session_id: "last-week",
@@ -501,7 +516,7 @@ fn this_week_is_monday_to_now_not_last_completed_week() {
 
 #[test]
 fn empty_range_does_not_call_engine() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let dto = h.build();
     assert!(!dto.has_data);
     assert_eq!(dto.skipped_sparse, 0);
@@ -511,7 +526,7 @@ fn empty_range_does_not_call_engine() {
 
 #[test]
 fn sparse_sessions_are_skipped_and_counted() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let few_events = [user_msg("hi"), assistant_msg("ok")];
     h.insert_session(SeedSession {
         session_id: "few-events",
@@ -540,7 +555,7 @@ fn sparse_sessions_are_skipped_and_counted() {
 
 #[test]
 fn session_prompt_is_compressed_and_project_is_directory_name() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     let first = format!("HEAD{}TAIL", "X".repeat(1500));
     let last = format!("ASSIST-HEAD{}ASSIST-TAIL", "Y".repeat(1500));
     let mut events = vec![user_msg(first)];
@@ -607,7 +622,7 @@ fn session_prompt_is_compressed_and_project_is_directory_name() {
 
 #[test]
 fn codex_command_is_readonly_no_approval_ephemeral_in_dedicated_workdir() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/Users/me/src/statistics");
     let dto = h.build();
     assert!(dto.has_data);
@@ -627,7 +642,7 @@ fn codex_command_is_readonly_no_approval_ephemeral_in_dedicated_workdir() {
 
 #[test]
 fn claude_command_is_print_no_persist_no_tools_json_schema() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/Users/me/src/statistics");
     let dto = h
         .try_build_with(WorkNotesRange::this_week(), false, "claude", None)
@@ -652,15 +667,15 @@ fn claude_command_is_print_no_persist_no_tools_json_schema() {
 
 #[test]
 fn switching_engine_uses_the_matching_profile() {
-    let h = Harness::new(replies(&[
-        &map_json("摘要"),
-        &reduce_json(),
-        &map_json("摘要"),
-        &reduce_json(),
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("摘要"), &map_json("摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
     seed_eligible(&h, "ok", "/proj/statistics");
-    h.try_build_with(WorkNotesRange::this_week(), false, "codex", None)
+    let first = h
+        .try_build_with(WorkNotesRange::this_week(), false, "codex", None)
         .unwrap();
+    h.job.finish(Ok(first)).unwrap();
     h.try_build_with(WorkNotesRange::this_week(), false, "claude", Some("sonnet"))
         .unwrap();
     let commands = h.runner.recorded();
@@ -683,7 +698,7 @@ fn switching_engine_uses_the_matching_profile() {
 
 #[test]
 fn unknown_engine_is_rejected_before_spawn() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let error = h
         .try_build_with(WorkNotesRange::this_week(), false, "nope", None)
@@ -717,7 +732,7 @@ fn detect_marks_missing_cli_uninstalled() {
 
 #[test]
 fn parses_schema_json() {
-    let h = Harness::new(replies(&[&map_json("修口径"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("修口径")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let dto = h.build();
     assert_eq!(dto.headline, "本周主线是修统计口径");
@@ -734,7 +749,7 @@ fn parses_schema_json() {
 #[test]
 fn parses_fenced_json_block() {
     let fenced = format!("好的，结果如下：\n```json\n{}\n```\n完", reduce_json());
-    let h = Harness::new(replies(&[&map_json("修口径"), &fenced]));
+    let h = Harness::new(replies(&[&map_json("修口径")], &[&fenced]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let dto = h.build();
     assert_eq!(dto.headline, "本周主线是修统计口径");
@@ -743,11 +758,10 @@ fn parses_fenced_json_block() {
 
 #[test]
 fn retries_once_then_parses() {
-    let h = Harness::new(replies(&[
-        &map_json("修口径"),
-        "这不是 JSON",
-        &reduce_json(),
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("修口径")],
+        &["这不是 JSON", &reduce_json()],
+    ));
     seed_eligible(&h, "ok", "/proj/statistics");
     let dto = h.build();
     assert_eq!(dto.headline, "本周主线是修统计口径");
@@ -756,11 +770,10 @@ fn retries_once_then_parses() {
 
 #[test]
 fn degrades_to_plain_text_after_retry_fails() {
-    let h = Harness::new(replies(&[
-        &map_json("修口径"),
-        "完全无法解析的散文",
-        "还是不行的散文 RAW_FALLBACK",
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("修口径")],
+        &["完全无法解析的散文", "还是不行的散文 RAW_FALLBACK"],
+    ));
     seed_eligible(&h, "ok", "/proj/statistics");
     let dto = h.build();
     assert!(dto.has_data);
@@ -775,7 +788,7 @@ fn degrades_to_plain_text_after_retry_fails() {
 
 #[test]
 fn skipped_sparse_still_counted_when_other_sessions_summarize() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let tiny = [user_msg("?"), assistant_msg(".")];
     h.insert_session(SeedSession {
@@ -803,7 +816,7 @@ fn map_stdin(h: &Harness) -> String {
 
 #[test]
 fn this_month_is_first_to_now_not_last_completed_month() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible_at(
         &h,
         "last-month",
@@ -841,11 +854,10 @@ fn this_month_is_first_to_now_not_last_completed_month() {
 
 #[test]
 fn custom_range_is_closed_local_days() {
-    let h = Harness::new(replies(&[
-        &map_json("摘要一"),
-        &map_json("摘要二"),
-        &reduce_json(),
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("摘要一"), &map_json("摘要二")],
+        &[&reduce_json()],
+    ));
     seed_eligible_at(&h, "before", "区间前", "/proj/a", day(2026, 8, 9), 10);
     seed_eligible_at(&h, "start", "起始日", "/proj/a", day(2026, 8, 10), 10);
     seed_eligible_at(&h, "end", "结束日", "/proj/a", day(2026, 8, 12), 22);
@@ -877,7 +889,7 @@ fn custom_range_is_closed_local_days() {
 
 #[test]
 fn custom_range_ending_today_stops_at_now() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible_at(
         &h,
         "this-afternoon",
@@ -900,7 +912,7 @@ fn custom_range_ending_today_stops_at_now() {
 
 #[test]
 fn custom_range_allows_31_days() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let dto = h
         .try_build(WorkNotesRange::custom("2026-07-20", "2026-08-19"), false)
         .unwrap();
@@ -911,7 +923,7 @@ fn custom_range_allows_31_days() {
 
 #[test]
 fn custom_range_rejects_more_than_31_days() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let error = h
         .try_build(WorkNotesRange::custom("2026-07-19", "2026-08-19"), false)
         .unwrap_err();
@@ -922,7 +934,7 @@ fn custom_range_rejects_more_than_31_days() {
 
 #[test]
 fn custom_range_rejects_future_dates() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let error = h
         .try_build(WorkNotesRange::custom("2026-08-19", "2026-08-20"), false)
         .unwrap_err();
@@ -932,7 +944,7 @@ fn custom_range_rejects_future_dates() {
 
 #[test]
 fn preview_counts_sessions_without_calling_engine() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let tiny = [user_msg("?"), assistant_msg(".")];
     h.insert_session(SeedSession {
@@ -957,7 +969,7 @@ fn preview_counts_sessions_without_calling_engine() {
 
 #[test]
 fn sixty_eligible_sessions_do_not_require_confirmation() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     seed_eligible_n(&h, 60);
     let preview = h.preview(WorkNotesRange::this_week()).unwrap();
     assert_eq!(preview.session_count, 60);
@@ -966,7 +978,7 @@ fn sixty_eligible_sessions_do_not_require_confirmation() {
 
 #[test]
 fn more_than_60_eligible_sessions_require_confirmation() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     seed_eligible_n(&h, 61);
     let preview = h.preview(WorkNotesRange::this_week()).unwrap();
     assert_eq!(preview.session_count, 61);
@@ -979,7 +991,7 @@ fn more_than_60_eligible_sessions_require_confirmation() {
 
 #[test]
 fn more_than_60_eligible_sessions_run_after_confirmation() {
-    let h = Harness::new(replies(&[&map_json("摘要")]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[]));
     seed_eligible_n(&h, 61);
     let error = h.try_build(WorkNotesRange::this_week(), true).unwrap_err();
     assert!(
@@ -990,7 +1002,7 @@ fn more_than_60_eligible_sessions_run_after_confirmation() {
 
 #[test]
 fn more_than_150_eligible_sessions_are_rejected() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     seed_eligible_n(&h, 151);
     let preview = h.preview(WorkNotesRange::this_week()).unwrap();
     assert_eq!(preview.session_count, 151);
@@ -1005,7 +1017,7 @@ fn more_than_150_eligible_sessions_are_rejected() {
 
 #[test]
 fn sparse_sessions_do_not_count_toward_the_gate() {
-    let h = Harness::new(replies(&[]));
+    let h = Harness::new(replies(&[], &[]));
     let few = [user_msg("hi"), assistant_msg("ok")];
     for index in 0..61 {
         let session_id = format!("sparse-{index}");
@@ -1031,7 +1043,7 @@ fn sparse_sessions_do_not_count_toward_the_gate() {
 
 #[test]
 fn grok_command_pins_session_id_and_uses_print_json_schema_disallowed_tools() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/Users/me/src/statistics");
     let dto = h
         .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
@@ -1060,7 +1072,7 @@ fn grok_command_pins_session_id_and_uses_print_json_schema_disallowed_tools() {
 
 #[test]
 fn cursor_agent_command_is_print_ask_mode_in_dedicated_workdir_without_schema() {
-    let h = Harness::new(replies(&[&map_json("摘要"), &reduce_json()]));
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/Users/me/src/statistics");
     let dto = h
         .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
@@ -1080,15 +1092,15 @@ fn cursor_agent_command_is_print_ask_mode_in_dedicated_workdir_without_schema() 
 
 #[test]
 fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() {
-    let h = Harness::new(replies(&[
-        &map_json("摘要"),
-        &reduce_json(),
-        &map_json("摘要"),
-        &reduce_json(),
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("摘要"), &map_json("摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
     seed_eligible(&h, "ok", "/proj/statistics");
-    h.try_build_with(WorkNotesRange::this_week(), false, "grok", None)
+    let first = h
+        .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
         .unwrap();
+    h.job.finish(Ok(first)).unwrap();
     let generated_id = pinned_session_id(&h.runner.recorded()[0])
         .expect("grok 应钉 session id")
         .to_string();
@@ -1147,16 +1159,15 @@ fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() 
 
 #[test]
 fn cursor_agent_generated_session_is_identified_by_workdir_not_time_window() {
-    let h = Harness::new(replies(&[
-        &map_json("摘要"),
-        &reduce_json(),
-        &map_json("摘要一"),
-        &map_json("摘要二"),
-        &reduce_json(),
-    ]));
+    let h = Harness::new(replies(
+        &[&map_json("摘要"), &map_json("摘要一"), &map_json("摘要二")],
+        &[&reduce_json(), &reduce_json()],
+    ));
     seed_eligible(&h, "ok", "/proj/statistics");
-    h.try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
+    let first = h
+        .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
         .unwrap();
+    h.job.finish(Ok(first)).unwrap();
     let events = eligible_events();
     h.insert_named(
         "cursor_agent",
@@ -1221,7 +1232,7 @@ fn cursor_agent_generated_session_is_identified_by_workdir_not_time_window() {
 #[test]
 fn cursor_agent_without_schema_still_parses_fenced_json_to_three_to_six_entries() {
     let fenced = format!("好的，结果如下：\n```json\n{}\n```\n完", reduce_json());
-    let h = Harness::new(replies(&[&map_json("修口径"), &fenced]));
+    let h = Harness::new(replies(&[&map_json("修口径")], &[&fenced]));
     seed_eligible(&h, "ok", "/proj/statistics");
     let dto = h
         .try_build_with(WorkNotesRange::this_week(), false, "cursor-agent", None)
@@ -1246,7 +1257,8 @@ fn work_notes_codex_spawn_smoke() {
     )
     .unwrap();
     let out = work_notes::ProcessRunner
-        .run(&cmd)
+        .run(&cmd, &std::sync::atomic::AtomicBool::new(false))
+        .map_err(|error| error.message())
         .expect("codex spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
 }
@@ -1266,7 +1278,8 @@ fn work_notes_claude_spawn_smoke() {
     )
     .unwrap();
     let out = work_notes::ProcessRunner
-        .run(&cmd)
+        .run(&cmd, &std::sync::atomic::AtomicBool::new(false))
+        .map_err(|error| error.message())
         .expect("claude spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
 }
@@ -1286,7 +1299,8 @@ fn work_notes_grok_spawn_smoke() {
     )
     .unwrap();
     let out = work_notes::ProcessRunner
-        .run(&cmd)
+        .run(&cmd, &std::sync::atomic::AtomicBool::new(false))
+        .map_err(|error| error.message())
         .expect("grok spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
 }
@@ -1306,7 +1320,222 @@ fn work_notes_cursor_agent_spawn_smoke() {
     )
     .unwrap();
     let out = work_notes::ProcessRunner
-        .run(&cmd)
+        .run(&cmd, &std::sync::atomic::AtomicBool::new(false))
+        .map_err(|error| error.message())
         .expect("cursor-agent spawn 失败");
     assert!(!out.trim().is_empty(), "stdout 空：{out:?}");
+}
+
+fn priced(model: &str, input: f64) -> PriceTable {
+    PriceTable {
+        prices: vec![PriceEntry {
+            model: model.into(),
+            provider: None,
+            input,
+            output: 0.0,
+            cache_read: 0.0,
+            cache_creation: 0.0,
+            origin: PriceOrigin::User,
+        }],
+    }
+}
+
+fn jsonl_payload(payload: &str, input: i64, output: i64) -> String {
+    let text = serde_json::Value::String(payload.to_string());
+    format!(
+        "{{\"type\":\"thread.started\",\"thread_id\":\"t\"}}\n\
+         {{\"type\":\"item.completed\",\"item\":{{\"id\":\"i\",\"type\":\"agent_message\",\"text\":{text}}}}}\n\
+         {{\"type\":\"turn.completed\",\"usage\":{{\"input_tokens\":{input},\"cached_input_tokens\":0,\"output_tokens\":{output}}}}}"
+    )
+}
+
+fn map_count(h: &Harness) -> usize {
+    h.runner
+        .recorded()
+        .iter()
+        .filter(|cmd| cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")))
+        .count()
+}
+
+fn map_titles(h: &Harness) -> Vec<String> {
+    let mut titles = Vec::new();
+    for cmd in h.runner.recorded() {
+        if !cmd.args.iter().any(|arg| arg.ends_with("map.schema.json")) {
+            continue;
+        }
+        for line in cmd.stdin.lines() {
+            if let Some(title) = line.strip_prefix("标题：") {
+                titles.push(title.to_string());
+                break;
+            }
+        }
+    }
+    titles
+}
+
+#[test]
+fn preview_estimates_calls_secs_and_cost_from_compressed_chars() {
+    let profile = work_notes::codex_profile();
+    assert_eq!(profile.concurrency, 3, "并发必须来自引擎 profile");
+    let h = Harness::new(replies(&[], &[])).with_prices(priced(&profile.model, 1.0));
+    seed_eligible_n(&h, 6);
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 6);
+    assert_eq!(preview.estimated_calls, 7, "6 次 map + 1 次 reduce");
+    assert_eq!(
+        preview.estimated_secs,
+        i64::from(profile.secs_per_call) * 3,
+        "ceil(6/3) 轮 map + 1 轮 reduce"
+    );
+    assert!(
+        preview.estimated_input_tokens > 0,
+        "压缩后字符应能推出 token：{}",
+        preview.estimated_input_tokens
+    );
+    assert!(!preview.estimated_unpriced);
+    assert_eq!(
+        preview.estimated_cost,
+        Some(preview.estimated_input_tokens as f64)
+    );
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn preview_has_zero_estimate_when_empty_and_unpriced_without_price() {
+    let empty = Harness::new(replies(&[], &[]));
+    let preview = empty.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.estimated_calls, 0);
+    assert_eq!(preview.estimated_secs, 0);
+    assert_eq!(preview.estimated_input_tokens, 0);
+    assert_eq!(preview.estimated_cost, None);
+
+    let unpriced = Harness::new(replies(&[], &[]));
+    seed_eligible(&unpriced, "ok", "/proj/statistics");
+    let preview = unpriced.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.estimated_calls, 2);
+    assert!(preview.estimated_unpriced);
+    assert_eq!(preview.estimated_cost, None);
+}
+
+#[test]
+fn concurrent_maps_use_profile_concurrency_and_call_once_per_session() {
+    let profile = work_notes::codex_profile();
+    let maps = vec![map_json("摘要"); 4];
+    let runner = ScriptedRunner::succeeding(maps, [reduce_json()])
+        .with_delay(std::time::Duration::from_millis(40));
+    let h = Harness::new(runner);
+    seed_eligible_n(&h, 4);
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(map_count(&h), 4);
+    assert_eq!(h.runner.recorded().len(), 5, "4 map + 1 reduce");
+    assert_eq!(
+        h.runner.max_in_flight(),
+        profile.concurrency as usize,
+        "并发必须读 profile，不是编排里写死的另一个数"
+    );
+}
+
+#[test]
+fn one_session_failure_does_not_stop_the_rest_and_keeps_raw_stderr() {
+    let runner = replies(
+        &[&map_json("摘要"), &map_json("摘要"), &map_json("摘要")],
+        &[&reduce_json()],
+    )
+    .fail_when("会失败", "RAW_STDERR_FROM_CLI");
+    let h = Harness::new(runner);
+    seed_eligible_at(&h, "ok-1", "成功甲", "/proj/a", day(2026, 8, 18), 10);
+    seed_eligible_at(&h, "bad", "会失败", "/proj/a", day(2026, 8, 18), 11);
+    seed_eligible_at(&h, "ok-2", "成功乙", "/proj/a", day(2026, 8, 18), 12);
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(dto.failed_count, 1);
+    assert_eq!(dto.failures.len(), 1);
+    assert_eq!(dto.failures[0].title, "会失败");
+    assert_eq!(dto.failures[0].error, "RAW_STDERR_FROM_CLI");
+    assert_eq!(map_count(&h), 3);
+    assert!(h.runner.recorded().iter().any(|cmd| {
+        cmd.args
+            .iter()
+            .any(|arg| arg.ends_with("reduce.schema.json"))
+    }));
+}
+
+#[test]
+fn cancel_keeps_completed_summaries_and_retry_skips_them() {
+    let maps = vec![map_json("摘要"); 5];
+    let runner = ScriptedRunner::succeeding(maps, [reduce_json()]).cancel_after_maps(2);
+    let h = Harness::new(runner);
+    for index in 0..5 {
+        seed_eligible_at(
+            &h,
+            &format!("s{index}"),
+            &format!("会话{index}"),
+            "/proj/a",
+            day(2026, 8, 18),
+            10 + index as u32,
+        );
+    }
+    let range = WorkNotesRange::this_week();
+    h.job.begin(&range, "codex", None).unwrap();
+    let error = h.try_build(range.clone(), false).unwrap_err();
+    assert!(error.contains("已取消"), "{error}");
+    h.job.finish(Err(error)).unwrap();
+    assert_eq!(
+        h.job.snapshot().unwrap().status,
+        WorkNotesJobStatus::Cancelled
+    );
+    let completed = h.job.completed_session_ids();
+    assert!(
+        !completed.is_empty(),
+        "中断后应留下已完成集合：{completed:?}"
+    );
+    let first_maps = map_count(&h);
+    assert!(first_maps < 5, "不应跑完全部会话，实际 {first_maps}");
+
+    h.job.begin(&range, "codex", None).unwrap();
+    let dto = h.try_build(range, false).unwrap();
+    assert!(dto.has_data);
+    let titles = map_titles(&h);
+    let covered: std::collections::HashSet<_> = titles.iter().cloned().collect();
+    assert_eq!(covered.len(), 5, "五次调用应覆盖五个会话：{titles:?}");
+    for index in 0..5 {
+        let title = format!("会话{index}");
+        let id = format!("s{index}");
+        assert!(covered.contains(&title), "应覆盖 {title}：{titles:?}");
+        if completed.contains(&id) {
+            assert_eq!(
+                titles.iter().filter(|item| *item == &title).count(),
+                1,
+                "已完成的 {title} 被重算了：{titles:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn actual_usage_comes_from_engine_json_and_is_priced() {
+    let profile = work_notes::codex_profile();
+    let map_out = jsonl_payload(&map_json("摘要"), 100, 20);
+    let reduce_out = jsonl_payload(&reduce_json(), 50, 10);
+    let h =
+        Harness::new(replies(&[&map_out], &[&reduce_out])).with_prices(priced(&profile.model, 2.0));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(dto.actual_input_tokens, 150);
+    assert_eq!(dto.actual_output_tokens, 30);
+    assert!(!dto.actual_unpriced);
+    assert_eq!(dto.actual_cost, Some(300.0));
+}
+
+#[test]
+fn progress_tracks_completed_and_total() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let _ = h.build();
+    let progress = h.job.snapshot().unwrap();
+    assert_eq!(progress.total, 2, "map + reduce");
+    assert_eq!(progress.done, 2);
+    assert_eq!(progress.current_title, "正在汇总");
 }

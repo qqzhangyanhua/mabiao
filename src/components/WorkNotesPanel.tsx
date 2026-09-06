@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
 import { humanStatus } from "../lib/format";
+import { useWorkNotesProgress } from "../lib/useWorkNotesProgress";
+import { workNotesEstimateCopy, workNotesUsageCopy } from "../lib/workNotesCopy";
 import {
   clampWorkNotesCustomRange,
   thisWeekStartDate,
@@ -19,7 +21,6 @@ import {
 } from "../lib/workNotesPreference";
 import type { WorkNotesDto, WorkNotesPreviewDto, WorkNotesRangeKind } from "../types";
 import { EmptyState } from "./EmptyState";
-import { LoadingOverlay } from "./LoadingOverlay";
 import { WorkNotesShare } from "./WorkNotesShare";
 import { Button } from "./ui/Button";
 import { DatePicker } from "./ui/DatePicker";
@@ -39,11 +40,12 @@ export function WorkNotesPanel() {
   const [preview, setPreview] = useState<WorkNotesPreviewDto | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
-  const [dto, setDto] = useState<WorkNotesDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState(false);
   const [preference, setPreference] = useState(loadWorkNotesPreference);
+  const [pollRev, setPollRev] = useState(0);
+  const progress = useWorkNotesProgress(pollRev);
+  const running = progress?.status === "running";
 
   const range = useMemo(
     () => workNotesRangePayload(rangeKind, customFrom, customTo),
@@ -59,13 +61,22 @@ export function WorkNotesPanel() {
   const model = engineId ? (preference.models[engineId] ?? "") : "";
   const selectedEngine = installed.find((engine) => engine.id === engineId) ?? null;
   const generateDisabled =
-    busy ||
+    running ||
     previewLoading ||
     previewError !== null ||
     preview == null ||
     preview.gate === "rejected" ||
     preview.session_count === 0 ||
     engineId == null;
+  const estimateCopy = preview ? workNotesEstimateCopy(preview) : null;
+  const rawDto = progress?.status === "done" ? progress.result : null;
+  const dto =
+    rawDto &&
+    preview &&
+    rawDto.start_date === preview.start_date &&
+    rawDto.end_date === preview.end_date
+      ? rawDto
+      : null;
 
   function persist(next: WorkNotesPreference) {
     saveWorkNotesPreference(next);
@@ -77,7 +88,11 @@ export function WorkNotesPanel() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 切区间时先置 loading，避免沿用上一档会话数
     setPreviewLoading(true);
     setPreviewError(null);
-    void invoke<WorkNotesPreviewDto>("preview_work_notes", { range })
+    void invoke<WorkNotesPreviewDto>("preview_work_notes", {
+      range,
+      engine_id: engineId,
+      model: model.trim() === "" ? null : model.trim(),
+    })
       .then((next) => {
         if (!cancelled) {
           setPreview(next);
@@ -97,12 +112,11 @@ export function WorkNotesPanel() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [engineId, model, range]);
 
   function resetGenerated() {
     setPendingConfirm(false);
-    setDto(null);
-    setError(null);
+    setStartError(null);
   }
 
   function generate() {
@@ -114,23 +128,28 @@ export function WorkNotesPanel() {
       return;
     }
     persist({ ...preference, engineId });
-    setBusy(true);
-    setError(null);
-    void invoke<WorkNotesDto>("build_work_notes", {
+    setStartError(null);
+    void invoke("start_work_notes", {
       range,
       engine_id: engineId,
       model: model.trim() === "" ? null : model.trim(),
       confirmed: preview?.gate === "confirm",
     })
-      .then((next) => {
-        setDto(next);
+      .then(() => {
+        setPollRev((value) => value + 1);
       })
       .catch((caught: unknown) => {
-        setDto(null);
-        setError(humanStatus(caught));
+        setStartError(humanStatus(caught));
+      });
+  }
+
+  function stop() {
+    void invoke("cancel_work_notes")
+      .then(() => {
+        setPollRev((value) => value + 1);
       })
-      .finally(() => {
-        setBusy(false);
+      .catch((caught: unknown) => {
+        setStartError(humanStatus(caught));
       });
   }
 
@@ -138,172 +157,219 @@ export function WorkNotesPanel() {
     preview && preview.skipped_sparse > 0
       ? `已略过 ${preview.skipped_sparse} 个零星会话`
       : copy.emptyHint;
+  const jobError = progress?.status === "error" ? progress.error : startError;
+  const cancelled = progress?.status === "cancelled";
 
   return (
-    <LoadingOverlay active={busy} label="正在生成工作纪要…">
-      <div className="work-notes">
-        <div className="work-notes-head">
-          <div className="work-notes-range">
-            <Segmented
-              value={rangeKind}
-              options={RANGE_OPTIONS}
-              ariaLabel="工作纪要区间"
-              disabled={busy}
-              onChange={(next) => {
-                if (next === "custom") {
-                  const seeded = clampWorkNotesCustomRange(
-                    preview?.start_date ?? thisWeekStartDate(),
-                    preview?.end_date ?? todayDateValue(),
-                  );
-                  setCustomFrom(seeded.from);
-                  setCustomTo(seeded.to);
-                }
-                setRangeKind(next);
-                resetGenerated();
-              }}
-            />
-            {rangeKind === "custom" ? (
-              <div className="work-notes-custom-range">
-                <DatePicker
-                  ariaLabel="区间起始日"
-                  value={customFrom}
-                  min={customBounds.fromMin}
-                  max={customBounds.fromMax}
-                  disabled={busy || previewLoading}
-                  onChange={(day) => {
-                    const nextRange = clampWorkNotesCustomRange(day, customTo, new Date(), "from");
-                    setCustomFrom(nextRange.from);
-                    setCustomTo(nextRange.to);
-                    resetGenerated();
-                  }}
-                />
-                <span>至</span>
-                <DatePicker
-                  ariaLabel="区间结束日"
-                  value={customTo}
-                  min={customBounds.toMin}
-                  max={customBounds.toMax}
-                  disabled={busy || previewLoading}
-                  onChange={(day) => {
-                    const nextRange = clampWorkNotesCustomRange(customFrom, day, new Date(), "to");
-                    setCustomFrom(nextRange.from);
-                    setCustomTo(nextRange.to);
-                    resetGenerated();
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-          {installed.length > 0 && engineId ? (
-            <div className="work-notes-engine">
-              <Select
-                ariaLabel="纪要引擎"
-                value={engineId}
-                options={installed.map((engine) => ({
-                  value: engine.id,
-                  label: engineSelectLabel(engine),
-                }))}
-                disabled={busy}
-                align="left"
-                onChange={(next) => {
-                  persist({ ...preference, engineId: next });
+    <div className="work-notes">
+      <div className="work-notes-head">
+        <div className="work-notes-range">
+          <Segmented
+            value={rangeKind}
+            options={RANGE_OPTIONS}
+            ariaLabel="工作纪要区间"
+            disabled={running}
+            onChange={(next) => {
+              if (next === "custom") {
+                const seeded = clampWorkNotesCustomRange(
+                  preview?.start_date ?? thisWeekStartDate(),
+                  preview?.end_date ?? todayDateValue(),
+                );
+                setCustomFrom(seeded.from);
+                setCustomTo(seeded.to);
+              }
+              setRangeKind(next);
+              resetGenerated();
+            }}
+          />
+          {rangeKind === "custom" ? (
+            <div className="work-notes-custom-range">
+              <DatePicker
+                ariaLabel="区间起始日"
+                value={customFrom}
+                min={customBounds.fromMin}
+                max={customBounds.fromMax}
+                disabled={running || previewLoading}
+                onChange={(day) => {
+                  const nextRange = clampWorkNotesCustomRange(day, customTo, new Date(), "from");
+                  setCustomFrom(nextRange.from);
+                  setCustomTo(nextRange.to);
                   resetGenerated();
                 }}
               />
-              <label className="work-notes-model">
-                <span>模型</span>
-                <input
-                  value={model}
-                  placeholder="默认"
-                  aria-label="纪要模型"
-                  disabled={busy}
-                  onChange={(event) => {
-                    persist({
-                      ...preference,
-                      engineId,
-                      models: { ...preference.models, [engineId]: event.target.value },
-                    });
-                  }}
-                />
-              </label>
+              <span>至</span>
+              <DatePicker
+                ariaLabel="区间结束日"
+                value={customTo}
+                min={customBounds.toMin}
+                max={customBounds.toMax}
+                disabled={running || previewLoading}
+                onChange={(day) => {
+                  const nextRange = clampWorkNotesCustomRange(customFrom, day, new Date(), "to");
+                  setCustomFrom(nextRange.from);
+                  setCustomTo(nextRange.to);
+                  resetGenerated();
+                }}
+              />
             </div>
           ) : null}
-          <Button variant="accent" disabled={generateDisabled} onClick={generate}>
-            {pendingConfirm ? "确认生成" : "生成"}
-          </Button>
         </div>
-        <p className="work-notes-help">
-          {selectedEngine
-            ? selectedEngine.writes_session_dir
-              ? "以只读、禁用工具的方式运行。会在你的会话记录里留下一条。"
-              : "以只读、禁用工具的方式运行。"
-            : copy.help}
-        </p>
-        {previewError ? (
-          <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
+        {installed.length > 0 && engineId ? (
+          <div className="work-notes-engine">
+            <Select
+              ariaLabel="纪要引擎"
+              value={engineId}
+              options={installed.map((engine) => ({
+                value: engine.id,
+                label: engineSelectLabel(engine),
+              }))}
+              disabled={running}
+              align="left"
+              onChange={(next) => {
+                persist({ ...preference, engineId: next });
+                resetGenerated();
+              }}
+            />
+            <label className="work-notes-model">
+              <span>模型</span>
+              <input
+                value={model}
+                placeholder="默认"
+                aria-label="纪要模型"
+                disabled={running}
+                onChange={(event) => {
+                  persist({
+                    ...preference,
+                    engineId,
+                    models: { ...preference.models, [engineId]: event.target.value },
+                  });
+                }}
+              />
+            </label>
+          </div>
         ) : null}
-        {previewLoading ? <p className="work-notes-scale">正在统计会话数…</p> : null}
-        {!previewLoading && preview && !previewError ? (
-          <p className="work-notes-scale">
-            {preview.start_date} 至 {preview.end_date}，有 {preview.session_count} 个会话
-            {preview.skipped_sparse > 0 ? `，已略过 ${preview.skipped_sparse} 个零星会话` : ""}
-          </p>
-        ) : null}
-        {!previewLoading && preview?.message ? (
-          <p
-            className={
-              preview.gate === "rejected" ? "work-notes-gate-reject" : "work-notes-gate-confirm"
-            }
-          >
-            {preview.message}
-          </p>
-        ) : null}
-        {error ? (
-          <EmptyState icon="alertTriangle" tone="warn" title="生成失败" hint={error} />
-        ) : null}
-        {!previewLoading &&
-        !error &&
-        !previewError &&
-        preview &&
-        preview.session_count === 0 &&
-        !dto ? (
-          <EmptyState icon="notes" title="这段时间没有可总结的会话" hint={emptyHint} />
-        ) : null}
-        {preference.detected.length === 0 ? (
-          <EmptyState
-            icon="notes"
-            title="还没有检测本机纪要引擎"
-            hint="请到设置 → 数据里点「检测」。选项只列出本机已安装的 CLI。"
-          />
-        ) : null}
-        {preference.detected.length > 0 && installed.length === 0 ? (
-          <EmptyState
-            icon="notes"
-            title="本机没有可用的纪要引擎"
-            hint="设置里已经检测过，但没有找到 Codex、Claude、Grok 或 Cursor Agent。装好后再点「检测」。"
-          />
-        ) : null}
-        {!previewLoading &&
-        !error &&
-        !previewError &&
-        !dto &&
-        preview &&
-        preview.session_count > 0 &&
-        preview.gate !== "rejected" &&
-        installed.length > 0 ? (
-          <EmptyState icon="notes" title="还没有生成工作纪要" hint={copy.emptyHint} />
-        ) : null}
-        {dto && !dto.has_data ? (
-          <EmptyState
-            icon="notes"
-            title="这段时间没有可总结的会话"
-            hint={
-              dto.skipped_sparse > 0 ? `已略过 ${dto.skipped_sparse} 个零星会话` : copy.emptyHint
-            }
-          />
-        ) : null}
-        {dto?.has_data ? <WorkNotesShare dto={dto} /> : null}
+        <div className="work-notes-actions">
+          {running ? (
+            <Button variant="danger" onClick={stop}>
+              停止
+            </Button>
+          ) : (
+            <Button variant="accent" disabled={generateDisabled} onClick={generate}>
+              {pendingConfirm ? "确认生成" : cancelled ? "继续生成" : "生成"}
+            </Button>
+          )}
+        </div>
       </div>
-    </LoadingOverlay>
+      <p className="work-notes-help">
+        {selectedEngine
+          ? selectedEngine.writes_session_dir
+            ? "以只读、禁用工具的方式运行。会在你的会话记录里留下一条。"
+            : "以只读、禁用工具的方式运行。"
+          : copy.help}
+      </p>
+      {previewError ? (
+        <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
+      ) : null}
+      {previewLoading ? <p className="work-notes-scale">正在统计会话数…</p> : null}
+      {!previewLoading && preview && !previewError ? (
+        <p className="work-notes-scale">
+          {preview.start_date} 至 {preview.end_date}，有 {preview.session_count} 个会话
+          {preview.skipped_sparse > 0 ? `，已略过 ${preview.skipped_sparse} 个零星会话` : ""}
+          {estimateCopy ? `。${estimateCopy}` : ""}
+        </p>
+      ) : null}
+      {!previewLoading && preview?.message ? (
+        <p
+          className={
+            preview.gate === "rejected" ? "work-notes-gate-reject" : "work-notes-gate-confirm"
+          }
+        >
+          {preview.message}
+        </p>
+      ) : null}
+      {running && progress ? (
+        <p className="work-notes-progress" role="status" aria-live="polite">
+          已完成 {progress.done} / 共 {progress.total}
+          {progress.current_title ? `，正在总结：${progress.current_title}` : ""}
+        </p>
+      ) : null}
+      {cancelled ? (
+        <p className="work-notes-progress">
+          已停止。已完成的会话摘要还在，再次生成不会重复调用。
+        </p>
+      ) : null}
+      {jobError ? (
+        <EmptyState icon="alertTriangle" tone="warn" title="生成失败" hint={jobError} />
+      ) : null}
+      {dto && dto.failures.length > 0 ? <WorkNotesFailures dto={dto} /> : null}
+      {!previewLoading &&
+      !jobError &&
+      !previewError &&
+      preview &&
+      preview.session_count === 0 &&
+      !dto &&
+      !running ? (
+        <EmptyState icon="notes" title="这段时间没有可总结的会话" hint={emptyHint} />
+      ) : null}
+      {preference.detected.length === 0 ? (
+        <EmptyState
+          icon="notes"
+          title="还没有检测本机纪要引擎"
+          hint="请到设置 → 数据里点「检测」。选项只列出本机已安装的 CLI。"
+        />
+      ) : null}
+      {preference.detected.length > 0 && installed.length === 0 ? (
+        <EmptyState
+          icon="notes"
+          title="本机没有可用的纪要引擎"
+          hint="设置里已经检测过，但没有找到 Codex、Claude、Grok 或 Cursor Agent。装好后再点「检测」。"
+        />
+      ) : null}
+      {!previewLoading &&
+      !jobError &&
+      !previewError &&
+      !dto &&
+      !running &&
+      !cancelled &&
+      preview &&
+      preview.session_count > 0 &&
+      preview.gate !== "rejected" &&
+      installed.length > 0 ? (
+        <EmptyState icon="notes" title="还没有生成工作纪要" hint={copy.emptyHint} />
+      ) : null}
+      {dto && !dto.has_data && dto.failed_count === 0 ? (
+        <EmptyState
+          icon="notes"
+          title="这段时间没有可总结的会话"
+          hint={
+            dto.skipped_sparse > 0 ? `已略过 ${dto.skipped_sparse} 个零星会话` : copy.emptyHint
+          }
+        />
+      ) : null}
+      {dto?.has_data ? <WorkNotesShare dto={dto} /> : null}
+      {dto ? <WorkNotesUsage dto={dto} /> : null}
+    </div>
   );
+}
+
+function WorkNotesFailures({ dto }: { dto: WorkNotesDto }) {
+  return (
+    <div className="work-notes-failures">
+      <p className="work-notes-failures-title">有 {dto.failed_count} 个会话总结失败</p>
+      {dto.failures.map((failure, index) => (
+        <pre key={`${failure.title}-${index}`} className="work-notes-stderr">
+          {failure.title ? `${failure.title}\n` : ""}
+          {failure.error}
+        </pre>
+      ))}
+    </div>
+  );
+}
+
+function WorkNotesUsage({ dto }: { dto: WorkNotesDto }) {
+  const usage = workNotesUsageCopy(dto);
+  if (!usage) {
+    return null;
+  }
+  return <p className="work-notes-usage">{usage}</p>;
 }

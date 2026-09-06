@@ -55,7 +55,7 @@ pub enum WorkNotesGate {
 }
 
 /// 选完区间立刻返回的规模预览，不调引擎。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkNotesPreviewDto {
     pub range_kind: WorkNotesRangeKind,
     pub start_date: String,
@@ -64,6 +64,11 @@ pub struct WorkNotesPreviewDto {
     pub skipped_sparse: i64,
     pub gate: WorkNotesGate,
     pub message: String,
+    pub estimated_calls: i64,
+    pub estimated_secs: i64,
+    pub estimated_input_tokens: i64,
+    pub estimated_cost: Option<f64>,
+    pub estimated_unpriced: bool,
 }
 
 /// 纪要引擎的静态描述。一个 CLI 一个 profile。
@@ -72,7 +77,11 @@ pub struct EngineProfile {
     pub id: String,
     pub program: String,
     pub writes_session_dir: bool,
+    /// 编排读这个数，不在调用循环里写死。
     pub concurrency: u32,
+    pub secs_per_call: u32,
+    pub model: String,
+    pub provider: String,
 }
 
 /// 设置页手动探测的结果。未安装的项 `installed = false`，不进生成选项。
@@ -83,6 +92,46 @@ pub struct DetectedEngine {
     pub writes_session_dir: bool,
     pub installed: bool,
     pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkNotesJobStatus {
+    Idle,
+    Running,
+    Done,
+    Cancelled,
+    Error,
+}
+
+/// 后台任务进度。前端轮询，不另开 Tauri event。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkNotesProgressDto {
+    pub status: WorkNotesJobStatus,
+    pub done: u32,
+    pub total: u32,
+    pub current_title: String,
+    pub error: String,
+    pub result: Option<WorkNotesDto>,
+}
+
+impl Default for WorkNotesProgressDto {
+    fn default() -> Self {
+        Self {
+            status: WorkNotesJobStatus::Idle,
+            done: 0,
+            total: 0,
+            current_title: String::new(),
+            error: String::new(),
+            result: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesFailure {
+    pub title: String,
+    pub error: String,
 }
 
 /// 应用数据目录下纪要引擎的专用空目录名。会落盘的引擎把它当作项目路径，用来识别自造会话。
@@ -114,6 +163,12 @@ pub struct WorkNotesDto {
     pub headline: String,
     pub entries: Vec<WorkNotesEntry>,
     pub closing: String,
+    pub failed_count: i64,
+    pub failures: Vec<WorkNotesFailure>,
+    pub actual_input_tokens: i64,
+    pub actual_output_tokens: i64,
+    pub actual_cost: Option<f64>,
+    pub actual_unpriced: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

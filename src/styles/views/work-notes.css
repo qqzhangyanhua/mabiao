@@ -199,3 +199,39 @@
 .work-notes-preview .report-preview-frame {
   height: 100%;
 }
+
+.work-notes-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.work-notes-progress,
+.work-notes-usage {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.work-notes-failures {
+  display: grid;
+  gap: 8px;
+}
+
+.work-notes-failures-title {
+  margin: 0;
+  font-size: 13px;
+  color: var(--orange-fg);
+}
+
+.work-notes-stderr {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-grad-2);
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

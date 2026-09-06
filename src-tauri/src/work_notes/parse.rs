@@ -1,51 +1,108 @@
+use std::sync::atomic::AtomicBool;
+
 use serde::de::DeserializeOwned;
 
 use crate::domain::{EngineCommand, WorkNotesEntry};
 
-use super::engines::EngineRunner;
+use super::engines::{EngineError, EngineRunner};
 use super::input::take_chars;
+use super::usage::{self, EngineUsage};
 
 pub enum ParseOutcome<T> {
     Parsed(T),
     Plain(String),
     Failed(String),
+    Cancelled,
+}
+
+pub struct Parsed<T> {
+    pub outcome: ParseOutcome<T>,
+    pub usage: EngineUsage,
 }
 
 pub fn run<T: DeserializeOwned>(
     runner: &dyn EngineRunner,
     make: impl FnMut() -> Result<EngineCommand, String>,
-) -> ParseOutcome<T> {
-    run_with(runner, make, parse_structured)
+    cancel: &AtomicBool,
+) -> Parsed<T> {
+    run_with(runner, make, cancel, parse_structured)
 }
 
 pub fn run_with<T>(
     runner: &dyn EngineRunner,
     mut make: impl FnMut() -> Result<EngineCommand, String>,
+    cancel: &AtomicBool,
     parse: impl Fn(&str) -> Option<T>,
-) -> ParseOutcome<T> {
+) -> Parsed<T> {
+    let mut usage = EngineUsage::default();
     let first_command = match make() {
         Ok(command) => command,
-        Err(error) => return ParseOutcome::Failed(error),
+        Err(error) => {
+            return Parsed {
+                outcome: ParseOutcome::Failed(error),
+                usage,
+            };
+        }
     };
-    let first = match runner.run(&first_command) {
+    let first = match runner.run(&first_command, cancel) {
         Ok(stdout) => stdout,
-        Err(error) => return ParseOutcome::Failed(error),
+        Err(EngineError::Cancelled) => {
+            return Parsed {
+                outcome: ParseOutcome::Cancelled,
+                usage,
+            };
+        }
+        Err(EngineError::Failed(error)) => {
+            return Parsed {
+                outcome: ParseOutcome::Failed(error),
+                usage,
+            };
+        }
     };
-    if let Some(value) = parse(&first) {
-        return ParseOutcome::Parsed(value);
+    let split = usage::split_output(&first);
+    usage.add(&split.usage);
+    if let Some(value) = parse(&split.payload) {
+        return Parsed {
+            outcome: ParseOutcome::Parsed(value),
+            usage,
+        };
     }
     let second_command = match make() {
         Ok(command) => command,
-        Err(error) => return ParseOutcome::Failed(error),
+        Err(error) => {
+            return Parsed {
+                outcome: ParseOutcome::Failed(error),
+                usage,
+            };
+        }
     };
-    let second = match runner.run(&second_command) {
+    let second = match runner.run(&second_command, cancel) {
         Ok(stdout) => stdout,
-        Err(error) => return ParseOutcome::Failed(error),
+        Err(EngineError::Cancelled) => {
+            return Parsed {
+                outcome: ParseOutcome::Cancelled,
+                usage,
+            };
+        }
+        Err(EngineError::Failed(error)) => {
+            return Parsed {
+                outcome: ParseOutcome::Failed(error),
+                usage,
+            };
+        }
     };
-    if let Some(value) = parse(&second) {
-        return ParseOutcome::Parsed(value);
+    let split = usage::split_output(&second);
+    usage.add(&split.usage);
+    if let Some(value) = parse(&split.payload) {
+        return Parsed {
+            outcome: ParseOutcome::Parsed(value),
+            usage,
+        };
     }
-    ParseOutcome::Plain(second)
+    Parsed {
+        outcome: ParseOutcome::Plain(split.payload),
+        usage,
+    }
 }
 
 pub fn parse_structured<T: DeserializeOwned>(raw: &str) -> Option<T> {

@@ -996,6 +996,11 @@ export type WorkNotesEntry = {
   project: string;
 };
 
+export type WorkNotesFailure = {
+  title: string;
+  error: string;
+};
+
 export type WorkNotesDto = {
   range_kind: WorkNotesRangeKind;
   start_date: string;
@@ -1009,6 +1014,12 @@ export type WorkNotesDto = {
   headline: string;
   entries: WorkNotesEntry[];
   closing: string;
+  failed_count: number;
+  failures: WorkNotesFailure[];
+  actual_input_tokens: number;
+  actual_output_tokens: number;
+  actual_cost: number | null;
+  actual_unpriced: boolean;
 };
 
 export type WorkNotesGate = "ok" | "confirm" | "rejected";
@@ -1021,6 +1032,22 @@ export type WorkNotesPreviewDto = {
   skipped_sparse: number;
   gate: WorkNotesGate;
   message: string;
+  estimated_calls: number;
+  estimated_secs: number;
+  estimated_input_tokens: number;
+  estimated_cost: number | null;
+  estimated_unpriced: boolean;
+};
+
+export type WorkNotesJobStatus = "idle" | "running" | "done" | "cancelled" | "error";
+
+export type WorkNotesProgressDto = {
+  status: WorkNotesJobStatus;
+  done: number;
+  total: number;
+  current_title: string;
+  error: string;
+  result: WorkNotesDto | null;
 };
 
 export type DetectedEngine = {
