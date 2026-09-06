@@ -1,0 +1,76 @@
+src-tauri/src/work_notes/engines.rs
+  s_a8684a980df2ea::t_0f3193d2ea4da1 5,13-14
+  s_4ef8f52392351e::t_195357d85141e4 82,301-302,314,316
+  s_a8684a980df2ea::t_86927485919d5d 161
+  s_a8684a980df2ea::t_dd06ebf861fb45 155
+  s_a8684a980df2ea::t_33ff7f9ec7ea3f 6,19-20,23,30-48,52-53,59-60,66-67,69-74,79-81,84-85,87-92,96-121,125-135,140-154,156-160,162-179,222,238,246,250,254,258,262,278-280,283-295,303,308,311,313,315
+src-tauri/src/lib.rs
+  s_a8684a980df2ea::t_9a15425bd99c28 127,325,352-354
+src/styles/views/work-notes.css
+  s_a8684a980df2ea::t_aaa2848755bccb 124-129,133-159
+  s_a8684a980df2ea::t_8bb33092d404d6 130-132
+src-tauri/src/work_notes/usage.rs
+  s_4ef8f52392351e::t_62aff659724cab 1-58,60-138
+  s_a8684a980df2ea::t_3788594e8a1137 59
+src/components/WorkNotesPanel.tsx
+  s_a8684a980df2ea::t_bc61bc0add38c9 245
+  s_a8684a980df2ea::t_b8e58cefb975d4 4-5,34,36-39,48,54,85,93-94,98-99,102-109,111-112,120-121,124-143,145-187,189-244,246-269,274,304
+src/types.ts
+  s_a8684a980df2ea::t_1ceb4807cb0d4c 998-1002,1016-1021,1034-1049
+src-tauri/src/work_notes.rs
+  s_a8684a980df2ea::t_bf7d9721c72e75 130,133
+  s_4ef8f52392351e::t_704f6481b0a76d 5,7-8,13,22,27-28,30,37-40,42-46,49-53,57,67,69-80,86-87,89,94-116,120,122-123,126-129,132,134,139-141,143-151,155-160,164-168,183-184,188,264-269
+  s_a8684a980df2ea::t_86927485919d5d 121,131,137-138
+src-tauri/src/work_notes/job.rs
+  s_4ef8f52392351e::t_62aff659724cab 1-187
+src-tauri/src/work_notes/estimate.rs
+  s_a8684a980df2ea::t_58413a916c1916 46
+  s_4ef8f52392351e::t_62aff659724cab 1-45,47-94
+docs/agent-layers.md
+  s_a8684a980df2ea::t_ca234460b89d15 101
+src-tauri/src/tests/work_notes.rs
+  s_a8684a980df2ea::t_e2a76b1c7feee7 325,346,356,385,452,472,528,556,629,652,663,674,684,709,718,742,757
+  s_a8684a980df2ea::t_86927485919d5d 498-501,971-972
+  s_a8684a980df2ea::t_5c273ecfff163d 7,11,48-49,56-57,66-67,71-75,87,93,98
+  s_a8684a980df2ea::t_af036e7c7d45e1 305-309
+  s_a8684a980df2ea::t_49eda7c255485e 489,510-513,594-597,731,1007
+  s_a8684a980df2ea::t_73b85516ef10e0 1008
+  s_a8684a980df2ea::t_ce63ebc10ccae4 781-930,934,940-948,951-970,973-987,991-992
+  s_a8684a980df2ea::t_5dae7467fc1882 8,931-933,935-939,949-950,988-990
+src-tauri/src/domain/work_notes.rs
+  s_4ef8f52392351e::t_62aff659724cab 58,67-71,80-124,151-156
+src/lib/workNotesCopy.test.ts
+  s_a8684a980df2ea::t_3bfbaeff381634 3-88
+  s_a8684a980df2ea::t_4d752ae658a1de 1-2
+src/lib/workNotesCopy.ts
+  s_a8684a980df2ea::t_fe5e0ee015e022 2-34
+  s_a8684a980df2ea::t_9f5e0730a4b05a 1
+src-tauri/src/work_notes/orchestrate.rs
+  s_a8684a980df2ea::t_86927485919d5d 50,63-208,212
+  s_a8684a980df2ea::t_f0ff0e8ba52fff 16,216
+  s_a8684a980df2ea::t_be198b32b5f7c0 1-15,17-49,51-62,209-211,213-215,217-226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "66bb467b8f6ef9ed54ea07993e09c1a0e72e4045",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8f52392351e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07521-9f6e-7ff0-9fd2-0d7955951dd9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_a8684a980df2ea": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07521-24e1-73e2-8b3d-fc5de0d1e444",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
