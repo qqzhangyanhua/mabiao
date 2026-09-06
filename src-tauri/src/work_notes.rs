@@ -22,7 +22,8 @@ use std::sync::Mutex;
 use crate::conversation;
 use crate::domain::{
     ConversationEvent, ConversationQuery, ConversationSessionRow, EngineCommand, Filter,
-    PriceTable, WorkNotesDto, WorkNotesParams, WorkNotesPreviewDto,
+    PriceTable, WorkNotesDto, WorkNotesHistoryPage, WorkNotesHistoryQuery, WorkNotesParams,
+    WorkNotesPreviewDto,
 };
 use crate::query;
 
@@ -89,6 +90,38 @@ pub fn preview(
 
 pub fn require_engine(engine_id: &str) -> Result<(), String> {
     engines::require(engine_id)
+}
+
+/// 历史纪要列表：按创建时间倒序分页，可选按引擎筛选。
+pub fn history(
+    conn: &Connection,
+    query: &WorkNotesHistoryQuery,
+) -> Result<WorkNotesHistoryPage, String> {
+    let engine = query
+        .engine
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    cache::list_reports(
+        conn,
+        engine,
+        query.page.unwrap_or(1),
+        query.page_size.unwrap_or(20),
+    )
+}
+
+/// 取历史列表某一条的完整内容（entries/closing/failures 等）。
+pub fn history_entry(conn: &Connection, id: i64) -> Result<WorkNotesDto, String> {
+    cache::load_notes_by_id(conn, id)?.ok_or_else(|| "这条纪要已经不在了".to_string())
+}
+
+/// 删除一条历史纪要。
+pub fn delete_history_entry(conn: &Connection, id: i64) -> Result<(), String> {
+    if cache::delete_report(conn, id)? {
+        Ok(())
+    } else {
+        Err("这条纪要已经不在了".to_string())
+    }
 }
 
 /// 工作纪要模块的单一入口。`now`、`runner`、`job` 由调用方注入。

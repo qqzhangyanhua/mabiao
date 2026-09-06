@@ -132,6 +132,80 @@ fn opening_legacy_cache_migrates_conversation_manifest_to_multi_session_paths() 
 }
 
 #[test]
+fn opening_legacy_cache_backfills_summary_reports_columns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy-summary-reports.sqlite");
+    let legacy = rusqlite::Connection::open(&path).unwrap();
+    legacy
+        .execute_batch(
+            r#"
+            CREATE TABLE summary_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                range_key TEXT NOT NULL,
+                range_kind TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                engine TEXT NOT NULL,
+                model TEXT NOT NULL,
+                extra_instructions TEXT NOT NULL,
+                session_set_hash TEXT NOT NULL,
+                skipped_sparse INTEGER NOT NULL,
+                session_count INTEGER NOT NULL,
+                project_count INTEGER NOT NULL,
+                active_days INTEGER NOT NULL,
+                total_tokens INTEGER NOT NULL,
+                headline TEXT NOT NULL,
+                entries_json TEXT NOT NULL,
+                closing TEXT NOT NULL,
+                UNIQUE (range_key, engine, model, extra_instructions, session_set_hash)
+            );
+            INSERT INTO summary_reports(
+                created_at, range_key, range_kind, start_date, end_date, engine, model,
+                extra_instructions, session_set_hash, skipped_sparse, session_count,
+                project_count, active_days, total_tokens, headline, entries_json, closing
+            ) VALUES(
+                '2026-01-01T00:00:00Z', 'week', 'week', '2026-01-01', '2026-01-07', 'codex',
+                'gpt', '', 'hash', 0, 1, 1, 1, 10, 'h', '[]', 'c'
+            );
+            "#,
+        )
+        .unwrap();
+    drop(legacy);
+
+    let conn = store::open_db(path.to_string_lossy().as_ref()).unwrap();
+    let columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(summary_reports)")
+        .unwrap()
+        .query_map([], |row| row.get(1))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    for column in [
+        "failed_count",
+        "failures_json",
+        "actual_input_tokens",
+        "actual_output_tokens",
+        "actual_cost",
+        "actual_unpriced",
+    ] {
+        assert!(
+            columns.contains(&column.to_string()),
+            "expected {column} to be backfilled, got columns: {columns:?}"
+        );
+    }
+    let (failed_count, failures_json): (i64, String) = conn
+        .query_row(
+            "SELECT failed_count, failures_json FROM summary_reports WHERE range_key = 'week'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(failed_count, 0);
+    assert_eq!(failures_json, "[]");
+}
+
+#[test]
 fn usage_records_source_file_operations_use_an_index() {
     let conn = store::open_memory().unwrap();
     for sql in [

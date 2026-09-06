@@ -107,7 +107,7 @@ export function GlobalInstructionPanel() {
   async function openExternal(absPath: string) {
     setActionError(null);
     try {
-      await invoke("open_global_instruction", { abs_path: absPath });
+      await invoke("open_global_instruction", { absPath });
     } catch (err: unknown) {
       setActionError(humanStatus(err));
     }

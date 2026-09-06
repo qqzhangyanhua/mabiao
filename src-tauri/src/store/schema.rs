@@ -416,7 +416,41 @@ fn ensure_work_notes_tables(conn: &Connection) -> Result<(), String> {
             ON summary_reports(range_key, engine, model, created_at);
         "#,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    // 这几列是在 summary_reports 已经上线后补的：老库的表是在这批列加入前建的，
+    // 上面的 CREATE TABLE IF NOT EXISTS 对已存在的表是空操作，得靠 ensure_column 补齐。
+    ensure_column(
+        conn,
+        "summary_reports",
+        "failed_count",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        conn,
+        "summary_reports",
+        "failures_json",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )?;
+    ensure_column(
+        conn,
+        "summary_reports",
+        "actual_input_tokens",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(
+        conn,
+        "summary_reports",
+        "actual_output_tokens",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_column(conn, "summary_reports", "actual_cost", "REAL")?;
+    ensure_column(
+        conn,
+        "summary_reports",
+        "actual_unpriced",
+        "INTEGER NOT NULL DEFAULT 1",
+    )?;
+    Ok(())
 }
 
 /// 事件表、路径字典与工具汇总表建在一起：三者是同一份派生缓存的三个部分，列定义要被

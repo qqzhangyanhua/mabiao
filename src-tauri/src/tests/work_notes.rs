@@ -6,8 +6,8 @@ use rusqlite::{params, Connection};
 use crate::conversation;
 use crate::domain::{
     ConversationQuery, EngineCommand, PriceEntry, PriceOrigin, PriceTable, Source, WorkNotesDto,
-    WorkNotesGate, WorkNotesJobStatus, WorkNotesParams, WorkNotesPreviewDto, WorkNotesRange,
-    WorkNotesRangeKind,
+    WorkNotesGate, WorkNotesHistoryQuery, WorkNotesJobStatus, WorkNotesParams, WorkNotesPreviewDto,
+    WorkNotesRange, WorkNotesRangeKind,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner, WorkNotesJob};
@@ -1765,4 +1765,121 @@ fn changing_extra_instructions_reruns_reduce_not_maps() {
     assert_eq!(h.reduce_stdin().len(), 2);
     assert_eq!(dto.headline, "后端架构主线");
     assert!(h.reduce_stdin()[1].contains("我是后端，重点讲架构改动，别提 CSS"));
+}
+
+#[test]
+fn history_lists_reports_across_ranges_newest_first_and_filters_by_engine() {
+    let h = Harness::new(replies(
+        &[&map_json("摘要1"), &map_json("摘要2")],
+        &[&reduce_json(), &reduce_json_backend()],
+    ));
+    seed_eligible_at(&h, "s1", "第一个会话", "/proj/a", day(2026, 8, 17), 10);
+    h.try_build(WorkNotesRange::custom("2026-08-17", "2026-08-18"), false)
+        .unwrap();
+    seed_eligible_at(&h, "s2", "第二个会话", "/proj/b", day(2026, 8, 10), 10);
+    h.try_build(WorkNotesRange::custom("2026-08-10", "2026-08-18"), false)
+        .unwrap();
+
+    // 两次生成的区间不同（range_key 不同），各存一条，不会互相覆盖。
+    let page = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    assert_eq!(page.total, 2);
+    assert_eq!(page.rows.len(), 2);
+    // 最近一次生成的排在最前。
+    assert_eq!(page.rows[0].headline, "后端架构主线");
+    assert_eq!(page.rows[0].start_date, "2026-08-10");
+    assert_eq!(page.rows[0].end_date, "2026-08-18");
+    assert_eq!(page.rows[1].headline, "本周主线是修统计口径");
+    assert_eq!(page.rows[1].start_date, "2026-08-17");
+
+    let filtered = work_notes::history(
+        &h.conn,
+        &WorkNotesHistoryQuery {
+            engine: Some("cursor-agent".to_string()),
+            page: None,
+            page_size: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(filtered.total, 0);
+    assert!(filtered.rows.is_empty());
+
+    let matched = work_notes::history(
+        &h.conn,
+        &WorkNotesHistoryQuery {
+            engine: Some("codex".to_string()),
+            page: None,
+            page_size: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(matched.total, 2);
+}
+
+#[test]
+fn history_pagination_returns_newest_first_across_pages() {
+    let h = Harness::new(replies(
+        &[&map_json("摘要1"), &map_json("摘要2"), &map_json("摘要3")],
+        &[&reduce_json(), &reduce_json(), &reduce_json()],
+    ));
+    for (session_id, date) in [
+        ("s1", day(2026, 8, 10)),
+        ("s2", day(2026, 8, 11)),
+        ("s3", day(2026, 8, 12)),
+    ] {
+        seed_eligible_at(&h, session_id, "会话", "/proj/a", date, 10);
+        let iso = date.format("%Y-%m-%d").to_string();
+        h.try_build(WorkNotesRange::custom(iso.clone(), iso), false)
+            .unwrap();
+    }
+
+    let page1 = work_notes::history(
+        &h.conn,
+        &WorkNotesHistoryQuery {
+            engine: None,
+            page: Some(1),
+            page_size: Some(2),
+        },
+    )
+    .unwrap();
+    assert_eq!(page1.total, 3);
+    assert_eq!(page1.rows.len(), 2);
+    assert_eq!(page1.rows[0].start_date, "2026-08-12");
+    assert_eq!(page1.rows[1].start_date, "2026-08-11");
+
+    let page2 = work_notes::history(
+        &h.conn,
+        &WorkNotesHistoryQuery {
+            engine: None,
+            page: Some(2),
+            page_size: Some(2),
+        },
+    )
+    .unwrap();
+    assert_eq!(page2.total, 3);
+    assert_eq!(page2.rows.len(), 1);
+    assert_eq!(page2.rows[0].start_date, "2026-08-10");
+}
+
+#[test]
+fn history_entry_returns_full_dto_and_delete_removes_it() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "s1", "/proj/a");
+    let built = h.build();
+
+    let page = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    assert_eq!(page.rows.len(), 1);
+    let id = page.rows[0].id;
+
+    let entry = work_notes::history_entry(&h.conn, id).unwrap();
+    assert_eq!(entry.headline, built.headline);
+    assert_eq!(entry.entries, built.entries);
+    assert_eq!(entry.closing, built.closing);
+
+    work_notes::delete_history_entry(&h.conn, id).unwrap();
+    let after = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    assert_eq!(after.total, 0);
+    assert!(after.rows.is_empty());
+
+    assert!(work_notes::history_entry(&h.conn, id).is_err());
+    assert!(work_notes::delete_history_entry(&h.conn, id).is_err());
 }

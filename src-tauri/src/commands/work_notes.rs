@@ -1,7 +1,8 @@
 use tauri::Manager;
 
 use crate::domain::{
-    DetectedEngine, WorkNotesParams, WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange,
+    DetectedEngine, WorkNotesDto, WorkNotesHistoryPage, WorkNotesHistoryQuery, WorkNotesParams,
+    WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange,
 };
 use crate::paths;
 use crate::work_notes::{self, ProcessRunner, RecordingRunner};
@@ -123,4 +124,43 @@ pub async fn detect_work_note_engines() -> Result<Vec<DetectedEngine>, String> {
     tauri::async_runtime::spawn_blocking(work_notes::detect_engines)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn list_work_notes_history(
+    app: tauri::AppHandle,
+    query: WorkNotesHistoryQuery,
+) -> Result<WorkNotesHistoryPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        work_notes::history(&conn, &query)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_work_notes_history_entry(
+    app: tauri::AppHandle,
+    id: i64,
+) -> Result<WorkNotesDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        work_notes::history_entry(&conn, id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn delete_work_notes_history_entry(app: tauri::AppHandle, id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_write()?;
+        work_notes::delete_history_entry(&conn, id)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }

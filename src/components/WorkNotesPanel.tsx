@@ -21,6 +21,7 @@ import {
 } from "../lib/workNotesPreference";
 import type { WorkNotesDto, WorkNotesPreviewDto, WorkNotesRangeKind } from "../types";
 import { EmptyState } from "./EmptyState";
+import { WorkNotesHistory } from "./WorkNotesHistory";
 import { WorkNotesShare } from "./WorkNotesShare";
 import { Button } from "./ui/Button";
 import { DatePicker } from "./ui/DatePicker";
@@ -92,7 +93,7 @@ export function WorkNotesPanel() {
     setPreviewError(null);
     void invoke<WorkNotesPreviewDto>("preview_work_notes", {
       range,
-      engine_id: engineId,
+      engineId,
       model: model.trim() === "" ? null : model.trim(),
     })
       .then((next) => {
@@ -137,9 +138,9 @@ export function WorkNotesPanel() {
     setStartError(null);
     void invoke("start_work_notes", {
       range,
-      engine_id: engineId,
+      engineId,
       model: model.trim() === "" ? null : model.trim(),
-      extra_instructions: extraInstructions,
+      extraInstructions,
       confirmed: preview?.gate === "confirm",
     })
       .then(() => {
@@ -366,6 +367,7 @@ export function WorkNotesPanel() {
       ) : null}
       {dto?.has_data ? <WorkNotesShare dto={dto} /> : null}
       {dto ? <WorkNotesUsage dto={dto} /> : null}
+      <WorkNotesHistory currentEngineId={engineId} />
     </div>
   );
 }
