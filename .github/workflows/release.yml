@@ -15,7 +15,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  create-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create one draft GitHub Release
+        id: create
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          TAG="v${VERSION}"
+          ID=$(gh api "repos/${GITHUB_REPOSITORY}/releases" \
+            --jq "[.[] | select(.tag_name==\"${TAG}\" and .draft==true)][0].id // empty")
+          if [ -z "$ID" ]; then
+            ID=$(gh api --method POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="$TAG" \
+              -f name="码表 v${VERSION}" \
+              -f target_commitish="${GITHUB_SHA}" \
+              -F draft=true \
+              -F prerelease=false \
+              --jq .id)
+          fi
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+
   publish-tauri:
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -80,6 +110,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           tagName: v__VERSION__
           releaseName: 码表 v__VERSION__
           releaseBody: |
@@ -96,6 +127,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
+          retryAttempts: 3
           tauriScript: pnpm tauri
           args: ${{ matrix.args }}
 

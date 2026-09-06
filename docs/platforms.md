@@ -52,7 +52,7 @@ pnpm tauri build
 
 ## GitHub Actions 打包
 
-工作流：`.github/workflows/release.yml`（`tauri-apps/tauri-action@v1`）。
+工作流：`.github/workflows/release.yml`。先建一个 draft Release，再让四个平台的 `tauri-apps/tauri-action@v1` 往同一个 Release 上传，避免矩阵并行拆成两个 draft。
 
 **触发**
 
