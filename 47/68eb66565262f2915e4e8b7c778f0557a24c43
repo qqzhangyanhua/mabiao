@@ -1,0 +1,56 @@
+src/components/WorkNotesPanel.tsx
+  s_4ef8f52392351e::t_a2dbf05a0ef862 88
+  s_4ef8f52392351e::t_b26d9efddc5833 37,62-65,101,180-190
+src-tauri/src/work_notes.rs
+  s_4ef8f52392351e::t_eac3c13683ab72 113-115,120-136
+  s_4ef8f52392351e::t_6d65999c8a93e7 52,99,171
+  s_4ef8f52392351e::t_084133af0d3ae2 4,19-20,44,47,61,69,74-78,85,88-95,97-98,100-103,109-112,116-118,148,156,169-170,172-180,267,282
+  s_4ef8f52392351e::t_69c779e5a2e26f 119
+src-tauri/src/tests/work_notes.rs
+  s_4ef8f52392351e::t_817a9e523420d6 895-902,905,918-920
+  s_4ef8f52392351e::t_95eeb95bf3213d 86-93,98,848-859
+  s_4ef8f52392351e::t_5b51e0617f5d75 863,876
+  s_4ef8f52392351e::t_cc0002acd09690 7-8,76-85,97,105-146,827-847,860-862,864-875,877-894,903-904,906-917,921-1009
+  s_4ef8f52392351e::t_22da6fa7f7cd4a 1010
+src/styles/views/work-notes.css
+  s_4ef8f52392351e::t_a449f34c3a0baa 39-61
+src-tauri/src/work_notes/prompt.rs
+  s_4ef8f52392351e::t_1c6684c730bee2 13,29-33
+  s_4ef8f52392351e::t_9d103d1abaffd1 34
+src-tauri/src/work_notes/cache.rs
+  s_4ef8f52392351e::t_6241e1177df64b 22,31,33-78,81,85,102,110,238
+  s_4ef8f52392351e::t_ece69d0642ebcd 21,114-237
+  s_4ef8f52392351e::t_8cc49f9edddf52 18-20
+  s_4ef8f52392351e::t_3fdf673b1359ae 23-25,28-30
+  s_4ef8f52392351e::t_865bc60789f2a0 32
+  s_4ef8f52392351e::t_eb0f51a9ea5b1b 79-80
+  s_4ef8f52392351e::t_ed7c441a74f485 82-84
+  s_4ef8f52392351e::t_9a090f4bb0bc2f 86-88,99-101
+  s_4ef8f52392351e::t_40afd72af040ec 103-105,107-109
+  s_4ef8f52392351e::t_86f74f73d119e9 111-113
+  s_4ef8f52392351e::t_09b9bc80656cfb 239-240
+src/types.ts
+  s_4ef8f52392351e::t_5d02ad992dc075 1011,1024
+src-tauri/src/store/schema.rs
+  s_4ef8f52392351e::t_d03f62211738ff 362,366-382,384-398,400-401,403-405
+  s_4ef8f52392351e::t_4b0b16d34f11d2 383,399,402
+  s_4ef8f52392351e::t_50fcee9f5b60c0 406-407
+src-tauri/src/domain/work_notes.rs
+  s_4ef8f52392351e::t_303e105c0106af 67-102,123,137-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4768eb66565262f2915e4e8b7c778f0557a24c43",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8f52392351e": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07521-9f6e-7ff0-9fd2-0d7955951dd9",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
