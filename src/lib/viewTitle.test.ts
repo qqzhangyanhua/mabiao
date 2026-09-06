@@ -29,6 +29,7 @@ describe("navLabel — sidebar disambiguation", () => {
     expect(navLabel("conversations")).toBe("对话记录");
     expect(navLabel("cursor-sessions")).toBe("会话");
     expect(navLabel("worktime")).toBe("工作时间线");
+    expect(navLabel("work-notes")).toBe("工作纪要");
   });
 });
 

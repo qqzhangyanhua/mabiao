@@ -16,6 +16,7 @@ export type IconName =
   | "filter"
   | "tokens"
   | "chat"
+  | "notes"
   | "cost"
   | "daily"
   | "clock"
@@ -125,6 +126,13 @@ const strokes: Record<IconName, ReactElement> = {
   chat: (
     <>
       <path d="M6 7h12v8H9l-3 3V7Z" />
+    </>
+  ),
+  notes: (
+    <>
+      <path d="M7 4h8l4 4v12H7z" />
+      <path d="M15 4v4h4" />
+      <path d="M10 12h6M10 16h4" />
     </>
   ),
   cost: (

@@ -56,6 +56,10 @@ export function conversationStatusLabel(status: string): string {
   return status === "experimental" ? "实验性" : status;
 }
 
+export function workNotesGeneratedLabel(): string {
+  return "码表生成";
+}
+
 export function conversationFileUnavailableLabel(source: string): string {
   return source === "cursor_agent" ? "缺少 transcript" : "原文件已删除";
 }

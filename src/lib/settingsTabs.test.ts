@@ -14,6 +14,7 @@ describe("tabFromHash", () => {
     expect(tabFromHash("#settings-scan-paths")).toBe("sources");
     expect(tabFromHash("#settings-diagnostics")).toBe("sources");
     expect(tabFromHash("#settings-conversation-index")).toBe("sources");
+    expect(tabFromHash("#settings-work-notes-engines")).toBe("sources");
     expect(tabFromHash("#settings-backup")).toBe("sources");
     expect(tabFromHash("#settings-official-quota")).toBe("quota");
     expect(tabFromHash("#settings-custom-quota")).toBe("quota");

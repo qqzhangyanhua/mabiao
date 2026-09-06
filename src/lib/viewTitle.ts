@@ -9,6 +9,7 @@ const NAV_LABELS: Partial<Record<View, string>> = {
   provider: "接口统计",
   worktime: "工作时间线",
   conversations: "对话记录",
+  "work-notes": "工作纪要",
   cursor: "代码量",
   "cursor-sessions": "会话",
   instructions: "全局指令",
@@ -31,6 +32,8 @@ export function viewTitle(view: View): { title: string; subtitle: string } {
       return { title: "使用统计", subtitle: "按时间查看 Token 消耗" };
     case "conversations":
       return { title: "对话记录", subtitle: "全来源正文；Cursor Agent 也在这里" };
+    case "work-notes":
+      return { title: "工作纪要", subtitle: "按区间读对话正文，经本机 CLI 总结" };
     case "model":
       return { title: "模型统计", subtitle: "按模型拆分 Token 与费用" };
     case "project":

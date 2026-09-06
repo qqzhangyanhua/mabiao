@@ -4,17 +4,30 @@ import {
   findExportedComponentFile,
   parseCssCustomPropertyNames,
 } from "./posterCssGuard";
+import {
+  WORK_NOTES_POSTER_STYLES,
+  type WorkNotesPosterStyle,
+} from "../workNotes/posterStyleRegistry";
 import { REPORT_POSTER_STYLES, type ReportPosterStyle } from "./posterStyleRegistry";
 
 export const SPIKE_HARNESS_STYLESHEET = "spike.css";
 
 const REPORT_DIR = new URL("./", import.meta.url);
+const WORK_NOTES_DIR = new URL("../workNotes/", import.meta.url);
 const TOKENS_URL = new URL("../styles/base/tokens.css", import.meta.url);
 
 export type CoveredPosterCss = {
   name: string;
-  kind: "weekly-report" | "harness";
+  kind: "weekly-report" | "work-notes" | "harness";
   source: string;
+};
+
+type PosterStyleEntry = ReportPosterStyle | WorkNotesPosterStyle;
+
+type SourceFile = {
+  path: string;
+  source: string;
+  root: URL;
 };
 
 export type PosterCssCoverageError = {
@@ -22,8 +35,8 @@ export type PosterCssCoverageError = {
   reason: string;
 };
 
-function listRelativeFiles(predicate: (name: string) => boolean): string[] {
-  const names = readdirSync(REPORT_DIR, { recursive: true });
+function listRelativeFiles(root: URL, predicate: (name: string) => boolean): string[] {
+  const names = readdirSync(root, { recursive: true });
   const files: string[] = [];
   for (const name of names) {
     if (typeof name !== "string") {
@@ -37,8 +50,18 @@ function listRelativeFiles(predicate: (name: string) => boolean): string[] {
   return files;
 }
 
-function readReportFile(relative: string): string {
-  return readFileSync(new URL(relative, REPORT_DIR), "utf8");
+function listSourceFiles(root: URL): SourceFile[] {
+  return listRelativeFiles(
+    root,
+    (name) =>
+      (name.endsWith(".ts") || name.endsWith(".tsx")) &&
+      !name.endsWith(".test.ts") &&
+      !name.endsWith(".test.tsx"),
+  ).map((relative) => ({
+    path: relative,
+    source: readFileSync(new URL(relative, root), "utf8"),
+    root,
+  }));
 }
 
 function fileExists(url: URL): boolean {
@@ -50,8 +73,8 @@ function fileExists(url: URL): boolean {
   }
 }
 
-function relativeToReport(url: URL): string {
-  const base = REPORT_DIR.href;
+function relativeToRoot(url: URL, root: URL): string {
+  const base = root.href;
   if (url.href.startsWith(base)) {
     return decodeURIComponent(url.href.slice(base.length));
   }
@@ -59,12 +82,14 @@ function relativeToReport(url: URL): string {
 }
 
 function coverStyle(
-  style: ReportPosterStyle,
-  modules: readonly { path: string; source: string }[],
+  style: PosterStyleEntry,
+  kind: CoveredPosterCss["kind"],
+  root: URL,
+  modules: readonly SourceFile[],
   covered: Map<string, CoveredPosterCss>,
   errors: PosterCssCoverageError[],
 ): void {
-  const stylesheetUrl = new URL(style.stylesheet, REPORT_DIR);
+  const stylesheetUrl = new URL(style.stylesheet, root);
   if (!fileExists(stylesheetUrl)) {
     errors.push({
       styleId: style.id,
@@ -83,7 +108,8 @@ function coverStyle(
 
   const componentName = style.Component.name;
   const componentFile = findExportedComponentFile(modules, componentName);
-  if (!componentFile) {
+  const owner = modules.find((file) => file.path === componentFile);
+  if (!componentFile || !owner) {
     errors.push({
       styleId: style.id,
       reason: `cannot locate a unique export for ${componentName || "(anonymous component)"}`,
@@ -91,7 +117,7 @@ function coverStyle(
     return;
   }
 
-  const imported = extractCssImports(modules.find((file) => file.path === componentFile)?.source ?? "");
+  const imported = extractCssImports(owner.source);
   if (imported.length === 0) {
     errors.push({
       styleId: style.id,
@@ -100,7 +126,7 @@ function coverStyle(
     return;
   }
 
-  const importedUrls = imported.map((spec) => new URL(spec, new URL(componentFile, REPORT_DIR)));
+  const importedUrls = imported.map((spec) => new URL(spec, new URL(componentFile, owner.root)));
   if (!importedUrls.some((url) => url.href === stylesheetUrl.href)) {
     errors.push({
       styleId: style.id,
@@ -109,8 +135,8 @@ function coverStyle(
   }
 
   covered.set(stylesheetUrl.href, {
-    name: relativeToReport(stylesheetUrl),
-    kind: "weekly-report",
+    name: relativeToRoot(stylesheetUrl, root),
+    kind,
     source: stylesheetSource,
   });
 
@@ -118,7 +144,7 @@ function coverStyle(
     if (!fileExists(cssUrl)) {
       errors.push({
         styleId: style.id,
-        reason: `imported stylesheet ${relativeToReport(cssUrl)} is missing`,
+        reason: `imported stylesheet ${relativeToRoot(cssUrl, root)} is missing`,
       });
       continue;
     }
@@ -126,14 +152,14 @@ function coverStyle(
     if (source.trim().length === 0) {
       errors.push({
         styleId: style.id,
-        reason: `imported stylesheet ${relativeToReport(cssUrl)} is empty`,
+        reason: `imported stylesheet ${relativeToRoot(cssUrl, root)} is empty`,
       });
       continue;
     }
     if (!covered.has(cssUrl.href)) {
       covered.set(cssUrl.href, {
-        name: relativeToReport(cssUrl),
-        kind: "weekly-report",
+        name: relativeToRoot(cssUrl, root),
+        kind,
         source,
       });
     }
@@ -159,8 +185,26 @@ function coverNamedFile(
   covered.set(url.href, { name: filename, kind, source });
 }
 
+function coverExtraCss(
+  root: URL,
+  kind: CoveredPosterCss["kind"],
+  covered: Map<string, CoveredPosterCss>,
+): void {
+  for (const relative of listRelativeFiles(root, (name) => name.endsWith(".css"))) {
+    const url = new URL(relative, root);
+    if (covered.has(url.href)) {
+      continue;
+    }
+    covered.set(url.href, {
+      name: relative,
+      kind,
+      source: readFileSync(url, "utf8"),
+    });
+  }
+}
+
 /**
- * 从注册表推每周报 CSS，并并入 spike 夹具。
+ * 从周报与纪要注册表推海报 CSS，并并入 spike 夹具。
  * 目录里多出来的海报 CSS 也会进隔离门禁，避免漏网。
  */
 export function collectPosterCssCoverage(): {
@@ -168,33 +212,22 @@ export function collectPosterCssCoverage(): {
   errors: PosterCssCoverageError[];
   appTokenNames: string[];
 } {
-  const modules = listRelativeFiles(
-    (name) =>
-      (name.endsWith(".ts") || name.endsWith(".tsx")) &&
-      !name.endsWith(".test.ts") &&
-      !name.endsWith(".test.tsx"),
-  ).map((relative) => ({ path: relative, source: readReportFile(relative) }));
+  const modules = [...listSourceFiles(REPORT_DIR), ...listSourceFiles(WORK_NOTES_DIR)];
 
   const covered = new Map<string, CoveredPosterCss>();
   const errors: PosterCssCoverageError[] = [];
 
   for (const style of REPORT_POSTER_STYLES) {
-    coverStyle(style, modules, covered, errors);
+    coverStyle(style, "weekly-report", REPORT_DIR, modules, covered, errors);
+  }
+  for (const style of WORK_NOTES_POSTER_STYLES) {
+    coverStyle(style, "work-notes", WORK_NOTES_DIR, modules, covered, errors);
   }
 
   coverNamedFile(SPIKE_HARNESS_STYLESHEET, "harness", covered, errors);
 
-  for (const relative of listRelativeFiles((name) => name.endsWith(".css"))) {
-    const url = new URL(relative, REPORT_DIR);
-    if (covered.has(url.href)) {
-      continue;
-    }
-    covered.set(url.href, {
-      name: relative,
-      kind: "weekly-report",
-      source: readReportFile(relative),
-    });
-  }
+  coverExtraCss(REPORT_DIR, "weekly-report", covered);
+  coverExtraCss(WORK_NOTES_DIR, "work-notes", covered);
 
   return {
     files: [...covered.values()].sort((left, right) => left.name.localeCompare(right.name)),

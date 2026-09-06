@@ -96,6 +96,10 @@ describe("parseSharePreference", () => {
     expect(
       parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: null })).posterStyleId,
     ).toBe("dark-analytics");
+    expect(
+      parseSharePreference(JSON.stringify({ kind: "week", posterStyleId: "folio-ruled" }))
+        .posterStyleId,
+    ).toBe("dark-analytics");
   });
 });
 

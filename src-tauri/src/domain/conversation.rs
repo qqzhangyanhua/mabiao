@@ -69,6 +69,9 @@ pub struct ConversationSessionRow {
     pub match_event_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub match_sequence: Option<u32>,
+    /// 由工作纪要引擎写回的自造会话。只作展示与后续纪要输入剔除，不从 token KPI 扣除。
+    #[serde(default)]
+    pub generated_by_work_notes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

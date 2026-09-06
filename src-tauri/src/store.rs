@@ -10,6 +10,7 @@ pub mod official_quota;
 pub mod records;
 pub mod rollup;
 mod schema;
+mod work_notes_generated;
 
 pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum};
 pub use cursor_account::*;
@@ -21,4 +22,8 @@ pub(crate) use schema::{
     conversation_events_needs_layout_migration, conversation_fts_needs_migration,
     conversation_session_tools_sql, migrate_conversation_events_fts,
     migrate_conversation_events_layout, CONVERSATION_EVENT_COLUMN_LIST,
+};
+pub(crate) use work_notes_generated::{
+    load_generated_sessions, mark_generated_session, mark_generated_sessions,
+    record_generated_session, session_is_generated,
 };

@@ -5,6 +5,7 @@ import {
   conversationDetailSummary,
   conversationFileUnavailableLabel,
   conversationStatusLabel,
+  workNotesGeneratedLabel,
 } from "../lib/conversationDisplay";
 import { formatClock, projectLabel } from "../lib/format";
 import { CollapsibleSection } from "./CollapsibleSection";
@@ -44,6 +45,11 @@ export function ConversationDetailHead({
             <span className={`conversation-status status-${session.support_status}`}>
               {conversationStatusLabel(session.support_status)}
             </span>
+            {session.generated_by_work_notes ? (
+              <span className="conversation-status status-generated">
+                {workNotesGeneratedLabel()}
+              </span>
+            ) : null}
             {fileAvailable ? null : (
               <span className="conversation-file-unavailable">
                 <Icon name="alertTriangle" size={12} />

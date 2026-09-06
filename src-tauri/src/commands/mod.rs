@@ -6,6 +6,7 @@ mod io;
 mod quota;
 mod settings;
 mod usage;
+mod work_notes;
 
 pub use conversations::*;
 pub use cursor::*;
@@ -15,6 +16,7 @@ pub use io::*;
 pub use quota::*;
 pub use settings::*;
 pub use usage::*;
+pub use work_notes::*;
 
 #[tauri::command]
 pub fn ping() -> String {

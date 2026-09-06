@@ -250,6 +250,7 @@ pub(crate) fn load_session(
                 .collect();
         }
         fill_empty_cursor_hash_model(conn, session)?;
+        crate::store::mark_generated_session(conn, session)?;
     }
     Ok(session)
 }

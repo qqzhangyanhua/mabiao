@@ -1,0 +1,162 @@
+.db-poster {
+  --db-bg: #161410;
+  --db-panel: #1e1b16;
+  --db-ink: #f3ead8;
+  --db-soft: #d4c7ae;
+  --db-quiet: #8f846f;
+  --db-gold: #d4b36a;
+  --db-line: #3a3428;
+  box-sizing: border-box;
+  width: 720px;
+  padding: 40px 44px 36px;
+  color: var(--db-ink);
+  font-family: "Avenir Next Condensed", "Avenir Next", "PingFang SC", "Noto Sans SC", sans-serif;
+  line-height: 1.45;
+  background:
+    radial-gradient(ellipse 520px 280px at 100% 0%, #2a2418 0%, transparent 70%), var(--db-bg);
+  border-radius: 0;
+}
+
+.db-poster *,
+.db-poster *::before,
+.db-poster *::after {
+  box-sizing: border-box;
+}
+
+.db-mast {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--db-gold);
+}
+
+.db-kicker {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--db-gold);
+}
+
+.db-range {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--db-quiet);
+}
+
+.db-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--db-line);
+}
+
+.db-metrics li {
+  padding: 16px 12px 14px 0;
+  border-right: 1px solid var(--db-line);
+}
+
+.db-metrics li:last-child {
+  border-right: 0;
+  padding-right: 0;
+}
+
+.db-metric-value {
+  display: block;
+  font-size: 26px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  color: var(--db-ink);
+}
+
+.db-metric-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--db-quiet);
+}
+
+.db-headline {
+  margin: 28px 0 0;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: 0.01em;
+}
+
+.db-entries {
+  display: grid;
+  gap: 0;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: db-entry;
+}
+
+.db-entry {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 10px;
+  padding: 18px 0;
+  border-top: 1px solid var(--db-line);
+  counter-increment: db-entry;
+}
+
+.db-entry::before {
+  content: counter(db-entry, decimal-leading-zero);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  color: var(--db-gold);
+  padding-top: 4px;
+}
+
+.db-entry-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.db-entry-detail {
+  margin: 8px 0 0;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--db-soft);
+  font-weight: 400;
+}
+
+.db-entry-project {
+  display: inline-block;
+  margin: 10px 0 0;
+  padding: 2px 8px;
+  border: 1px solid var(--db-line);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--db-quiet);
+}
+
+.db-closing {
+  margin: 8px 0 0;
+  padding: 18px 16px;
+  background: var(--db-panel);
+  border-left: 2px solid var(--db-gold);
+  font-size: 14px;
+  color: var(--db-soft);
+}
+
+.db-skipped {
+  margin: 16px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--db-quiet);
+}

@@ -30,6 +30,7 @@ pub mod tray;
 pub mod tray_popup;
 pub mod user_files;
 pub mod vscode_state;
+pub mod work_notes;
 pub mod work_timeline;
 
 use std::fs;
@@ -123,6 +124,7 @@ pub struct AppState {
     pub conn: Mutex<Connection>,
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
+    pub work_notes: work_notes::WorkNotesJob,
 }
 
 impl AppState {
@@ -320,6 +322,7 @@ pub fn run() {
                 conn: Mutex::new(conn),
                 read_pool,
                 snapshot: Mutex::new(snapshot),
+                work_notes: work_notes::WorkNotesJob::new(),
             });
             tray::setup(app.handle()).map_err(std::io::Error::other)?;
             spawn_rollup_backfill(app.handle());
@@ -345,6 +348,11 @@ pub fn run() {
             commands::ingest,
             commands::get_overview,
             commands::get_report,
+            commands::preview_work_notes,
+            commands::start_work_notes,
+            commands::get_work_notes_progress,
+            commands::cancel_work_notes,
+            commands::detect_work_note_engines,
             commands::get_billing_windows,
             commands::get_trend,
             commands::get_application_analytics,

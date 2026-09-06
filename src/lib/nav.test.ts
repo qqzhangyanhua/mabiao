@@ -22,6 +22,7 @@ describe("NAV_VIEWS", () => {
       "provider",
       "worktime",
       "conversations",
+      "work-notes",
       "cursor",
       "cursor-sessions",
       "instructions",
@@ -45,11 +46,12 @@ describe("digit shortcuts", () => {
     expect(viewForShortcutKey("6")).toBe("provider");
     expect(viewForShortcutKey("7")).toBe("worktime");
     expect(viewForShortcutKey("8")).toBe("conversations");
-    expect(viewForShortcutKey("9")).toBe("cursor");
-    expect(viewForShortcutKey("0")).toBe("cursor-sessions");
+    expect(viewForShortcutKey("9")).toBe("work-notes");
+    expect(viewForShortcutKey("0")).toBe("cursor");
   });
 
   it("leaves items past the first 10 without a digit", () => {
+    expect(shortcutKeyForView("cursor-sessions")).toBeNull();
     expect(shortcutKeyForView("instructions")).toBeNull();
     expect(shortcutKeyForView("settings")).toBeNull();
     expect(shortcutKeyAt(10)).toBeNull();
@@ -67,7 +69,7 @@ describe("shortcut footer", () => {
   it("follows the flattened table for the visible range and title legend", () => {
     expect(shortcutRangeLabel()).toBe("1-0");
     expect(shortcutLegend()).toBe(
-      "1 概览 · 2 使用统计 · 3 模型统计 · 4 项目统计 · 5 来源统计 · 6 接口统计 · 7 工作时间线 · 8 对话记录 · 9 代码量 · 0 会话",
+      "1 概览 · 2 使用统计 · 3 模型统计 · 4 项目统计 · 5 来源统计 · 6 接口统计 · 7 工作时间线 · 8 对话记录 · 9 工作纪要 · 0 代码量",
     );
   });
 });

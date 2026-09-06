@@ -25,6 +25,7 @@ import { PricePresetPanel } from "./PricePresetPanel";
 import { ScanPathPanel } from "./ScanPathPanel";
 import { SourceDiagnosticsPanel } from "./SourceDiagnosticsPanel";
 import { UnpricedDiagnosisPanel } from "./UnpricedDiagnosisPanel";
+import { WorkNotesEnginePanel } from "./WorkNotesEnginePanel";
 import type { SettingsTabIcon } from "./type";
 
 const TAB_ICONS: SettingsTabIcon = {
@@ -210,6 +211,7 @@ export function Settings({
               onPurgeArchived={onPurgeArchived}
             />
             <ConversationIndexPanel />
+            <WorkNotesEnginePanel />
             <BackupPanel onRestored={onSnapshotRefreshed} />
           </>
         ) : null}

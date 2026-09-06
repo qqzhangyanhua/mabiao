@@ -195,6 +195,14 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             prev_windows_json TEXT,
             prev_captured_at TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS work_notes_generated_sessions (
+            engine TEXT NOT NULL,
+            session_id TEXT NOT NULL DEFAULT '',
+            work_dir TEXT NOT NULL DEFAULT '',
+            started_at TEXT NOT NULL,
+            ended_at TEXT NOT NULL
+        );
         "#,
     )
     .map_err(|e| e.to_string())?;
@@ -359,7 +367,56 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     ensure_conversation_event_tables(conn)?;
     ensure_conversation_events_fts(conn)?;
+    ensure_work_notes_tables(conn)?;
     migrate_lowercase_model(conn)
+}
+
+fn ensure_work_notes_tables(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS summary_session_cache (
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            fingerprint TEXT NOT NULL,
+            engine TEXT NOT NULL,
+            model TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (source, session_id, fingerprint, engine, model)
+        );
+
+        CREATE TABLE IF NOT EXISTS summary_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            range_key TEXT NOT NULL,
+            range_kind TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            engine TEXT NOT NULL,
+            model TEXT NOT NULL,
+            extra_instructions TEXT NOT NULL,
+            session_set_hash TEXT NOT NULL,
+            skipped_sparse INTEGER NOT NULL,
+            session_count INTEGER NOT NULL,
+            project_count INTEGER NOT NULL,
+            active_days INTEGER NOT NULL,
+            total_tokens INTEGER NOT NULL,
+            headline TEXT NOT NULL,
+            entries_json TEXT NOT NULL,
+            closing TEXT NOT NULL,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            failures_json TEXT NOT NULL DEFAULT '[]',
+            actual_input_tokens INTEGER NOT NULL DEFAULT 0,
+            actual_output_tokens INTEGER NOT NULL DEFAULT 0,
+            actual_cost REAL,
+            actual_unpriced INTEGER NOT NULL DEFAULT 1,
+            UNIQUE (range_key, engine, model, extra_instructions, session_set_hash)
+        );
+        CREATE INDEX IF NOT EXISTS idx_summary_reports_latest
+            ON summary_reports(range_key, engine, model, created_at);
+        "#,
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// 事件表、路径字典与工具汇总表建在一起：三者是同一份派生缓存的三个部分，列定义要被

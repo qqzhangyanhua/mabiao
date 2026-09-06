@@ -58,4 +58,5 @@ mod scan_paths;
 mod store;
 mod tray;
 mod tray_popup;
+mod work_notes;
 mod work_timeline;

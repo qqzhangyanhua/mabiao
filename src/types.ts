@@ -295,6 +295,7 @@ export type View =
   | "provider"
   | "project"
   | "conversations"
+  | "work-notes"
   | "cursor"
   | "cursor-sessions"
   | "worktime"
@@ -459,6 +460,7 @@ export type ConversationSessionRow = {
   match_snippet?: string | null;
   match_event_id?: string | null;
   match_sequence?: number | null;
+  generated_by_work_notes?: boolean;
 };
 
 export type ConversationPage = {
@@ -978,4 +980,82 @@ export type ReportDto = {
   sources: ReportShareSlice[];
   models: string[];
   insights: ReportInsight[];
+};
+
+export type WorkNotesRangeKind = "this_week" | "this_month" | "custom";
+
+export type WorkNotesRange = {
+  kind: WorkNotesRangeKind;
+  from?: string | null;
+  to?: string | null;
+};
+
+export type WorkNotesEntry = {
+  title: string;
+  detail: string;
+  project: string;
+};
+
+export type WorkNotesFailure = {
+  title: string;
+  error: string;
+};
+
+export type WorkNotesDto = {
+  range_kind: WorkNotesRangeKind;
+  start_date: string;
+  end_date: string;
+  has_data: boolean;
+  skipped_sparse: number;
+  session_count: number;
+  project_count: number;
+  active_days: number;
+  total_tokens: number;
+  headline: string;
+  entries: WorkNotesEntry[];
+  closing: string;
+  extra_instructions: string;
+  failed_count: number;
+  failures: WorkNotesFailure[];
+  actual_input_tokens: number;
+  actual_output_tokens: number;
+  actual_cost: number | null;
+  actual_unpriced: boolean;
+};
+
+export type WorkNotesGate = "ok" | "confirm" | "rejected";
+
+export type WorkNotesPreviewDto = {
+  range_kind: WorkNotesRangeKind;
+  start_date: string;
+  end_date: string;
+  session_count: number;
+  skipped_sparse: number;
+  gate: WorkNotesGate;
+  message: string;
+  estimated_calls: number;
+  estimated_secs: number;
+  estimated_input_tokens: number;
+  estimated_cost: number | null;
+  estimated_unpriced: boolean;
+  cached?: WorkNotesDto | null;
+};
+
+export type WorkNotesJobStatus = "idle" | "running" | "done" | "cancelled" | "error";
+
+export type WorkNotesProgressDto = {
+  status: WorkNotesJobStatus;
+  done: number;
+  total: number;
+  current_title: string;
+  error: string;
+  result: WorkNotesDto | null;
+};
+
+export type DetectedEngine = {
+  id: string;
+  program: string;
+  writes_session_dir: boolean;
+  installed: boolean;
+  version: string | null;
 };

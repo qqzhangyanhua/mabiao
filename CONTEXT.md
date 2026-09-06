@@ -61,16 +61,24 @@ _Avoid_: 把它和「LiteLLM Proxy」当成同一个东西。LiteLLM Proxy 属�
 _Avoid_: 把它当成又一份 token KPI，或把 Cursor 会话伪造成消耗记录
 
 **可分享卡片 (Share Card)**：
-报告海报的转发形态，只写剪贴板。当前只有这一种。入口见 ADR 0020；「不要把别的维度画进同一张图」见 ADR 0018。
+海报的转发形态，只写剪贴板。当前有两种：报告海报（数字，见 ADR 0015 / 0020）与工作纪要海报（自然语言，见 ADR 0021）。两张各自成图，不互相引用对方的数字。「不要把别的维度画进同一张图」见 ADR 0018；再加第三种前先改 ADR 0021 与 0018 的卡片名单。
 _Avoid_: 模板、导出、把官方额度卡当成分享产物
 
 **报告 (Report)**：
-已结束自然周 / 月或自选闭区间内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量不得并进总数。洞察在 Rust 侧产生，前端只措辞与排版。口径与槽位对照 ADR 0015；入口与周期对照 ADR 0020；视觉风格对照 ADR 0019。
-_Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费窗）；把报告叫成导出或仪表盘截图；把官方额度写进周报
+已结束自然周 / 月或自选闭区间内、仅基于消耗记录的可分享汇总，形态是一张竖版长图。不是独立数据维度。token 与费用只来自消耗记录；代码量、官方额度、Cursor 账号用量不得并进总数。**不读对话正文**，也不展示工作纪要的文本。洞察在 Rust 侧产生，前端只措辞与排版。口径与槽位对照 ADR 0015；入口与周期对照 ADR 0020；视觉风格对照 ADR 0019。
+_Avoid_: 摄取报告（那是 `IngestReport`）；滚动 7 天（那是计费窗）；把报告叫成导出或仪表盘截图；把官方额度写进周报；与工作纪要混称（那个读正文、由本机 CLI 生成）
 
 **洞察 (Insight)**：
 报告中的一条结构化事实（`kind` + 数值 payload），由 Rust 规则引擎产生。payload 不含自然语言；措辞不属于洞察本身。
-_Avoid_: 评语、文案、headline；不要在 webview 里现算洞察
+_Avoid_: 评语、文案、headline；不要在 webview 里现算洞察；不要把工作纪要的条目叫成洞察（那是模型写的自然语言，不是规则产生的结构化事实）
+
+**工作纪要 (Work Notes)**：
+一段区间内、基于**对话正文**、由**本机已装的 AI CLI** 逐会话总结再汇总的自然语言纪要，形态是一张伸缩长图（3–6 个条目）。不是报告、不是洞察、不是独立数据维度，不写进 `UsageRecord`。周期语义是**至今**（本周一至今 / 本月 1 号至今 / 自选闭区间，最长 31 天），与报告的「已结束自然周期」相反，**不复用 `ReportPeriod`**。应用自身不持有模型密钥、不自建模型 HTTP 通路。海报可叠加同次查询取齐的硬数字（会话数、项目数、活跃天数、区间 token），代码量、官方额度、Cursor 账号用量仍不得并入。口径见 ADR 0021。
+_Avoid_: 报告（那个只读消耗记录、规则在 Rust）；周报；洞察；把它叫成导出或 AI 总结报告
+
+**纪要引擎 (Summary Engine)**：
+被工作纪要调用来做总结的那个本机 AI CLI，一个 CLI 一个 profile：命令名、非交互形态、只读与禁工具开关、是否支持结构化输出、**是否会写回自己的会话目录**。首版四个：codex（`--ephemeral`，不落盘）、claude（`--no-session-persistence`，不落盘）、grok 与 cursor-agent（**会落盘**）。会落盘的引擎必须可识别（优先钉 session id，否则靠专用工作目录），识别后只做两件事：从后续纪要输入里剔除、在对话记录里打「码表生成」标记；**不从 token KPI 扣除**（那笔 token 真的烧了），**不删除或改写用户的会话文件**。
+_Avoid_: 适配器（那指把原始格式解析成消耗记录或对话记录的模块，方向相反）；来源 (Source)；把它当成又一个数据采集通道
 
 **全局指令 (Global Instruction)**：
 某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
@@ -99,4 +107,4 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 
 表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。
 
-以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告口径与洞察见 `docs/adr/0015-report-and-insights.md`；分享入口与周期见 `docs/adr/0020-share-entry-report-only.md`。
+以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告口径与洞察见 `docs/adr/0015-report-and-insights.md`；分享入口与周期见 `docs/adr/0020-share-entry-report-only.md`；工作纪要与纪要引擎见 `docs/adr/0021-work-notes-llm-summary.md`。

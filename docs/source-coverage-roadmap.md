@@ -6,7 +6,7 @@
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
-**范围声明**：本文档只做优先级排序和可行性记录，不是实施计划；不包含 RED/GREEN 步骤（那类文档见 `docs/superpowers/plans/`）。所有路径/字段来自 2026-09-02 对本机 `~` 目录的一次性 probe，样本量很小（多数来源只有个位数会话），真正实现前仍需按 `AGENTS.md` 的 Adapter 新增流程补脱敏 fixture 并跑 `cargo run --bin probe` 确认字段稳定性。
+**范围声明**：本文档只做优先级排序和可行性记录，不是实施计划；不包含 RED/GREEN 步骤（那类文档见 `docs/superpowers/plans/`）。所有路径/字段来自 2026-09-02 对本机 `~` 目录的一次性 probe，样本量很小（多数来源只有个位数会话），真正实现前仍需按 `docs/agent-layers.md` 的 Adapter 节补脱敏 fixture 并跑 `cargo run --bin probe` 确认字段稳定性。
 
 ## Tier 1 — 高可行性，建议按此顺序新增来源
 
@@ -76,6 +76,6 @@
 
 ## 后续步骤（真正排期实现某一项时）
 
-1. 按 `AGENTS.md` 的「新增 / 修改 Adapter」清单：注册 `Source`、写 adapter、脱敏 fixture 放 `src-tauri/tests/fixtures/`、`tests/adapters.rs` 单测、必要时递增 `store.rs::ADAPTER_VERSION`
+1. 按 `docs/agent-layers.md` 的 Adapter 节做完每一项
 2. 不确定字段先跑 `cargo run --bin probe`，结果写入 `docs/probe/`，尤其是 Cline 家族的 model 字段来源，本文档的判断样本量都很小
 3. Cline/Roo/Kilo 三个 Source 共享解析函数时，注意在 `USAGE_ADAPTERS` 表里各自的 `coverage` 文案要分开写清楚，避免用户以为是同一个来源

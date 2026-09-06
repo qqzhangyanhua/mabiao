@@ -27,7 +27,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     label: "对话",
-    items: [{ id: "conversations", icon: "chat" }],
+    items: [
+      { id: "conversations", icon: "chat" },
+      { id: "work-notes", icon: "notes" },
+    ],
   },
   {
     label: "Cursor",
