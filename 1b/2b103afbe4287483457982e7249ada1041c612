@@ -1,0 +1,54 @@
+src-tauri/src/store/schema.rs
+  s_fd7c965591d43a::t_2509a743bc548f 419-453
+src-tauri/src/tests/store.rs
+  s_fd7c965591d43a::t_e4398dd661baa1 135-207
+  s_fd7c965591d43a::t_ed8aaa66f1e9e8 134
+src-tauri/src/domain/work_notes.rs
+  s_fd7c965591d43a::t_7f6c39c51a85ee 218-249
+src/types.ts
+  s_fd7c965591d43a::t_ef5c1d579e06c3 1044-1067
+src/components/WorkNotesPanel.tsx
+  s_fd7c965591d43a::t_9572cffb150454 24
+  s_fd7c965591d43a::t_e91387eb19498a 96
+  s_fd7c965591d43a::t_9fc33b25c3a03b 141,143
+  s_fd7c965591d43a::t_d5193e39cbe0ef 370
+src-tauri/src/lib.rs
+  s_fd7c965591d43a::t_f5856f5035cab8 356-358
+src-tauri/src/work_notes/cache.rs
+  s_fd7c965591d43a::t_80fa30504d3325 214-293
+  s_fd7c965591d43a::t_c9f16a901a98ee 3-6,10-11
+  s_fd7c965591d43a::t_167659578248ea 12
+src/styles/views/work-notes.css
+  s_fd7c965591d43a::t_3e2d5e2e4f2c37 261-347
+src-tauri/src/commands/work_notes.rs
+  s_fd7c965591d43a::t_17d147a86e6220 158
+  s_fd7c965591d43a::t_302b934ac3fc2c 4-5
+  s_fd7c965591d43a::t_51840ad5ebbde0 128-157,159-166
+src-tauri/src/tests/work_notes.rs
+  s_fd7c965591d43a::t_da67b36633aea9 1769-1885
+  s_fd7c965591d43a::t_f5f6f7e25f010c 9-10
+src/components/GlobalInstructionPanel.tsx
+  s_fd7c965591d43a::t_f73f77ad387176 110
+src-tauri/src/work_notes.rs
+  s_fd7c965591d43a::t_ae8f85e1596c27 95-126
+  s_fd7c965591d43a::t_3db011110e915e 25-26
+src/components/WorkNotesHistory.tsx
+  s_fd7c965591d43a::t_0917274a67bedf 43
+  s_fd7c965591d43a::t_873d9609194287 1-42,44-230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1b2b103afbe4287483457982e7249ada1041c612",
+  "prompts": {},
+  "sessions": {
+    "s_fd7c965591d43a": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "284ebf56-35c4-48ce-a81d-1b3f831e81f3",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
