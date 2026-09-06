@@ -1,0 +1,67 @@
+src/lib/workNotesRange.test.ts
+  s_7d503a836be9cf::t_80d833f1e2902a 1-58,60-61,63-64,66-96
+  s_7d503a836be9cf::t_615955b22ecc09 59,62,65
+src/types.ts
+  s_7d503a836be9cf::t_92ca2966c9a69a 1012-1023
+src-tauri/src/work_notes/period.rs
+  s_7d503a836be9cf::t_80d833f1e2902a 1,6-7,21,23-27,29,43-107
+src-tauri/src/conversation/mod.rs
+  s_7d503a836be9cf::t_80d833f1e2902a 64
+src-tauri/src/domain/work_notes.rs
+  s_7d503a836be9cf::t_9efde14a43f73c 30-66
+src-tauri/src/lib.rs
+  s_7d503a836be9cf::t_7242f56e5082d4 349
+src-tauri/src/tests/work_notes.rs
+  s_7d503a836be9cf::t_830a7266982efe 275,532-567,569-625,627-711,713-717,729-736,738-768
+  s_7d503a836be9cf::t_9984eef1704672 7-8,73-75,79,83,85-88,238-248,252,254-255,261-274
+  s_7d503a836be9cf::t_80d833f1e2902a 72,568,626,712,737
+  s_7d503a836be9cf::t_e76190adaafec5 718-728
+  s_7d503a836be9cf::t_e70182ada82e05 276
+docs/agent-layers.md
+  s_7d503a836be9cf::t_d9287b6cf98950 101
+src/lib/workNotesRange.ts
+  s_7d503a836be9cf::t_80d833f1e2902a 1-4,7-104
+  s_7d503a836be9cf::t_dd73f302dd389b 5-6
+src/styles/views/work-notes.css
+  s_7d503a836be9cf::t_41376e83ebecb9 51
+  s_7d503a836be9cf::t_978be2ec969037 14-50,52-53
+src-tauri/src/work_notes.rs
+  s_7d503a836be9cf::t_6746b910dbdba6 9
+  s_7d503a836be9cf::t_80d833f1e2902a 19
+  s_7d503a836be9cf::t_ddeb980d2a9be2 39-61,63,71,77-82,85,174-190
+  s_7d503a836be9cf::t_1a1d43aa071b35 191
+src/components/WorkNotesPanel.tsx
+  s_7d503a836be9cf::t_7f425e93c81751 45-50,169
+  s_7d503a836be9cf::t_221195a049659d 205-209
+  s_7d503a836be9cf::t_6c42d52be453f1 12,145,159,180,217,231-232
+  s_7d503a836be9cf::t_fdcf0a4397f9a1 54-83,86-89,92-95,108-112,117-133,148,162
+  s_7d503a836be9cf::t_8325ecdb0b025a 176-177,183-191,195-204
+  s_7d503a836be9cf::t_14c63861a50348 9-11
+  s_7d503a836be9cf::t_931a841be16cf4 42-44
+  s_7d503a836be9cf::t_578aada5bc8359 51-53
+  s_7d503a836be9cf::t_2dc5801e73f0b2 134-136,142-144
+  s_7d503a836be9cf::t_798a42ce470d68 146-147
+  s_7d503a836be9cf::t_4f0828348acfc0 149-151,156-158
+  s_7d503a836be9cf::t_1149ab5848a6b0 160-161
+  s_7d503a836be9cf::t_051fec621ea70d 163-168
+  s_7d503a836be9cf::t_a07ccf7f52d39d 173-175
+  s_7d503a836be9cf::t_65c5702c431430 178-179
+  s_7d503a836be9cf::t_0077769536e726 181-182
+  s_7d503a836be9cf::t_9d9274fecf934b 210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "12254e97537ed156008bffc886b8fe561c454273",
+  "prompts": {},
+  "sessions": {
+    "s_7d503a836be9cf": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07506-f926-77d1-bb3c-2176ddf0e3ef",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
