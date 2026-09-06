@@ -1,0 +1,21 @@
+.github/workflows/release.yml
+  s_3b7da977a473c7::t_007647be87878f 18-46,48,113,130
+docs/platforms.md
+  s_3b7da977a473c7::t_d7c9b84b27ba60 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "2997c09b822dbe3a9f45985afcd73fe4ff60c4cb",
+  "prompts": {},
+  "sessions": {
+    "s_3b7da977a473c7": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07451-bd36-7c82-87ea-9d72eb47d927",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
