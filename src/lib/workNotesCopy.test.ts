@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { WorkNotesPreviewDto } from "../types";
-import { formatEstimatedSecs, workNotesEstimateCopy, workNotesUsageCopy } from "./workNotesCopy";
+import {
+  formatEstimatedSecs,
+  workNotesEstimateCopy,
+  workNotesPlainText,
+  workNotesUsageCopy,
+} from "./workNotesCopy";
 import type { WorkNotesDto } from "../types";
 
 function preview(overrides: Partial<WorkNotesPreviewDto> = {}): WorkNotesPreviewDto {
@@ -85,5 +90,58 @@ describe("workNotesUsageCopy", () => {
         dto({ actual_unpriced: true, actual_input_tokens: 0, actual_output_tokens: 0, actual_cost: null }),
       ),
     ).toBe("本次引擎没有回吐用量");
+  });
+});
+
+describe("workNotesPlainText", () => {
+  it("renders headline, entries and closing", () => {
+    const result = workNotesPlainText(
+      dto({
+        headline: "本周主线",
+        entries: [
+          { title: "重构缓存层", detail: "降低锁竞争 45%", project: "/home/user/proj/api" },
+        ],
+        closing: "下周继续优化",
+      }),
+    );
+    expect(result).toContain("本周主线");
+    expect(result).toContain("01  重构缓存层");
+    expect(result).toContain("    降低锁竞争 45%");
+    expect(result).toContain("    📁 api");
+    expect(result).toContain("下周继续优化");
+  });
+
+  it("omits project line when project is empty", () => {
+    const result = workNotesPlainText(
+      dto({
+        entries: [{ title: "修 bug", detail: "修了一个", project: "" }],
+      }),
+    );
+    expect(result).not.toContain("📁");
+  });
+
+  it("appends skipped sparse note when present", () => {
+    const result = workNotesPlainText(dto({ skipped_sparse: 3 }));
+    expect(result).toContain("已略过 3 个零星会话");
+  });
+
+  it("omits skipped note when count is zero", () => {
+    const result = workNotesPlainText(dto({ skipped_sparse: 0 }));
+    expect(result).not.toContain("零星会话");
+  });
+
+  it("handles multiple entries with correct numbering", () => {
+    const result = workNotesPlainText(
+      dto({
+        entries: [
+          { title: "A", detail: "", project: "" },
+          { title: "B", detail: "", project: "" },
+          { title: "C", detail: "", project: "" },
+        ],
+      }),
+    );
+    expect(result).toContain("01  A");
+    expect(result).toContain("02  B");
+    expect(result).toContain("03  C");
   });
 });

@@ -53,6 +53,9 @@ pub fn split_output(raw: &str) -> SplitOutput {
             payload = text;
         } else if let Some(result) = result_text(&value) {
             payload = result;
+        } else if let Some(text) = text_field(&value) {
+            // grok 有时把结构化输出包在顶层 "text" 字段里（字符串值）
+            payload = text;
         }
     }
     if payload.is_empty() {
@@ -70,6 +73,9 @@ fn split_value(value: &Value, raw: &str) -> SplitOutput {
         text
     } else if let Some(result) = result_text(value) {
         result
+    } else if let Some(text) = text_field(value) {
+        // grok 有时把结构化输出包在顶层 "text" 字段里（字符串值）
+        text
     } else {
         raw.to_string()
     };
@@ -95,6 +101,14 @@ fn agent_message_text(value: &Value) -> Option<String> {
         return None;
     }
     item.get("text")?.as_str().map(str::to_string)
+}
+
+/// grok 有时把结构化输出包在顶层 `"text"` 字段里，值为字符串。
+fn text_field(value: &Value) -> Option<String> {
+    match value.get("text") {
+        Some(Value::String(text)) if !text.trim().is_empty() => Some(text.clone()),
+        _ => None,
+    }
 }
 
 fn take_usage(value: &Value, usage: &mut EngineUsage) {

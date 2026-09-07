@@ -110,6 +110,15 @@ pub fn parse_structured<T: DeserializeOwned>(raw: &str) -> Option<T> {
     if let Ok(value) = serde_json::from_str(trimmed) {
         return Some(value);
     }
+    // grok 有时把 JSON 对象序列化为字符串后再放入 text 字段，split_output 拿到的是
+    // 内层字符串（已 JSON 解码），直接 parse 即可；但如果拿到的仍是外层编码字符串
+    // （形如 `"{ \"headline\": ... }"`），则需多解一层。
+    if let Ok(serde_json::Value::String(inner)) = serde_json::from_str::<serde_json::Value>(trimmed)
+    {
+        if let Ok(value) = serde_json::from_str(&inner) {
+            return Some(value);
+        }
+    }
     let block = extract_json_fence(trimmed)?;
     serde_json::from_str(block).ok()
 }
