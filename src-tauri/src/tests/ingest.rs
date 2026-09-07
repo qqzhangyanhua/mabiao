@@ -1751,6 +1751,215 @@ fn agy_encrypted_pb_does_not_increment_failure_count() {
     );
 }
 
+fn write_agy_home_session(
+    home: &std::path::Path,
+    name: &str,
+    steps: &[&str],
+    generations: &[&str],
+) -> PathBuf {
+    write_agy_conversation_db(
+        &home
+            .join(".gemini/antigravity-cli/conversations")
+            .join(name),
+        steps,
+        generations,
+    )
+}
+
+struct AgyMidParseFailure;
+
+impl AgyMidParseFailure {
+    fn arm() -> Self {
+        agy::force_mid_parse_failure(true);
+        Self
+    }
+}
+
+impl Drop for AgyMidParseFailure {
+    fn drop(&mut self) {
+        agy::force_mid_parse_failure(false);
+    }
+}
+
+#[test]
+fn scan_is_stale_detects_agy_wal_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let db = write_agy_home_session(home, "sess.db", &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert!(!ingest::scan_is_stale(&conn, home).unwrap());
+
+    std::fs::write(format!("{}-wal", db.to_string_lossy()), b"wal").unwrap();
+    assert!(
+        ingest::scan_is_stale(&conn, home).unwrap(),
+        "agy .db-wal 变化必须让缓存失效"
+    );
+}
+
+#[test]
+fn agy_ingest_follows_uncheckpointed_wal_on_refresh() {
+    // 写连接保持打开，第二轮用量只进 WAL、不 checkpoint。
+    // sidecar 指纹含 -wal 的 mtime+size，刷新必须重解析并看到新消耗。
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let db = write_agy_home_session(home, "sess-live.db", &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    let writer = rusqlite::Connection::open(&db).unwrap();
+    writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let first = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(first.files_failed, 0, "issues={:?}", first.issues);
+    assert_eq!(
+        store::load_all(&conn)
+            .unwrap()
+            .iter()
+            .filter(|record| record.source == Source::Agy)
+            .count(),
+        1
+    );
+
+    writer
+        .execute(
+            "INSERT INTO steps (idx, metadata) VALUES (?1, ?2)",
+            rusqlite::params![1i64, decode_hex(STEP_REQ_B)],
+        )
+        .unwrap();
+    assert!(
+        PathBuf::from(format!("{}-wal", db.to_string_lossy())).exists(),
+        "第二轮必须还停在 -wal 里"
+    );
+    assert!(
+        ingest::scan_is_stale(&conn, home).unwrap(),
+        "只改 -wal 时必须缓存未命中"
+    );
+
+    let second = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(second.files_failed, 0, "issues={:?}", second.issues);
+    let agy_rows: Vec<_> = store::load_all(&conn)
+        .unwrap()
+        .into_iter()
+        .filter(|record| record.source == Source::Agy)
+        .collect();
+    assert_eq!(
+        agy_rows.len(),
+        2,
+        "刷新后必须看到 WAL 里尚未 checkpoint 的新消耗"
+    );
+    assert!(agy_rows.iter().any(|row| row.input_tokens == 100));
+    assert!(agy_rows.iter().any(|row| row.input_tokens == 5));
+}
+
+#[test]
+fn agy_non_agy_db_is_excluded_without_incrementing_files_failed() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let conv = home.join(".gemini/antigravity-cli/conversations");
+    std::fs::create_dir_all(&conv).unwrap();
+    std::fs::write(conv.join("junk.db"), b"not-a-database").unwrap();
+    let other = conv.join("wrong-schema.db");
+    let source_db = rusqlite::Connection::open(&other).unwrap();
+    source_db
+        .execute_batch("CREATE TABLE message (id INTEGER);")
+        .unwrap();
+    drop(source_db);
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+    let agy = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Agy.as_str())
+        .unwrap();
+
+    assert_eq!(agy.files_failed, 0);
+    assert_eq!(report.files_failed, 0);
+    assert!(
+        report
+            .issues
+            .iter()
+            .all(|issue| issue.source != Source::Agy.as_str()),
+        "非 agy 的 .db 必须静默排除：{:?}",
+        report.issues
+    );
+    assert!(store::load_all(&conn)
+        .unwrap()
+        .iter()
+        .all(|record| record.source != Source::Agy));
+}
+
+#[test]
+fn agy_mid_parse_failure_does_not_block_source_reconcile() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let keep = write_agy_home_session(home, "keep.db", &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    let gone = write_agy_home_session(home, "gone.db", &[STEP_REQ_B], &[GEN_NO_MODEL]);
+
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(
+        store::load_all(&conn)
+            .unwrap()
+            .iter()
+            .filter(|record| record.source == Source::Agy)
+            .count(),
+        2
+    );
+
+    std::fs::remove_file(&gone).unwrap();
+    // 主库 mtime 不变时第二轮会缓存命中、根本不进 parse。这里改一行让指纹失效，
+    // 才能把 Level B 注入走到摄取路径上。
+    let touch = rusqlite::Connection::open(&keep).unwrap();
+    touch
+        .execute("UPDATE steps SET idx = idx WHERE idx = 0", [])
+        .unwrap();
+    drop(touch);
+    let _force = AgyMidParseFailure::arm();
+    let report = ingest::ingest_all(&conn, home).unwrap();
+
+    assert_eq!(
+        report.files_failed, 0,
+        "Level B 不得抬 files_failed，否则 ADR 0003 会跳过对账：{:?}",
+        report.issues
+    );
+    assert!(report.partial_success);
+    assert!(
+        report.issues.iter().any(|issue| {
+            issue.source == Source::Agy.as_str()
+                && issue.path.ends_with("keep.db")
+                && issue.message.contains("中途失败")
+        }),
+        "中途失败必须写诊断：{:?}",
+        report.issues
+    );
+    assert_eq!(
+        report.records_archived, 1,
+        "已删除的 sibling 必须照常归档，实际 archived={}",
+        report.records_archived
+    );
+
+    let records = store::load_all(&conn).unwrap();
+    let agy_rows: Vec<_> = records
+        .iter()
+        .filter(|record| record.source == Source::Agy)
+        .collect();
+    assert_eq!(
+        agy_rows.len(),
+        2,
+        "keep 保留上次正确缓存，gone 归档后仍计入统计"
+    );
+    assert!(agy_rows.iter().any(|row| row.session_id == "keep"));
+    assert!(agy_rows.iter().any(|row| row.session_id == "gone"));
+
+    let diagnostics = ingest::source_diagnostics(&conn, home).unwrap();
+    let agy = diagnostics
+        .iter()
+        .find(|entry| entry.source == Source::Agy.as_str())
+        .unwrap();
+    assert_eq!(agy.archived_record_count, 1);
+}
+
 #[test]
 fn usage_adapter_table_covers_every_registered_source_once() {
     use crate::adapters::{usage_adapter, usage_adapters};
@@ -1790,6 +1999,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
 
     let agy = usage_adapter(Source::Agy);
     assert!(!agy.append_log, "agy 会话库是 SQLite，不是追加型日志");
+    assert!(
+        agy.soft_parse_failure,
+        "agy 中途失败不得抬 files_failed，否则会按 ADR 0003 停掉整源对账"
+    );
     assert_eq!(agy.path_env, "AGY_DATA_DIR");
     assert!(
         agy.detected.is_some(),

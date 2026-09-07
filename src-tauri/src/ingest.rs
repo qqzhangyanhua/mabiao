@@ -280,7 +280,9 @@ fn ingest_all_with_overrides_timed(
     report.records_removed += removed_unknown;
     // 清理未知来源是整表 DELETE，定位不到具体是哪几天，只能整张重来。罕见路径。
     report.rollup_full_rebuild = removed_unknown > 0;
-    report.partial_success = report.files_failed > 0 || !report.conversation_issues.is_empty();
+    report.partial_success = report.files_failed > 0
+        || !report.issues.is_empty()
+        || !report.conversation_issues.is_empty();
 
     let started = std::time::Instant::now();
     sync_rollup(&transaction, &report)?;
@@ -404,7 +406,9 @@ pub fn rebuild_cache(
             &mut report,
         );
     }
-    report.partial_success = report.files_failed > 0 || !report.conversation_issues.is_empty();
+    report.partial_success = report.files_failed > 0
+        || !report.issues.is_empty()
+        || !report.conversation_issues.is_empty();
     // 重建缓存必然动了记录，不走 sync_rollup 的「没变就跳过」判断。
     store::rebuild_rollup(&transaction)?;
     transaction.commit().map_err(|e| e.to_string())?;
@@ -548,7 +552,11 @@ fn ingest_one_prepared(
     let records = match read_records(&loc) {
         Ok(records) => records,
         Err(error) => {
-            record_failure(report, source, &loc, &error);
+            if usage_adapter(source).soft_parse_failure {
+                record_soft_failure(report, source, &loc, &error);
+            } else {
+                record_failure(report, source, &loc, &error);
+            }
             return Ok(());
         }
     };
@@ -712,6 +720,17 @@ fn record_failure(report: &mut IngestReport, source: Source, path: &str, message
     increment(report, source, |source_report| {
         source_report.files_failed += 1
     });
+    push_issue(report, source, path, message);
+}
+
+/// 记诊断、标部分成功，但不抬 `files_failed`。归档对账仍按 ADR 0003 在
+/// `files_failed == 0` 时继续；agy 单库中途失败走这条缝，避免整源对账停摆。
+fn record_soft_failure(report: &mut IngestReport, source: Source, path: &str, message: &str) {
+    report.partial_success = true;
+    push_issue(report, source, path, message);
+}
+
+fn push_issue(report: &mut IngestReport, source: Source, path: &str, message: &str) {
     report.issues.push(IngestIssue {
         source: source.as_str().to_string(),
         path: path.to_string(),
@@ -834,6 +853,52 @@ pub(crate) fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String>
         .pragma_update(None, "query_only", true)
         .map_err(|error| error.to_string())?;
     Ok(connection)
+}
+
+/// 只读打开并跟随 WAL：`file:…?mode=ro` + `SQLITE_OPEN_URI`。
+///
+/// 不用 `immutable=1`——它会跳过未 checkpoint 的 WAL 页，正在写入的会话会静默读到旧数据。
+/// Hermes / agy 共用；`open_readonly`（仅 flags）留给 OpenCode 与代码量，避免改它们的打开语义。
+pub(crate) fn open_readonly_uri(path: &Path) -> Result<rusqlite::Connection, String> {
+    let connection = rusqlite::Connection::open_with_flags(
+        sqlite_file_uri(path, "mode=ro"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .map_err(|error| error.to_string())?;
+    connection
+        .pragma_update(None, "query_only", true)
+        .map_err(|error| error.to_string())?;
+    Ok(connection)
+}
+
+/// SQLite URI：转义路径里的空格、`?`、`#`，再拼查询串。
+pub(crate) fn sqlite_file_uri(path: &Path, query: &str) -> String {
+    let raw = path.to_string_lossy().replace('\\', "/");
+    let mut uri = String::from("file:");
+    for ch in raw.chars() {
+        match ch {
+            ' ' => uri.push_str("%20"),
+            '?' => uri.push_str("%3F"),
+            '#' => uri.push_str("%23"),
+            c => uri.push(c),
+        }
+    }
+    uri.push('?');
+    uri.push_str(query);
+    uri
+}
+
+pub(crate) fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
+    PathBuf::from(format!("{}{suffix}", path.to_string_lossy()))
+}
+
+/// 主库旁的 `-wal` / `-shm` 元数据指纹（mtime+size 等）。任一侧车变化都会让缓存失效。
+pub(crate) fn wal_shm_fingerprint(path: &Path) -> String {
+    format!(
+        "{}|{}",
+        metadata_fingerprint(&sqlite_sidecar_path(path, "-wal")),
+        metadata_fingerprint(&sqlite_sidecar_path(path, "-shm"))
+    )
 }
 
 pub(crate) fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>, String> {

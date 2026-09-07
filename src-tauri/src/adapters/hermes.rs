@@ -1,8 +1,6 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use rusqlite::OpenFlags;
-
 use crate::adapters::finish;
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
@@ -20,15 +18,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    format!(
-        "{}|{}",
-        ingest::metadata_fingerprint(&sidecar_path(path, "-wal")),
-        ingest::metadata_fingerprint(&sidecar_path(path, "-shm"))
-    )
+    ingest::wal_shm_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let source_db = open_readonly(path)?;
+    let source_db = ingest::open_readonly_uri(path)?;
     let usage_cols = table_columns(&source_db, "session_model_usage")?;
     let session_cols = table_columns(&source_db, "sessions")?;
     let sql = format!(
@@ -195,36 +189,4 @@ fn unix_seconds_to_rfc3339(started_at: f64) -> String {
     chrono::DateTime::from_timestamp(secs, nanos as u32)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default()
-}
-
-fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    PathBuf::from(format!("{}{suffix}", path.to_string_lossy()))
-}
-
-fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String> {
-    let uri = sqlite_readonly_uri(path);
-    let connection = rusqlite::Connection::open_with_flags(
-        uri,
-        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|error| error.to_string())?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| error.to_string())?;
-    Ok(connection)
-}
-
-fn sqlite_readonly_uri(path: &Path) -> String {
-    let raw = path.to_string_lossy().replace('\\', "/");
-    let mut uri = String::from("file:");
-    for ch in raw.chars() {
-        match ch {
-            ' ' => uri.push_str("%20"),
-            '?' => uri.push_str("%3F"),
-            '#' => uri.push_str("%23"),
-            c => uri.push(c),
-        }
-    }
-    uri.push_str("?mode=ro");
-    uri
 }

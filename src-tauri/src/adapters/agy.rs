@@ -16,6 +16,10 @@
 //! 以及 Windows `file:///C:/…` 多出来的前导斜杠）。路径能 `canonicalize` 时
 //! 用磁盘真实大小写；失败则原样保留 URI 最后一段。不读 blob 里的 git remote，
 //! 也不做小写化。URI 缺失、空串或 blob 畸形时项目留空，用量行仍解析。
+//!
+//! 摄取边界：只读打开跟随 WAL；sidecar 指纹含 `-wal`/`-shm`；前置校验失败视为
+//! 非 agy 数据（`Ok([])`，不抬 `files_failed`）；过了前置却中途失败则软失败，
+//! 写诊断、保留上次正确缓存，但不阻断该来源的归档对账。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -88,17 +92,28 @@ pub(crate) fn detected(dirs: &[PathBuf]) -> bool {
     })
 }
 
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    ingest::wal_shm_fingerprint(path)
+}
+
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let Ok(conn) = ingest::open_readonly(path) else {
+    let Ok(conn) = ingest::open_readonly_uri(path) else {
         return Ok(Vec::new());
     };
+    if !preflight(&conn) {
+        return Ok(Vec::new());
+    }
+    #[cfg(test)]
+    if mid_parse_failure_forced() {
+        return Err("agy 会话库已确认是本源数据，但解析中途失败".to_string());
+    }
     let models = load_model_names(&conn);
     let project = load_project(&conn);
     let session_id = session_id_from_source_file(&path.to_string_lossy());
     let source_file = path.to_string_lossy().into_owned();
     let mut records: Vec<UsageRecord> = Vec::new();
     let mut index: HashMap<String, usize> = HashMap::new();
-    for blob in load_step_blobs(&conn) {
+    for blob in load_step_blobs(&conn)? {
         let Some((request_id, record)) =
             record_from_step(&blob, &session_id, &source_file, &project, &models)
         else {
@@ -116,14 +131,55 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
     Ok(records)
 }
 
-fn load_step_blobs(conn: &rusqlite::Connection) -> Vec<Vec<u8>> {
-    let Ok(mut stmt) = conn.prepare("SELECT metadata FROM steps WHERE metadata IS NOT NULL") else {
-        return Vec::new();
+/// 前置校验：只读已打开、`steps`/`gen_metadata` 在、且至少能解出一行生成元数据。
+/// 不通过视为「不是 agy 数据」，静默排除。`trajectory_metadata_blob` 可选。
+fn preflight(conn: &rusqlite::Connection) -> bool {
+    table_exists(conn, "steps")
+        && table_exists(conn, "gen_metadata")
+        && decodes_at_least_one_generation(conn)
+}
+
+fn table_exists(conn: &rusqlite::Connection, name: &str) -> bool {
+    conn.query_row(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
+        [name],
+        |_| Ok(()),
+    )
+    .is_ok()
+}
+
+fn decodes_at_least_one_generation(conn: &rusqlite::Connection) -> bool {
+    let Ok(mut stmt) = conn.prepare("SELECT data FROM gen_metadata WHERE data IS NOT NULL") else {
+        return false;
     };
     let Ok(rows) = stmt.query_map([], |row| row.get::<_, Vec<u8>>(0)) else {
-        return Vec::new();
+        return false;
     };
-    rows.filter_map(Result::ok).collect()
+    let blobs: Vec<Vec<u8>> = rows.filter_map(Result::ok).collect();
+    blobs.iter().any(|blob| generation_row_decodes(blob))
+}
+
+/// 生成元数据行能解出嵌套的 ChatModelMetadata 形状即可；模型名可缺（留空）。
+fn generation_row_decodes(blob: &[u8]) -> bool {
+    let mut decoded = false;
+    proto_wire::for_each_bytes_field(blob, |_field, inner| {
+        if proto_wire::text_at_path(inner, &[GEN_USAGE, USAGE_REQUEST_ID]).is_some()
+            || proto_wire::text_at_path(inner, &[GEN_MODEL]).is_some()
+        {
+            decoded = true;
+        }
+    });
+    decoded
+}
+
+fn load_step_blobs(conn: &rusqlite::Connection) -> Result<Vec<Vec<u8>>, String> {
+    let mut stmt = conn
+        .prepare("SELECT metadata FROM steps WHERE metadata IS NOT NULL")
+        .map_err(|error| error.to_string())?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, Vec<u8>>(0))
+        .map_err(|error| error.to_string())?;
+    Ok(rows.filter_map(Result::ok).collect())
 }
 
 fn load_model_names(conn: &rusqlite::Connection) -> HashMap<String, String> {
@@ -273,4 +329,20 @@ fn timestamp_at(blob: &[u8], path: &[u32]) -> String {
     chrono::DateTime::from_timestamp(seconds, nanos)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+thread_local! {
+    static FORCE_MID_PARSE_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// 测试注入：前置校验已通过后让 `parse` 返回 Err，走摄取的软失败路径。
+#[cfg(test)]
+pub(crate) fn force_mid_parse_failure(enabled: bool) {
+    FORCE_MID_PARSE_FAILURE.with(|flag| flag.set(enabled));
+}
+
+#[cfg(test)]
+fn mid_parse_failure_forced() -> bool {
+    FORCE_MID_PARSE_FAILURE.with(std::cell::Cell::get)
 }
