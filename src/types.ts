@@ -894,7 +894,8 @@ export type UsageSource =
   | "factory"
   | "cursor_agent"
   | "copilot"
-  | "hermes";
+  | "hermes"
+  | "agy";
 
 export type SourceIngestReport = {
   source: UsageSource;

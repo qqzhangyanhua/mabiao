@@ -1,3 +1,4 @@
+pub mod agy;
 pub mod claude;
 pub mod codex;
 pub mod copilot;
@@ -270,6 +271,20 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "模型级 Token（含原生费用）",
         display_dirs: None,
         detected: None,
+    },
+    UsageAdapter {
+        source: Source::Agy,
+        path_env: agy::PATH_ENV,
+        scan_dirs: agy::scan_dirs,
+        discover: agy::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: agy::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+        detected: Some(agy::detected),
     },
 ];
 

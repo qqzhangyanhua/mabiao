@@ -42,6 +42,7 @@ export const QUOTA_SOURCE_IDS = [
   "gemini",
   "grok",
   "hermes",
+  "agy",
   "qwen",
 ] as const;
 

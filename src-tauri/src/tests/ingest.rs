@@ -1095,6 +1095,13 @@ fn source_scan_dirs_default_to_home_relative_paths() {
         ingest::source_scan_dirs_with(&overrides, home, Source::Hermes),
         vec![home.join(".hermes")],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Agy),
+        vec![
+            home.join(".gemini/antigravity-cli/conversations"),
+            home.join(".gemini/antigravity-ide/conversations"),
+        ],
+    );
 }
 
 #[test]
@@ -1112,6 +1119,13 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("GROK_HOME", vec![PathBuf::from("/custom/grok")]),
         ("OPENCODE_DATA_DIR", vec![PathBuf::from("/custom/opencode")]),
         ("HERMES_HOME", vec![PathBuf::from("/custom/hermes")]),
+        (
+            "AGY_DATA_DIR",
+            vec![
+                PathBuf::from("/custom/agy-a"),
+                PathBuf::from("/custom/agy-b"),
+            ],
+        ),
     ]);
 
     assert_eq!(
@@ -1137,6 +1151,14 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Hermes),
         vec![PathBuf::from("/custom/hermes")],
+    );
+    // 覆盖后不再回退到默认的 CLI/IDE 双路径，只扫用户显式给出的目录。
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Agy),
+        vec![
+            PathBuf::from("/custom/agy-a/conversations"),
+            PathBuf::from("/custom/agy-b/conversations"),
+        ],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1230,7 +1252,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 14);
+    assert_eq!(Source::ALL.len(), 15);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1303,6 +1325,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const HERMES_FILES: u64 = 1;
     const HERMES_RECORDS: usize = 3;
     const HERMES_TOKENS: i64 = 232;
+    const AGY_FILES: u64 = 1;
+    const AGY_RECORDS: usize = 0;
+    const AGY_TOKENS: i64 = 0;
 
     let opencode = first
         .sources
@@ -1324,6 +1349,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Hermes.as_str())
         .unwrap();
+    let agy = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Agy.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1332,6 +1362,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(omp.records_written, OMP_RECORDS as u64);
     assert_eq!(hermes.files_parsed, HERMES_FILES);
     assert_eq!(hermes.records_written, HERMES_RECORDS as u64);
+    assert_eq!(agy.files_parsed, AGY_FILES);
+    assert_eq!(agy.records_written, AGY_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1349,10 +1381,15 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Hermes)
         .collect();
+    let agy_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Agy)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
     assert_eq!(hermes_rows.len(), HERMES_RECORDS);
+    assert_eq!(agy_rows.len(), AGY_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1381,11 +1418,28 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         HERMES_TOKENS
     );
+    assert_eq!(
+        agy_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        AGY_TOKENS
+    );
 
-    let files = PREV_FILES + OPENCODE_FILES + CURSOR_AGENT_FILES + OMP_FILES + HERMES_FILES;
-    let records =
-        PREV_RECORDS + OPENCODE_RECORDS + CURSOR_AGENT_RECORDS + OMP_RECORDS + HERMES_RECORDS;
-    let tokens = PREV_TOKENS + OPENCODE_TOKENS + CURSOR_AGENT_TOKENS + OMP_TOKENS + HERMES_TOKENS;
+    let files =
+        PREV_FILES + OPENCODE_FILES + CURSOR_AGENT_FILES + OMP_FILES + HERMES_FILES + AGY_FILES;
+    let records = PREV_RECORDS
+        + OPENCODE_RECORDS
+        + CURSOR_AGENT_RECORDS
+        + OMP_RECORDS
+        + HERMES_RECORDS
+        + AGY_RECORDS;
+    let tokens = PREV_TOKENS
+        + OPENCODE_TOKENS
+        + CURSOR_AGENT_TOKENS
+        + OMP_TOKENS
+        + HERMES_TOKENS
+        + AGY_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
     assert_eq!(stored.len(), records);
@@ -1464,9 +1518,9 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 14);
+    assert_eq!(report.files_seen, 15);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 14);
+    assert_eq!(report.files_parsed, 15);
     assert_eq!(report.files_failed, 0);
     assert_eq!(report.records_written, 24);
     assert_eq!(report.records_archived, 0);
@@ -1498,7 +1552,7 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::CursorAgent
             | Source::Copilot => (1, 0, 1, 2, 0, 0),
             Source::Opencode | Source::Gemini | Source::Factory => (1, 0, 1, 1, 0, 0),
-            Source::Qwen => (1, 0, 1, 0, 0, 0),
+            Source::Qwen | Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes => (1, 0, 1, 3, 0, 0),
         };
         let entry = report
@@ -1665,6 +1719,39 @@ fn scan_is_stale_detects_hermes_wal_and_shm_change() {
 }
 
 #[test]
+fn agy_encrypted_pb_does_not_increment_failure_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let conv = home.join(".gemini/antigravity-cli/conversations");
+    std::fs::create_dir_all(&conv).unwrap();
+    std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
+    std::fs::write(conv.join("also.pb"), b"another-encrypted").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report =
+        ingest::ingest_all_with_overrides(&conn, home, &ingest::PathOverrides::new()).unwrap();
+    let agy = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Agy.as_str())
+        .expect("agy 必须出现在摄取报告里");
+
+    assert!(!agy.detected, "只有 .pb 时不得谎报已检测到：{agy:?}");
+    assert_eq!(agy.files_seen, 0);
+    assert_eq!(agy.files_failed, 0);
+    assert_eq!(agy.files_parsed, 0);
+    assert_eq!(report.files_failed, 0);
+    assert!(
+        report
+            .issues
+            .iter()
+            .all(|issue| issue.source != Source::Agy.as_str()),
+        "加密 .pb 不得写成解析失败：{:?}",
+        report.issues
+    );
+}
+
+#[test]
 fn usage_adapter_table_covers_every_registered_source_once() {
     use crate::adapters::{usage_adapter, usage_adapters};
 
@@ -1700,6 +1787,15 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     );
     assert_eq!(hermes.path_env, "HERMES_HOME");
     assert_eq!(hermes.coverage, "模型级 Token（含原生费用）");
+
+    let agy = usage_adapter(Source::Agy);
+    assert!(!agy.append_log, "agy 会话库是 SQLite，不是追加型日志");
+    assert_eq!(agy.path_env, "AGY_DATA_DIR");
+    assert!(
+        agy.detected.is_some(),
+        "agy 必须用自定义「已检测到」判定，不能用目录存在即检测到"
+    );
+    assert_eq!(agy.coverage, "轮级 Token");
 }
 
 #[test]

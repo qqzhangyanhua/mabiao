@@ -12,6 +12,7 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   factory: "factory",
   droid: "factory",
   antigravity: "gemini",
+  agy: "gemini",
   pi: "pi",
   omp: "omp",
   dsh: "dsh",

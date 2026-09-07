@@ -138,6 +138,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("droid")).toBe("Droid");
     expect(sourceLabel("omp")).toBe("OMP");
     expect(sourceLabel("antigravity")).toBe("Antigravity");
+    expect(sourceLabel("agy")).toBe("Antigravity");
     expect(sourceLabel("devin")).toBe("Devin");
     expect(sourceLabel("hermes")).toBe("Hermes");
   });

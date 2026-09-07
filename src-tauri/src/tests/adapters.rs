@@ -541,6 +541,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Omp.application_name(), "OMP");
     assert_eq!(Source::Copilot.application_name(), "GitHub Copilot CLI");
     assert_eq!(Source::Hermes.application_name(), "Hermes");
+    assert_eq!(Source::Agy.application_name(), "Antigravity");
+    assert_eq!(Source::Agy.as_str(), "agy");
+    assert_eq!(Source::parse("agy"), Some(Source::Agy));
 }
 
 #[test]
@@ -1082,4 +1085,62 @@ fn hermes_adapter_fingerprint_covers_wal_and_shm() {
     let with_wal_and_shm = hermes::sidecar_fingerprint(&db, &[]);
     assert_ne!(with_wal_and_shm, with_wal);
     assert_ne!(with_wal_and_shm, missing);
+}
+
+fn agy_conversations(home: &std::path::Path) -> PathBuf {
+    let conv = home.join("conversations");
+    std::fs::create_dir_all(&conv).unwrap();
+    conv
+}
+
+#[test]
+fn agy_only_pb_dir_is_not_detected() {
+    let dir = tempfile::tempdir().unwrap();
+    let conv = agy_conversations(dir.path());
+    std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
+    assert!(
+        !agy::detected(&[conv.clone()]),
+        "只有加密 .pb 时不得谎报已检测到"
+    );
+    assert!(
+        agy::discover(&[conv]).unwrap().is_empty(),
+        "发现阶段不得把 .pb 列入解析名单"
+    );
+}
+
+#[test]
+fn agy_db_dir_is_detected() {
+    let dir = tempfile::tempdir().unwrap();
+    let conv = agy_conversations(dir.path());
+    std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
+    std::fs::write(conv.join("session.db"), b"").unwrap();
+    assert!(agy::detected(&[conv.clone()]));
+    let found = agy::discover(&[conv]).unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].file_name().and_then(|name| name.to_str()),
+        Some("session.db")
+    );
+}
+
+#[test]
+fn agy_discover_excludes_pb_and_sqlite_sidecars() {
+    let dir = tempfile::tempdir().unwrap();
+    let conv = agy_conversations(dir.path());
+    std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
+    std::fs::write(conv.join("session.db"), b"").unwrap();
+    std::fs::write(conv.join("session.db-wal"), b"wal").unwrap();
+    std::fs::write(conv.join("session.db-shm"), b"shm").unwrap();
+    let found = agy::discover(&[conv]).unwrap();
+    assert_eq!(found.len(), 1);
+    assert!(found[0].file_name().unwrap() == "session.db");
+}
+
+#[test]
+fn agy_parse_returns_empty_until_usage_mapping_lands() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("session.db");
+    std::fs::write(&db, b"").unwrap();
+    let records = agy::parse(&db, dir.path()).unwrap();
+    assert!(records.is_empty());
 }
