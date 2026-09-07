@@ -1421,3 +1421,137 @@ fn agy_adapter_malformed_trajectory_skips_project_but_parses_usage() {
     assert_eq!(records[0].input_tokens, 100);
     assert_eq!(records[0].output_tokens, 50);
 }
+
+#[test]
+fn agy_adapter_fingerprint_covers_wal_and_shm() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_agy_conversation_db(
+        &dir.path().join("sess.db"),
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+    );
+    let missing = agy::sidecar_fingerprint(&db, &[]);
+    assert_eq!(missing, "missing|missing");
+
+    std::fs::write(format!("{}-wal", db.to_string_lossy()), b"wal").unwrap();
+    let with_wal = agy::sidecar_fingerprint(&db, &[]);
+    assert_ne!(with_wal, missing);
+    assert!(
+        with_wal.ends_with("|missing"),
+        "只有 -wal 变化时 -shm 仍应是 missing：{with_wal}"
+    );
+
+    std::fs::write(format!("{}-shm", db.to_string_lossy()), b"shm").unwrap();
+    let with_wal_and_shm = agy::sidecar_fingerprint(&db, &[]);
+    assert_ne!(with_wal_and_shm, with_wal);
+    assert_ne!(with_wal_and_shm, missing);
+}
+
+#[test]
+fn agy_adapter_readonly_parse_follows_uncheckpointed_wal() {
+    // 写连接设 journal_mode=WAL，插入第一轮后保持不关，再插入第二轮。
+    // 关最后一条写连接会 checkpoint，-wal 被收进主库，测不到「跟随 WAL」。
+    // `file:…?mode=ro` 必须看到第二轮；`immutable=1` 跳过 WAL，第二轮静默失踪。
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_agy_conversation_db(
+        &dir.path().join("sess-wal.db"),
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+    );
+    let writer = rusqlite::Connection::open(&db).unwrap();
+    writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+    writer
+        .execute(
+            "INSERT INTO steps (idx, metadata) VALUES (?1, ?2)",
+            rusqlite::params![1i64, decode_hex(STEP_REQ_B)],
+        )
+        .unwrap();
+    assert!(
+        PathBuf::from(format!("{}-wal", db.to_string_lossy())).exists(),
+        "第二轮必须还停在 -wal 里"
+    );
+
+    let records = agy::parse(&db, dir.path()).unwrap();
+    assert_eq!(
+        records.len(),
+        2,
+        "mode=ro 必须看到 WAL 里尚未 checkpoint 的 req-b"
+    );
+    assert!(records.iter().any(|row| row.input_tokens == 100));
+    assert!(records.iter().any(|row| row.input_tokens == 5));
+
+    let immutable = rusqlite::Connection::open_with_flags(
+        ingest::sqlite_file_uri(&db, "immutable=1"),
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .unwrap();
+    let checkpointed: i64 = immutable
+        .query_row("SELECT COUNT(*) FROM steps", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(
+        checkpointed, 1,
+        "immutable=1 跳过 WAL，只能看到写入 WAL 之前的一行"
+    );
+}
+
+#[test]
+fn agy_adapter_readonly_parse_does_not_change_wal_sidecar() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_agy_conversation_db(
+        &dir.path().join("sess-ro.db"),
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+    );
+    let writer = rusqlite::Connection::open(&db).unwrap();
+    writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+    writer
+        .execute("UPDATE steps SET idx = idx WHERE idx = 0", [])
+        .unwrap();
+    assert!(PathBuf::from(format!("{}-wal", db.to_string_lossy())).exists());
+    let before = agy::sidecar_fingerprint(&db, &[]);
+    agy::parse(&db, dir.path()).unwrap();
+    let after = agy::sidecar_fingerprint(&db, &[]);
+    assert_eq!(before, after);
+}
+
+#[test]
+fn agy_parse_returns_empty_for_wrong_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("other.db");
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute_batch("CREATE TABLE message (id INTEGER);")
+        .unwrap();
+    drop(conn);
+    let records = agy::parse(&db, dir.path()).unwrap();
+    assert!(records.is_empty());
+}
+
+#[test]
+fn agy_parse_returns_empty_when_generation_cannot_decode() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = dir.path().join("junk-gen.db");
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute_batch(
+        r#"
+        CREATE TABLE steps (idx INTEGER PRIMARY KEY, metadata BLOB);
+        CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);
+        "#,
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO gen_metadata (idx, data) VALUES (0, ?1)",
+        rusqlite::params![b"\x00\x01\xff".to_vec()],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO steps (idx, metadata) VALUES (0, ?1)",
+        rusqlite::params![decode_hex(STEP_SIX_TUPLE)],
+    )
+    .unwrap();
+    drop(conn);
+    let records = agy::parse(&db, dir.path()).unwrap();
+    assert!(
+        records.is_empty(),
+        "解不出生成元数据时视为非 agy 数据，不得产出消耗记录"
+    );
+}
