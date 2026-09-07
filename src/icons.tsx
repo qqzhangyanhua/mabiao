@@ -268,4 +268,5 @@ export const sourceTone: Record<string, string> = {
   copilot: "tone-copilot",
   hermes: "tone-hermes",
   antigravity: "tone-gemini",
+  agy: "tone-gemini",
 };

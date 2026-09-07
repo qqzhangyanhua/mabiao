@@ -17,6 +17,7 @@ const KNOWN_SOURCES = [
   "cursor_agent",
   "copilot",
   "hermes",
+  "agy",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -47,8 +48,9 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("droid")).toBe("factory");
   });
 
-  it("uses the Gemini face for Antigravity official quota", () => {
+  it("uses the Gemini face for Antigravity official quota and agy usage", () => {
     expect(resolveSourceIconId("antigravity")).toBe("gemini");
+    expect(resolveSourceIconId("agy")).toBe("gemini");
   });
 
   it("falls back to the generic mark instead of a first letter", () => {
