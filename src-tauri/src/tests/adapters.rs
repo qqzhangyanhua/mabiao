@@ -1138,11 +1138,129 @@ fn agy_discover_excludes_pb_and_sqlite_sidecars() {
     assert!(found[0].file_name().unwrap() == "session.db");
 }
 
+fn parse_agy_db(
+    name: &str,
+    steps: &[&str],
+    generations: &[&str],
+) -> (tempfile::TempDir, Vec<UsageRecord>) {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_agy_conversation_db(&dir.path().join(name), steps, generations);
+    let records = agy::parse(&db, dir.path()).unwrap();
+    (dir, records)
+}
+
 #[test]
-fn agy_parse_returns_empty_until_usage_mapping_lands() {
+fn agy_parse_returns_empty_for_unreadable_file() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("session.db");
     std::fs::write(&db, b"").unwrap();
     let records = agy::parse(&db, dir.path()).unwrap();
     assert!(records.is_empty());
+}
+
+#[test]
+fn agy_adapter_maps_six_token_fields_and_output_equals_thinking_plus_response() {
+    let (_dir, records) = parse_agy_db("sess-six.db", &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    assert_eq!(records.len(), 1);
+    let row = &records[0];
+    assert_eq!(row.source, Source::Agy);
+    assert_eq!(row.session_id, "sess-six");
+    assert_eq!(row.model, "claude-sonnet-4-6");
+    assert_eq!(row.provider, "");
+    assert_eq!(row.project, "");
+    assert_eq!(row.native_cost, None);
+    assert_eq!(row.occurred_at, "2026-04-05T08:00:00+00:00");
+    assert_eq!(row.input_tokens, 100);
+    assert_eq!(row.output_tokens, 50);
+    assert_eq!(row.cache_read_tokens, 20);
+    assert_eq!(row.cache_creation_tokens, 7);
+    assert_eq!(row.reasoning_tokens, 30);
+    const RESPONSE: i64 = 20;
+    assert_eq!(row.output_tokens, row.reasoning_tokens + RESPONSE);
+    assert_eq!(
+        row.input_tokens, 100,
+        "必须用 step 服务端值，不能吃 gen_metadata 里的客户端估算 9999"
+    );
+}
+
+#[test]
+fn agy_adapter_total_tokens_excludes_reasoning() {
+    let (_dir, records) = parse_agy_db("sess-total.db", &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    let row = &records[0];
+    let expected =
+        row.input_tokens + row.output_tokens + row.cache_read_tokens + row.cache_creation_tokens;
+    assert_eq!(row.total_tokens, expected);
+    assert_eq!(row.total_tokens, 177);
+    assert_ne!(
+        row.total_tokens,
+        expected + row.reasoning_tokens,
+        "total 再加 reasoning 就是静默双计"
+    );
+}
+
+#[test]
+fn agy_adapter_keeps_max_output_for_duplicate_request_id() {
+    let (_dir, records) =
+        parse_agy_db("sess-dup.db", &[STEP_DUP_LOW, STEP_DUP_HIGH], &[GEN_CLAUDE]);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].input_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 12);
+    assert_eq!(records[0].cache_creation_tokens, 3);
+}
+
+#[test]
+fn agy_adapter_keeps_both_rows_when_request_ids_differ() {
+    let (_dir, records) = parse_agy_db("sess-two.db", &[STEP_SIX_TUPLE, STEP_REQ_B], &[GEN_CLAUDE]);
+    assert_eq!(records.len(), 2);
+    let a = records
+        .iter()
+        .find(|row| row.input_tokens == 100)
+        .expect("req-a");
+    let b = records
+        .iter()
+        .find(|row| row.input_tokens == 5)
+        .expect("req-b");
+    assert_eq!(a.output_tokens, 50);
+    assert_eq!(b.output_tokens, 8);
+    assert_eq!(a.model, "claude-sonnet-4-6");
+    assert_eq!(b.model, "");
+}
+
+#[test]
+fn agy_adapter_leaves_model_empty_when_generation_name_missing() {
+    let (_dir, records) = parse_agy_db("sess-anon.db", &[STEP_SIX_TUPLE], &[GEN_NO_MODEL]);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "");
+}
+
+#[test]
+fn agy_adapter_preserves_effort_suffix() {
+    let (_dir, records) = parse_agy_db("sess-high.db", &[STEP_SIX_TUPLE], &[GEN_HIGH]);
+    assert_eq!(records[0].model, "gemini-3.8-flash-high");
+}
+
+#[test]
+fn agy_adapter_skips_malformed_rows_without_failing_the_db() {
+    let (_dir, records) = parse_agy_db(
+        "sess-mix.db",
+        &[
+            STEP_TRUNCATED,
+            STEP_MISSING_PATH,
+            STEP_WRONG_WIRE,
+            STEP_MISSING_FIELDS,
+            STEP_SIX_TUPLE,
+        ],
+        &[GEN_CLAUDE],
+    );
+    assert_eq!(records.len(), 3);
+    assert!(records
+        .iter()
+        .any(|row| row.input_tokens == 100 && row.output_tokens == 50));
+    assert!(records
+        .iter()
+        .any(|row| row.input_tokens == 0 && row.output_tokens == 50));
+    assert!(records
+        .iter()
+        .any(|row| row.input_tokens == 0 && row.output_tokens == 9));
 }

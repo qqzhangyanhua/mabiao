@@ -20,6 +20,7 @@ pub mod memory;
 pub mod net;
 pub mod official_quota;
 pub mod paths;
+pub(crate) mod proto_wire;
 pub mod query;
 pub mod report;
 pub mod rollup_source;

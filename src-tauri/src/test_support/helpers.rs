@@ -233,7 +233,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     std::fs::write(&dsh, compressed).unwrap();
     write_opencode_fixture_db(home);
     super::write_default_hermes_home(home);
-    // agy 本票解析返回空；夹具只放一个空 `.db`，用来接通发现 / 检测 / 心跳对账。
+    // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");
     std::fs::create_dir_all(agy.parent().unwrap()).unwrap();

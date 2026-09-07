@@ -319,16 +319,5 @@ fn has_weekly_period(config: &[u8]) -> bool {
 }
 
 fn read_varint(bytes: &[u8], index: &mut usize) -> Option<u64> {
-    let mut value: u64 = 0;
-    let mut shift = 0;
-    while *index < bytes.len() && shift < 64 {
-        let byte = bytes[*index];
-        *index += 1;
-        value |= u64::from(byte & 0x7f) << shift;
-        if byte & 0x80 == 0 {
-            return Some(value);
-        }
-        shift += 7;
-    }
-    None
+    crate::proto_wire::read_varint_from(bytes, index)
 }
