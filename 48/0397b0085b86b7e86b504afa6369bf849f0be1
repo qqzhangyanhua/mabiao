@@ -1,0 +1,32 @@
+src-tauri/src/tests/work_notes.rs
+  h_4132837b09b7e7 846-869
+src-tauri/src/work_notes/parse.rs
+  h_4132837b09b7e7 113-121
+src-tauri/src/work_notes/usage.rs
+  h_4132837b09b7e7 56-58,76-78,106-113
+src/components/WorkNotesPanel.tsx
+  h_4132837b09b7e7 3,5,292-328,330-331,344-373
+src/components/WorkNotesShare.tsx
+  h_4132837b09b7e7 10,18,21-26,35,38,76-79,93-105,114-145,147-158,161-170
+src/lib/workNotesCopy.test.ts
+  h_4132837b09b7e7 3-8,95-147
+src/lib/workNotesCopy.ts
+  h_4132837b09b7e7 2,36-76
+src/styles.css
+  h_4132837b09b7e7 27
+src/styles/views/work-notes-history.css
+  h_4132837b09b7e7 1-86
+src/styles/views/work-notes.css
+  h_4132837b09b7e7 91,99-101,105-138,147,152-158,201-202,206-207,230,239,261-274,284,287-288,290,293,298,301-303,306-307,310-317,319-326,329,332-336,339-345,348-353,355,358,362,365-368,371-379,382-392,394
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "480397b0085b86b7e86b504afa6369bf849f0be1",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
