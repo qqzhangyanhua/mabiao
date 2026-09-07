@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
-import { humanStatus } from "../lib/format";
+import { formatTokens, formatUsdAmount, humanStatus } from "../lib/format";
 import { useWorkNotesProgress } from "../lib/useWorkNotesProgress";
-import { workNotesEstimateCopy, workNotesUsageCopy } from "../lib/workNotesCopy";
+import { formatEstimatedSecs, workNotesUsageCopy } from "../lib/workNotesCopy";
 import {
   clampWorkNotesCustomRange,
   thisWeekStartDate,
@@ -70,7 +70,6 @@ export function WorkNotesPanel() {
     preview.gate === "rejected" ||
     preview.session_count === 0 ||
     engineId == null;
-  const estimateCopy = preview ? workNotesEstimateCopy(preview) : null;
   const rawDto = progress?.status === "done" ? progress.result : null;
   const progressDto =
     rawDto &&
@@ -290,11 +289,46 @@ export function WorkNotesPanel() {
         <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
       ) : null}
       {previewLoading ? <p className="work-notes-scale">正在统计会话数…</p> : null}
-      {!previewLoading && preview && !previewError ? (
+      {!previewLoading && preview && !previewError && preview.session_count > 0 ? (
+        <div className="work-notes-estimate-strip">
+          <div className="work-notes-estimate-item">
+            <span className="work-notes-estimate-label">区间范围</span>
+            <span className="work-notes-estimate-value">
+              {preview.start_date} 至 {preview.end_date}
+            </span>
+          </div>
+          <div className="work-notes-estimate-item">
+            <span className="work-notes-estimate-label">参与会话</span>
+            <span className="work-notes-estimate-value">
+              {preview.session_count} 个
+              {preview.skipped_sparse > 0 ? (
+                <span className="work-notes-estimate-sub">（略过 {preview.skipped_sparse} 零星）</span>
+              ) : null}
+            </span>
+          </div>
+          <div className="work-notes-estimate-item">
+            <span className="work-notes-estimate-label">预计耗时</span>
+            <span className="work-notes-estimate-value">
+              {formatEstimatedSecs(preview.estimated_secs)} · {preview.estimated_calls} 次调用
+            </span>
+          </div>
+          <div className="work-notes-estimate-item">
+            <span className="work-notes-estimate-label">预计消耗</span>
+            <span className="work-notes-estimate-value">
+              {preview.estimated_unpriced || preview.estimated_cost == null
+                ? "费用未定价"
+                : `约 ${formatUsdAmount(preview.estimated_cost)}`}{" "}
+              <span className="work-notes-estimate-sub">
+                （约 {formatTokens(preview.estimated_input_tokens)} tok）
+              </span>
+            </span>
+          </div>
+        </div>
+      ) : null}
+      {!previewLoading && preview && !previewError && preview.session_count === 0 ? (
         <p className="work-notes-scale">
-          {preview.start_date} 至 {preview.end_date}，有 {preview.session_count} 个会话
-          {preview.skipped_sparse > 0 ? `，已略过 ${preview.skipped_sparse} 个零星会话` : ""}
-          {estimateCopy ? `。${estimateCopy}` : ""}
+          {preview.start_date} 至 {preview.end_date}，无会话
+          {preview.skipped_sparse > 0 ? `（已略过 ${preview.skipped_sparse} 个零星会话）` : ""}
         </p>
       ) : null}
       {!previewLoading && preview?.message ? (
@@ -307,10 +341,36 @@ export function WorkNotesPanel() {
         </p>
       ) : null}
       {running && progress ? (
-        <p className="work-notes-progress" role="status" aria-live="polite">
-          已完成 {progress.done} / 共 {progress.total}
-          {progress.current_title ? `，正在总结：${progress.current_title}` : ""}
-        </p>
+        <div className="work-notes-progress-box" role="status" aria-live="polite">
+          <div className="work-notes-progress-header">
+            <span className="work-notes-progress-title-meta">正在总结会话…</span>
+            <span className="work-notes-progress-count">
+              已完成 <strong>{progress.done}</strong> / {progress.total}
+              <span className="work-notes-progress-pct">
+                （{progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%）
+              </span>
+            </span>
+          </div>
+          <div className="work-notes-progress-track">
+            <div
+              className="work-notes-progress-bar"
+              style={{
+                width: `${
+                  progress.total > 0
+                    ? Math.min(100, Math.max(3, Math.round((progress.done / progress.total) * 100)))
+                    : 3
+                }%`,
+              }}
+            />
+          </div>
+          {progress.current_title ? (
+            <p className="work-notes-progress-current">
+              <span className="work-notes-progress-dot" aria-hidden="true" />
+              <span className="work-notes-progress-current-label">当前正在总结：</span>
+              <span className="work-notes-progress-current-title">{progress.current_title}</span>
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {cancelled ? (
         <p className="work-notes-progress">

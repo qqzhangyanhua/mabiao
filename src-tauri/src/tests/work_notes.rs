@@ -843,6 +843,30 @@ fn degrades_to_plain_text_after_retry_fails() {
     assert_eq!(h.runner.recorded().len(), 3);
 }
 
+/// grok 有时把结构化输出包在顶层 `text` 字段里（字符串值）。
+/// 例如：`{ "text": "{\"headline\":\"...\",\"entries\":[...],\"closing\":\"...\"}" }`
+#[test]
+fn parses_grok_text_field_wrapping_reduce_json() {
+    let wrapped = serde_json::json!({ "text": reduce_json() }).to_string();
+    let h = Harness::new(replies(&[&map_json("修口径")], &[&wrapped]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let dto = h.build();
+    assert_eq!(dto.headline, "本周主线是修统计口径");
+    assert_eq!(dto.entries.len(), 3);
+    assert_eq!(dto.closing, "下周继续补区间和引擎");
+}
+
+/// grok map phase 同理：`{ "text": "{\"summary\":\"...\"}" }`
+#[test]
+fn parses_grok_text_field_wrapping_map_json() {
+    let wrapped_map = serde_json::json!({ "text": map_json("修口径") }).to_string();
+    let h = Harness::new(replies(&[&wrapped_map], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let dto = h.build();
+    assert_eq!(dto.headline, "本周主线是修统计口径");
+    assert_eq!(dto.entries.len(), 3);
+}
+
 #[test]
 fn skipped_sparse_still_counted_when_other_sessions_summarize() {
     let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
