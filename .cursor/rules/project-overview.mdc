@@ -58,7 +58,7 @@ docs/adr/
 ## 领域词汇（详见 CONTEXT.md，请勿用其它措辞替代）
 
 - **消耗记录 (Usage Record)**：归一化后的标准用量条目，唯一定义在 `domain::UsageRecord`
-- **来源 (Source)**：被统计的 AI 工具（如 codex、claude），避免用「工具/tool/渠道」；权威名单是 `domain::Source::ALL`（14 个）
+- **来源 (Source)**：被统计的 AI 工具（如 codex、claude），避免用「工具/tool/渠道」；权威名单是 `domain::Source::ALL`（15 个）
 - **适配器 (Adapter)**：把某 Source 的原始格式解析成 Usage Record 的模块，避免用「parser/解析器」
 - **Token 口径 (Token Dimension)**：input/output/cache_read/cache_creation/reasoning/total
 - **代码量 (Code Volume)**：仅 Cursor 编辑器的 AI 生成代码行数统计，与 token 无关，界面上严格分区，避免与「用量/消耗」混用

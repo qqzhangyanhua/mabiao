@@ -300,7 +300,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: false,
         soft_parse_failure: true,
-        coverage: "轮级 Token",
+        coverage: "轮级六元组（无原生费用）",
         display_dirs: None,
         detected: Some(agy::detected),
     },

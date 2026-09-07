@@ -2008,7 +2008,7 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         agy.detected.is_some(),
         "agy 必须用自定义「已检测到」判定，不能用目录存在即检测到"
     );
-    assert_eq!(agy.coverage, "轮级 Token");
+    assert_eq!(agy.coverage, "轮级六元组（无原生费用）");
 }
 
 #[test]
