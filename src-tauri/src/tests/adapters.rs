@@ -1149,6 +1149,23 @@ fn parse_agy_db(
     (dir, records)
 }
 
+fn parse_agy_db_with_trajectory(
+    name: &str,
+    steps: &[&str],
+    generations: &[&str],
+    trajectory: &str,
+) -> (tempfile::TempDir, Vec<UsageRecord>) {
+    let dir = tempfile::tempdir().unwrap();
+    let db = write_agy_conversation_db_with_trajectory(
+        &dir.path().join(name),
+        steps,
+        generations,
+        Some(trajectory),
+    );
+    let records = agy::parse(&db, dir.path()).unwrap();
+    (dir, records)
+}
+
 #[test]
 fn agy_parse_returns_empty_for_unreadable_file() {
     let dir = tempfile::tempdir().unwrap();
@@ -1263,4 +1280,144 @@ fn agy_adapter_skips_malformed_rows_without_failing_the_db() {
     assert!(records
         .iter()
         .any(|row| row.input_tokens == 0 && row.output_tokens == 9));
+}
+
+#[test]
+fn agy_adapter_project_is_last_segment_of_workspace_uri() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-proj.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_URI_AI_WITH_REMOTE,
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].project, "AI");
+    assert_eq!(records[0].input_tokens, 100);
+}
+
+#[test]
+fn agy_adapter_project_ignores_git_remote_and_does_not_lowercase() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-remote.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_URI_AI_WITH_REMOTE,
+    );
+    assert_eq!(records[0].project, "AI");
+    assert_ne!(
+        records[0].project, "mabiao",
+        "不得取 decoy git remote 的仓库名"
+    );
+    assert_ne!(records[0].project, "ai", "不得把 URI 最后一段小写化");
+}
+
+#[test]
+fn agy_adapter_project_keeps_uri_segment_when_path_missing() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-missing.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_URI_AI_WITH_REMOTE,
+    );
+    assert_eq!(
+        records[0].project, "AI",
+        "路径不存在时必须原样保留 URI 最后一段"
+    );
+}
+
+#[test]
+fn agy_adapter_project_strips_windows_file_uri_leading_slash() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-win.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_URI_WINDOWS_AI,
+    );
+    assert_eq!(records[0].project, "AI");
+}
+
+#[test]
+fn agy_adapter_project_uses_canonical_last_component_when_path_exists() {
+    let root = tempfile::tempdir().unwrap();
+    let on_disk = root.path().join("AI");
+    std::fs::create_dir(&on_disk).unwrap();
+    let canonical = std::fs::canonicalize(&on_disk).unwrap();
+    let expected = canonical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("canonical last component");
+    assert_eq!(expected, "AI");
+
+    let uri = format!("file://{}", on_disk.display());
+    let hex = trajectory_workspace_hex(&uri, None);
+    let db = write_agy_conversation_db_with_trajectory(
+        &root.path().join("sess-canon.db"),
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        Some(&hex),
+    );
+    let records = agy::parse(&db, root.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].project, expected);
+}
+
+/// Linux 大小写敏感，无法直接演示 case-fold；用符号链接让 URI 最后一段
+/// 与 canonicalize 后的磁盘名不同，锁住「成功时取规范路径最后一段」。
+#[cfg(unix)]
+#[test]
+fn agy_adapter_project_prefers_canonical_name_over_uri_segment() {
+    let root = tempfile::tempdir().unwrap();
+    let on_disk = root.path().join("AI");
+    std::fs::create_dir(&on_disk).unwrap();
+    let alias = root.path().join("uri-alias");
+    std::os::unix::fs::symlink(&on_disk, &alias).unwrap();
+    let canonical = std::fs::canonicalize(&alias).unwrap();
+    let expected = canonical
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("canonical last component");
+    assert_eq!(expected, "AI");
+    assert_ne!(
+        alias.file_name().and_then(|name| name.to_str()),
+        Some(expected)
+    );
+
+    let uri = format!("file://{}", alias.display());
+    let hex = trajectory_workspace_hex(&uri, None);
+    let db = write_agy_conversation_db_with_trajectory(
+        &root.path().join("sess-alias.db"),
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        Some(&hex),
+    );
+    let records = agy::parse(&db, root.path()).unwrap();
+    assert_eq!(records[0].project, expected);
+    assert_ne!(records[0].project, "uri-alias");
+}
+
+#[test]
+fn agy_adapter_empty_workspace_uri_leaves_project_empty() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-empty-uri.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_EMPTY_URI,
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].project, "");
+    assert_eq!(records[0].input_tokens, 100);
+}
+
+#[test]
+fn agy_adapter_malformed_trajectory_skips_project_but_parses_usage() {
+    let (_dir, records) = parse_agy_db_with_trajectory(
+        "sess-bad-traj.db",
+        &[STEP_SIX_TUPLE],
+        &[GEN_CLAUDE],
+        TRAJECTORY_MALFORMED,
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].project, "");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 50);
 }

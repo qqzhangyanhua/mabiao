@@ -10,6 +10,10 @@ use std::path::{Path, PathBuf};
 /// `gen_metadata.data` 包装一层后是 `ChatModelMetadata`
 ///   4 → 客户端估算用量（不进消耗记录）
 ///   19 → 模型名
+///
+/// `trajectory_metadata_blob.data` 会话级元数据
+///   1 → 嵌套消息 { 1 workspace URI string }
+/// 字段号来自 agy 二进制 FileDescriptorProto；项目只读 #1.#1，不读 git remote。
 pub fn decode_hex(hex: &str) -> Vec<u8> {
     hex.split_whitespace()
         .map(|byte| u8::from_str_radix(byte, 16).expect("agy fixture hex"))
@@ -69,7 +73,74 @@ pub const GEN_CLAUDE: &str = "\
 /// 只有 request id，没有字段 19 模型名。
 pub const GEN_NO_MODEL: &str = "0a 09 22 07 5a 05 72 65 71 2d 61";
 
+/// `trajectory_metadata_blob.data`：#1.#1 = `file:///no/such/repo/AI`。
+/// 字段 2 是诱饵 git remote `git@github.com:other/mabiao.git`，不得被当成项目。
+pub const TRAJECTORY_URI_AI_WITH_REMOTE: &str = "\
+0a 19 0a 17 66 69 6c 65 3a 2f 2f 2f 6e 6f 2f 73 75 63 68 2f 72 65 70 6f 2f 41 49 \
+12 1f 67 69 74 40 67 69 74 68 75 62 2e 63 6f 6d 3a 6f 74 68 65 72 2f 6d 61 62 69 61 6f 2e 67 69 74";
+
+/// #1.#1 = `file:///C:/Users/foo/AI`（Windows 前导斜杠写法）；路径不存在，最后一段仍是 `AI`。
+pub const TRAJECTORY_URI_WINDOWS_AI: &str = "\
+0a 19 0a 17 66 69 6c 65 3a 2f 2f 2f 43 3a 2f 55 73 65 72 73 2f 66 6f 6f 2f 41 49";
+
+/// #1.#1 为空串。
+pub const TRAJECTORY_EMPTY_URI: &str = "0a 02 0a 00";
+
+/// 字段 1 声称 6 字节但立刻截断。
+pub const TRAJECTORY_MALFORMED: &str = "0a 06";
+
+/// 手写 #1.#1 workspace URI（可选字段 2 诱饵 remote）。给 canonicalize 用例拼动态路径。
+pub fn trajectory_workspace_hex(uri: &str, decoy_remote: Option<&str>) -> String {
+    let inner = encode_bytes_field(1, uri.as_bytes());
+    let mut outer = encode_bytes_field(1, &inner);
+    if let Some(remote) = decoy_remote {
+        outer.extend(encode_bytes_field(2, remote.as_bytes()));
+    }
+    to_hex(&outer)
+}
+
+fn encode_varint(mut value: u64) -> Vec<u8> {
+    let mut out = Vec::new();
+    loop {
+        let mut byte = (value & 0x7f) as u8;
+        value >>= 7;
+        if value != 0 {
+            byte |= 0x80;
+        }
+        out.push(byte);
+        if value == 0 {
+            break;
+        }
+    }
+    out
+}
+
+fn encode_bytes_field(field: u32, payload: &[u8]) -> Vec<u8> {
+    let tag = (u64::from(field) << 3) | 2;
+    let mut out = encode_varint(tag);
+    out.extend(encode_varint(payload.len() as u64));
+    out.extend_from_slice(payload);
+    out
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub fn write_agy_conversation_db(path: &Path, steps: &[&str], generations: &[&str]) -> PathBuf {
+    write_agy_conversation_db_with_trajectory(path, steps, generations, None)
+}
+
+pub fn write_agy_conversation_db_with_trajectory(
+    path: &Path,
+    steps: &[&str],
+    generations: &[&str],
+    trajectory: Option<&str>,
+) -> PathBuf {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).expect("create agy fixture dir");
     }
@@ -78,6 +149,7 @@ pub fn write_agy_conversation_db(path: &Path, steps: &[&str], generations: &[&st
         r#"
         CREATE TABLE steps (idx INTEGER PRIMARY KEY, metadata BLOB);
         CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);
+        CREATE TABLE trajectory_metadata_blob (idx INTEGER PRIMARY KEY, data BLOB);
         "#,
     )
     .expect("create agy fixture tables");
@@ -94,6 +166,13 @@ pub fn write_agy_conversation_db(path: &Path, steps: &[&str], generations: &[&st
             rusqlite::params![idx as i64, decode_hex(hex)],
         )
         .expect("insert agy generation");
+    }
+    if let Some(hex) = trajectory {
+        db.execute(
+            "INSERT INTO trajectory_metadata_blob (idx, data) VALUES (0, ?1)",
+            rusqlite::params![decode_hex(hex)],
+        )
+        .expect("insert agy trajectory");
     }
     path.to_path_buf()
 }
