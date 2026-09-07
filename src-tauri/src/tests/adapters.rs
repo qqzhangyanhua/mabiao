@@ -1099,11 +1099,13 @@ fn agy_only_pb_dir_is_not_detected() {
     let conv = agy_conversations(dir.path());
     std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
     assert!(
-        !agy::detected(&[conv.clone()]),
+        !agy::detected(std::slice::from_ref(&conv)),
         "只有加密 .pb 时不得谎报已检测到"
     );
     assert!(
-        agy::discover(&[conv]).unwrap().is_empty(),
+        agy::discover(std::slice::from_ref(&conv))
+            .unwrap()
+            .is_empty(),
         "发现阶段不得把 .pb 列入解析名单"
     );
 }
@@ -1114,8 +1116,8 @@ fn agy_db_dir_is_detected() {
     let conv = agy_conversations(dir.path());
     std::fs::write(conv.join("legacy.pb"), b"encrypted-session").unwrap();
     std::fs::write(conv.join("session.db"), b"").unwrap();
-    assert!(agy::detected(&[conv.clone()]));
-    let found = agy::discover(&[conv]).unwrap();
+    assert!(agy::detected(std::slice::from_ref(&conv)));
+    let found = agy::discover(std::slice::from_ref(&conv)).unwrap();
     assert_eq!(found.len(), 1);
     assert_eq!(
         found[0].file_name().and_then(|name| name.to_str()),
@@ -1131,7 +1133,7 @@ fn agy_discover_excludes_pb_and_sqlite_sidecars() {
     std::fs::write(conv.join("session.db"), b"").unwrap();
     std::fs::write(conv.join("session.db-wal"), b"wal").unwrap();
     std::fs::write(conv.join("session.db-shm"), b"shm").unwrap();
-    let found = agy::discover(&[conv]).unwrap();
+    let found = agy::discover(std::slice::from_ref(&conv)).unwrap();
     assert_eq!(found.len(), 1);
     assert!(found[0].file_name().unwrap() == "session.db");
 }
