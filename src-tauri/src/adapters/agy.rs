@@ -8,7 +8,14 @@
 //! 一条消耗记录 = `steps.metadata`（`CortexStepMetadata`）里的一次模型用量：
 //! 字段 9 是 `ModelUsageStats`（服务端计费六元组 + request id），字段 1 是创建时间。
 //! 模型名只从 `gen_metadata.data` 的 `ChatModelMetadata` 字段 19 按 request id 拼接；
-//! 那里的字段 4 用量是客户端 prompt 估算，不进消耗记录。项目归一化见后续票。
+//! 那里的字段 4 用量是客户端 prompt 估算，不进消耗记录。
+//!
+//! 项目取 `trajectory_metadata_blob.data` 会话级元数据里的 workspace URI
+//!（字段号来自 agy 二进制内 FileDescriptorProto，与 step/gen 同一权威）：
+//! **字段 1 → 嵌套字段 1**（string）。值为该 URI 的最后一段（可先剥 `file://`，
+//! 以及 Windows `file:///C:/…` 多出来的前导斜杠）。路径能 `canonicalize` 时
+//! 用磁盘真实大小写；失败则原样保留 URI 最后一段。不读 blob 里的 git remote，
+//! 也不做小写化。URI 缺失、空串或 blob 畸形时项目留空，用量行仍解析。
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -42,6 +49,11 @@ const USAGE_REQUEST_ID: u32 = 11;
 /// `ChatModelMetadata`：只取模型名与 request id，不用字段 4 的估算用量。
 const GEN_USAGE: u32 = 4;
 const GEN_MODEL: u32 = 19;
+
+/// `trajectory_metadata_blob.data`：会话级 workspace。
+/// FileDescriptorProto：字段 1（嵌套消息）→ 字段 1（workspace URI string）。
+const TRAJECTORY_WORKSPACE: u32 = 1;
+const WORKSPACE_URI: u32 = 1;
 
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
     let roots = overrides.get(PATH_ENV).cloned().unwrap_or_else(|| {
@@ -81,13 +93,14 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
         return Ok(Vec::new());
     };
     let models = load_model_names(&conn);
+    let project = load_project(&conn);
     let session_id = session_id_from_source_file(&path.to_string_lossy());
     let source_file = path.to_string_lossy().into_owned();
     let mut records: Vec<UsageRecord> = Vec::new();
     let mut index: HashMap<String, usize> = HashMap::new();
     for blob in load_step_blobs(&conn) {
         let Some((request_id, record)) =
-            record_from_step(&blob, &session_id, &source_file, &models)
+            record_from_step(&blob, &session_id, &source_file, &project, &models)
         else {
             continue;
         };
@@ -127,6 +140,59 @@ fn load_model_names(conn: &rusqlite::Connection) -> HashMap<String, String> {
     models
 }
 
+fn load_project(conn: &rusqlite::Connection) -> String {
+    let Ok(mut stmt) =
+        conn.prepare("SELECT data FROM trajectory_metadata_blob WHERE data IS NOT NULL")
+    else {
+        return String::new();
+    };
+    let Ok(rows) = stmt.query_map([], |row| row.get::<_, Vec<u8>>(0)) else {
+        return String::new();
+    };
+    for blob in rows.filter_map(Result::ok) {
+        if let Some(uri) = proto_wire::text_at_path(&blob, &[TRAJECTORY_WORKSPACE, WORKSPACE_URI]) {
+            return project_from_workspace_uri(uri);
+        }
+    }
+    String::new()
+}
+
+/// 剥 `file://`，再处理 Windows `file:///C:/…` 留下的 `/C:/` 前导斜杠。
+fn filesystem_path_from_workspace_uri(uri: &str) -> Option<PathBuf> {
+    let stripped = uri.strip_prefix("file://").unwrap_or(uri);
+    let path = strip_windows_drive_leading_slash(stripped);
+    if path.is_empty() {
+        return None;
+    }
+    Some(PathBuf::from(path))
+}
+
+fn strip_windows_drive_leading_slash(path: &str) -> &str {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        &path[1..]
+    } else {
+        path
+    }
+}
+
+fn last_path_segment(path: &Path) -> String {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn project_from_workspace_uri(uri: &str) -> String {
+    let Some(fs_path) = filesystem_path_from_workspace_uri(uri) else {
+        return String::new();
+    };
+    if let Ok(canonical) = std::fs::canonicalize(&fs_path) {
+        return last_path_segment(&canonical);
+    }
+    last_path_segment(&fs_path)
+}
+
 fn collect_model_names(blob: &[u8], models: &mut HashMap<String, String>) {
     proto_wire::for_each_bytes_field(blob, |_field, inner| {
         let Some(model) = proto_wire::text_at_path(inner, &[GEN_MODEL]) else {
@@ -144,6 +210,7 @@ fn record_from_step(
     blob: &[u8],
     session_id: &str,
     source_file: &str,
+    project: &str,
     models: &HashMap<String, String>,
 ) -> Option<(String, UsageRecord)> {
     let usage = proto_wire::bytes_at_path(blob, &[STEP_USAGE])?;
@@ -167,7 +234,7 @@ fn record_from_step(
         source: Source::Agy,
         model: models.get(&request_id).cloned().unwrap_or_default(),
         provider: String::new(),
-        project: String::new(),
+        project: project.to_string(),
         session_id: session_id.to_string(),
         source_file: source_file.to_string(),
         input_tokens,
