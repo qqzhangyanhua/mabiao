@@ -9,7 +9,7 @@
 _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记录）
 
 **来源 (Source)**：
-一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 14 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
+一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 15 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
@@ -33,7 +33,7 @@ _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不�
 _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话；不要把账号用量或代码量画进工作时间线
 
 **对话记录 (Conversation Record)**：
-本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
+本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes、agy（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。
 _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或上传
 
 **对话记录适配器 (Conversation Adapter)**：
@@ -81,7 +81,7 @@ _Avoid_: 报告（那个只读消耗记录、规则在 Rust）；周报；洞察
 _Avoid_: 适配器（那指把原始格式解析成消耗记录或对话记录的模块，方向相反）；来源 (Source)；把它当成又一个数据采集通道
 
 **全局指令 (Global Instruction)**：
-某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
+某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp、agy。agy 没有跨项目的用户手写指令文件：产品文档里 rules 只有目录级 `GEMINI.md` / `AGENTS.md`；全局根下无 rules 目录或全局规则文件；用户记忆经 language-server RPC 注入系统提示，不落本机 markdown。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
 _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、memory（会和 Claude 自动记忆、Cursor 残留 memories 撞名）；提示词
 
 ## 采集源现状
@@ -98,6 +98,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | gemini | json `~/.gemini/tmp/*/chats/session-*.json` | ✅ | ❌ |
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
 | Hermes | sqlite `~/.hermes/state.db`（`session_model_usage`） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
+| Antigravity | 每会话一个 SQLite、裸 protobuf BLOB；CLI `~/.gemini/antigravity-cli` + IDE `~/.gemini/antigravity-ide`（各进 `conversations/`；`AGY_DATA_DIR` 可整体覆盖） | ✅（轮级六元组：input / output / cache 读写 / thinking） | ❌（无原生费用，靠价目快照兜底） |
 | qwen | `~/.qwen/tmp/*/logs.json` | ❌（本地无 Token） | ❌ |
 | Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量 | ✅（会话累计、无模型名） | ❌ |
 | Cursor | sqlite（代码量）+ 账号级 token（联网）+ 会话 transcript（行为统计） | ⚠️ 账号级（默选手动，可独立自动刷新） | ❌ |
@@ -105,6 +106,6 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
 
-表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。
+表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Antigravity** 行的 Source slug 是 **`agy`**，界面 application 名是 **Antigravity**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。
 
 以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告口径与洞察见 `docs/adr/0015-report-and-insights.md`；分享入口与周期见 `docs/adr/0020-share-entry-report-only.md`；工作纪要与纪要引擎见 `docs/adr/0021-work-notes-llm-summary.md`。
