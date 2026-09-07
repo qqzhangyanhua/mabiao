@@ -383,19 +383,19 @@ fn proto_strings(buf: &[u8], depth: u8) -> Vec<String> {
     let mut out = Vec::new();
     let mut i = 0usize;
     while i < buf.len() {
-        let Some((tag, next)) = read_varint(buf, i) else {
+        let Some((tag, next)) = crate::proto_wire::read_varint(buf, i) else {
             break;
         };
         i = next;
         match tag & 7 {
-            0 => match read_varint(buf, i) {
+            0 => match crate::proto_wire::read_varint(buf, i) {
                 Some((_, next)) => i = next,
                 None => break,
             },
             1 => i += 8,
             5 => i += 4,
             2 => {
-                let Some((len, next)) = read_varint(buf, i) else {
+                let Some((len, next)) = crate::proto_wire::read_varint(buf, i) else {
                     break;
                 };
                 let len = len as usize;
@@ -416,23 +416,6 @@ fn proto_strings(buf: &[u8], depth: u8) -> Vec<String> {
         }
     }
     out
-}
-
-fn read_varint(buf: &[u8], mut i: usize) -> Option<(u64, usize)> {
-    let mut result = 0u64;
-    let mut shift = 0u32;
-    loop {
-        let byte = *buf.get(i)?;
-        i += 1;
-        result |= u64::from(byte & 0x7f).checked_shl(shift)?;
-        if byte & 0x80 == 0 {
-            return Some((result, i));
-        }
-        shift += 7;
-        if shift > 63 {
-            return None;
-        }
-    }
 }
 
 /// 从本机安装的 Antigravity 里找 OAuth 客户端。`main.js` / `language_server` 里
