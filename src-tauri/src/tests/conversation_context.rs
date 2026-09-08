@@ -61,8 +61,12 @@ fn seed_grok_session(home: &Path, session_id: &str) -> PathBuf {
 }
 
 fn refresh_grok(conn: &rusqlite::Connection, home: &Path) {
-    crate::conversation::refresh(conn, Source::Grok, &ingest::source_scan_dirs(home, Source::Grok))
-        .unwrap();
+    crate::conversation::refresh(
+        conn,
+        Source::Grok,
+        &ingest::source_scan_dirs(home, Source::Grok),
+    )
+    .unwrap();
 }
 
 fn layer_items(
@@ -322,7 +326,10 @@ fn grok_disk_lists_existing_home_files_and_omits_project_and_unverified_kinds() 
     write_text(&home.path().join(".grok/AGENTS.md"), "# grok-global\n");
     write_text(&home.path().join(".grok/rules/style.md"), "prefer rust\n");
     write_text(&home.path().join(".grok/rules/ignore.txt"), "skip\n");
-    write_text(&home.path().join(".grok/config.toml"), "not-an-instruction\n");
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        "not-an-instruction\n",
+    );
     write_text(&project.path().join("AGENTS.md"), "# project-agents\n");
     write_text(
         &project.path().join(".cursor/rules/style.mdc"),
@@ -421,12 +428,14 @@ fn grok_detail_context_manifest_matches_timeline_tools_and_home_disk() {
         observed_tools.insert(item.id.clone(), count);
     }
     assert_eq!(observed_tools, timeline_tools);
-    assert!(observed.iter().any(
-        |item| item.kind == ConversationContextKind::SystemStatus && item.id == "subagent_spawned"
-    ));
-    assert!(observed.iter().any(
-        |item| item.kind == ConversationContextKind::SystemStatus && item.id == "subagent_finished"
-    ));
+    assert!(observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::SystemStatus
+            && item.id == "subagent_spawned"));
+    assert!(observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::SystemStatus
+            && item.id == "subagent_finished"));
     assert!(!observed
         .iter()
         .any(|item| item.label.contains("AGENTS.md") || item.id.contains("AGENTS.md")));
@@ -456,7 +465,10 @@ fn grok_context_omits_missing_home_files_and_does_not_invent_agents() {
     let project = tempfile::tempdir().unwrap();
     seed_grok_session(home, "sess-grok-empty");
     write_text(&project.path().join("AGENTS.md"), "project-only\n");
-    write_text(&home.join(".grok/sessions/README.md"), "not an instruction\n");
+    write_text(
+        &home.join(".grok/sessions/README.md"),
+        "not an instruction\n",
+    );
 
     let conn = store::open_memory().unwrap();
     refresh_grok(&conn, home);

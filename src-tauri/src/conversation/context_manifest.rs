@@ -52,7 +52,12 @@ pub(crate) fn for_session(
         Source::Grok => crate::instructions::grok_disk::scan(home),
         _ => return None,
     };
-    Some(assemble(source, observed, on_disk, session.project.as_str()))
+    Some(assemble(
+        source,
+        observed,
+        on_disk,
+        session.project.as_str(),
+    ))
 }
 
 pub(crate) fn assemble(
