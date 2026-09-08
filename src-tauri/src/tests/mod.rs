@@ -13,6 +13,7 @@ mod codex_usage;
 mod conversation;
 mod conversation_boundary;
 mod conversation_cache_layout;
+mod conversation_context;
 mod conversation_events_page;
 mod conversation_fts;
 mod conversation_index;
