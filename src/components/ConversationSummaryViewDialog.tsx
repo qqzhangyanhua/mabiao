@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Icon } from "../icons";
 import { conversationWorkNotesSummaries } from "../lib/conversationDisplay";
 import { consumeEscape } from "../lib/escapeShortcut";
 import { workNotesEngineLabel } from "../lib/workNotesPreference";
@@ -88,6 +89,9 @@ export function ConversationSummaryViewDialog({
               {session.title}
             </p>
           </div>
+          <Button variant="icon" onClick={onClose} aria-label="关闭工作纪要摘要">
+            <Icon name="close" size={15} />
+          </Button>
         </header>
         <div className="conversation-summary-body">
           {summaries.length === 0 ? (

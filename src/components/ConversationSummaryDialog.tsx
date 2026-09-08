@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../icons";
 import { consumeEscape } from "../lib/escapeShortcut";
 import { humanStatus } from "../lib/format";
 import {
@@ -97,6 +98,13 @@ export function ConversationSummaryDialog({
     });
   }
 
+  function requestClose() {
+    if (busyRef.current) {
+      void invoke("cancel_work_notes");
+    }
+    onClose();
+  }
+
   useEffect(() => {
     const previousFocus =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -107,7 +115,9 @@ export function ConversationSummaryDialog({
           'button:not([disabled]), select, input:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ) ?? [],
       );
-    focusable()[0]?.focus();
+    const initial =
+      focusable().find((control) => !control.classList.contains("icon-btn")) ?? focusable()[0];
+    initial?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
       if (consumeEscape(event)) {
@@ -167,21 +177,32 @@ export function ConversationSummaryDialog({
               {session.title}
             </p>
           </div>
+          <Button variant="icon" onClick={requestClose} aria-label="关闭生成摘要">
+            <Icon name="close" size={15} />
+          </Button>
         </header>
         {installed.length > 0 && engineId ? (
           <div className="conversation-summary-fields">
-            <Select
-              ariaLabel="纪要引擎"
-              value={engineId}
-              options={installed.map((engine) => ({
-                value: engine.id,
-                label: engineSelectLabel(engine),
-              }))}
-              disabled={busy}
-              align="left"
-              onChange={(next) => persist({ ...preference, engineId: next })}
-            />
-            <label className="conversation-summary-model">
+            <div className="conversation-summary-field">
+              <div className="conversation-summary-field-head">
+                <span>引擎</span>
+                <Button variant="text" disabled={detecting || busy} onClick={detect}>
+                  {detecting ? "正在检测…" : "检测"}
+                </Button>
+              </div>
+              <Select
+                ariaLabel="纪要引擎"
+                value={engineId}
+                options={installed.map((engine) => ({
+                  value: engine.id,
+                  label: engineSelectLabel(engine),
+                }))}
+                disabled={busy}
+                align="left"
+                onChange={(next) => persist({ ...preference, engineId: next })}
+              />
+            </div>
+            <label className="conversation-summary-field">
               <span>模型</span>
               <input
                 value={model}
@@ -199,21 +220,26 @@ export function ConversationSummaryDialog({
             </label>
           </div>
         ) : (
-          <p className="conversation-summary-help">
-            {preference.detected.length === 0
-              ? "还没有检测过纪要引擎。点「检测」会跑 which 和 --version。"
-              : "本机没有可用的纪要引擎。"}
-          </p>
+          <div className="conversation-summary-empty">
+            <p className="conversation-summary-help">
+              {preference.detected.length === 0
+                ? "还没有检测过纪要引擎。点「检测」会跑 which 和 --version。"
+                : "本机没有可用的纪要引擎。"}
+            </p>
+            <Button disabled={detecting || busy} onClick={detect}>
+              {detecting ? "正在检测…" : "检测"}
+            </Button>
+          </div>
         )}
-        <p className="conversation-summary-help">
-          {selected
-            ? selected.writes_session_dir
+        {selected ? (
+          <p className="conversation-summary-hint">
+            {selected.writes_session_dir
               ? "以只读、禁用工具的方式运行。会在你的会话记录里留下一条。"
-              : "以只读、禁用工具的方式运行。"
-            : null}
-        </p>
+              : "以只读、禁用工具的方式运行。"}
+          </p>
+        ) : null}
         {busy ? (
-          <p className="conversation-summary-help" role="status">
+          <p className="conversation-summary-hint" role="status">
             正在生成…
           </p>
         ) : null}
@@ -223,9 +249,6 @@ export function ConversationSummaryDialog({
           </p>
         ) : null}
         <footer>
-          <Button disabled={detecting || busy} onClick={detect}>
-            {detecting ? "正在检测…" : "检测"}
-          </Button>
           <div className="conversation-summary-actions">
             <Button disabled={busy} onClick={onClose}>
               取消

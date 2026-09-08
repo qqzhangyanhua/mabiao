@@ -143,8 +143,13 @@
     flex-basis: 76px;
   }
 
-  .conversation-image-backdrop {
+  .conversation-image-backdrop,
+  .conversation-summary-backdrop {
     padding: 10px;
+  }
+
+  .conversation-summary-fields {
+    grid-template-columns: 1fr;
   }
 
   .conversation-image-dialog {

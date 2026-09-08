@@ -55,75 +55,178 @@
 
 .conversation-summary-dialog {
   display: grid;
-  gap: 12px;
-  width: min(420px, 100%);
-  padding: 16px 16px 14px;
+  gap: 16px;
+  width: min(480px, 100%);
+  padding: 18px 18px 16px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 12px;
   color: var(--text);
   background: var(--bg-panel);
-  box-shadow: 0 16px 40px var(--shadow-strong);
+  box-shadow: 0 18px 48px var(--shadow-strong);
+  animation: conversation-summary-in 0.16s ease;
+}
+
+@keyframes conversation-summary-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-summary-dialog {
+    animation: none;
+  }
+}
+
+.conversation-summary-dialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.conversation-summary-dialog > header > div {
+  min-width: 0;
+  flex: 1;
 }
 
 .conversation-summary-dialog h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 650;
 }
 
 .conversation-summary-session {
-  margin: 4px 0 0;
+  display: -webkit-box;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--overlay-recessed);
   color: var(--text-soft);
   font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.5;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .conversation-summary-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+}
+
+.conversation-summary-field {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.conversation-summary-field > span,
+.conversation-summary-field-head > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.conversation-summary-field > span,
+.conversation-summary-field-head {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  min-height: 22px;
+}
+
+.conversation-summary-field-head {
+  justify-content: space-between;
   gap: 8px;
 }
 
-.conversation-summary-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-faint);
+.conversation-summary-field-head .text-btn {
+  padding: 0 4px;
+  color: var(--purple-fg);
+}
+
+.conversation-summary-field .select,
+.conversation-summary-field .select-trigger,
+.conversation-summary-field input {
+  width: 100%;
+}
+
+.conversation-summary-field .chip-range {
+  max-width: none;
+  flex: 1;
+  text-align: left;
+}
+
+.conversation-summary-field input {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--field-bg);
   font-size: 12px;
 }
 
-.conversation-summary-model input {
-  width: 140px;
-  min-height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  color: var(--text);
-  background: var(--input-bg);
+.conversation-summary-field input:focus {
+  outline: none;
+  border-color: rgba(139, 108, 255, 0.45);
+}
+
+.conversation-summary-field input:disabled {
+  opacity: 0.55;
+}
+
+.conversation-summary-empty {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+
+.conversation-summary-empty .conversation-summary-help {
+  width: 100%;
 }
 
 .conversation-summary-help,
+.conversation-summary-hint,
 .conversation-summary-error {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
 }
 
-.conversation-summary-help {
-  color: var(--text-soft);
+.conversation-summary-help,
+.conversation-summary-hint {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--overlay-1);
+  color: var(--text-faint);
 }
 
 .conversation-summary-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(251, 113, 133, 0.1);
   color: var(--red-fg);
 }
 
 .conversation-summary-dialog footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
 }
 
 .conversation-summary-actions {
@@ -131,14 +234,14 @@
   gap: 8px;
 }
 
+.conversation-summary-actions .ghost-btn-accent {
+  min-width: 72px;
+}
+
 .conversation-summary-dialog.is-view {
   width: min(520px, 100%);
   max-height: min(70vh, 640px);
   grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.conversation-summary-dialog.is-view footer {
-  justify-content: flex-end;
 }
 
 .conversation-summary-body {
