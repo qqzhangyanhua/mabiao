@@ -350,7 +350,7 @@ fn grok_disk_lists_existing_home_files_and_omits_project_and_unverified_kinds() 
     assert!(items.iter().all(|item| !item.label.contains("已注入")));
     assert!(!ids.iter().any(|id| id.contains("ignore.txt")));
     assert!(!ids.iter().any(|id| id.contains("config.toml")));
-    assert!(!ids.iter().any(|id| *id == "AGENTS.md"));
+    assert!(!ids.contains(&"AGENTS.md"));
     assert!(!ids.iter().any(|id| id.contains("style.mdc")));
     assert!(!ids.iter().any(|id| id.contains("review")));
     assert!(items
