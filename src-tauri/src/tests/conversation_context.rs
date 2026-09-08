@@ -36,6 +36,40 @@ fn refresh_cursor(conn: &rusqlite::Connection, home: &Path) {
         .unwrap();
 }
 
+fn refresh_grok(conn: &rusqlite::Connection, home: &Path) {
+    crate::conversation::refresh(
+        conn,
+        Source::Grok,
+        &ingest::source_scan_dirs(home, Source::Grok),
+    )
+    .unwrap();
+}
+
+fn seed_grok_updates(home: &Path, session_id: &str) -> PathBuf {
+    let path = home
+        .join(".grok/sessions/%2Fworkspace%2Fgrok-ctx")
+        .join(session_id)
+        .join("updates.jsonl");
+    write_text(
+        &path,
+        concat!(
+            "{\"timestamp\":1787100000,\"method\":\"session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"u1\"},\"update\":{\"sessionUpdate\":\"user_message_chunk\",\"content\":{\"type\":\"text\",\"text\":\"Please follow AGENTS.md and use the deploy skill\"}}}}\n",
+            "{\"timestamp\":1787100001,\"method\":\"session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"t1\"},\"update\":{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"call-read-1\",\"title\":\"Read\",\"rawInput\":{\"path\":\"src/lib.rs\"}}}}\n",
+            "{\"timestamp\":1787100002,\"method\":\"session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"t2\"},\"update\":{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"call-read-2\",\"title\":\"Read\",\"rawInput\":{\"path\":\"src/main.rs\"}}}}\n",
+            "{\"timestamp\":1787100003,\"method\":\"session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"t3\"},\"update\":{\"sessionUpdate\":\"tool_call\",\"toolCallId\":\"call-grep\",\"title\":\"Grep\",\"rawInput\":{\"pattern\":\"TODO\"}}}}\n",
+            "{\"timestamp\":1787100004,\"method\":\"session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"r1\"},\"update\":{\"sessionUpdate\":\"tool_call_update\",\"toolCallId\":\"call-read-1\",\"status\":\"completed\",\"content\":[{\"type\":\"content\",\"content\":{\"type\":\"text\",\"text\":\"ok\"}}]}}}\n",
+            "{\"timestamp\":1787100005,\"method\":\"session/update\",\"params\":{\"_meta\":{\"eventId\":\"s1\"},\"update\":{\"sessionUpdate\":\"subagent_spawned\",\"description\":\"Spec review\",\"subagent_type\":\"general-purpose\"}}}\n",
+            "{\"timestamp\":1787100006,\"method\":\"session/update\",\"params\":{\"_meta\":{\"eventId\":\"s2\"},\"update\":{\"sessionUpdate\":\"subagent_finished\",\"status\":\"completed\"}}}\n",
+            "{\"timestamp\":1787100007,\"method\":\"_x.ai/session/update\",\"params\":{\"_meta\":{\"promptId\":\"p1\",\"eventId\":\"c1\"},\"update\":{\"sessionUpdate\":\"turn_completed\",\"prompt_id\":\"p1\",\"stop_reason\":\"end_turn\"}}}\n"
+        ),
+    );
+    write_text(
+        &path.parent().unwrap().join("summary.json"),
+        "{\"current_model_id\":\"grok-test\"}",
+    );
+    path
+}
+
 fn layer_items(
     items: &[ConversationContextItem],
     layer: ConversationContextLayer,
@@ -75,7 +109,10 @@ fn assert_no_injected(items: &[ConversationContextItem], notes: &[Option<&str>])
         );
         if note.contains("磁盘") || note.contains("可能") {
             assert!(
-                note.contains("可能生效") || note.contains("未发现") || note.contains("无法确认"),
+                note.contains("可能生效")
+                    || note.contains("未发现")
+                    || note.contains("无法确认")
+                    || note.contains("未扫描"),
                 "{note}"
             );
         }
@@ -283,6 +320,223 @@ fn cursor_context_omits_missing_disk_paths_and_does_not_invent_skills() {
         layer_items(&manifest.items, ConversationContextLayer::Observed)
             .iter()
             .all(|item| item.kind != ConversationContextKind::Skill)
+    );
+}
+
+#[test]
+fn grok_disk_lists_home_instructions_and_omits_project_cursor_paths() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    write_text(&home.path().join(".grok/AGENTS.md"), "# grok-global\n");
+    write_text(&home.path().join(".grok/CLAUDE.md"), "claude-compat\n");
+    write_text(&home.path().join(".grok/rules/style.md"), "prefer rust\n");
+    write_text(&home.path().join(".grok/rules/ignore.txt"), "skip\n");
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        "not-an-instruction\n",
+    );
+    write_text(
+        &home.path().join(".grok/skills/deploy/SKILL.md"),
+        "---\nname: deploy\n---\n",
+    );
+    write_text(&project.path().join("AGENTS.md"), "# project agents\n");
+    write_text(
+        &project.path().join(".cursor/rules/style.mdc"),
+        "cursor rule\n",
+    );
+    write_text(
+        &project.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"docs":{"command":"npx"}}}"#,
+    );
+    write_text(
+        &home.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"search":{"command":"uvx"}}}"#,
+    );
+
+    let items = crate::instructions::grok_disk::scan(home.path());
+    let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
+    assert!(ids.contains(&"user:AGENTS.md"));
+    assert!(ids.contains(&"user:CLAUDE.md"));
+    assert!(ids.contains(&"user:rules/style.md"));
+    assert!(items
+        .iter()
+        .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
+    assert!(items.iter().all(|item| !item.label.contains("已注入")));
+    assert!(!ids.iter().any(|id| id.contains("ignore")));
+    assert!(!ids.iter().any(|id| id.contains("config")));
+    assert!(!ids.iter().any(|id| id.contains("deploy")));
+    assert!(!ids
+        .iter()
+        .any(|id| id.contains("docs") || id.contains("search")));
+    assert!(items.iter().all(|item| {
+        item.kind != ConversationContextKind::McpServer
+            && item.kind != ConversationContextKind::Skill
+    }));
+    assert!(!items.iter().any(|item| {
+        item.path.as_deref().is_some_and(|path| {
+            path.contains(".cursor") || path.contains(project.path().to_str().unwrap_or("\0"))
+        })
+    }));
+
+    let empty_home = tempfile::tempdir().unwrap();
+    write_text(&empty_home.path().join(".grok/config.toml"), "nope\n");
+    let sparse = crate::instructions::grok_disk::scan(empty_home.path());
+    assert!(sparse.is_empty(), "{sparse:?}");
+}
+
+#[test]
+fn grok_detail_context_manifest_matches_timeline_tools_and_home_scan() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = tempfile::tempdir().unwrap();
+    seed_grok_updates(home, "grok-ctx");
+    write_text(&home.join(".grok/AGENTS.md"), "# grok-global\n");
+    write_text(&home.join(".grok/rules/style.md"), "prefer rust\n");
+    write_text(&project.path().join("AGENTS.md"), "# project agents\n");
+    write_text(
+        &project.path().join(".cursor/rules/rust.mdc"),
+        "always use rust\n",
+    );
+    write_text(
+        &project.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"docs":{"url":"https://example.test/mcp"}}}"#,
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    conn.execute(
+        "UPDATE conversation_sessions SET project = ?1 WHERE source = 'grok' AND session_id = 'grok-ctx'",
+        params![project.path().to_string_lossy()],
+    )
+    .unwrap();
+
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "grok-ctx").unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("grok detail should carry the shared context manifest");
+    assert_no_injected(
+        &manifest.items,
+        &[
+            manifest.observed_note.as_deref(),
+            manifest.on_disk_note.as_deref(),
+        ],
+    );
+    assert!(manifest
+        .on_disk_note
+        .as_deref()
+        .is_some_and(|note| note.contains("可能生效")
+            && note.contains("未扫描")
+            && !note.contains("已注入")));
+
+    let events = crate::conversation::load_events(
+        &conn,
+        home,
+        "grok",
+        "grok-ctx",
+        ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap();
+    let mut timeline_tools = BTreeMap::<String, u64>::new();
+    for event in &events.events {
+        if event.kind == ConversationEventKind::ToolCall {
+            if let Some(name) = event.name.as_deref().filter(|name| !name.is_empty()) {
+                *timeline_tools.entry(name.to_string()).or_default() += 1;
+            }
+        }
+    }
+    assert_eq!(timeline_tools.get("Read").copied(), Some(2));
+    assert_eq!(timeline_tools.get("Grep").copied(), Some(1));
+
+    let observed = layer_items(&manifest.items, ConversationContextLayer::Observed);
+    let mut observed_tools = BTreeMap::<String, u64>::new();
+    for item in &observed {
+        if item.kind != ConversationContextKind::Tool {
+            continue;
+        }
+        let count = item
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("call_count"))
+            .and_then(|value| value.as_u64())
+            .expect("observed tool should carry call_count");
+        observed_tools.insert(item.id.clone(), count);
+    }
+    assert_eq!(observed_tools, timeline_tools);
+    assert!(observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::SystemStatus
+            && item.id == "subagent_spawned"));
+    assert!(observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::SystemStatus
+            && item.id == "subagent_finished"));
+    assert!(observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::SystemStatus
+            && item.id == "turn_completed"));
+    assert!(!observed
+        .iter()
+        .any(|item| item.kind == ConversationContextKind::Skill));
+    assert!(!observed
+        .iter()
+        .any(|item| item.label.contains("AGENTS.md") || item.id.contains("AGENTS.md")));
+
+    let possible = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
+    assert!(kind_ids(&possible, ConversationContextKind::Instruction)
+        .contains(&"user:AGENTS.md".into()));
+    assert!(
+        kind_ids(&possible, ConversationContextKind::Rule).contains(&"user:rules/style.md".into())
+    );
+    assert!(possible
+        .iter()
+        .all(|item| item.kind != ConversationContextKind::McpServer
+            && item.kind != ConversationContextKind::Skill));
+    assert!(!possible.iter().any(|item| {
+        item.path.as_deref().is_some_and(|path| {
+            path.contains(".cursor") || path.contains(project.path().to_str().unwrap_or("\0"))
+        })
+    }));
+}
+
+#[test]
+fn grok_context_empty_home_is_honest_and_does_not_invent_project_agents() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = tempfile::tempdir().unwrap();
+    seed_grok_updates(home, "grok-empty-disk");
+    write_text(&project.path().join("AGENTS.md"), "# project agents\n");
+    write_text(&project.path().join("README.md"), "not an instruction\n");
+    write_text(
+        &project.path().join(".cursor/rules/style.mdc"),
+        "cursor only\n",
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    conn.execute(
+        "UPDATE conversation_sessions SET project = ?1 WHERE source = 'grok' AND session_id = 'grok-empty-disk'",
+        params![project.path().to_string_lossy()],
+    )
+    .unwrap();
+
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "grok-empty-disk").unwrap();
+    let manifest = detail.context_manifest.unwrap();
+    let possible = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
+    assert!(possible.is_empty(), "{possible:?}");
+    assert!(manifest.on_disk_note.as_deref().is_some_and(|note| {
+        note.contains("未扫描")
+            && note.contains("未发现")
+            && !note.contains("已注入")
+            && !note.contains("已加载")
+    }));
+    assert!(
+        layer_items(&manifest.items, ConversationContextLayer::Observed)
+            .iter()
+            .all(|item| item.kind != ConversationContextKind::Skill
+                && !item.id.contains("AGENTS.md")
+                && !item.label.contains("AGENTS.md"))
     );
 }
 

@@ -1,11 +1,12 @@
-//! 对话详情「上下文清单」：会话内已观测 + 项目上可能生效。
+//! 对话详情「上下文清单」：会话内已观测 + 磁盘上可能生效。
 //!
 //! Cursor transcript **不落**发送时完整注入清单（见 `instructions/cursor_disk.rs`
-//! 探测注释）。本模块只聚合已有事件索引 / 解析结果，再叠加实时磁盘扫描。
-//! 不改事件归一化，因此不递增 `CONVERSATION_ADAPTER_VERSION`。
+//! 探测注释）。Grok `updates.jsonl` 同样没有注入清单字段。本模块只聚合已有
+//! 事件索引 / 解析结果，再叠加实时磁盘扫描。不改事件归一化，因此不递增
+//! `CONVERSATION_ADAPTER_VERSION`。
 //!
-//! Grok (#252) 应复用 `ConversationContextManifest` / `ConversationContextItem`，
-//! 在 `for_session` 加分支，不要另造第三套 DTO。
+//! Cursor 与 Grok 共用 `ConversationContextManifest` / `ConversationContextItem`，
+//! 在 `for_session` 分分支，不要另造第三套 DTO。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -30,6 +31,14 @@ const NO_PROJECT: &str =
 const MISSING_PROJECT: &str =
     "项目路径在本机不存在，且未发现用户级 MCP/skills；源文件未落盘注入清单，无法确认。";
 const PROJECT_EMPTY: &str = "项目下未发现指令文件、rules、skills 或 MCP 配置。";
+const GROK_ON_DISK_POSSIBLE: &str =
+    "下列 ~/.grok 用户级指令与 rules 来自磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。项目 cwd 的 AGENTS.md / .cursor/rules 与 MCP/skills 未扫描。";
+const GROK_ON_DISK_EMPTY: &str =
+    "Grok 产品口径只确认用户级 ~/.grok/ 指令（候选文件名与 rules/*.md）。本机未发现这些文件。项目 cwd 的 AGENTS.md / .cursor/rules 与 MCP/skills 未扫描。";
+
+pub(crate) fn collects_observed(source: Source) -> bool {
+    matches!(source, Source::CursorAgent | Source::Grok)
+}
 
 pub(crate) fn for_session(
     home: &Path,
@@ -37,18 +46,26 @@ pub(crate) fn for_session(
     session: &ConversationSessionRow,
     observed: Vec<ConversationContextItem>,
 ) -> Option<ConversationContextManifest> {
-    if source != Source::CursorAgent {
-        return None;
+    match source {
+        Source::CursorAgent => {
+            let project = Path::new(session.project.as_str());
+            let on_disk = crate::instructions::cursor_disk::scan(home, project);
+            let note = cursor_on_disk_note(session.project.as_str(), on_disk.is_empty());
+            Some(assemble(observed, on_disk, note))
+        }
+        Source::Grok => {
+            let on_disk = crate::instructions::grok_disk::scan(home);
+            let note = grok_on_disk_note(on_disk.is_empty());
+            Some(assemble(observed, on_disk, note))
+        }
+        _ => None,
     }
-    let project = Path::new(session.project.as_str());
-    let on_disk = crate::instructions::cursor_disk::scan(home, project);
-    Some(assemble(observed, on_disk, session.project.as_str()))
 }
 
 pub(crate) fn assemble(
     observed: Vec<ConversationContextItem>,
     on_disk: Vec<ConversationContextItem>,
-    project: &str,
+    on_disk_note: String,
 ) -> ConversationContextManifest {
     debug_assert!(observed
         .iter()
@@ -57,13 +74,12 @@ pub(crate) fn assemble(
         .iter()
         .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
     let observed_note = observed.is_empty().then(|| OBSERVED_EMPTY.to_string());
-    let on_disk_note = Some(on_disk_note(project, on_disk.is_empty()));
     let mut items = observed;
     items.extend(on_disk);
     ConversationContextManifest {
         items,
         observed_note,
-        on_disk_note,
+        on_disk_note: Some(on_disk_note),
     }
 }
 
@@ -200,7 +216,7 @@ pub(crate) fn observed_from_index(
     Ok(items)
 }
 
-fn on_disk_note(project: &str, empty: bool) -> String {
+fn cursor_on_disk_note(project: &str, empty: bool) -> String {
     if !empty {
         return ON_DISK_POSSIBLE.to_string();
     }
@@ -211,6 +227,14 @@ fn on_disk_note(project: &str, empty: bool) -> String {
         return MISSING_PROJECT.to_string();
     }
     PROJECT_EMPTY.to_string()
+}
+
+fn grok_on_disk_note(empty: bool) -> String {
+    if empty {
+        GROK_ON_DISK_EMPTY.to_string()
+    } else {
+        GROK_ON_DISK_POSSIBLE.to_string()
+    }
 }
 
 fn tool_item(name: String, call_count: u64) -> ConversationContextItem {

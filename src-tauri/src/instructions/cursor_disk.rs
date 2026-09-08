@@ -28,9 +28,9 @@ use serde_json::Value;
 use crate::domain::{ConversationContextItem, ConversationContextKind, ConversationContextLayer};
 
 use super::project_walk::{
-    existing_file, file_stat, is_cursor_rule_file, is_skill_file, walk_files, CURSOR_MCP_REL,
-    CURSOR_PROJECT_INSTRUCTION_NAMES, CURSOR_RULES_DIR, CURSOR_SKILLS_DIR, CURSOR_USER_MCP_REL,
-    CURSOR_USER_SKILLS_DIR,
+    existing_file, file_stat, is_cursor_rule_file, is_skill_file, on_disk_file_item, rel_posix,
+    walk_files, CURSOR_MCP_REL, CURSOR_PROJECT_INSTRUCTION_NAMES, CURSOR_RULES_DIR,
+    CURSOR_SKILLS_DIR, CURSOR_USER_MCP_REL, CURSOR_USER_SKILLS_DIR,
 };
 
 pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
@@ -54,7 +54,7 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
     if project.is_dir() {
         for name in CURSOR_PROJECT_INSTRUCTION_NAMES {
             if let Some(path) = existing_file(project, Path::new(name)) {
-                if let Some(item) = file_item(
+                if let Some(item) = on_disk_file_item(
                     ConversationContextKind::Instruction,
                     name,
                     name,
@@ -67,7 +67,7 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
         }
         for path in walk_files(project, Path::new(CURSOR_RULES_DIR), 3, is_cursor_rule_file) {
             let rel = rel_posix(project, &path);
-            if let Some(item) = file_item(
+            if let Some(item) = on_disk_file_item(
                 ConversationContextKind::Rule,
                 &rel,
                 &rel,
@@ -130,7 +130,7 @@ fn push_skills(items: &mut Vec<ConversationContextItem>, dir: &Path, scope: &str
         } else {
             format!("{prefix}/{nested}")
         };
-        if let Some(item) = file_item(
+        if let Some(item) = on_disk_file_item(
             ConversationContextKind::Skill,
             &id,
             skill_id,
@@ -175,37 +175,4 @@ fn push_mcp(items: &mut Vec<ConversationContextItem>, path: &Path, scope: &str, 
             })),
         });
     }
-}
-
-fn file_item(
-    kind: ConversationContextKind,
-    id: &str,
-    label: &str,
-    path: &Path,
-    display: Option<String>,
-) -> Option<ConversationContextItem> {
-    let (byte_size, modified_at) = file_stat(path)?;
-    let mut meta = serde_json::Map::new();
-    meta.insert("byte_size".into(), serde_json::json!(byte_size));
-    if let Some(modified_at) = modified_at {
-        meta.insert("modified_at".into(), serde_json::json!(modified_at));
-    }
-    if let Some(display) = display {
-        meta.insert("display_path".into(), serde_json::json!(display));
-    }
-    Some(ConversationContextItem {
-        layer: ConversationContextLayer::OnDiskPossible,
-        kind,
-        id: id.to_string(),
-        label: label.to_string(),
-        path: Some(path.to_string_lossy().into_owned()),
-        meta: Some(Value::Object(meta)),
-    })
-}
-
-fn rel_posix(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
 }

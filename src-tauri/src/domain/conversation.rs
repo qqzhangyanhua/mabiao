@@ -315,7 +315,7 @@ pub struct ConversationDetailDto {
     /// Cursor 本机行为聚合；非 Cursor 或对不上 `cursor_sessions` 时为空。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor_behavior: Option<CursorSessionDetailDto>,
-    /// 会话上下文清单。Cursor 先做；Grok 复用同一形状，其它来源为空。
+    /// 会话上下文清单。Cursor / Grok 已挂；其它来源为空。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context_manifest: Option<ConversationContextManifest>,
 }
@@ -377,7 +377,7 @@ pub struct ConversationContextItem {
     pub meta: Option<serde_json::Value>,
 }
 
-/// 两层证据的扁平清单，供对话详情与后续 Grok 票复用。
+/// 两层证据的扁平清单，Cursor / Grok 共用，其它来源不要另造一套。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationContextManifest {
     pub items: Vec<ConversationContextItem>,
