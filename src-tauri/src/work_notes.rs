@@ -11,6 +11,7 @@ mod parse;
 mod period;
 mod prompt;
 mod scale;
+mod session;
 mod usage;
 
 use chrono::{DateTime, Local};
@@ -38,6 +39,7 @@ pub use engines::{
     codex_profile, detect_engines, ensure_work_dir, write_schemas, EngineRunner, ProcessRunner,
 };
 pub use job::WorkNotesJob;
+pub use session::{persist_session_summary, prepare_session_summary, run_session_summary};
 
 pub struct EligibleSession {
     pub session: ConversationSessionRow,

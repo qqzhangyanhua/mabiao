@@ -1,9 +1,10 @@
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, params_from_iter, Connection};
 
-use crate::domain::{ConversationSessionRow, WORK_NOTES_ENGINE_DIR};
+use crate::domain::{ConversationSessionRow, WorkNotesSessionSummary, WORK_NOTES_ENGINE_DIR};
 
 #[derive(Debug, Clone)]
 pub struct GeneratedSession {
@@ -71,7 +72,7 @@ pub fn session_is_generated(
     })
 }
 
-pub fn mark_generated_sessions(
+fn mark_generated_sessions(
     conn: &Connection,
     rows: &mut [ConversationSessionRow],
 ) -> Result<(), String> {
@@ -83,11 +84,73 @@ pub fn mark_generated_sessions(
     Ok(())
 }
 
-pub fn mark_generated_session(
+pub fn decorate_conversation_sessions(
     conn: &Connection,
-    row: &mut ConversationSessionRow,
+    rows: &mut [ConversationSessionRow],
 ) -> Result<(), String> {
-    mark_generated_sessions(conn, std::slice::from_mut(row))
+    mark_generated_sessions(conn, rows)?;
+    attach_work_notes_summaries(conn, rows)
+}
+
+fn attach_work_notes_summaries(
+    conn: &Connection,
+    rows: &mut [ConversationSessionRow],
+) -> Result<(), String> {
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let mut sql = String::from(
+        "SELECT c.source, c.session_id, c.engine, c.model, c.summary, c.created_at
+         FROM summary_session_cache AS c
+         INNER JOIN conversation_sessions AS s
+           ON s.source = c.source
+          AND s.session_id = c.session_id
+          AND s.source_revision = c.fingerprint
+         WHERE ",
+    );
+    let mut binds = Vec::with_capacity(rows.len() * 2);
+    for (index, row) in rows.iter().enumerate() {
+        if index > 0 {
+            sql.push_str(" OR ");
+        }
+        sql.push_str("(c.source = ? AND c.session_id = ?)");
+        binds.push(row.source.clone());
+        binds.push(row.session_id.clone());
+    }
+    sql.push_str(" ORDER BY c.created_at DESC, c.engine ASC, c.model ASC");
+    let mut stmt = conn.prepare(&sql).map_err(|error| error.to_string())?;
+    let fetched = stmt
+        .query_map(params_from_iter(binds.iter()), |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                WorkNotesSessionSummary {
+                    engine: row.get(2)?,
+                    model: row.get(3)?,
+                    summary: row.get(4)?,
+                    created_at: row.get(5)?,
+                },
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let mut grouped: BTreeMap<(String, String), Vec<WorkNotesSessionSummary>> = BTreeMap::new();
+    for (source, session_id, summary) in fetched {
+        if summary.summary.trim().is_empty() {
+            continue;
+        }
+        grouped
+            .entry((source, session_id))
+            .or_default()
+            .push(summary);
+    }
+    for row in rows {
+        row.work_notes_summaries = grouped
+            .remove(&(row.source.clone(), row.session_id.clone()))
+            .unwrap_or_default();
+    }
+    Ok(())
 }
 
 fn engine_source(engine: &str) -> &str {

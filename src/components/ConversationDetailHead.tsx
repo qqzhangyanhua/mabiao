@@ -5,9 +5,11 @@ import {
   conversationDetailSummary,
   conversationFileUnavailableLabel,
   conversationStatusLabel,
+  conversationWorkNotesSummaries,
   workNotesGeneratedLabel,
 } from "../lib/conversationDisplay";
 import { formatClock, projectLabel } from "../lib/format";
+import { workNotesEngineLabel } from "../lib/workNotesPreference";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { SessionResumeCommand } from "./SessionResumeCommand";
 import { SourceLabel } from "./SourceIcon";
@@ -28,9 +30,12 @@ export function ConversationDetailHead({
   exportDisabled,
   onBack,
   onExport,
+  onSummarize,
+  onViewSummary,
 }: ConversationDetailHeadProps) {
   const exporting = exportFormat !== null;
   const cannotExport = exporting || exportDisabled;
+  const workNotesSummaries = conversationWorkNotesSummaries(session);
 
   return (
     <section className="panel conversation-detail-head">
@@ -59,16 +64,28 @@ export function ConversationDetailHead({
           </div>
         </div>
         <div className="conversation-export-wrap">
-          <div className="conversation-export-actions" aria-label="导出会话">
-            <Icon name="download" size={14} />
-            <Button variant="text" onClick={() => onExport("markdown")} disabled={cannotExport}>
-              {exportFormat === "markdown" ? <Spinner size={12} /> : null}
-              Markdown
-            </Button>
-            <Button variant="text" onClick={() => onExport("json")} disabled={cannotExport}>
-              {exportFormat === "json" ? <Spinner size={12} /> : null}
-              JSON
-            </Button>
+          <div className="conversation-export-actions">
+            {workNotesSummaries.length > 0 ? (
+              <Button variant="text" onClick={onViewSummary}>
+                查看摘要
+              </Button>
+            ) : null}
+            {session.generated_by_work_notes ? null : (
+              <Button variant="text" onClick={onSummarize}>
+                生成摘要
+              </Button>
+            )}
+            <span className="conversation-export-actions" aria-label="导出会话">
+              <Icon name="download" size={14} />
+              <Button variant="text" onClick={() => onExport("markdown")} disabled={cannotExport}>
+                {exportFormat === "markdown" ? <Spinner size={12} /> : null}
+                Markdown
+              </Button>
+              <Button variant="text" onClick={() => onExport("json")} disabled={cannotExport}>
+                {exportFormat === "json" ? <Spinner size={12} /> : null}
+                JSON
+              </Button>
+            </span>
           </div>
           <span
             className={
@@ -81,6 +98,23 @@ export function ConversationDetailHead({
           </span>
         </div>
       </div>
+      {workNotesSummaries.length > 0 ? (
+        <div className="conversation-work-notes-summary">
+          <h3>工作纪要摘要</h3>
+          {workNotesSummaries.map((item) => (
+            <div
+              className="conversation-work-notes-item"
+              key={`${item.engine}:${item.model}:${item.created_at}`}
+            >
+              <p>{item.summary}</p>
+              <span>
+                {workNotesEngineLabel(item.engine)}
+                {item.model.trim() ? ` · ${item.model}` : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
       <CollapsibleSection
         sectionId={META_SECTION_ID}
         title={session.title}

@@ -50,6 +50,8 @@ export function ConversationDetailView({
   follow,
   onBack,
   onExport,
+  onSummarize,
+  onViewSummary,
   onTabChange,
   onRetry,
   onToggleChild,
@@ -79,6 +81,8 @@ export function ConversationDetailView({
   follow: ConversationTimelineFollow;
   onBack: () => void;
   onExport: (format: ConversationExportFormat) => void;
+  onSummarize: () => void;
+  onViewSummary: () => void;
   onTabChange: (tab: ConversationDetailTab) => void;
   onRetry: () => void;
   onToggleChild: (link: ConversationAgentLink) => void;
@@ -113,6 +117,8 @@ export function ConversationDetailView({
         exportDisabled={!detailFileAvailable || !detail}
         onBack={onBack}
         onExport={onExport}
+        onSummarize={onSummarize}
+        onViewSummary={onViewSummary}
       />
 
       <section className="conversation-detail-body" aria-busy={detailLoading}>

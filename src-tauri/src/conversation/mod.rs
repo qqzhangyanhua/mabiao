@@ -77,6 +77,7 @@ pub(crate) use read::{
     backfill_event_index_step_skipping, catalog_roots, event_index_ready, finish_prepared_detail,
     load_prepared_parsed, prepare_detail, prepare_detail_read,
 };
+pub use session_store::load_session;
 
 pub use export::build_export;
 #[cfg(test)]

@@ -16,6 +16,7 @@
 @import "./styles/views/official-quota.css";
 @import "./styles/views/quota-tray.css";
 @import "./styles/views/conversation-catalog.css";
+@import "./styles/views/conversation-work-notes.css";
 @import "./styles/views/conversation-timeline.css";
 @import "./styles/views/conversation-markdown.css";
 @import "./styles/views/conversation-events.css";

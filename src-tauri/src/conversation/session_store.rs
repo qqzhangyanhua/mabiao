@@ -223,7 +223,7 @@ pub(crate) fn usage_record_identity(record: &UsageRecord) -> String {
     .to_string()
 }
 
-pub(crate) fn load_session(
+pub fn load_session(
     conn: &Connection,
     source: &str,
     session_id: &str,
@@ -250,7 +250,7 @@ pub(crate) fn load_session(
                 .collect();
         }
         fill_empty_cursor_hash_model(conn, session)?;
-        crate::store::mark_generated_session(conn, session)?;
+        crate::store::decorate_conversation_sessions(conn, std::slice::from_mut(session))?;
     }
     Ok(session)
 }

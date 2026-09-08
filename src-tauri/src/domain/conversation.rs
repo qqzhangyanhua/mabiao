@@ -72,6 +72,18 @@ pub struct ConversationSessionRow {
     /// 由工作纪要引擎写回的自造会话。只作展示与后续纪要输入剔除，不从 token KPI 扣除。
     #[serde(default)]
     pub generated_by_work_notes: bool,
+    /// 工作纪要 map 阶段为该会话写下的一句话摘要。只挂当前指纹仍匹配的缓存。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub work_notes_summaries: Vec<WorkNotesSessionSummary>,
+}
+
+/// 某次纪要引擎给单会话写出的摘要。同一会话可有多引擎/多模型各一条。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesSessionSummary {
+    pub engine: String,
+    pub model: String,
+    pub summary: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

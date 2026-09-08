@@ -309,7 +309,7 @@ pub(crate) fn finish_catalog_rows(
     }
     hydrate_catalog_usage(conn, prices, rows)?;
     hydrate_cursor_hash_models(conn, rows)?;
-    crate::store::mark_generated_sessions(conn, rows)?;
+    crate::store::decorate_conversation_sessions(conn, rows)?;
     Ok(())
 }
 

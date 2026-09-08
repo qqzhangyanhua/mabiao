@@ -24,6 +24,6 @@ pub(crate) use schema::{
     migrate_conversation_events_layout, CONVERSATION_EVENT_COLUMN_LIST,
 };
 pub(crate) use work_notes_generated::{
-    load_generated_sessions, mark_generated_session, mark_generated_sessions,
-    record_generated_session, session_is_generated,
+    decorate_conversation_sessions, load_generated_sessions, record_generated_session,
+    session_is_generated,
 };

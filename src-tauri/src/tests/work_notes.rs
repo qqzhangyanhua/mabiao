@@ -168,6 +168,23 @@ impl Harness {
             .collect()
     }
 
+    fn summarize(
+        &self,
+        source: &str,
+        session_id: &str,
+        engine_id: &str,
+    ) -> Result<Vec<crate::domain::WorkNotesSessionSummary>, String> {
+        let prepared =
+            work_notes::prepare_session_summary(&self.conn, source, session_id, engine_id, None)?;
+        let ran = work_notes::run_session_summary(
+            &prepared,
+            &self.runner,
+            self.app_dir.path(),
+            &self.job,
+        );
+        work_notes::persist_session_summary(&self.conn, &prepared, &ran, now())
+    }
+
     fn insert_session(&self, seed: SeedSession) {
         self.insert_named("codex", Source::Codex, seed);
     }
@@ -1232,6 +1249,138 @@ fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() 
         .find(|row| row.session_id == "ok")
         .expect("用户会话");
     assert!(!user.generated_by_work_notes);
+}
+
+#[test]
+fn conversation_catalog_shows_matching_session_summary() {
+    let h = Harness::new(replies(&[&map_json("压缩会话输入")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.build();
+    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let user = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    assert_eq!(user.work_notes_summaries.len(), 1);
+    assert_eq!(user.work_notes_summaries[0].engine, "codex");
+    assert_eq!(user.work_notes_summaries[0].summary, "压缩会话输入");
+
+    h.set_revision("ok", "rev-after");
+    let stale = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let user = stale
+        .rows
+        .iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    assert!(
+        user.work_notes_summaries.is_empty(),
+        "指纹变了不得把过期摘要挂在对话记录上"
+    );
+}
+
+#[test]
+fn conversation_catalog_lists_summaries_from_each_engine() {
+    let h = Harness::new(replies(
+        &[&map_json("codex 摘要"), &map_json("claude 摘要")],
+        &[&reduce_json(), &reduce_json()],
+    ));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.try_params(extra_params("", "codex", "")).unwrap();
+    h.try_params(extra_params("", "claude", "")).unwrap();
+    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let user = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    let engines: Vec<&str> = user
+        .work_notes_summaries
+        .iter()
+        .map(|item| item.engine.as_str())
+        .collect();
+    let summaries: Vec<&str> = user
+        .work_notes_summaries
+        .iter()
+        .map(|item| item.summary.as_str())
+        .collect();
+    assert_eq!(engines, ["claude", "codex"]);
+    assert_eq!(summaries, ["claude 摘要", "codex 摘要"]);
+}
+
+#[test]
+fn conversation_session_can_be_summarized_without_reduce() {
+    let h = Harness::new(replies(&[&map_json("压缩会话输入")], &[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let summaries = h.summarize("codex", "ok", "codex").unwrap();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].engine, "codex");
+    assert_eq!(summaries[0].summary, "压缩会话输入");
+    assert_eq!(h.map_count(), 1);
+    assert!(h.reduce_stdin().is_empty());
+    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let user = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    assert_eq!(user.work_notes_summaries[0].summary, "压缩会话输入");
+}
+
+#[test]
+fn conversation_session_summary_overwrites_same_engine_cache() {
+    let h = Harness::new(replies(&[&map_json("旧摘要"), &map_json("新摘要")], &[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.summarize("codex", "ok", "codex").unwrap();
+    let summaries = h.summarize("codex", "ok", "codex").unwrap();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].summary, "新摘要");
+    assert_eq!(h.map_count(), 2);
+}
+
+#[test]
+fn conversation_session_summary_rejects_empty_events() {
+    let h = Harness::new(replies(&[], &[]));
+    h.insert_session(SeedSession {
+        session_id: "empty",
+        title: "空会话",
+        project: "/proj/statistics",
+        started: day(2026, 8, 18),
+        hour: 10,
+        tokens: 0,
+        events: &[],
+    });
+    let error = h.summarize("codex", "empty", "codex").unwrap_err();
+    assert_eq!(error, "没有可总结的正文");
+}
+
+#[test]
+fn conversation_session_summary_rejects_work_notes_generated_session() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let first = h
+        .try_build_with(WorkNotesRange::this_week(), false, "grok", None)
+        .unwrap();
+    h.job.finish(Ok(first)).unwrap();
+    let generated_id = pinned_session_id(&h.runner.recorded()[0])
+        .expect("grok 应钉 session id")
+        .to_string();
+    let events = eligible_events();
+    h.insert_named(
+        "grok",
+        Source::Grok,
+        SeedSession {
+            session_id: &generated_id,
+            title: "码表自己生成的",
+            project: h.work_dir().to_str().unwrap(),
+            started: day(2026, 8, 18),
+            hour: 10,
+            tokens: 3000,
+            events: &events,
+        },
+    );
+    let error = h.summarize("grok", &generated_id, "codex").unwrap_err();
+    assert_eq!(error, "码表生成的会话不写摘要");
 }
 
 #[test]

@@ -50,6 +50,8 @@ export type ConversationCatalogRowProps = {
   searching?: boolean;
   highlightQuery?: string;
   onOpen: (row: ConversationSessionRow) => void;
+  onSummarize: (row: ConversationSessionRow) => void;
+  onViewSummary: (row: ConversationSessionRow) => void;
 };
 
 export type CursorSessionDetailProps = {
@@ -85,4 +87,6 @@ export type ConversationDetailHeadProps = {
   exportDisabled: boolean;
   onBack: () => void;
   onExport: (format: ConversationExportFormat) => void;
+  onSummarize: () => void;
+  onViewSummary: () => void;
 };

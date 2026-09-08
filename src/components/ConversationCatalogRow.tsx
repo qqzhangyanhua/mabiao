@@ -6,12 +6,15 @@ import {
   conversationRangeLabel,
   conversationRangeTitle,
   conversationStatusLabel,
+  conversationWorkNotesSnippet,
+  conversationWorkNotesSummaries,
   workNotesGeneratedLabel,
 } from "../lib/conversationDisplay";
 import { formatCost, formatTokens, projectLabel } from "../lib/format";
 import { HighlightedSnippet } from "../lib/highlightMatch";
 import { SourceLabel } from "./SourceIcon";
 import type { ConversationCatalogRowProps } from "./type";
+import { Button } from "./ui/Button";
 
 export function ConversationCatalogRow({
   row,
@@ -19,8 +22,12 @@ export function ConversationCatalogRow({
   searching = false,
   highlightQuery = "",
   onOpen,
+  onSummarize,
+  onViewSummary,
 }: ConversationCatalogRowProps) {
   const rangeTitle = conversationRangeTitle(row);
+  const workNotesSnippet = conversationWorkNotesSnippet(row);
+  const hasSummary = conversationWorkNotesSummaries(row).length > 0;
   return (
     <tr
       className="clickable"
@@ -38,6 +45,11 @@ export function ConversationCatalogRow({
         <div className="conversation-title-cell">
           <strong>{row.title}</strong>
           <span className="mono">{row.session_id}</span>
+          {workNotesSnippet ? (
+            <span className="conversation-work-notes-snippet" title={workNotesSnippet}>
+              {workNotesSnippet}
+            </span>
+          ) : null}
           {row.match_field === "body" && row.match_snippet ? (
             <HighlightedSnippet
               className="conversation-match-snippet"
@@ -93,6 +105,30 @@ export function ConversationCatalogRow({
           {searching && row.event_index_ready === false ? (
             <span className="conversation-index-pending">正文索引未就绪，当前只搜标题</span>
           ) : null}
+          {hasSummary ? (
+            <Button
+              variant="text"
+              onClick={(event) => {
+                event.stopPropagation();
+                onViewSummary(row);
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              查看摘要
+            </Button>
+          ) : null}
+          {row.generated_by_work_notes ? null : (
+            <Button
+              variant="text"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSummarize(row);
+              }}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              生成摘要
+            </Button>
+          )}
         </div>
       </td>
     </tr>

@@ -36,6 +36,8 @@ export function ConversationCatalog({
   onToolNames,
   onToolFailed,
   onOpen,
+  onSummarize,
+  onViewSummary,
 }: {
   searchInput: string;
   onSearchInput: (value: string) => void;
@@ -52,6 +54,8 @@ export function ConversationCatalog({
   onToolNames: (names: string[]) => void;
   onToolFailed: (failed: boolean) => void;
   onOpen: (row: ConversationSessionRow) => void;
+  onSummarize: (row: ConversationSessionRow) => void;
+  onViewSummary: (row: ConversationSessionRow) => void;
 }) {
   const { rows, total } = pageData;
   const pageCount = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
@@ -149,6 +153,8 @@ export function ConversationCatalog({
                     searching={searching}
                     highlightQuery={search}
                     onOpen={onOpen}
+                    onSummarize={onSummarize}
+                    onViewSummary={onViewSummary}
                   />
                 ),
               )}

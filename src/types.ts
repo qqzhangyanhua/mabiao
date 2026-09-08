@@ -461,6 +461,14 @@ export type ConversationSessionRow = {
   match_event_id?: string | null;
   match_sequence?: number | null;
   generated_by_work_notes?: boolean;
+  work_notes_summaries?: WorkNotesSessionSummary[];
+};
+
+export type WorkNotesSessionSummary = {
+  engine: string;
+  model: string;
+  summary: string;
+  created_at: string;
 };
 
 export type ConversationPage = {

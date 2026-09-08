@@ -176,6 +176,22 @@ enum MapOne {
     Cancelled,
 }
 
+pub(crate) fn summarize_one(
+    session: &ConversationSessionRow,
+    events: &[ConversationEvent],
+    runner: &dyn EngineRunner,
+    work_dir: &Path,
+    engine_id: &str,
+    model: Option<&str>,
+    job: &WorkNotesJob,
+) -> Result<String, String> {
+    match map_one(session, events, runner, work_dir, engine_id, model, job) {
+        MapOne::Cancelled => Err(CANCELLED_MESSAGE.to_string()),
+        MapOne::Failed(failure) => Err(failure.item.error),
+        MapOne::Ok(done) => Ok(done.summary.summary),
+    }
+}
+
 fn map_one(
     session: &ConversationSessionRow,
     events: &[ConversationEvent],

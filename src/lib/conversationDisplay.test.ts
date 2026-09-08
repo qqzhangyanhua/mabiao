@@ -12,6 +12,8 @@ import {
   conversationSourceOptions,
   conversationSourcesFromUsageFilter,
   conversationStatusLabel,
+  conversationWorkNotesSnippet,
+  conversationWorkNotesSummaries,
   workNotesGeneratedLabel,
 } from "./conversationDisplay";
 
@@ -44,6 +46,47 @@ describe("conversation display labels", () => {
 
   it("labels work-notes generated sessions", () => {
     expect(workNotesGeneratedLabel()).toBe("码表生成");
+  });
+
+  it("picks the first non-empty work-notes session summary", () => {
+    expect(conversationWorkNotesSnippet(session())).toBeNull();
+    expect(
+      conversationWorkNotesSnippet(
+        session({
+          work_notes_summaries: [
+            { engine: "codex", model: "", summary: "  ", created_at: "t0" },
+            {
+              engine: "claude",
+              model: "sonnet",
+              summary: "压缩会话输入",
+              created_at: "t1",
+            },
+          ],
+        }),
+      ),
+    ).toBe("压缩会话输入");
+    expect(
+      conversationWorkNotesSummaries(
+        session({
+          work_notes_summaries: [
+            { engine: "codex", model: "", summary: "  ", created_at: "t0" },
+            {
+              engine: "claude",
+              model: "sonnet",
+              summary: "压缩会话输入",
+              created_at: "t1",
+            },
+          ],
+        }),
+      ),
+    ).toEqual([
+      {
+        engine: "claude",
+        model: "sonnet",
+        summary: "压缩会话输入",
+        created_at: "t1",
+      },
+    ]);
   });
 
   it("keeps Cursor Agent grouped with Cursor", () => {

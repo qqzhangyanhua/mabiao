@@ -351,6 +351,7 @@ pub fn run() {
             commands::get_report,
             commands::preview_work_notes,
             commands::start_work_notes,
+            commands::summarize_conversation_session,
             commands::get_work_notes_progress,
             commands::cancel_work_notes,
             commands::detect_work_note_engines,

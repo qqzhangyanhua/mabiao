@@ -1,4 +1,9 @@
-import type { ConversationQuery, ConversationSessionRow, Filter } from "../types";
+import type {
+  ConversationQuery,
+  ConversationSessionRow,
+  Filter,
+  WorkNotesSessionSummary,
+} from "../types";
 import { sourceLabel, formatClock, projectLabel, relativeTime } from "./format";
 
 const CAPABILITY_LABELS: Record<string, string> = {
@@ -58,6 +63,19 @@ export function conversationStatusLabel(status: string): string {
 
 export function workNotesGeneratedLabel(): string {
   return "码表生成";
+}
+
+export function conversationWorkNotesSummaries(
+  row: Pick<ConversationSessionRow, "work_notes_summaries">,
+): WorkNotesSessionSummary[] {
+  return (row.work_notes_summaries ?? []).filter((item) => item.summary.trim().length > 0);
+}
+
+export function conversationWorkNotesSnippet(
+  row: Pick<ConversationSessionRow, "work_notes_summaries">,
+): string | null {
+  const summary = conversationWorkNotesSummaries(row)[0]?.summary.trim();
+  return summary ? summary : null;
 }
 
 export function conversationFileUnavailableLabel(source: string): string {

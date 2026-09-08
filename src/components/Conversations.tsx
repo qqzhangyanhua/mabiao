@@ -21,9 +21,12 @@ import type {
   ConversationFocus,
   ConversationSessionRow,
   Filter,
+  WorkNotesSessionSummary,
 } from "../types";
 import { ConversationCatalog } from "./ConversationCatalog";
 import { ConversationDetailView } from "./ConversationDetailView";
+import { ConversationSummaryDialog } from "./ConversationSummaryDialog";
+import { ConversationSummaryViewDialog } from "./ConversationSummaryViewDialog";
 
 export function Conversations({
   filter,
@@ -54,6 +57,7 @@ export function Conversations({
     loading: catalogLoading,
     error: catalogError,
     indexProgress,
+    reload: reloadCatalog,
   } = useConversationCatalog({ filter, revision, onError });
   const [navigation, setNavigation] = useState(initialConversationNavigationState);
   const [matchFocus, setMatchFocus] = useState<{
@@ -74,6 +78,8 @@ export function Conversations({
     follow,
   });
   const { fetchDetail, clearExport, reset: resetDetail, exportConversation } = loader;
+  const [summaryTarget, setSummaryTarget] = useState<ConversationSessionRow | null>(null);
+  const [viewTarget, setViewTarget] = useState<ConversationSessionRow | null>(null);
   const { prepareOpen, prepareClose, prepareBack, prepareEnterChild, rememberEventsScroll } =
     follow;
   const usageIdentity =
@@ -207,6 +213,25 @@ export function Conversations({
     );
   }
 
+  function applySummaries(session: ConversationSessionRow, summaries: WorkNotesSessionSummary[]) {
+    reloadCatalog();
+    setNavigation((current) => ({
+      ...current,
+      frames: current.frames.map((frame) =>
+        frame.session.source === session.source && frame.session.session_id === session.session_id
+          ? { ...frame, session: { ...frame.session, work_notes_summaries: summaries } }
+          : frame,
+      ),
+    }));
+    if (
+      selected &&
+      selected.source === session.source &&
+      selected.session_id === session.session_id
+    ) {
+      fetchDetail({ ...selected, work_notes_summaries: summaries });
+    }
+  }
+
   function openChild(link: ConversationAgentLink) {
     if (!link.session) return;
     const parentScrollTop = follow.parentScrollTop();
@@ -223,45 +248,48 @@ export function Conversations({
     fetchDetail(link.session);
   }
 
-  if (selected) {
-    const session = loader.detail?.session ?? selected;
-    return (
-      <ConversationDetailView
-        session={session}
-        detail={loader.detail}
-        detailTab={detailTab}
-        detailLoading={loader.detailLoading}
-        detailError={loader.detailError}
-        detailFileAvailable={loader.detailFileAvailable}
-        pollError={loader.pollError}
-        breadcrumb={
-          navigation.frames.length > 1
-            ? navigation.frames.map((frame) => frame.session.title).join(" / ")
-            : null
-        }
-        parentAvailable={navigation.frames.length > 1}
-        expandedRelationshipIds={currentFrame?.expanded_relationship_ids ?? []}
-        matchFocus={matchFocus}
-        usageIdentity={usageIdentity}
-        exportFormat={loader.exportFormat}
-        exportStatus={loader.exportStatus}
-        exportError={loader.exportError}
-        follow={follow}
-        onBack={navigation.frames.length > 1 ? backToParent : closeDetail}
-        onExport={(format) => void exportConversation(format)}
-        onTabChange={(tab) => {
-          rememberEventsScroll(detailTab, tab);
-          setDetailTab(tab);
-        }}
-        onRetry={() => fetchDetail(selected)}
-        onToggleChild={toggleChild}
-        onOpenChild={openChild}
-        onError={onError}
-      />
-    );
-  }
-
-  return (
+  const view = selected ? (
+    <ConversationDetailView
+      session={loader.detail?.session ?? selected}
+      detail={loader.detail}
+      detailTab={detailTab}
+      detailLoading={loader.detailLoading}
+      detailError={loader.detailError}
+      detailFileAvailable={loader.detailFileAvailable}
+      pollError={loader.pollError}
+      breadcrumb={
+        navigation.frames.length > 1
+          ? navigation.frames.map((frame) => frame.session.title).join(" / ")
+          : null
+      }
+      parentAvailable={navigation.frames.length > 1}
+      expandedRelationshipIds={currentFrame?.expanded_relationship_ids ?? []}
+      matchFocus={matchFocus}
+      usageIdentity={usageIdentity}
+      exportFormat={loader.exportFormat}
+      exportStatus={loader.exportStatus}
+      exportError={loader.exportError}
+      follow={follow}
+      onBack={navigation.frames.length > 1 ? backToParent : closeDetail}
+      onExport={(format) => void exportConversation(format)}
+      onSummarize={() => {
+        setViewTarget(null);
+        setSummaryTarget(loader.detail?.session ?? selected);
+      }}
+      onViewSummary={() => {
+        setSummaryTarget(null);
+        setViewTarget(loader.detail?.session ?? selected);
+      }}
+      onTabChange={(tab) => {
+        rememberEventsScroll(detailTab, tab);
+        setDetailTab(tab);
+      }}
+      onRetry={() => fetchDetail(selected)}
+      onToggleChild={toggleChild}
+      onOpenChild={openChild}
+      onError={onError}
+    />
+  ) : (
     <ConversationCatalog
       searchInput={searchInput}
       onSearchInput={setSearchInput}
@@ -278,6 +306,38 @@ export function Conversations({
       onToolNames={setToolNames}
       onToolFailed={setToolFailed}
       onOpen={loadDetail}
+      onSummarize={(row) => {
+        setViewTarget(null);
+        setSummaryTarget(row);
+      }}
+      onViewSummary={(row) => {
+        setSummaryTarget(null);
+        setViewTarget(row);
+      }}
     />
+  );
+
+  return (
+    <>
+      {view}
+      {summaryTarget ? (
+        <ConversationSummaryDialog
+          session={summaryTarget}
+          onClose={() => setSummaryTarget(null)}
+          onGenerated={(summaries) => {
+            const next = { ...summaryTarget, work_notes_summaries: summaries };
+            applySummaries(summaryTarget, summaries);
+            setSummaryTarget(null);
+            setViewTarget(next);
+          }}
+        />
+      ) : null}
+      {viewTarget ? (
+        <ConversationSummaryViewDialog
+          session={viewTarget}
+          onClose={() => setViewTarget(null)}
+        />
+      ) : null}
+    </>
   );
 }

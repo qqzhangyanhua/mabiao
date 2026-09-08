@@ -118,6 +118,65 @@ impl WorkNotesJob {
         Ok(())
     }
 
+    pub fn begin_session_summary(
+        &self,
+        engine_id: &str,
+        model: Option<&str>,
+    ) -> Result<(), String> {
+        let mut state = self.lock()?;
+        if state.status == WorkNotesJobStatus::Running {
+            return Err("正在生成工作纪要".to_string());
+        }
+        let model = model
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string);
+        state.completed.clear();
+        state.range = None;
+        state.engine_id = Some(engine_id.to_string());
+        state.model = model;
+        state.status = WorkNotesJobStatus::Running;
+        state.error.clear();
+        state.result = None;
+        state.done = 0;
+        state.total = 1;
+        state.current_title.clear();
+        self.cancel.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    pub fn finish_session_summary(&self, result: Result<(), String>) -> Result<(), String> {
+        let cancelled = self.is_cancelled()
+            || result
+                .as_ref()
+                .err()
+                .is_some_and(|error| error == CANCELLED_MESSAGE);
+        let mut state = self.lock()?;
+        if cancelled {
+            state.status = WorkNotesJobStatus::Cancelled;
+            state.current_title.clear();
+            state.error.clear();
+            state.result = None;
+            return Ok(());
+        }
+        match result {
+            Ok(()) => {
+                state.status = WorkNotesJobStatus::Done;
+                state.current_title.clear();
+                state.error.clear();
+                state.result = None;
+                state.completed.clear();
+            }
+            Err(error) => {
+                state.status = WorkNotesJobStatus::Error;
+                state.current_title.clear();
+                state.error = error;
+                state.result = None;
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_total(&self, total: u32) -> Result<(), String> {
         let mut state = self.lock()?;
         state.total = total;

@@ -39,6 +39,7 @@ export function useConversationCatalog({
   const [toolFailed, setToolFailed] = useState(false);
   const [toolNameOptions, setToolNameOptions] = useState<string[]>([]);
   const [page, setPage] = useState(1);
+  const [reloadTick, setReloadTick] = useState(0);
   const [pageData, setPageData] = useState<ConversationPage>({ rows: [], total: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function useConversationCatalog({
     setSeenQueryKey(queryKey);
     setPage(1);
   }
-  const requestKey = `${queryKey}|${page}|${revision}`;
+  const requestKey = `${queryKey}|${page}|${revision}|${reloadTick}`;
   const [seenRequestKey, setSeenRequestKey] = useState("");
   if (seenRequestKey !== requestKey) {
     setSeenRequestKey(requestKey);
@@ -97,7 +98,7 @@ export function useConversationCatalog({
           setLoading(false);
         }
       });
-  }, [filter, revision, search, page, toolNames, toolFailed, onError]);
+  }, [filter, revision, search, page, reloadTick, toolNames, toolFailed, onError]);
 
   useEffect(() => {
     const generation = ++toolNamesGeneration.current;
@@ -139,5 +140,6 @@ export function useConversationCatalog({
     loading,
     error,
     indexProgress,
+    reload: () => setReloadTick((tick) => tick + 1),
   };
 }
