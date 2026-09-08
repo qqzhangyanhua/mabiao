@@ -106,7 +106,10 @@ export function BreakdownProjectSessions({
         <span>共 {formatTokens(data.total)} 个会话</span>
         <span>与对话记录同一目录，按最近活动排序</span>
       </div>
-      <LoadingOverlay active={loading && data.rows.length > 0} className="table-scroll">
+      <LoadingOverlay
+        active={loading && data.rows.length > 0}
+        className="table-scroll breakdown-session-table"
+      >
         <table>
           <thead>
             <tr>
@@ -115,7 +118,7 @@ export function BreakdownProjectSessions({
               <th>模型</th>
               <th>Token</th>
               <th>费用</th>
-              <th>时间</th>
+              <th className="breakdown-session-range">时间</th>
             </tr>
           </thead>
           <tbody>
@@ -210,7 +213,9 @@ function ProjectSessionRow({
           <span className="muted"> *</span>
         ) : null}
       </td>
-      <td title={conversationRangeTitle(row) || undefined}>{conversationRangeLabel(row)}</td>
+      <td className="breakdown-session-range" title={conversationRangeTitle(row) || undefined}>
+        {conversationRangeLabel(row)}
+      </td>
     </tr>
   );
 }

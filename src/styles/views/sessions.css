@@ -272,8 +272,44 @@ tr.breakdown-expand-row > td {
   background: var(--sticky-col-bg);
 }
 
+.breakdown-session-table table {
+  min-width: 780px;
+}
+
 .breakdown-session-table thead th {
   position: static;
+}
+
+.breakdown-session-table th:first-child,
+.breakdown-session-table td:first-child {
+  width: 100%;
+  min-width: 0;
+}
+
+.breakdown-session-table .conversation-title-cell {
+  min-width: 0;
+  max-width: none;
+}
+
+.breakdown-session-table th:not(:first-child),
+.breakdown-session-table td:not(:first-child) {
+  white-space: nowrap;
+}
+
+.breakdown-session-table td:nth-child(2),
+.breakdown-session-table td:nth-child(3) {
+  max-width: 168px;
+}
+
+.breakdown-session-table th:nth-child(n + 4),
+.breakdown-session-table td:nth-child(n + 4) {
+  text-align: right;
+}
+
+.breakdown-session-range {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
 }
 
 .breakdown-expand-row .pagination {
