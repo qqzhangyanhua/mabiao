@@ -1,0 +1,49 @@
+src-tauri/src/conversation/mod.rs
+  s_43eee0d889ef74::t_3e865818b38772 54
+  s_43eee0d889ef74::t_a9aff80835b164 30
+docs/agent-layers.md
+  s_43eee0d889ef74::t_18eb34acdc9867 75-76
+  s_43eee0d889ef74::t_926c9aa6072dc5 108
+src-tauri/src/conversation/catalog.rs
+  s_43eee0d889ef74::t_985d8928a7892f 290
+  s_43eee0d889ef74::t_d4a1c80b5479d1 13-14
+  s_43eee0d889ef74::t_aeac04ce2f64f5 6-7
+src-tauri/src/conversation/cursor_bridge.rs
+  s_43eee0d889ef74::t_ae16339c36258c 202
+src-tauri/src/tests/work_notes.rs
+  s_43eee0d889ef74::t_a542ce62af7a49 1313-1350
+src-tauri/src/work_notes/identity.rs
+  s_43eee0d889ef74::t_17c2b7ecb0f876 1-6,15-54,57,82-83,87-91,94-96,101-102,104-105,152
+  s_43eee0d889ef74::t_3e865818b38772 93
+src-tauri/src/conversation/session_store.rs
+  s_43eee0d889ef74::t_c3159aa6c2ddd6 244-245
+src-tauri/src/work_notes/pipeline.rs
+  s_43eee0d889ef74::t_2c6ee3eea86c16 427,431
+  s_43eee0d889ef74::t_2bf93c2dbd4ebe 24
+  s_43eee0d889ef74::t_174306e8349194 382
+src-tauri/src/conversation/hydrate.rs
+  s_43eee0d889ef74::t_122f4f46ed9782 1-61
+src-tauri/src/conversation/catalog_search.rs
+  s_43eee0d889ef74::t_a1d08ea38782df 7,9
+  s_43eee0d889ef74::t_a2afc03cea4c42 66
+src-tauri/src/work_notes.rs
+  s_43eee0d889ef74::t_a5be6445941a7b 108-117
+  s_43eee0d889ef74::t_70128893d19b18 7-8
+  s_43eee0d889ef74::t_67dcfb78993387 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "47217e22f2bfa5c9efd89ea58fdd408391f7d156",
+  "prompts": {},
+  "sessions": {
+    "s_43eee0d889ef74": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8f132527-6db2-4240-8baa-ecbf927ac8c4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
