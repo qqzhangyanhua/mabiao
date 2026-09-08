@@ -27,6 +27,7 @@ mod event_tables;
 mod export;
 mod gemini;
 mod grok;
+mod hydrate;
 mod incremental;
 mod kimi;
 mod line_direct;
@@ -50,11 +51,11 @@ use session_store::{
 use toolbox::{FileIndexCursor, ParsedConversation};
 use trusted_path::modified_nanos;
 
+pub(crate) use catalog::conversation_source_paths;
 pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
     usage_records_page,
 };
-pub(crate) use catalog::{conversation_source_paths, finish_catalog_rows};
 pub(crate) use discover::{
     detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
     discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,

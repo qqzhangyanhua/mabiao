@@ -4,10 +4,13 @@
 //! `summarize_session` 只总结一条会话。后两个收 `ConnectionSource` 而不是 `&Connection`，
 //! 因为「读连接取输入 → 放开连接调引擎 → 有东西可写才取写连接」这套编排属于实现，
 //! 不该由调用方拼。阶段实现在 `pipeline` 与 `session`。
+//!
+//! 「这条会话是不是码表自己生成的」由 `identity` 判定，对话记录只经 `decorate_sessions` 取结果。
 
 mod cache;
 mod engines;
 mod estimate;
+mod identity;
 mod input;
 mod job;
 mod orchestrate;
@@ -100,6 +103,16 @@ pub fn preview(
 
 pub fn require_engine(engine_id: &str) -> Result<(), String> {
     engines::require(engine_id)
+}
+
+/// 对话记录给会话行打「码表生成」标记、挂上已有摘要的唯一入口。
+///
+/// 判定规则与落痕表都在 `identity` 里，调用方不需要知道是靠 session id 还是工作目录认出来的。
+pub fn decorate_sessions(
+    conn: &Connection,
+    rows: &mut [ConversationSessionRow],
+) -> Result<(), String> {
+    identity::decorate(conn, rows)
 }
 
 /// 区间纪要的唯一入口。`now`、runner、`job` 由调用方注入。

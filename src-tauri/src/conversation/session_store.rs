@@ -12,7 +12,6 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::domain::{ConversationMatchField, ConversationSessionRow, Source, UsageRecord};
 
 use super::conversation_adapter;
-use super::cursor_bridge::fill_empty_cursor_hash_model;
 use super::event_index;
 use super::merge::IndexedAgentMetadata;
 use super::read::conversation_source_roots;
@@ -242,15 +241,8 @@ pub fn load_session(
         .optional()
         .map_err(|e| e.to_string())?;
     if let Some(session) = &mut session {
-        let paths = load_session_files(conn, source, session_id)?;
-        if !paths.is_empty() {
-            session.source_files = paths
-                .into_iter()
-                .map(|path| path.to_string_lossy().to_string())
-                .collect();
-        }
-        fill_empty_cursor_hash_model(conn, session)?;
-        crate::store::decorate_conversation_sessions(conn, std::slice::from_mut(session))?;
+        // 详情页不带价目表，注水时跳过消耗记录汇总；SQL 里的 `0, -1` 就是那对占位值。
+        super::hydrate::sessions(conn, None, std::slice::from_mut(session))?;
     }
     Ok(session)
 }

@@ -72,7 +72,8 @@
 
 1. 事件 `text`/`name` 进 `conversation_events`（ADR 0011）；目录搜索走 FTS 派生表（ADR 0014）。`details` 按需读原文件。正文留在本机索引，备份与上传不含正文。
 2. Cursor Agent transcript 走 `conversation/cursor.rs`，`source=cursor_agent`，与 `cursor_sessions`（ADR 0007）分区。
-3. `cargo test conversation` 绿（含增量、回填、正文搜索）。
+3. 会话行注水只有 `conversation/hydrate.rs` 一条：源文件清单、消耗记录汇总、Cursor 会话补模型、工作纪要打标。目录页、正文搜索、单条详情共用它，别在某一条路上单独补一项。没有价目表时传 `None` 跳过消耗记录汇总。
+4. `cargo test conversation` 绿（含增量、回填、正文搜索）。
 
 ## 全局指令
 
@@ -104,7 +105,7 @@
 4. 硬数字只复用现有 `query` 函数，不新增聚合。
 5. 读 ADR 0021、0011、0002。`cargo test work_notes` 绿。真 spawn 冒烟 `#[ignore]`，不进 CI。
 6. 引擎清单只列 `which` 探测到的。探测只走设置页手动按钮（`which` + `--version`），启动时不 spawn。加引擎只改 `work_notes::engines` 的 profile 表，不改编排。
-7. 会落盘的引擎必须可识别：能钉 session id 就钉死，否则靠专用工作目录。识别后只从后续纪要输入剔除、在对话记录打「码表生成」标记；不从 token KPI 扣除，不删改用户会话文件。
+7. 会落盘的引擎必须可识别：能钉 session id 就钉死，否则靠专用工作目录。识别后只从后续纪要输入剔除、在对话记录打「码表生成」标记；不从 token KPI 扣除，不删改用户会话文件。判定规则与落痕表都在 `work_notes/identity.rs`，对话记录只经 `work_notes::decorate_sessions` 取结果，不自己拼规则。
 
 ## 样式
 

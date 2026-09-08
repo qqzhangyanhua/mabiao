@@ -1310,6 +1310,44 @@ fn conversation_catalog_lists_summaries_from_each_engine() {
     assert_eq!(summaries, ["claude 摘要", "codex 摘要"]);
 }
 
+/// 目录页、正文搜索、单条详情是三条不同的 SQL，注水只有一条：三边看到的会话行必须一致。
+#[test]
+fn catalog_search_and_single_session_carry_the_same_work_notes_marks() {
+    let h = Harness::new(replies(&[&map_json("压缩会话输入")], &[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.summarize("codex", "ok", "codex").unwrap();
+    let conn = h.conn.get();
+    let listed = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    let listed = listed
+        .rows
+        .into_iter()
+        .find(|row| row.session_id == "ok")
+        .expect("用户会话");
+    let searched = conversation::sessions_page(
+        &conn,
+        &ConversationQuery {
+            search: Some("对齐口径".into()),
+            ..ConversationQuery::default()
+        },
+    )
+    .unwrap();
+    let searched = searched
+        .rows
+        .into_iter()
+        .find(|row| row.session_id == "ok")
+        .expect("搜索命中");
+    let single = conversation::load_session(&conn, "codex", "ok")
+        .unwrap()
+        .expect("单条详情");
+
+    assert_eq!(listed.work_notes_summaries.len(), 1);
+    for row in [&searched, &single] {
+        assert_eq!(row.work_notes_summaries, listed.work_notes_summaries);
+        assert_eq!(row.generated_by_work_notes, listed.generated_by_work_notes);
+        assert_eq!(row.source_files, listed.source_files);
+    }
+}
+
 #[test]
 fn conversation_session_can_be_summarized_without_reduce() {
     let h = Harness::new(replies(&[&map_json("压缩会话输入")], &[]));

@@ -199,7 +199,7 @@ pub(crate) fn sync_cursor_hash_models(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn hydrate_cursor_hash_models(
+pub(super) fn hydrate_cursor_hash_models(
     conn: &Connection,
     rows: &mut [ConversationSessionRow],
 ) -> Result<(), String> {
@@ -215,17 +215,5 @@ pub(crate) fn hydrate_cursor_hash_models(
     for row in rows {
         apply_cursor_hash_model(row, models.get(&row.session_id).map(String::as_str));
     }
-    Ok(())
-}
-
-pub(crate) fn fill_empty_cursor_hash_model(
-    conn: &Connection,
-    session: &mut ConversationSessionRow,
-) -> Result<(), String> {
-    if session.source != Source::CursorAgent.as_str() || !session.model.is_empty() {
-        return Ok(());
-    }
-    let models = cursor_hash_models_by_session(conn, std::slice::from_ref(&session.session_id))?;
-    apply_cursor_hash_model(session, models.get(&session.session_id).map(String::as_str));
     Ok(())
 }

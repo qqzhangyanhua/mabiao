@@ -4,8 +4,9 @@ use crate::domain::{
     ConversationMatchField, ConversationPage, ConversationQuery, ConversationSessionRow, PriceTable,
 };
 
+use super::hydrate;
 use super::session_store::row_from_sql;
-use super::{finish_catalog_rows, CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use super::{CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 const TITLE_LIKE_FIELDS: usize = 7;
 const SNIPPET_RADIUS: usize = 48;
@@ -62,7 +63,7 @@ pub(super) fn sessions_page_with_search(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| error.to_string())?;
     hydrate_body_matches(conn, search, include_body, &mut rows)?;
-    finish_catalog_rows(conn, prices, &mut rows)?;
+    hydrate::sessions(conn, Some(prices), &mut rows)?;
     Ok(ConversationPage { rows, total })
 }
 

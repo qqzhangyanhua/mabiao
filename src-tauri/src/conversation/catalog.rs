@@ -3,16 +3,15 @@ use std::path::PathBuf;
 use rusqlite::{params_from_iter, Connection};
 
 use crate::domain::{
-    ConversationEvent, ConversationPage, ConversationQuery, ConversationSessionRow,
-    ConversationUsagePage, PriceTable, Source,
+    ConversationEvent, ConversationPage, ConversationQuery, ConversationUsagePage, PriceTable,
+    Source,
 };
-use crate::query;
 
 use super::catalog_search;
 use super::conversation_adapter;
-use super::cursor_bridge::hydrate_cursor_hash_models;
 use super::event_index;
-use super::session_store::{load_session_files, load_usage_records, row_from_sql};
+use super::hydrate;
+use super::session_store::{load_usage_records, row_from_sql};
 use super::CONVERSATION_SOURCES;
 use super::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
@@ -288,51 +287,7 @@ pub fn sessions_page_with_prices(
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    finish_catalog_rows(conn, prices, &mut rows)?;
+    hydrate::sessions(conn, Some(prices), &mut rows)?;
 
     Ok(ConversationPage { rows, total })
-}
-
-pub(crate) fn finish_catalog_rows(
-    conn: &Connection,
-    prices: &PriceTable,
-    rows: &mut [ConversationSessionRow],
-) -> Result<(), String> {
-    for row in rows.iter_mut() {
-        let paths = load_session_files(conn, &row.source, &row.session_id)?;
-        if !paths.is_empty() {
-            row.source_files = paths
-                .into_iter()
-                .map(|path| path.to_string_lossy().to_string())
-                .collect();
-        }
-    }
-    hydrate_catalog_usage(conn, prices, rows)?;
-    hydrate_cursor_hash_models(conn, rows)?;
-    crate::store::decorate_conversation_sessions(conn, rows)?;
-    Ok(())
-}
-
-pub(crate) fn hydrate_catalog_usage(
-    conn: &Connection,
-    prices: &PriceTable,
-    rows: &mut [ConversationSessionRow],
-) -> Result<(), String> {
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let keys = rows
-        .iter()
-        .map(|row| (row.source.clone(), row.session_id.clone()))
-        .collect::<Vec<_>>();
-    let totals = query::usage_rollups_for_sessions(conn, prices, &keys)?;
-    for row in rows {
-        let Some(usage) = totals.get(&(row.source.clone(), row.session_id.clone())) else {
-            continue;
-        };
-        row.total_tokens = usage.total_tokens;
-        row.cost = usage.cost;
-        row.unpriced = usage.unpriced;
-    }
-    Ok(())
 }

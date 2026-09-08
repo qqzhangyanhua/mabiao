@@ -21,6 +21,7 @@ use crate::query;
 use super::cache;
 use super::engines::{self, EngineError, EngineRunner};
 use super::estimate;
+use super::identity::{self, GeneratedIdentity};
 use super::input;
 use super::job::{self, WorkNotesJob};
 use super::orchestrate;
@@ -378,7 +379,7 @@ pub(super) fn flush_generated(
     records: &[GeneratedRecord],
 ) -> Result<(), String> {
     for record in records {
-        crate::store::record_generated_session(
+        identity::record(
             conn,
             &record.engine_id,
             record.session_id.as_deref(),
@@ -423,16 +424,11 @@ fn classify_sessions(
     conn: &Connection,
     sessions: Vec<ConversationSessionRow>,
 ) -> Result<(i64, Vec<ConversationSessionRow>), String> {
-    let generated = crate::store::load_generated_sessions(conn)?;
+    let generated = GeneratedIdentity::load(conn)?;
     let mut skipped_sparse = 0i64;
     let mut eligible = Vec::new();
     for session in sessions {
-        if crate::store::session_is_generated(
-            &generated,
-            &session.source,
-            &session.session_id,
-            &session.project,
-        ) {
+        if generated.contains(&session.source, &session.session_id, &session.project) {
             continue;
         }
         let event_count =
