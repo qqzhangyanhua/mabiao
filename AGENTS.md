@@ -49,3 +49,17 @@ Rust 测试在 `src-tauri/src/tests/`，辅助在 `src-tauri/src/test_support/`�
 - 功能分支：`cursor/<描述>-eedd`，`git push -u origin <branch>`
 - PR 先 draft，CI 绿再 mark ready
 - 发版：同步 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 的 version → 推 `v*` tag 或 Actions 手动 **Release** → 检查 draft 的 macOS / Linux / Windows 产物后 Publish。安装包只由这条流水线打。
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `qqzhangyanhua/mabiao` (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical roles map 1:1: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
