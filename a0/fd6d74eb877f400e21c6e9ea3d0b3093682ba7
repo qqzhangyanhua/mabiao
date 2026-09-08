@@ -1,0 +1,25 @@
+src/styles/views/sessions.css
+  s_43eee0d889ef74::t_678c8ba2621341 283-288
+  s_43eee0d889ef74::t_de6fd9114ea7fe 275-278,289-313
+  s_43eee0d889ef74::t_53a96825b4f768 314
+src/components/BreakdownProjectSessions.tsx
+  s_43eee0d889ef74::t_428e5c9731b034 121
+  s_43eee0d889ef74::t_1ca39d7ee91ed4 109-112
+  s_43eee0d889ef74::t_c17af4cf0d226d 216-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "a0fd6d74eb877f400e21c6e9ea3d0b3093682ba7",
+  "prompts": {},
+  "sessions": {
+    "s_43eee0d889ef74": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8f132527-6db2-4240-8baa-ecbf927ac8c4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
