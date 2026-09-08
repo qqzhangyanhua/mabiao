@@ -13,6 +13,7 @@ pub mod factory;
 mod file;
 pub mod gemini;
 pub mod grok;
+pub(crate) mod grok_disk;
 mod insight;
 pub mod kimi;
 pub mod opencode;
