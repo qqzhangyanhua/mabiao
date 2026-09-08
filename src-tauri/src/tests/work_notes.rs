@@ -570,6 +570,44 @@ fn assert_cursor_agent_switches(cmd: &EngineCommand, work_dir: &Path) {
 }
 
 #[test]
+fn today_is_local_midnight_to_now() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible_at(
+        &h,
+        "yesterday",
+        "昨天的活",
+        "/proj/old",
+        day(2026, 8, 18),
+        10,
+    );
+    seed_eligible_at(
+        &h,
+        "this-morning",
+        "今天上午",
+        "/proj/statistics",
+        day(2026, 8, 19),
+        10,
+    );
+    seed_eligible_at(
+        &h,
+        "tonight",
+        "今晚的活",
+        "/proj/statistics",
+        day(2026, 8, 19),
+        16,
+    );
+    let dto = h.try_build(WorkNotesRange::today(), false).unwrap();
+    assert_eq!(dto.range_kind, WorkNotesRangeKind::Today);
+    assert_eq!(dto.start_date, "2026-08-19");
+    assert_eq!(dto.end_date, "2026-08-19");
+    assert!(dto.has_data);
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("今天上午"), "{stdin}");
+    assert!(!stdin.contains("昨天的活"), "{stdin}");
+    assert!(!stdin.contains("今晚的活"), "{stdin}");
+}
+
+#[test]
 fn this_week_is_monday_to_now_not_last_completed_week() {
     let h = Harness::new(replies(&[], &[]));
     let events = eligible_events();

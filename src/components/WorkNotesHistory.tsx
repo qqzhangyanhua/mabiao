@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import { Icon } from "../icons";
 import { humanStatus, relativeTime } from "../lib/format";
 import { workNotesEngineLabel } from "../lib/workNotesPreference";
+import { workNotesHistoryDateLabel, workNotesRangeKindLabel } from "../lib/workNotesRange";
 import type { WorkNotesDto, WorkNotesHistoryPage, WorkNotesHistoryRow } from "../types";
 import { EmptyState } from "./EmptyState";
 import { Pagination } from "./Pagination";
@@ -154,66 +156,20 @@ export function WorkNotesHistory({ currentEngineId }: { currentEngineId: string 
           {!loading && !error && rows.length > 0 ? (
             <ul className="work-notes-history-list">
               {rows.map((row) => (
-                <li key={row.id} className="work-notes-history-item">
-                  <div className="work-notes-history-row-wrap">
-                    <button
-                      type="button"
-                      className="work-notes-history-row"
-                      onClick={() => toggleExpand(row)}
-                      aria-expanded={expandedId === row.id}
-                    >
-                      <span className="work-notes-history-range">
-                        {row.start_date} 至 {row.end_date}
-                      </span>
-                      <span className="work-notes-history-headline">
-                        {row.headline || "（未生成要点）"}
-                      </span>
-                      <span className="work-notes-history-meta">
-                        {workNotesEngineLabel(row.engine)}
-                        {row.model ? ` · ${row.model}` : ""} · {row.session_count} 个会话 ·{" "}
-                        {relativeTime(row.created_at)}
-                      </span>
-                    </button>
-                    <div className="work-notes-history-actions">
-                      {pendingDeleteId === row.id ? (
-                        <>
-                          <Button
-                            variant="danger"
-                            disabled={deletingId === row.id}
-                            onClick={() => remove(row.id)}
-                          >
-                            确认删除
-                          </Button>
-                          <Button
-                            disabled={deletingId === row.id}
-                            onClick={() => setPendingDeleteId(null)}
-                          >
-                            取消
-                          </Button>
-                        </>
-                      ) : (
-                        <Button variant="danger" onClick={() => setPendingDeleteId(row.id)}>
-                          删除
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  {expandedId === row.id ? (
-                    <div className="work-notes-history-detail">
-                      {expandedLoading ? <p className="work-notes-scale">正在加载…</p> : null}
-                      {expandedError ? (
-                        <EmptyState
-                          icon="alertTriangle"
-                          tone="warn"
-                          title="加载失败"
-                          hint={expandedError}
-                          compact
-                        />
-                      ) : null}
-                      {expandedDto ? <WorkNotesShare dto={expandedDto} /> : null}
-                    </div>
-                  ) : null}
-                </li>
+                <HistoryCard
+                  key={row.id}
+                  row={row}
+                  expanded={expandedId === row.id}
+                  expandedDto={expandedId === row.id ? expandedDto : null}
+                  expandedLoading={expandedId === row.id && expandedLoading}
+                  expandedError={expandedId === row.id ? expandedError : null}
+                  pendingDelete={pendingDeleteId === row.id}
+                  deleting={deletingId === row.id}
+                  onToggle={() => toggleExpand(row)}
+                  onAskDelete={() => setPendingDeleteId(row.id)}
+                  onConfirmDelete={() => remove(row.id)}
+                  onCancelDelete={() => setPendingDeleteId(null)}
+                />
               ))}
             </ul>
           ) : null}
@@ -226,5 +182,111 @@ export function WorkNotesHistory({ currentEngineId }: { currentEngineId: string 
         </div>
       ) : null}
     </div>
+  );
+}
+
+function HistoryCard({
+  row,
+  expanded,
+  expandedDto,
+  expandedLoading,
+  expandedError,
+  pendingDelete,
+  deleting,
+  onToggle,
+  onAskDelete,
+  onConfirmDelete,
+  onCancelDelete,
+}: {
+  row: WorkNotesHistoryRow;
+  expanded: boolean;
+  expandedDto: WorkNotesDto | null;
+  expandedLoading: boolean;
+  expandedError: string | null;
+  pendingDelete: boolean;
+  deleting: boolean;
+  onToggle: () => void;
+  onAskDelete: () => void;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
+}) {
+  const headline = row.headline || "（未生成要点）";
+  const itemClass = [
+    "work-notes-history-item",
+    expanded ? "is-open" : "",
+    pendingDelete ? "is-confirm" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const meta = [
+    workNotesHistoryDateLabel(row.start_date, row.end_date),
+    workNotesEngineLabel(row.engine),
+    row.model || null,
+    `${row.session_count} 个会话`,
+    relativeTime(row.created_at),
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" · ");
+
+  return (
+    <li className={itemClass}>
+      <div className="work-notes-history-row-wrap">
+        <button
+          type="button"
+          className="work-notes-history-row"
+          onClick={onToggle}
+          aria-expanded={expanded}
+        >
+          <Icon name="chevron" size={13} className="work-notes-history-chevron" />
+          <span className="work-notes-history-copy">
+            <span className="work-notes-history-title">
+              <span className="work-notes-history-kind">
+                {workNotesRangeKindLabel(row.range_kind)}
+              </span>
+              <span className="work-notes-history-headline" title={headline}>
+                {headline}
+              </span>
+            </span>
+            <span className="work-notes-history-meta">{meta}</span>
+          </span>
+        </button>
+        <div className={`work-notes-history-actions${pendingDelete ? " is-confirm" : ""}`}>
+          {pendingDelete ? (
+            <>
+              <Button variant="danger" size="sm" disabled={deleting} onClick={onConfirmDelete}>
+                确认删除
+              </Button>
+              <Button size="sm" disabled={deleting} onClick={onCancelDelete}>
+                取消
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="icon"
+              className="work-notes-history-delete"
+              aria-label={`删除：${headline}`}
+              onClick={onAskDelete}
+            >
+              <Icon name="trash" size={14} />
+            </Button>
+          )}
+        </div>
+      </div>
+      {expanded ? (
+        <div className="work-notes-history-detail">
+          {expandedLoading ? <p className="work-notes-scale">正在加载…</p> : null}
+          {expandedError ? (
+            <EmptyState
+              icon="alertTriangle"
+              tone="warn"
+              title="加载失败"
+              hint={expandedError}
+              compact
+            />
+          ) : null}
+          {expandedDto ? <WorkNotesShare dto={expandedDto} /> : null}
+        </div>
+      ) : null}
+    </li>
   );
 }

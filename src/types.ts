@@ -991,7 +991,7 @@ export type ReportDto = {
   insights: ReportInsight[];
 };
 
-export type WorkNotesRangeKind = "this_week" | "this_month" | "custom";
+export type WorkNotesRangeKind = "today" | "this_week" | "this_month" | "custom";
 
 export type WorkNotesRange = {
   kind: WorkNotesRangeKind;

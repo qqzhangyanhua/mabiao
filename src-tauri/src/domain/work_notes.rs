@@ -14,12 +14,21 @@ pub struct WorkNotesRange {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkNotesRangeKind {
+    Today,
     ThisWeek,
     ThisMonth,
     Custom,
 }
 
 impl WorkNotesRange {
+    pub fn today() -> Self {
+        Self {
+            kind: WorkNotesRangeKind::Today,
+            from: None,
+            to: None,
+        }
+    }
+
     pub fn this_week() -> Self {
         Self {
             kind: WorkNotesRangeKind::ThisWeek,

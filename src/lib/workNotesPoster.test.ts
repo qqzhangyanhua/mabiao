@@ -62,7 +62,17 @@ describe("toWorkNotesPosterViewModel", () => {
     });
   });
 
-  it("changes kicker and token unit for this month and custom ranges", () => {
+  it("changes kicker and token unit for today, this month and custom ranges", () => {
+    const today = toWorkNotesPosterViewModel(
+      dto({
+        range_kind: "today",
+        start_date: "2026-08-19",
+        end_date: "2026-08-19",
+      }),
+    );
+    expect(today?.kicker).toBe("码表 · 今日纪要");
+    expect(today?.metrics.find((metric) => metric.id === "tokens")?.label).toBe("今日 token");
+
     const month = toWorkNotesPosterViewModel(dto({ range_kind: "this_month" }));
     expect(month?.kicker).toBe("码表 · 本月纪要");
     expect(month?.metrics.find((metric) => metric.id === "tokens")?.label).toBe("本月 token");

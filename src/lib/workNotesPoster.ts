@@ -4,6 +4,9 @@ import { formatCompact, projectLabel } from "./format";
 import { periodRangeLabel } from "./reportCopy";
 
 function rangePhrases(kind: WorkNotesRangeKind): { kicker: string; tokenUnit: string } {
+  if (kind === "today") {
+    return { kicker: "码表 · 今日纪要", tokenUnit: "今日 token" };
+  }
   if (kind === "this_month") {
     return { kicker: "码表 · 本月纪要", tokenUnit: "本月 token" };
   }

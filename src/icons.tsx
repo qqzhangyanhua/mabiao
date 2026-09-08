@@ -31,7 +31,8 @@ export type IconName =
   | "copy"
   | "share"
   | "inbox"
-  | "alertTriangle";
+  | "alertTriangle"
+  | "trash";
 
 const strokes: Record<IconName, ReactElement> = {
   overview: (
@@ -219,6 +220,14 @@ const strokes: Record<IconName, ReactElement> = {
     <>
       <path d="M12 4 3 20h18L12 4Z" />
       <path d="M12 10v4M12 17h.01" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+      <path d="M7 7l1 13h8l1-13" />
+      <path d="M10 11v6M14 11v6" />
     </>
   ),
 };

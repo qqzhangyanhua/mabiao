@@ -99,7 +99,7 @@
 
 读区间内的对话正文，经本机 CLI 总结成结构化条目。不是报告，不复用 `ReportPeriod`。
 
-1. 入口三个：`work_notes::preview`（只读，收 `&Connection`）、`work_notes::generate`（区间纪要）、`work_notes::summarize_session`（单条会话摘要）。后两个收 `ConnectionSource` 而不是连接——「读连接取输入 → 放开连接调 CLI → 有东西可写才取写连接」这套编排在 `work_notes/pipeline.rs` 与 `session.rs` 里，command 不参与；`now`、runner、job、应用数据目录仍由调用方注入。`ConnectionSource` 的实现不得同时持有读与写 guard。command 只做 `begin`（互斥闸门，错误要同步回前端）→ spawn → 入口 → `finish`。生成是后台任务，进度写进 AppState，前端轮询。三种区间、60/150 规模闸门、成本预估在 Rust 判定，webview 只呈现。
+1. 入口三个：`work_notes::preview`（只读，收 `&Connection`）、`work_notes::generate`（区间纪要）、`work_notes::summarize_session`（单条会话摘要）。后两个收 `ConnectionSource` 而不是连接——「读连接取输入 → 放开连接调 CLI → 有东西可写才取写连接」这套编排在 `work_notes/pipeline.rs` 与 `session.rs` 里，command 不参与；`now`、runner、job、应用数据目录仍由调用方注入。`ConnectionSource` 的实现不得同时持有读与写 guard。command 只做 `begin`（互斥闸门，错误要同步回前端）→ spawn → 入口 → `finish`。生成是后台任务，进度写进 AppState，前端轮询。四种区间、60/150 规模闸门、成本预估在 Rust 判定，webview 只呈现。
 2. runner 边界是「执行一条已经拼好的 `EngineCommand`，回一段 stdout」。argv 拼装（只读、禁审批、不落盘、schema、会落盘引擎的 session id）必须跑在这条缝里。
 3. 本机 CLI 只读、禁工具，工作目录固定在应用数据目录下的专用空目录。不自建模型 HTTP 通路，不存密钥。
 4. 硬数字只复用现有 `query` 函数，不新增聚合。

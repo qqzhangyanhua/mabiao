@@ -81,10 +81,46 @@ export function workNotesRangePayload(
   return { kind };
 }
 
+export function workNotesRangeKindLabel(kind: WorkNotesRangeKind): string {
+  if (kind === "today") {
+    return "今天";
+  }
+  if (kind === "this_month") {
+    return "本月";
+  }
+  if (kind === "custom") {
+    return "区间";
+  }
+  return "本周";
+}
+
+export function workNotesHistoryDateLabel(start: string, end: string): string {
+  const from = parseDateValue(start);
+  const to = parseDateValue(end);
+  if (!from || !to) {
+    return start === end ? start : `${start} 至 ${end}`;
+  }
+  const fromText = `${from.getMonth() + 1}月${from.getDate()}日`;
+  const toText = `${to.getMonth() + 1}月${to.getDate()}日`;
+  if (start === end) {
+    return fromText;
+  }
+  if (from.getFullYear() !== to.getFullYear()) {
+    return `${from.getFullYear()}年${fromText} – ${to.getFullYear()}年${toText}`;
+  }
+  return `${fromText} – ${toText}`;
+}
+
 export function workNotesRangeCopy(kind: WorkNotesRangeKind): {
   help: string;
   emptyHint: string;
 } {
+  if (kind === "today") {
+    return {
+      help: "今天 00:00 到此刻。",
+      emptyHint: "换一段时间再试，或先去对话记录确认有正文。",
+    };
+  }
   if (kind === "this_month") {
     return {
       help: "本月 1 号 00:00 到此刻。",

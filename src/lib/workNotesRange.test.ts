@@ -5,7 +5,9 @@ import {
   thisWeekStartDate,
   WORK_NOTES_CUSTOM_MAX_DAYS,
   workNotesCustomPickerBounds,
+  workNotesHistoryDateLabel,
   workNotesRangeCopy,
+  workNotesRangeKindLabel,
   workNotesRangePayload,
 } from "./workNotesRange";
 
@@ -21,6 +23,10 @@ describe("thisWeekStartDate / thisMonthStartDate", () => {
 
 describe("workNotesRangeCopy", () => {
   it("describes until-now semantics, not a completed natural period", () => {
+    expect(workNotesRangeCopy("today")).toEqual({
+      help: "今天 00:00 到此刻。",
+      emptyHint: "换一段时间再试，或先去对话记录确认有正文。",
+    });
     expect(workNotesRangeCopy("this_week")).toEqual({
       help: "本周一 00:00 到此刻。",
       emptyHint: "选一段时间后点生成。区间内的对话会交给本机 Codex 总结。",
@@ -79,8 +85,28 @@ describe("workNotesCustomPickerBounds", () => {
   });
 });
 
+describe("workNotesRangeKindLabel / workNotesHistoryDateLabel", () => {
+  it("names the four range kinds", () => {
+    expect(workNotesRangeKindLabel("today")).toBe("今天");
+    expect(workNotesRangeKindLabel("this_week")).toBe("本周");
+    expect(workNotesRangeKindLabel("this_month")).toBe("本月");
+    expect(workNotesRangeKindLabel("custom")).toBe("区间");
+  });
+
+  it("collapses a single day and drops the year inside the same year", () => {
+    expect(workNotesHistoryDateLabel("2026-08-19", "2026-08-19")).toBe("8月19日");
+    expect(workNotesHistoryDateLabel("2026-08-17", "2026-08-19")).toBe("8月17日 – 8月19日");
+    expect(workNotesHistoryDateLabel("2025-12-31", "2026-01-02")).toBe(
+      "2025年12月31日 – 2026年1月2日",
+    );
+  });
+});
+
 describe("workNotesRangePayload", () => {
   it("sends from/to only for custom", () => {
+    expect(workNotesRangePayload("today", "2026-08-01", "2026-08-13")).toEqual({
+      kind: "today",
+    });
     expect(workNotesRangePayload("this_week", "2026-08-01", "2026-08-13")).toEqual({
       kind: "this_week",
     });

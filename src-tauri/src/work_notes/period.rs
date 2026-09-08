@@ -15,6 +15,9 @@ pub struct ResolvedRange {
 
 pub fn resolve(range: &WorkNotesRange, now: DateTime<Local>) -> Result<ResolvedRange, String> {
     match range.kind {
+        WorkNotesRangeKind::Today => {
+            Ok(until_now(WorkNotesRangeKind::Today, now.date_naive(), now))
+        }
         WorkNotesRangeKind::ThisWeek => {
             let today = now.date_naive();
             let monday = today - Duration::days(i64::from(today.weekday().num_days_from_monday()));

@@ -44,6 +44,7 @@ pub fn range_key(range: &ResolvedRange) -> String {
 fn range_key_parts(kind: WorkNotesRangeKind, start_date: &str, end_date: &str) -> String {
     match kind {
         WorkNotesRangeKind::Custom => format!("custom:{start_date}:{end_date}"),
+        WorkNotesRangeKind::Today => format!("today:{start_date}"),
         WorkNotesRangeKind::ThisWeek => format!("this_week:{start_date}"),
         WorkNotesRangeKind::ThisMonth => format!("this_month:{start_date}"),
     }
@@ -342,6 +343,7 @@ fn notes_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkNotesDto> {
 
 fn kind_slug(kind: WorkNotesRangeKind) -> &'static str {
     match kind {
+        WorkNotesRangeKind::Today => "today",
         WorkNotesRangeKind::ThisWeek => "this_week",
         WorkNotesRangeKind::ThisMonth => "this_month",
         WorkNotesRangeKind::Custom => "custom",
@@ -350,6 +352,7 @@ fn kind_slug(kind: WorkNotesRangeKind) -> &'static str {
 
 fn parse_kind(value: &str) -> Option<WorkNotesRangeKind> {
     match value {
+        "today" => Some(WorkNotesRangeKind::Today),
         "this_week" => Some(WorkNotesRangeKind::ThisWeek),
         "this_month" => Some(WorkNotesRangeKind::ThisMonth),
         "custom" => Some(WorkNotesRangeKind::Custom),

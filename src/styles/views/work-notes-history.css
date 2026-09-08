@@ -20,7 +20,7 @@
 
 .work-notes-history-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -28,36 +28,98 @@
 
 .work-notes-history-item {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 0;
+  padding: 2px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--overlay-recessed);
+  border-radius: 12px;
+  background: var(--overlay-1);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.work-notes-history-item:hover,
+.work-notes-history-item:focus-within {
+  border-color: var(--line-strong);
+  background: var(--overlay-2);
+}
+
+.work-notes-history-item.is-open {
+  gap: 8px;
+  padding: 2px 2px 10px;
+  border-color: var(--line-strong);
+  background: var(--panel-grad-2);
+}
+
+.work-notes-history-item.is-confirm {
+  border-color: rgba(251, 113, 133, 0.28);
 }
 
 .work-notes-history-row-wrap {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .work-notes-history-row {
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   min-width: 0;
-  padding: 0;
+  padding: 8px 8px 8px 10px;
   border: 0;
+  border-radius: 10px;
   background: transparent;
   text-align: left;
   cursor: pointer;
 }
 
-.work-notes-history-range {
-  color: var(--muted);
-  font-size: 11px;
+.work-notes-history-row:focus-visible {
+  outline: 2px solid rgba(139, 108, 255, 0.55);
+  outline-offset: 0;
+}
+
+.work-notes-history-chevron {
+  flex-shrink: 0;
+  color: var(--text-faint-2);
+  transform: rotate(180deg);
+  transition: transform 0.15s ease;
+}
+
+.work-notes-history-item.is-open .work-notes-history-chevron {
+  transform: rotate(-90deg);
+}
+
+.work-notes-history-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.work-notes-history-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.work-notes-history-kind {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-faint);
+  background: var(--overlay-recessed);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
 }
 
 .work-notes-history-headline {
@@ -72,15 +134,65 @@
 .work-notes-history-meta {
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .work-notes-history-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   flex-shrink: 0;
+  width: 32px;
+  margin-right: 6px;
+}
+
+.work-notes-history-actions.is-confirm {
+  width: auto;
+}
+
+.work-notes-history-delete {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.work-notes-history-item:hover .work-notes-history-delete,
+.work-notes-history-item:focus-within .work-notes-history-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.work-notes-history-delete:hover:not(:disabled) {
+  border-color: rgba(251, 113, 133, 0.4);
+  color: var(--red-fg);
+  background: rgba(251, 113, 133, 0.1);
 }
 
 .work-notes-history-detail {
-  padding-top: 4px;
+  padding: 8px 10px 2px;
+  border-top: 1px solid var(--line);
+}
+
+@media (hover: none) {
+  .work-notes-history-delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-notes-history-item,
+  .work-notes-history-chevron,
+  .work-notes-history-delete {
+    transition: none;
+  }
 }

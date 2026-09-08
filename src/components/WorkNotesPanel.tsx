@@ -29,6 +29,7 @@ import { Segmented } from "./ui/Segmented";
 import { Select } from "./ui/Select";
 
 const RANGE_OPTIONS = [
+  { value: "today" as const, label: "今天" },
   { value: "this_week" as const, label: "本周" },
   { value: "this_month" as const, label: "本月" },
   { value: "custom" as const, label: "区间" },
