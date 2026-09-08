@@ -427,7 +427,7 @@ fn refresh_conversation_catalog(
             continue;
         }
         let dirs = crate::conversation::catalog_roots(overrides, home, source);
-        match crate::conversation::refresh_source_in_roots(conn, source, &dirs) {
+        match crate::conversation::refresh(conn, source, &dirs) {
             Ok(issues) => report
                 .conversation_issues
                 .extend(issues.into_iter().map(|issue| IngestIssue {

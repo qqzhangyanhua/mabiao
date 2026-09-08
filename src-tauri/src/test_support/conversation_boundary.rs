@@ -6,7 +6,7 @@ use std::fmt;
 
 /// 模块根允许定义的编排入口。显式写死，不靠命名前缀推断。
 const ORCHESTRATION_ENTRY_FNS: &[&str] = &[
-    "refresh_source_in_roots",
+    "refresh",
     "parse_conversation_file",
     "parse_conversation_files",
     "load_events",
