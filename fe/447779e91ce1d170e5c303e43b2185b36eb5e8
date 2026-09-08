@@ -1,0 +1,58 @@
+CONTEXT.md
+  s_43eee0d889ef74::t_3070333ced4f78 76
+src/icons.tsx
+  s_43eee0d889ef74::t_fef7142b5c14e3 225-232
+  s_43eee0d889ef74::t_d857e8861ea7e2 34-35
+src/lib/workNotesRange.test.ts
+  s_43eee0d889ef74::t_8a1c2f9ce6ef01 88-104
+  s_43eee0d889ef74::t_3b8a9ae9e0f513 107-109
+  s_43eee0d889ef74::t_e9ee836066b1b7 26-29
+  s_43eee0d889ef74::t_9d4e28233fe5f8 8,10
+docs/agent-layers.md
+  s_43eee0d889ef74::t_fd09f04ae0fe8e 102
+src/lib/workNotesPoster.ts
+  s_43eee0d889ef74::t_b798a354f5c269 7-9
+src/types.ts
+  s_43eee0d889ef74::t_56a94f21dec354 994
+docs/adr/0021-work-notes-llm-summary.md
+  s_43eee0d889ef74::t_48e5728efbeb49 89
+src/styles/views/work-notes-history.css
+  s_43eee0d889ef74::t_d4365e3666c27a 23,31-32,34-55,62-63,67-69,72,74,80-122,137-140,146-147,150-177,181-197
+src-tauri/src/work_notes/cache.rs
+  s_43eee0d889ef74::t_0e02a6d265f510 346,355
+  s_43eee0d889ef74::t_d7d3bf230bab5b 47
+src/lib/workNotesPoster.test.ts
+  s_43eee0d889ef74::t_4ffce0ebc57d00 65-75
+src/components/WorkNotesHistory.tsx
+  s_43eee0d889ef74::t_90c1477ea6723e 243-245
+  s_43eee0d889ef74::t_031059e5492170 3,6,159-172,187-242,246-290
+  s_43eee0d889ef74::t_cb71bcb66d4262 291-292
+src-tauri/src/work_notes/period.rs
+  s_43eee0d889ef74::t_6c57b6a23d6b6d 18-20
+src/components/WorkNotesPanel.tsx
+  s_43eee0d889ef74::t_ab4df73f237fe7 32
+src-tauri/src/tests/work_notes.rs
+  s_43eee0d889ef74::t_60b895de1050ed 573-609
+  s_43eee0d889ef74::t_e01eabaedea58c 572
+src/lib/workNotesRange.ts
+  s_43eee0d889ef74::t_3cb577e82e8594 118-123
+  s_43eee0d889ef74::t_4d96d1f6b34cf0 84-113
+src-tauri/src/domain/work_notes.rs
+  s_43eee0d889ef74::t_48b9b658a4e12d 17,24-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fe447779e91ce1d170e5c303e43b2185b36eb5e8",
+  "prompts": {},
+  "sessions": {
+    "s_43eee0d889ef74": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8f132527-6db2-4240-8baa-ecbf927ac8c4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
