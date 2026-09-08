@@ -97,7 +97,7 @@ pub(crate) fn finish_prepared_events() {}
 pub fn refresh_codex() {}
 pub fn codex_index_for_bench() {}
 pub fn codex_index_suffix_for_bench() {}
-pub(crate) fn refresh_source_in_roots() {}
+pub(crate) fn refresh() {}
 pub(crate) fn parse_conversation_file() {}
 pub(super) fn parse_conversation_files() {}
 

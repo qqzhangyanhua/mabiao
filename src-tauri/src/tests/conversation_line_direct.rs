@@ -90,8 +90,7 @@ fn conversation_roots(home: &std::path::Path, source: Source) -> Vec<std::path::
 }
 
 fn refresh_source(conn: &rusqlite::Connection, home: &std::path::Path, source: Source) {
-    crate::conversation::refresh_source_in_roots(conn, source, &conversation_roots(home, source))
-        .unwrap();
+    crate::conversation::refresh(conn, source, &conversation_roots(home, source)).unwrap();
 }
 
 fn event_without_global_sequence(mut event: ConversationEvent) -> ConversationEvent {

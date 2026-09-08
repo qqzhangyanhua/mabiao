@@ -20,8 +20,7 @@ fn conversation_roots(home: &Path, source: Source) -> Vec<std::path::PathBuf> {
 }
 
 fn refresh_source(conn: &rusqlite::Connection, home: &Path, source: Source) {
-    crate::conversation::refresh_source_in_roots(conn, source, &conversation_roots(home, source))
-        .unwrap();
+    crate::conversation::refresh(conn, source, &conversation_roots(home, source)).unwrap();
 }
 
 fn seed_dsh(home: &Path) {
