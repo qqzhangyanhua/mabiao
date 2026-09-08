@@ -1,0 +1,31 @@
+src-tauri/src/conversation/mod.rs
+  s_27124278ff5874::t_3820c2250e5c71 38,43,57,345-346
+src-tauri/src/conversation/refresh.rs
+  s_27124278ff5874::t_ba89ef0d15960c 1-354
+src-tauri/src/ingest.rs
+  s_27124278ff5874::t_ad29256f81669e 430
+src-tauri/src/test_support/conversation_boundary.rs
+  s_27124278ff5874::t_19f7de7e5ba716 9
+src-tauri/src/tests/conversation_boundary.rs
+  s_27124278ff5874::t_2038499f942944 100
+src-tauri/src/tests/conversation_index_sources.rs
+  s_27124278ff5874::t_2995ff92511409 23
+src-tauri/src/tests/conversation_line_direct.rs
+  s_27124278ff5874::t_bcd472333e651b 93
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "ea54d685453bdc29ec84b61780d6f7661413b056",
+  "prompts": {},
+  "sessions": {
+    "s_27124278ff5874": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b80a816-52b7-487f-9885-42e192d846fd",
+        "model": "unknown"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
