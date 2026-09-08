@@ -2,10 +2,12 @@ mod agy_fixture;
 pub mod conversation_boundary;
 mod helpers;
 mod hermes_fixture;
+mod work_notes_conn;
 
 pub use agy_fixture::*;
 pub use helpers::*;
 pub use hermes_fixture::*;
+pub use work_notes_conn::*;
 
 pub use crate::adapters::cursor::{
     parse_cursor_commits, summarize_code_volume, with_cost_roi, CursorCommitRow,

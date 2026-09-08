@@ -74,7 +74,7 @@ pub struct WorkNotesPreviewDto {
     pub cached: Option<WorkNotesDto>,
 }
 
-/// `preview` / `build` 共用的请求参数。引擎、模型与补充指令计入缓存键。
+/// `preview` / `generate` 共用的请求参数。引擎、模型与补充指令计入缓存键。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkNotesParams {
     pub range: WorkNotesRange,
@@ -104,6 +104,31 @@ impl WorkNotesParams {
 
     pub fn extra(&self) -> &str {
         self.extra_instructions.trim()
+    }
+}
+
+/// `summarize_session` 的请求参数：哪条对话记录、用哪个引擎。引擎与模型同样计入缓存键。
+/// 由 command 就地拼出来，不过 IPC，因而没有 `types.ts` 对应物。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkNotesSessionParams {
+    pub source: String,
+    pub session_id: String,
+    pub engine: String,
+    pub model: String,
+}
+
+impl WorkNotesSessionParams {
+    pub fn engine_id(&self) -> &str {
+        let trimmed = self.engine.trim();
+        if trimmed.is_empty() {
+            "codex"
+        } else {
+            trimmed
+        }
+    }
+
+    pub fn model_id(&self) -> &str {
+        self.model.trim()
     }
 }
 

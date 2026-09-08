@@ -1,40 +1,53 @@
+//! 单条会话摘要的三个阶段，与 `pipeline` 同形：读连接取正文、无连接调引擎、取写连接落盘。
+//! 它只跑 map、不跑 reduce，也不写纪要表。锁编排在模块根的 `summarize_session` 上。
+
 use chrono::{DateTime, Local};
 use rusqlite::Connection;
 use std::path::Path;
 
 use crate::conversation;
-use crate::domain::WorkNotesSessionSummary;
+use crate::domain::{
+    ConversationEvent, ConversationSessionRow, WorkNotesSessionParams, WorkNotesSessionSummary,
+};
 
 use super::cache;
 use super::engines::{self, EngineRunner};
 use super::job::WorkNotesJob;
 use super::orchestrate;
-use super::{flush_generated, RecordingRunner};
+use super::pipeline::{flush_generated, GeneratedRecord, RecordingRunner};
 
-pub struct PreparedSessionSummary {
-    pub source: String,
-    pub session_id: String,
-    pub title: String,
-    pub fingerprint: String,
-    pub engine: String,
-    pub model: String,
-    pub events: Vec<crate::domain::ConversationEvent>,
-    pub session: crate::domain::ConversationSessionRow,
+pub(super) struct PreparedSessionSummary {
+    source: String,
+    session_id: String,
+    title: String,
+    fingerprint: String,
+    engine: String,
+    model: String,
+    events: Vec<ConversationEvent>,
+    session: ConversationSessionRow,
 }
 
-pub struct SessionSummaryRun {
-    pub result: Result<String, String>,
-    pub generated: Vec<super::GeneratedRecord>,
+pub(super) struct SessionSummaryRun {
+    result: Result<String, String>,
+    generated: Vec<GeneratedRecord>,
 }
 
-pub fn prepare_session_summary(
+impl SessionSummaryRun {
+    /// 没有引擎落痕、摘要也没跑出来时，回那条错误：一个字都不用写，写连接也不必取。
+    pub(super) fn nothing_to_persist(&self) -> Option<String> {
+        if !self.generated.is_empty() {
+            return None;
+        }
+        self.result.as_ref().err().cloned()
+    }
+}
+
+pub(super) fn prepare(
     conn: &Connection,
-    source: &str,
-    session_id: &str,
-    engine_id: &str,
-    model: Option<&str>,
+    params: &WorkNotesSessionParams,
 ) -> Result<PreparedSessionSummary, String> {
-    engines::require(engine_id)?;
+    let (source, session_id) = (params.source.as_str(), params.session_id.as_str());
+    engines::require(params.engine_id())?;
     let session = conversation::load_session(conn, source, session_id)?
         .ok_or_else(|| "未找到该对话记录".to_string())?;
     if session.generated_by_work_notes {
@@ -50,14 +63,14 @@ pub fn prepare_session_summary(
         session_id: session_id.to_string(),
         title: session.title.clone(),
         fingerprint,
-        engine: engine_id.to_string(),
-        model: model.unwrap_or("").trim().to_string(),
+        engine: params.engine_id().to_string(),
+        model: params.model_id().to_string(),
         events,
         session,
     })
 }
 
-pub fn run_session_summary(
+pub(super) fn run(
     prepared: &PreparedSessionSummary,
     runner: &dyn EngineRunner,
     app_data_dir: &Path,
@@ -95,7 +108,7 @@ pub fn run_session_summary(
     }
 }
 
-pub fn persist_session_summary(
+pub(super) fn persist(
     conn: &Connection,
     prepared: &PreparedSessionSummary,
     ran: &SessionSummaryRun,

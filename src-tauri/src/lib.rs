@@ -166,6 +166,18 @@ impl AppState {
     }
 }
 
+/// 工作纪要的连接来源：读走连接池，写走那把写锁。两者是不同的锁，因而 `work_notes` 能在
+/// spawn 引擎前放开读连接而不堵住写路径（ADR 0021）。
+impl work_notes::ConnectionSource for AppState {
+    fn read(&self) -> Result<MutexGuard<'_, Connection>, String> {
+        self.lock_read()
+    }
+
+    fn write(&self) -> Result<MutexGuard<'_, Connection>, String> {
+        self.lock_write()
+    }
+}
+
 fn cache_dir() -> PathBuf {
     crate::paths::app_data_dir()
 }

@@ -2,10 +2,11 @@ use tauri::Manager;
 
 use crate::domain::{
     DetectedEngine, WorkNotesDto, WorkNotesHistoryPage, WorkNotesHistoryQuery, WorkNotesParams,
-    WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange, WorkNotesSessionSummary,
+    WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange, WorkNotesSessionParams,
+    WorkNotesSessionSummary,
 };
 use crate::paths;
-use crate::work_notes::{self, ProcessRunner, RecordingRunner};
+use crate::work_notes::{self, ProcessRunner};
 use crate::AppState;
 
 fn params(
@@ -58,6 +59,7 @@ pub async fn start_work_notes(
 ) -> Result<(), String> {
     work_notes::require_engine(&engine_id)?;
     let state = app.state::<AppState>();
+    // `begin` 必须跑在这条线程上：它兼当互斥闸门，「正在生成」要同步回到前端。
     state
         .work_notes
         .begin(&range, &engine_id, model.as_deref())?;
@@ -70,35 +72,15 @@ pub async fn start_work_notes(
     );
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
-        let result = (|| {
-            let prices = state.effective_prices();
-            let now = chrono::Local::now();
-            let prepared = {
-                let conn = state.lock_read()?;
-                work_notes::prepare(&conn, &prices, &params, now, false)?
-            };
-            let process = ProcessRunner;
-            let runner = RecordingRunner::new(&process, params.engine_id());
-            let output = work_notes::run(
-                prepared,
-                &prices,
-                &runner,
-                &paths::app_data_dir(),
-                &params,
-                now,
-                &state.work_notes,
-            );
-            let records = runner.take();
-            if !records.is_empty()
-                || output.writes.notes.is_some()
-                || !output.writes.sessions.is_empty()
-            {
-                let conn = state.lock_write()?;
-                work_notes::flush_generated(&conn, &records)?;
-                work_notes::persist_cache(&conn, &output.writes)?;
-            }
-            output.result
-        })();
+        let result = work_notes::generate(
+            &*state,
+            &state.effective_prices(),
+            &params,
+            chrono::Local::now(),
+            &ProcessRunner,
+            &paths::app_data_dir(),
+            &state.work_notes,
+        );
         let _ = state.work_notes.finish(result);
     });
     Ok(())
@@ -132,30 +114,22 @@ pub async fn summarize_conversation_session(
     state
         .work_notes
         .begin_session_summary(&engine_id, model.as_deref())?;
+    let params = WorkNotesSessionParams {
+        source,
+        session_id,
+        engine: engine_id,
+        model: model.unwrap_or_default(),
+    };
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let result = (|| {
-            let now = chrono::Local::now();
-            let prepared = {
-                let conn = state.lock_read()?;
-                work_notes::prepare_session_summary(
-                    &conn,
-                    &source,
-                    &session_id,
-                    &engine_id,
-                    model.as_deref(),
-                )?
-            };
-            let process = ProcessRunner;
-            let ran = work_notes::run_session_summary(
-                &prepared,
-                &process,
-                &paths::app_data_dir(),
-                &state.work_notes,
-            );
-            let conn = state.lock_write()?;
-            work_notes::persist_session_summary(&conn, &prepared, &ran, now)
-        })();
+        let result = work_notes::summarize_session(
+            &*state,
+            &params,
+            chrono::Local::now(),
+            &ProcessRunner,
+            &paths::app_data_dir(),
+            &state.work_notes,
+        );
         let _ = state
             .work_notes
             .finish_session_summary(result.as_ref().map(|_| ()).map_err(|error| error.clone()));

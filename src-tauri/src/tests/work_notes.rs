@@ -1,13 +1,13 @@
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Local, NaiveDate};
-use rusqlite::{params, Connection};
+use rusqlite::params;
 
 use crate::conversation;
 use crate::domain::{
     ConversationQuery, EngineCommand, PriceEntry, PriceOrigin, PriceTable, Source, WorkNotesDto,
     WorkNotesGate, WorkNotesHistoryQuery, WorkNotesJobStatus, WorkNotesParams, WorkNotesPreviewDto,
-    WorkNotesRange, WorkNotesRangeKind,
+    WorkNotesRange, WorkNotesRangeKind, WorkNotesSessionParams,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner, WorkNotesJob};
@@ -52,7 +52,7 @@ fn replies(maps: &[&str], reduce: &[&str]) -> ScriptedRunner {
 }
 
 struct Harness {
-    conn: Connection,
+    conn: TestConnection,
     app_dir: tempfile::TempDir,
     runner: ScriptedRunner,
     prices: PriceTable,
@@ -62,7 +62,7 @@ struct Harness {
 impl Harness {
     fn new(runner: ScriptedRunner) -> Self {
         Self {
-            conn: store::open_memory().unwrap(),
+            conn: TestConnection::new(store::open_memory().unwrap()),
             app_dir: tempfile::tempdir().unwrap(),
             runner,
             prices: PriceTable::default(),
@@ -115,7 +115,7 @@ impl Harness {
         params: WorkNotesParams,
         at: DateTime<Local>,
     ) -> Result<WorkNotesDto, String> {
-        work_notes::build(
+        work_notes::generate(
             &self.conn,
             &self.prices,
             &params,
@@ -128,7 +128,7 @@ impl Harness {
 
     fn preview(&self, range: WorkNotesRange) -> Result<WorkNotesPreviewDto, String> {
         work_notes::preview(
-            &self.conn,
+            &self.conn.get(),
             &self.prices,
             &WorkNotesParams {
                 range,
@@ -143,6 +143,7 @@ impl Harness {
 
     fn set_revision(&self, session_id: &str, revision: &str) {
         self.conn
+            .get()
             .execute(
                 "UPDATE conversation_sessions SET source_revision = ?1 WHERE session_id = ?2",
                 params![revision, session_id],
@@ -174,15 +175,19 @@ impl Harness {
         session_id: &str,
         engine_id: &str,
     ) -> Result<Vec<crate::domain::WorkNotesSessionSummary>, String> {
-        let prepared =
-            work_notes::prepare_session_summary(&self.conn, source, session_id, engine_id, None)?;
-        let ran = work_notes::run_session_summary(
-            &prepared,
+        work_notes::summarize_session(
+            &self.conn,
+            &WorkNotesSessionParams {
+                source: source.to_string(),
+                session_id: session_id.to_string(),
+                engine: engine_id.to_string(),
+                model: String::new(),
+            },
+            now(),
             &self.runner,
             self.app_dir.path(),
             &self.job,
-        );
-        work_notes::persist_session_summary(&self.conn, &prepared, &ran, now())
+        )
     }
 
     fn insert_session(&self, seed: SeedSession) {
@@ -193,34 +198,32 @@ impl Harness {
         let started_at = local_time_iso(seed.started, seed.hour, 0, 0);
         let ended_at = local_time_iso(seed.started, seed.hour + 1, 0, 0);
         let source_file = format!("/tmp/{source}-{}.jsonl", seed.session_id);
-        self.conn
-            .execute(
-                r#"
+        let conn = self.conn.get();
+        conn.execute(
+            r#"
                 INSERT INTO conversation_sessions(
                     source, session_id, title, project, model, started_at, ended_at,
                     source_file, capabilities_json, support_status, file_available,
                     is_top_level, event_index_generation
                 ) VALUES(?1, ?2, ?3, ?4, '', ?5, ?6, ?7, '[]', 'ok', 1, 1, 1)
                 "#,
-                params![
-                    source,
-                    seed.session_id,
-                    seed.title,
-                    seed.project,
-                    started_at,
-                    ended_at,
-                    source_file
-                ],
-            )
-            .unwrap();
-        self.conn
-            .execute(
-                "INSERT OR IGNORE INTO conversation_files(path) VALUES(?1)",
-                params![source_file],
-            )
-            .unwrap();
-        let file_id: i64 = self
-            .conn
+            params![
+                source,
+                seed.session_id,
+                seed.title,
+                seed.project,
+                started_at,
+                ended_at,
+                source_file
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT OR IGNORE INTO conversation_files(path) VALUES(?1)",
+            params![source_file],
+        )
+        .unwrap();
+        let file_id: i64 = conn
             .query_row(
                 "SELECT file_id FROM conversation_files WHERE path = ?1",
                 params![source_file],
@@ -229,9 +232,8 @@ impl Harness {
             .unwrap();
         for (sequence, event) in seed.events.iter().enumerate() {
             let event_id = format!("{}-{sequence}", seed.session_id);
-            self.conn
-                .execute(
-                    r#"
+            conn.execute(
+                r#"
                     INSERT INTO conversation_events(
                         source, session_id, event_id, sequence, file_id, source_sequence,
                         kind, actor, name, occurred_at, occurred_at_sort, text,
@@ -244,25 +246,25 @@ impl Harness {
                         ?3, 0, 1
                     )
                     "#,
-                    params![
-                        source,
-                        seed.session_id,
-                        event_id,
-                        sequence as i64,
-                        file_id,
-                        event.kind,
-                        event.actor,
-                        event.name,
-                        started_at,
-                        event.text,
-                        event.content_status,
-                    ],
-                )
-                .unwrap();
+                params![
+                    source,
+                    seed.session_id,
+                    event_id,
+                    sequence as i64,
+                    file_id,
+                    event.kind,
+                    event.actor,
+                    event.name,
+                    started_at,
+                    event.text,
+                    event.content_status,
+                ],
+            )
+            .unwrap();
         }
         if seed.tokens > 0 {
             store::insert_records(
-                &self.conn,
+                &conn,
                 &[rec(
                     &started_at,
                     usage,
@@ -1233,7 +1235,7 @@ fn grok_generated_session_is_excluded_from_later_input_but_tokens_stay_in_kpi() 
         later_maps.is_empty(),
         "eligible 未变应命中纪要缓存，不应再调引擎：{later_maps:?}"
     );
-    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let generated = page
         .rows
         .iter()
@@ -1256,7 +1258,7 @@ fn conversation_catalog_shows_matching_session_summary() {
     let h = Harness::new(replies(&[&map_json("压缩会话输入")], &[&reduce_json()]));
     seed_eligible(&h, "ok", "/proj/statistics");
     h.build();
-    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let user = page
         .rows
         .iter()
@@ -1267,7 +1269,7 @@ fn conversation_catalog_shows_matching_session_summary() {
     assert_eq!(user.work_notes_summaries[0].summary, "压缩会话输入");
 
     h.set_revision("ok", "rev-after");
-    let stale = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let stale = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let user = stale
         .rows
         .iter()
@@ -1288,7 +1290,7 @@ fn conversation_catalog_lists_summaries_from_each_engine() {
     seed_eligible(&h, "ok", "/proj/statistics");
     h.try_params(extra_params("", "codex", "")).unwrap();
     h.try_params(extra_params("", "claude", "")).unwrap();
-    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let user = page
         .rows
         .iter()
@@ -1318,7 +1320,7 @@ fn conversation_session_can_be_summarized_without_reduce() {
     assert_eq!(summaries[0].summary, "压缩会话输入");
     assert_eq!(h.map_count(), 1);
     assert!(h.reduce_stdin().is_empty());
-    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let user = page
         .rows
         .iter()
@@ -1439,7 +1441,7 @@ fn cursor_agent_generated_session_is_identified_by_workdir_not_time_window() {
     assert_eq!(later_maps.len(), 1, "{joined}");
     assert!(joined.contains("用户自己的活"), "{joined}");
     assert!(!joined.contains("码表生成的会话"), "{joined}");
-    let page = conversation::sessions_page(&h.conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(&h.conn.get(), &ConversationQuery::default()).unwrap();
     let generated = page
         .rows
         .iter()
@@ -1738,6 +1740,58 @@ fn cancel_keeps_completed_summaries_and_retry_skips_them() {
     }
 }
 
+/// 取消时已跑成的那几条摘要必须落盘：那笔钱已经花了，重开一次不该再付一遍。
+/// 纪要本身没跑完，则不落。
+#[test]
+fn cancel_persists_completed_session_summaries_but_no_notes() {
+    let maps = vec![map_json("摘要"); 5];
+    let runner = ScriptedRunner::succeeding(maps, [reduce_json()]).cancel_after_maps(2);
+    let h = Harness::new(runner);
+    for index in 0..5 {
+        seed_eligible_at(
+            &h,
+            &format!("s{index}"),
+            &format!("会话{index}"),
+            "/proj/a",
+            day(2026, 8, 18),
+            10 + index as u32,
+        );
+    }
+    let error = h.try_build(WorkNotesRange::this_week(), false).unwrap_err();
+    assert!(error.contains("已取消"), "{error}");
+
+    let cached = count_rows(&h, "summary_session_cache");
+    assert!(cached > 0, "取消也要落已完成的摘要");
+    assert!(cached < 5, "不该落满五条：{cached}");
+    assert_eq!(count_rows(&h, "summary_reports"), 0, "纪要没跑完就不该落");
+}
+
+/// Q3 的条件在实现里只有一处：命中 exact 缓存时没有任何东西要写，连写连接都不该去取。
+#[test]
+fn exact_cache_hit_does_not_take_the_write_connection() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    h.build();
+    let after_first = h.conn.write_locks();
+    assert!(after_first > 0, "第一次生成要落盘");
+
+    h.build();
+    assert_eq!(
+        h.conn.write_locks(),
+        after_first,
+        "命中缓存没东西可写，不该再取写连接"
+    );
+}
+
+fn count_rows(h: &Harness, table: &str) -> i64 {
+    h.conn
+        .get()
+        .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+            row.get(0)
+        })
+        .unwrap()
+}
+
 #[test]
 fn actual_usage_comes_from_engine_json_and_is_priced() {
     let profile = work_notes::codex_profile();
@@ -1954,7 +2008,7 @@ fn history_lists_reports_across_ranges_newest_first_and_filters_by_engine() {
         .unwrap();
 
     // 两次生成的区间不同（range_key 不同），各存一条，不会互相覆盖。
-    let page = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    let page = work_notes::history(&h.conn.get(), &WorkNotesHistoryQuery::default()).unwrap();
     assert_eq!(page.total, 2);
     assert_eq!(page.rows.len(), 2);
     // 最近一次生成的排在最前。
@@ -1965,7 +2019,7 @@ fn history_lists_reports_across_ranges_newest_first_and_filters_by_engine() {
     assert_eq!(page.rows[1].start_date, "2026-08-17");
 
     let filtered = work_notes::history(
-        &h.conn,
+        &h.conn.get(),
         &WorkNotesHistoryQuery {
             engine: Some("cursor-agent".to_string()),
             page: None,
@@ -1977,7 +2031,7 @@ fn history_lists_reports_across_ranges_newest_first_and_filters_by_engine() {
     assert!(filtered.rows.is_empty());
 
     let matched = work_notes::history(
-        &h.conn,
+        &h.conn.get(),
         &WorkNotesHistoryQuery {
             engine: Some("codex".to_string()),
             page: None,
@@ -2006,7 +2060,7 @@ fn history_pagination_returns_newest_first_across_pages() {
     }
 
     let page1 = work_notes::history(
-        &h.conn,
+        &h.conn.get(),
         &WorkNotesHistoryQuery {
             engine: None,
             page: Some(1),
@@ -2020,7 +2074,7 @@ fn history_pagination_returns_newest_first_across_pages() {
     assert_eq!(page1.rows[1].start_date, "2026-08-11");
 
     let page2 = work_notes::history(
-        &h.conn,
+        &h.conn.get(),
         &WorkNotesHistoryQuery {
             engine: None,
             page: Some(2),
@@ -2039,20 +2093,20 @@ fn history_entry_returns_full_dto_and_delete_removes_it() {
     seed_eligible(&h, "s1", "/proj/a");
     let built = h.build();
 
-    let page = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    let page = work_notes::history(&h.conn.get(), &WorkNotesHistoryQuery::default()).unwrap();
     assert_eq!(page.rows.len(), 1);
     let id = page.rows[0].id;
 
-    let entry = work_notes::history_entry(&h.conn, id).unwrap();
+    let entry = work_notes::history_entry(&h.conn.get(), id).unwrap();
     assert_eq!(entry.headline, built.headline);
     assert_eq!(entry.entries, built.entries);
     assert_eq!(entry.closing, built.closing);
 
-    work_notes::delete_history_entry(&h.conn, id).unwrap();
-    let after = work_notes::history(&h.conn, &WorkNotesHistoryQuery::default()).unwrap();
+    work_notes::delete_history_entry(&h.conn.get(), id).unwrap();
+    let after = work_notes::history(&h.conn.get(), &WorkNotesHistoryQuery::default()).unwrap();
     assert_eq!(after.total, 0);
     assert!(after.rows.is_empty());
 
-    assert!(work_notes::history_entry(&h.conn, id).is_err());
-    assert!(work_notes::delete_history_entry(&h.conn, id).is_err());
+    assert!(work_notes::history_entry(&h.conn.get(), id).is_err());
+    assert!(work_notes::delete_history_entry(&h.conn.get(), id).is_err());
 }
