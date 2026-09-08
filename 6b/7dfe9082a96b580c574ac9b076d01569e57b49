@@ -1,0 +1,126 @@
+src-tauri/src/work_notes/session.rs
+  s_0593cad527be17::t_4d6e63ab69c8f9 10
+  s_0593cad527be17::t_8d1edabc6d8da2 7-9
+  s_0593cad527be17::t_8d14f1457fb914 11-13
+src/components/ConversationCatalog.tsx
+  s_0593cad527be17::t_0d27af88ca4950 40,58,157
+  s_0593cad527be17::t_6822faedc3aff4 39
+  s_0593cad527be17::t_6d72233a2c54fe 57,156
+src-tauri/src/domain/conversation.rs
+  s_0593cad527be17::t_2d8d481bc3df17 75-86
+src/components/ConversationDetailView.tsx
+  s_0593cad527be17::t_d9091117c0104c 84,120
+  s_0593cad527be17::t_65a2709e373236 54,85,121
+  s_0593cad527be17::t_6619b3fc5e7396 53
+src/components/Conversations.tsx
+  s_0593cad527be17::t_5c1ed4a6de9a1f 24,28,60,81,216-234,251-274,283-292,319-327,329-330,332,339-341
+  s_0593cad527be17::t_2d0bb3dba02e4b 29,82,275-282,309-316,328,331,333-338
+  s_0593cad527be17::t_5c47663e6a2e4c 342
+src-tauri/src/conversation/session_store.rs
+  s_0593cad527be17::t_503d20da0e9961 253
+  s_0593cad527be17::t_2ce02169414e47 226
+src-tauri/src/conversation/mod.rs
+  s_0593cad527be17::t_6be2650cbb8164 80
+src-tauri/src/work_notes.rs
+  s_0593cad527be17::t_3ae02316cbb3bc 42
+  s_0593cad527be17::t_f93f0c774a054c 14
+src-tauri/src/lib.rs
+  s_0593cad527be17::t_d0f98b5cbd6aa4 354
+src/components/type.ts
+  s_0593cad527be17::t_97564b3a40388f 54,91
+  s_0593cad527be17::t_9907ced1d028e5 53,90
+src-tauri/src/tests/work_notes.rs
+  s_0593cad527be17::t_21a4e1accc7118 179-180,184-185
+  s_0593cad527be17::t_1d7b870830df09 1255-1308,1384-1385
+  s_0593cad527be17::t_4aeec6a8002684 177-178
+  s_0593cad527be17::t_6be2650cbb8164 1332,1382
+  s_0593cad527be17::t_15ea40cccba694 171-176,181-183,186-187,1254,1309-1331,1333-1381,1383
+src/lib/conversationDisplay.test.ts
+  s_0593cad527be17::t_5278395293ce3e 15-16,51-89
+  s_0593cad527be17::t_b55cc06da46ec4 90-91
+src-tauri/src/store.rs
+  s_0593cad527be17::t_593d039820b979 27-28
+src/types.ts
+  s_0593cad527be17::t_76c3cd27fb1b10 464-471
+src/lib/conversationDisplay.ts
+  s_0593cad527be17::t_b821e1994ab5dd 1-6,68-79
+  s_0593cad527be17::t_7866bb420ced5a 80
+src-tauri/src/conversation/catalog.rs
+  s_0593cad527be17::t_c2715af83a8f06 312
+src/components/ConversationDetailHead.tsx
+  s_0593cad527be17::t_2ab106d5563fc8 34,68-72
+  s_0593cad527be17::t_4230292dbe8ab8 67
+  s_0593cad527be17::t_fb99dacf1bb3f3 33,73-77
+  s_0593cad527be17::t_9e14b3473e7f5f 8,38,101-117
+  s_0593cad527be17::t_8e6c29c03e4d07 78-88
+  s_0593cad527be17::t_69cf3e9ef6d691 12
+src-tauri/src/work_notes/orchestrate.rs
+  s_0593cad527be17::t_f03abd4561d21a 179-187,189-194
+  s_0593cad527be17::t_6be2650cbb8164 188
+src-tauri/src/work_notes/job.rs
+  s_0593cad527be17::t_cb1fcba071d003 121-179
+src-tauri/src/commands/work_notes.rs
+  s_0593cad527be17::t_9f9eda1093f0fe 5,122-158,162-166
+  s_0593cad527be17::t_ea22d3581a1776 159-161
+  s_0593cad527be17::t_e7a3ec3bb161eb 167-168
+src-tauri/src/store/work_notes_generated.rs
+  s_0593cad527be17::t_3f2fa45c88b321 75
+  s_0593cad527be17::t_c4521158f129b2 1,5,7,87,89-97,99-153
+src/styles.css
+  s_0593cad527be17::t_d419aef7b6f1d5 19
+src/components/ConversationCatalogRow.tsx
+  s_0593cad527be17::t_5bd51002e71041 10,26,30,108-118
+  s_0593cad527be17::t_08f4dab0f27271 9,51-52,119
+  s_0593cad527be17::t_f4eb54abaca545 17,25,120-131
+  s_0593cad527be17::t_fb0233494b5b7c 29,48-50
+src/components/ConversationSummaryDialog.tsx
+  s_0593cad527be17::t_9d3a7b4e22d68e 46-50,100
+  s_0593cad527be17::t_d49717a54878fe 32-33,114-144
+  s_0593cad527be17::t_6a7ec167271d0e 206,215-219,223-224
+  s_0593cad527be17::t_a0b2e3a8b06703 29-31
+  s_0593cad527be17::t_9844b6bc789be1 34-36,43-45
+  s_0593cad527be17::t_830671f790f86c 51-53,97-99
+  s_0593cad527be17::t_efc2fb8644f47f 101-103,111-113
+  s_0593cad527be17::t_37c4f0295f1c5b 145-147,203-205
+  s_0593cad527be17::t_87ff007bbc2858 207-209,212-214
+  s_0593cad527be17::t_5a26050828a076 220-222
+  s_0593cad527be17::t_9d6a7f3be9cf4b 225-227
+src/styles/views/conversation-work-notes.css
+  s_0593cad527be17::t_3bda099456606d 53,63-65,104
+  s_0593cad527be17::t_e90f45b69decbc 8,11,17,25,28,31,39,44,133-139,144-149
+  s_0593cad527be17::t_1f382cefe849b9 140-143
+  s_0593cad527be17::t_1050df6bc0ca01 2,5-7,12,14-15,20-21,34-35,37,42,45-52,54-62,66-103,105-132
+  s_0593cad527be17::t_5383597d3ed3f6 1
+  s_0593cad527be17::t_7b6f28f2129d96 3-4
+  s_0593cad527be17::t_b4abdcec8eb6fc 9-10
+  s_0593cad527be17::t_0ed0184dc42c3d 13
+  s_0593cad527be17::t_d75fce09a1d827 16
+  s_0593cad527be17::t_81b91f9343428c 18-19
+  s_0593cad527be17::t_83a9bcc56116e2 22-24
+  s_0593cad527be17::t_5c76da973e5e56 26-27
+  s_0593cad527be17::t_c0ea0a83d5b973 29-30
+  s_0593cad527be17::t_62ee4a6fc9f745 32-33
+  s_0593cad527be17::t_fb725224a125cb 36
+  s_0593cad527be17::t_e5e3a1113c7e09 38
+  s_0593cad527be17::t_90947e4a9d6a01 40-41
+  s_0593cad527be17::t_4a8efab277da97 43
+src/lib/useConversationCatalog.ts
+  s_0593cad527be17::t_cd437b6169f944 42,55,143
+  s_0593cad527be17::t_a62d2812ef161a 101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6b7dfe9082a96b580c574ac9b076d01569e57b49",
+  "prompts": {},
+  "sessions": {
+    "s_0593cad527be17": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a07ec4-c5bc-75c0-b3ee-245fd834390f",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
