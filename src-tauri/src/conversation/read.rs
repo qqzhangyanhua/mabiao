@@ -56,7 +56,7 @@ pub(crate) fn prepare_detail_read(
     let prepared = prepare_detail(conn, source, session_id)?;
     if event_index_ready(conn, home, &prepared)? {
         let event_count = event_index::indexed_event_count(conn, source, session_id)?;
-        let observed_context = if prepared.source == Source::CursorAgent {
+        let observed_context = if context_manifest::supported_source(prepared.source) {
             context_manifest::observed_from_index(conn, prepared.source, session_id)?
         } else {
             Vec::new()

@@ -33,7 +33,7 @@ _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不�
 _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话；不要把账号用量或代码量画进工作时间线
 
 **对话记录 (Conversation Record)**：
-本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes、agy（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。Cursor 对话详情可挂「上下文清单」：`observed`（本会话事件里真实出现的工具 / 系统状态 / skill 字面引用）与 `on_disk_possible`（按会话 `project` 对照磁盘上的指令 / rules / skills / MCP，标「可能生效 / 磁盘存在」）。源文件通常不落注入清单，**不得**把磁盘项写成「已注入」。
+本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes、agy（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。Cursor / Grok 对话详情可挂「上下文清单」：`observed`（本会话事件里真实出现的工具 / 系统状态 / skill 字面引用）与 `on_disk_possible`（磁盘上真实存在且产品口径已确认会加载的指令，标「可能生效 / 磁盘存在」）。Cursor 按会话 `project` 对照项目与用户级指令 / rules / skills / MCP；Grok 只扫用户级 `~/.grok` 官方 Project Rules（候选指令文件与 `rules/*.md`），不扫项目根 `AGENTS.md`、`.cursor/rules`，MCP / skills 未扫描。源文件通常不落注入清单，**不得**把磁盘项写成「已注入」。
 _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或上传；不要把「可能生效」说成已注入
 
 **对话记录适配器 (Conversation Adapter)**：

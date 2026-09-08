@@ -55,4 +55,12 @@ describe("conversationContext", () => {
     expect(contextItemMetaText(manifest.items[0])).toBe("2 次");
     expect(contextItemMetaText(manifest.items[1])).toBe("12 B");
   });
+
+  it("keeps Grok-style honest empty disk notes free of injection claims", () => {
+    const grokEmpty =
+      "Grok 只加载用户级 ~/.grok 指令（AGENTS.md / Agents.md / AGENT.md / CLAUDE.md / Claude.md / CLAUDE.local.md 与 rules/*.md）；本机未发现这些文件。不扫描项目根 AGENTS.md 或 .cursor/rules。MCP / skills 未扫描：产品口径无本机落盘。";
+    expect(contextForbiddenCopy(grokEmpty)).toBe(false);
+    expect(grokEmpty).toContain("未发现");
+    expect(grokEmpty).toContain("未扫描");
+  });
 });
