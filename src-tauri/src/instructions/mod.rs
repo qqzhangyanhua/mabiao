@@ -6,6 +6,7 @@ mod conflict;
 pub mod copilot;
 pub mod cursor;
 pub mod cursor_agent;
+pub(crate) mod cursor_disk;
 mod cursor_memories;
 pub mod dsh;
 pub mod factory;
@@ -16,6 +17,7 @@ mod insight;
 pub mod kimi;
 pub mod opencode;
 pub mod pi;
+mod project_walk;
 pub mod qwen;
 
 use std::path::{Path, PathBuf};

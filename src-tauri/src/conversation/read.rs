@@ -6,7 +6,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::domain::{
     ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
-    ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
+    ConversationContextItem, ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
     ConversationEventContentDto, ConversationEventKind as EventKind, ConversationIndexProgressDto,
     ConversationParsedDetail, ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord,
     Source, UsageRecord,
@@ -32,10 +32,10 @@ use super::trusted_path::{
     session_source_paths, trusted_paths_for_session,
 };
 use super::{
-    conversation_adapter, cursor, event_index, line_direct, parse_conversation_file,
-    parse_conversation_files, persist_session_file_cursors, write_session_file_events,
-    PreparedConversationDetail, PreparedDetailRead, CONVERSATION_ADAPTER_VERSION,
-    CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+    context_manifest, conversation_adapter, cursor, event_index, line_direct,
+    parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
+    write_session_file_events, PreparedConversationDetail, PreparedDetailRead,
+    CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(
@@ -56,9 +56,15 @@ pub(crate) fn prepare_detail_read(
     let prepared = prepare_detail(conn, source, session_id)?;
     if event_index_ready(conn, home, &prepared)? {
         let event_count = event_index::indexed_event_count(conn, source, session_id)?;
+        let observed_context = if prepared.source == Source::CursorAgent {
+            context_manifest::observed_from_index(conn, prepared.source, session_id)?
+        } else {
+            Vec::new()
+        };
         return Ok(PreparedDetailRead::Indexed {
             prepared,
             event_count,
+            observed_context,
         });
     }
     Ok(PreparedDetailRead::Parsed { prepared })
@@ -72,7 +78,8 @@ pub(crate) fn finish_prepared_detail(
         PreparedDetailRead::Indexed {
             prepared,
             event_count,
-        } => assemble_indexed_detail(home, prepared, event_count),
+            observed_context,
+        } => assemble_indexed_detail(home, prepared, event_count, observed_context),
         PreparedDetailRead::Parsed { prepared } => load_prepared_detail(home, prepared),
     }
 }
@@ -120,9 +127,14 @@ pub(crate) fn load_prepared_detail(
     prepared: PreparedConversationDetail,
 ) -> Result<ConversationDetailDto, String> {
     let usage_record_count = prepared.usage_records.len() as u32;
-    Ok(parsed_detail_to_dto(
-        load_prepared_parsed(home, prepared)?,
-        usage_record_count,
+    let source = prepared.source;
+    let parsed = load_prepared_parsed(home, prepared)?;
+    let observed = context_manifest::observed_from_events(&parsed.events);
+    Ok(with_context_manifest(
+        home,
+        source,
+        parsed_detail_to_dto(parsed, usage_record_count),
+        observed,
     ))
 }
 
@@ -183,6 +195,7 @@ pub(crate) fn parsed_detail_to_dto(
         usage_record_count,
         agent_relations: parsed.agent_relations,
         cursor_behavior: parsed.cursor_behavior,
+        context_manifest: None,
     }
 }
 
@@ -219,6 +232,7 @@ pub(crate) fn assemble_indexed_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
     event_count: u32,
+    observed_context: Vec<ConversationContextItem>,
 ) -> Result<ConversationDetailDto, String> {
     let PreparedConversationDetail {
         source,
@@ -235,14 +249,30 @@ pub(crate) fn assemble_indexed_detail(
         .iter()
         .map(|path| path.to_string_lossy().to_string())
         .collect();
-    Ok(ConversationDetailDto {
-        revision,
-        session,
-        event_count,
-        usage_record_count: usage_records.len() as u32,
-        agent_relations,
-        cursor_behavior,
-    })
+    Ok(with_context_manifest(
+        home,
+        source,
+        ConversationDetailDto {
+            revision,
+            session,
+            event_count,
+            usage_record_count: usage_records.len() as u32,
+            agent_relations,
+            cursor_behavior,
+            context_manifest: None,
+        },
+        observed_context,
+    ))
+}
+
+fn with_context_manifest(
+    home: &Path,
+    source: Source,
+    mut dto: ConversationDetailDto,
+    observed: Vec<ConversationContextItem>,
+) -> ConversationDetailDto {
+    dto.context_manifest = context_manifest::for_session(home, source, &dto.session, observed);
+    dto
 }
 
 pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgressDto, String> {

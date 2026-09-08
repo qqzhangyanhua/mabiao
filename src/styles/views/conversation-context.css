@@ -1,0 +1,119 @@
+.conversation-context-manifest {
+  flex: 0 0 auto;
+}
+
+.conversation-context-manifest .collapsible-body {
+  display: grid;
+  gap: 12px;
+}
+
+.conversation-context-lead {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.conversation-context-layers {
+  display: grid;
+  gap: 10px;
+}
+
+.conversation-context-layer {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--overlay-1);
+}
+
+.conversation-context-layer.layer-observed {
+  border-left: 3px solid var(--cyan-fg);
+}
+
+.conversation-context-layer.layer-on_disk_possible {
+  border-left: 3px solid var(--purple-fg);
+}
+
+.conversation-context-layer header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conversation-context-layer h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.conversation-context-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.conversation-context-badge.layer-observed {
+  color: var(--cyan-fg);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.conversation-context-badge.layer-on_disk_possible {
+  color: var(--purple-fg);
+  background: rgba(167, 139, 250, 0.12);
+}
+
+.conversation-context-layer ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.conversation-context-layer li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+}
+
+.conversation-context-kind {
+  margin-top: 1px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.conversation-context-layer li div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.conversation-context-layer li strong {
+  color: var(--text-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.conversation-context-layer li code {
+  color: var(--text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.conversation-context-empty,
+.conversation-context-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.conversation-context-empty {
+  color: var(--text-soft);
+}

@@ -7,6 +7,7 @@ import type {
   ConversationDetailDto,
   ConversationSessionRow,
 } from "../types";
+import { ConversationContextManifestPanel } from "./ConversationContextManifest";
 import { ConversationDetailHead } from "./ConversationDetailHead";
 import { ConversationJumpBar } from "./ConversationJumpBar";
 import { ConversationTimeline } from "./ConversationTimeline";
@@ -160,6 +161,9 @@ export function ConversationDetailView({
               </span>
             </div>
           </div>
+        ) : null}
+        {detail?.context_manifest ? (
+          <ConversationContextManifestPanel manifest={detail.context_manifest} />
         ) : null}
         {pollError ? (
           <div className="conversation-detail-notice" role="status">

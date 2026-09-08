@@ -594,6 +594,32 @@ export type ConversationEventPage = {
   has_more_after: boolean;
 };
 
+export type ConversationContextLayer = "observed" | "on_disk_possible";
+
+export type ConversationContextKind =
+  | "tool"
+  | "system_status"
+  | "error"
+  | "skill"
+  | "instruction"
+  | "rule"
+  | "mcp_server";
+
+export type ConversationContextItem = {
+  layer: ConversationContextLayer;
+  kind: ConversationContextKind;
+  id: string;
+  label: string;
+  path?: string | null;
+  meta?: Record<string, unknown> | null;
+};
+
+export type ConversationContextManifest = {
+  items: ConversationContextItem[];
+  observed_note?: string | null;
+  on_disk_note?: string | null;
+};
+
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;
@@ -601,6 +627,7 @@ export interface ConversationDetailDto {
   usage_record_count: number;
   agent_relations: ConversationAgentRelations;
   cursor_behavior?: CursorSessionDetailDto | null;
+  context_manifest?: ConversationContextManifest | null;
 }
 
 export type ConversationDetailStateDto = {

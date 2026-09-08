@@ -509,6 +509,14 @@ pub fn live_index_would_rewind(
     ))
 }
 
+pub(crate) fn session_generation(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+) -> Result<Option<i64>, String> {
+    live_generation(conn, source, session_id)
+}
+
 fn live_generation(
     conn: &Connection,
     source: &str,

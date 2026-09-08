@@ -1,11 +1,13 @@
 use std::collections::BTreeSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::domain::{
     GlobalInstructionFile, GlobalInstructionSourceRow, InstructionEntryKind, InstructionLoadStatus,
     InstructionOverlapHint,
 };
+
+use super::project_walk::{existing_file, is_cursor_rule_file, walk_files};
 
 const ROOT_NAMES: &[&str] = &[
     "AGENTS.md",
@@ -80,74 +82,48 @@ fn is_loaded_text(file: &GlobalInstructionFile) -> bool {
 fn project_rule_files(root: &Path) -> Vec<(String, String)> {
     let mut files = Vec::new();
     for name in ROOT_NAMES {
-        push_file(&mut files, root, Path::new(name));
+        push_existing(&mut files, root, Path::new(name));
     }
-    collect_dir(&mut files, root, Path::new(".cursor/rules"), 3);
-    push_file(&mut files, root, Path::new(".claude/CLAUDE.md"));
-    collect_dir(&mut files, root, Path::new(".claude/rules"), 1);
-    push_file(
+    push_walked(&mut files, root, Path::new(".cursor/rules"), 3);
+    push_existing(&mut files, root, Path::new(".claude/CLAUDE.md"));
+    push_walked(&mut files, root, Path::new(".claude/rules"), 1);
+    push_existing(
         &mut files,
         root,
         Path::new(".github/copilot-instructions.md"),
     );
-    collect_dir(&mut files, root, Path::new(".github/instructions"), 1);
+    push_walked(&mut files, root, Path::new(".github/instructions"), 1);
     files.sort_by(|a, b| a.0.cmp(&b.0));
     files.dedup_by(|a, b| a.0 == b.0);
     files
 }
 
-fn push_file(out: &mut Vec<(String, String)>, root: &Path, rel: &Path) {
-    let path = root.join(rel);
-    let Ok(content) = fs::read_to_string(&path) else {
+fn push_existing(out: &mut Vec<(String, String)>, root: &Path, rel: &Path) {
+    let Some(path) = existing_file(root, rel) else {
+        return;
+    };
+    push_content(out, root, &path);
+}
+
+fn push_walked(out: &mut Vec<(String, String)>, root: &Path, rel: &Path, depth: u8) {
+    for path in walk_files(root, rel, depth, is_cursor_rule_file) {
+        push_content(out, root, &path);
+    }
+}
+
+fn push_content(out: &mut Vec<(String, String)>, root: &Path, path: &Path) {
+    let Ok(content) = fs::read_to_string(path) else {
         return;
     };
     if content.is_empty() {
         return;
     }
-    out.push((rel.to_string_lossy().replace('\\', "/"), content));
-}
-
-fn collect_dir(out: &mut Vec<(String, String)>, root: &Path, rel: &Path, depth: u8) {
-    walk(out, root, &root.join(rel), depth);
-}
-
-fn walk(out: &mut Vec<(String, String)>, root: &Path, dir: &Path, depth: u8) {
-    if depth == 0 {
-        return;
-    }
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
-    paths.sort();
-    for path in paths {
-        if path.is_dir() {
-            walk(out, root, &path, depth - 1);
-            continue;
-        }
-        if !path.is_file() {
-            continue;
-        }
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if !(name.ends_with(".md") || name.ends_with(".mdc") || name.ends_with(".instructions.md"))
-        {
-            continue;
-        }
-        let Ok(content) = fs::read_to_string(&path) else {
-            continue;
-        };
-        if content.is_empty() {
-            continue;
-        }
-        let rel = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-        out.push((rel, content));
-    }
+    let rel = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    out.push((rel, content));
 }
 
 fn keywords(text: &str) -> BTreeSet<String> {

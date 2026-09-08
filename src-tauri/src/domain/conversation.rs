@@ -315,6 +315,76 @@ pub struct ConversationDetailDto {
     /// Cursor 本机行为聚合；非 Cursor 或对不上 `cursor_sessions` 时为空。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cursor_behavior: Option<CursorSessionDetailDto>,
+    /// 会话上下文清单。Cursor 先做；Grok 复用同一形状，其它来源为空。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context_manifest: Option<ConversationContextManifest>,
+}
+
+/// 证据层级。文案不得把 `on_disk_possible` 说成「已注入」。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextLayer {
+    Observed,
+    OnDiskPossible,
+}
+
+impl ConversationContextLayer {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Observed => "observed",
+            Self::OnDiskPossible => "on_disk_possible",
+        }
+    }
+}
+
+/// 清单条目种类。Cursor / Grok 共用，避免下一票另造一套。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextKind {
+    Tool,
+    SystemStatus,
+    Error,
+    Skill,
+    Instruction,
+    Rule,
+    McpServer,
+}
+
+impl ConversationContextKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Tool => "tool",
+            Self::SystemStatus => "system_status",
+            Self::Error => "error",
+            Self::Skill => "skill",
+            Self::Instruction => "instruction",
+            Self::Rule => "rule",
+            Self::McpServer => "mcp_server",
+        }
+    }
+}
+
+/// 一条上下文痕迹。`id` 是稳定键；磁盘项另带 `path`。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConversationContextItem {
+    pub layer: ConversationContextLayer,
+    pub kind: ConversationContextKind,
+    pub id: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<serde_json::Value>,
+}
+
+/// 两层证据的扁平清单，供对话详情与后续 Grok 票复用。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConversationContextManifest {
+    pub items: Vec<ConversationContextItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_disk_note: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
