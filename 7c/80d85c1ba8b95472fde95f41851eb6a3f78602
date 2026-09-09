@@ -1,0 +1,34 @@
+CONTEXT.md
+  h_4132837b09b7e7 36
+docs/adr/0022-context-manifest-load-modes.md
+  h_4132837b09b7e7 7,40
+src-tauri/Cargo.lock
+  h_4132837b09b7e7 2224
+src-tauri/Cargo.toml
+  h_4132837b09b7e7 54
+src-tauri/src/conversation/context_manifest.rs
+  h_4132837b09b7e7 4-8,28,76-80
+src-tauri/src/conversation/cursor_inject.rs
+  h_4132837b09b7e7 1-555
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 19
+src-tauri/src/test_support/cursor_store.rs
+  h_4132837b09b7e7 1-92
+src-tauri/src/test_support/mod.rs
+  h_4132837b09b7e7 3,9
+src-tauri/src/tests/conversation_context.rs
+  h_4132837b09b7e7 1322-1574
+src-tauri/tests/fixtures/cursor-inject-first-turn.txt
+  h_4132837b09b7e7 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "7c80d85c1ba8b95472fde95f41851eb6a3f78602",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
