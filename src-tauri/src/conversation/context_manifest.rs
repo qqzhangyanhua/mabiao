@@ -1,11 +1,11 @@
 //! 对话详情「上下文清单」：已注入 + 会话内已观测 + 可能生效 / 磁盘存在。
 //!
 //! Grok 注入层读会话目录 `prompt_context.json` 的 `agents_md_files[]`，以及
-//! `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成。与
-//! `updates.jsonl` 解析隔离，正文和 MCP 错误全文不进缓存。Cursor 注入快照本期不读。
-//! 合成的 `transcript_missing` 不算已观测。Skill 认事件 `name`/`text`
-//! 字面引用，以及 Cursor `Skill` 工具的 `input.skill`（解析路径读
-//! `details`；索引路径靠工具 `text`）。
+//! `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成。Cursor
+//! 注入层读 `~/.cursor/chats/<hash>/<session>/store.db` 下标 1 的 user 消息。
+//! 与 `updates.jsonl` 解析隔离，正文和 MCP 错误全文不进缓存。合成的
+//! `transcript_missing` 不算已观测。Skill 认事件 `name`/`text` 字面引用，
+//! 以及 Cursor `Skill` 工具的 `input.skill`（解析路径读 `details`；索引路径靠工具 `text`）。
 //!
 //! 噪音差集（injected 减 observed）对 skill 与 MCP 通用；指令与规则不参与。
 //! 未连上的 MCP 不占 token、不吃红标。
@@ -25,7 +25,7 @@ use crate::domain::{
     ConversationEvent, ConversationEventKind as EventKind, ConversationSessionRow, Source,
 };
 
-use super::{event_index, grok_inject};
+use super::{cursor_inject, event_index, grok_inject};
 
 const INJECTED_EMPTY: &str = "未发现本轮注入条目。";
 const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。";
@@ -73,6 +73,11 @@ pub(crate) fn for_session(
                 snapshot.called_mcp,
             )
         }
+        Source::CursorAgent => (
+            cursor_inject::from_session(home, session),
+            None,
+            BTreeSet::new(),
+        ),
         _ => (Vec::new(), None, BTreeSet::new()),
     };
     Some(assemble(

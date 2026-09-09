@@ -4,7 +4,7 @@
 
 **决定**：沿用 `ConversationContextItem` / `ConversationContextManifest`，不另造平行结构体。清单分三层证据：`injected`、`observed`、`on_disk_possible`。条目带 `load_mode`（`always` / `on_match` / `on_demand` / `manual` / `observed`）。体积以**字符数**为权威值写入 DTO；token 只在展示层按工作纪要的 `chars_to_tokens`（4 字符 ≈ 1 token）换算，主显「约 N tok」，副行给实测字符数。
 
-注入快照读取与对话记录适配器隔离：不写 `conversation_events`、不改 `CONVERSATION_ADAPTER_VERSION`、不把注入正文送进任何缓存。Grok 的 tracer 读会话目录 `prompt_context.json` 的 `agents_md_files[]`。
+注入快照读取与对话记录适配器隔离：不写 `conversation_events`、不改 `CONVERSATION_ADAPTER_VERSION`、不把注入正文送进任何缓存。Grok 的 tracer 读会话目录 `prompt_context.json` 的 `agents_md_files[]`。Cursor 读 `~/.cursor/chats/<hash>/<session>/store.db`：blobs 按内容 sha256 寻址，root blob 的 `repeated bytes` 字段 1 还原有序消息，取下标 1 的 user 消息分段计量；MCP 只计工具名列表。
 
 ## 加载档位
 
@@ -37,4 +37,4 @@
 - 看到有人把注入正文写入 sqlite / FTS / 备份，就是在违反本篇与 ADR 0011 / 0014。
 - 看到有人把 `on_disk_possible` 写成「已注入」，就是在违反三层证据模型。
 - 看到打开对话详情去 spawn MCP 或 `grok inspect`，就是在违反「故意不做」。
-- Cursor 注入快照读取另模块落地，复用本篇的层、档位与体积口径。
+- Cursor 注入快照读取落在 `conversation/cursor_inject.rs`，复用本篇的层、档位与体积口径。

@@ -1319,3 +1319,256 @@ fn grok_detail_omits_mcp_summary_without_mcp_events() {
             .all(|item| item.kind != ConversationContextKind::McpServer)
     );
 }
+
+const CURSOR_SKILL_BLOCK: &str =
+    "<agent_skill fullPath=\"/tmp/home/.cursor/skills/review/SKILL.md\">UNIQUE_CURSOR_INJECT_SKILL</agent_skill>";
+const CURSOR_RULE_BLOCK: &str =
+    "<always_applied_workspace_rule name=\"/tmp/workspace/demo/AGENTS.md\">UNIQUE_CURSOR_INJECT_RULE\n</always_applied_workspace_rule>";
+const CURSOR_USER_RULES_BLOCK: &str = "<user_rules description=\"user rules\">\n<user_rule>UNIQUE_CURSOR_INJECT_USER</user_rule>\n</user_rules>";
+const CURSOR_USER_INFO_BLOCK: &str = "<user_info>\nOS Version: testdarwin\nShell: zsh\nWorkspace Path: /tmp/workspace/demo\nUNIQUE_CURSOR_INJECT_ENV\n</user_info>";
+const CURSOR_SUBAGENT_BLOCK: &str =
+    "<available_subagent_types>\nUNIQUE_CURSOR_INJECT_SUBAGENT\n</available_subagent_types>";
+const CURSOR_MCP_TOOLS: &str = "search_docs,get_page";
+
+fn cursor_system_prompt() -> &'static str {
+    "You are an AI coding assistant, powered by Test Model.\n<available_skills><agent_skill fullPath=\"/tmp/should-not-see/SKILL.md\">UNIQUE_CURSOR_SYSTEM_SKILL</agent_skill></available_skills>"
+}
+
+fn cursor_later_user() -> &'static str {
+    "<agent_skill fullPath=\"/tmp/later/SKILL.md\">UNIQUE_CURSOR_LATER_SKILL</agent_skill>"
+}
+
+#[test]
+fn cursor_detail_lists_injected_sections_from_chat_store() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let first_turn = fixture("cursor-inject-first-turn.txt");
+    seed_cursor_transcript(home, "sess-cursor-inject");
+    write_cursor_chat_store(
+        home,
+        "sess-cursor-inject",
+        &[
+            serde_json::json!({"role":"system","content": cursor_system_prompt()}),
+            serde_json::json!({"role":"user","content": first_turn}),
+            serde_json::json!({"role":"user","content": cursor_later_user()}),
+        ],
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-inject")
+            .unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("cursor detail should carry a context manifest");
+    assert_no_injected(
+        &manifest.items,
+        &[
+            manifest.observed_note.as_deref(),
+            manifest.on_disk_note.as_deref(),
+        ],
+    );
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("已注入")));
+
+    let injected = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    let skill = injected
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::Skill)
+        .expect("skill should be injected");
+    assert_eq!(skill.id, "/tmp/home/.cursor/skills/review/SKILL.md");
+    assert_eq!(skill.label, "review");
+    assert_eq!(skill.load_mode, Some(ConversationContextLoadMode::Always));
+    assert_eq!(
+        skill.char_count,
+        Some(CURSOR_SKILL_BLOCK.chars().count() as u64)
+    );
+
+    let rule = injected
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::Rule && item.id.ends_with("AGENTS.md"))
+        .expect("workspace rule should be injected");
+    assert_eq!(rule.path.as_deref(), Some("/tmp/workspace/demo/AGENTS.md"));
+    assert_eq!(
+        rule.char_count,
+        Some(CURSOR_RULE_BLOCK.chars().count() as u64)
+    );
+
+    let user_rules = injected
+        .iter()
+        .find(|item| item.id == "user_rules")
+        .expect("user rules should be injected");
+    assert_eq!(user_rules.kind, ConversationContextKind::Rule);
+    assert_eq!(
+        user_rules.char_count,
+        Some(CURSOR_USER_RULES_BLOCK.chars().count() as u64)
+    );
+
+    let env = injected
+        .iter()
+        .find(|item| item.id == "user_info")
+        .expect("env info should be injected");
+    assert_eq!(env.kind, ConversationContextKind::Instruction);
+    assert_eq!(env.label, "环境信息");
+    assert_eq!(
+        env.char_count,
+        Some(CURSOR_USER_INFO_BLOCK.chars().count() as u64)
+    );
+
+    let mcp = mcp_item(&injected, "docs");
+    assert_eq!(mcp.kind, ConversationContextKind::McpServer);
+    assert_eq!(
+        mcp.injection_status,
+        Some(ConversationContextInjectionStatus::Connected)
+    );
+    assert_eq!(
+        mcp.char_count,
+        Some(CURSOR_MCP_TOOLS.chars().count() as u64)
+    );
+    let tools = mcp
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("tools"))
+        .and_then(|value| value.as_array())
+        .expect("mcp tools list");
+    assert_eq!(
+        tools,
+        &serde_json::json!(["search_docs", "get_page"])
+            .as_array()
+            .cloned()
+            .unwrap()
+    );
+
+    let subagents = injected
+        .iter()
+        .find(|item| item.id == "available_subagent_types")
+        .expect("subagent types should be injected");
+    assert_eq!(
+        subagents.char_count,
+        Some(CURSOR_SUBAGENT_BLOCK.chars().count() as u64)
+    );
+
+    let unrecognized = injected
+        .iter()
+        .find(|item| item.id == "unrecognized")
+        .expect("unrecognized remainder should be an item");
+    let sum: u64 = injected.iter().filter_map(|item| item.char_count).sum();
+    assert_eq!(
+        sum,
+        first_turn.chars().count() as u64,
+        "section char counts plus unrecognized must equal first-turn length; items={injected:?}"
+    );
+    assert!(
+        unrecognized.char_count.unwrap() > 0,
+        "wrapper chrome should remain as unrecognized"
+    );
+    assert!(unrecognized.label.contains("未识别"));
+
+    assert!(injected.iter().all(|item| {
+        item.id != "/tmp/should-not-see/SKILL.md" && item.label != "UNIQUE_CURSOR_SYSTEM_SKILL"
+    }));
+    assert!(injected.iter().all(|item| item.id != "/tmp/later/SKILL.md"));
+
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    for needle in [
+        "UNIQUE_CURSOR_INJECT_SKILL",
+        "UNIQUE_CURSOR_INJECT_RULE",
+        "UNIQUE_CURSOR_INJECT_USER",
+        "UNIQUE_CURSOR_INJECT_ENV",
+        "UNIQUE_CURSOR_INJECT_SUBAGENT",
+        "UNIQUE_CURSOR_SYSTEM_SKILL",
+        "UNIQUE_CURSOR_LATER_SKILL",
+    ] {
+        assert!(
+            !dto_json.contains(needle),
+            "injection body must not enter the detail DTO: {needle}"
+        );
+    }
+    let event_hits: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_events WHERE coalesce(text, '') LIKE '%UNIQUE_CURSOR_INJECT%'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        event_hits, 0,
+        "injection body must not enter conversation_events"
+    );
+}
+
+#[test]
+fn cursor_inject_total_chars_does_not_depend_on_tags() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    const PLAIN: &str = "hello UNIQUE_CURSOR_PLAIN_BODY";
+    seed_cursor_transcript(home, "sess-cursor-plain");
+    write_cursor_chat_store(
+        home,
+        "sess-cursor-plain",
+        &[
+            serde_json::json!({"role":"system","content": "system only"}),
+            serde_json::json!({"role":"user","content": PLAIN}),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-plain").unwrap();
+    let injected = layer_items(
+        &detail.context_manifest.as_ref().unwrap().items,
+        ConversationContextLayer::Injected,
+    );
+    assert_eq!(injected.len(), 1, "{injected:?}");
+    assert_eq!(injected[0].id, "unrecognized");
+    assert_eq!(injected[0].char_count, Some(PLAIN.chars().count() as u64));
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    assert!(!dto_json.contains("UNIQUE_CURSOR_PLAIN_BODY"));
+}
+
+#[test]
+fn cursor_inject_degrades_one_broken_section() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let user = format!(
+        "{CURSOR_USER_INFO_BLOCK}\n<agent_skill fullPath=\"/tmp/broken/SKILL.md\">UNIQUE_CURSOR_BROKEN_SKILL"
+    );
+    seed_cursor_transcript(home, "sess-cursor-broken");
+    write_cursor_chat_store(
+        home,
+        "sess-cursor-broken",
+        &[
+            serde_json::json!({"role":"system","content": "sys"}),
+            serde_json::json!({"role":"user","content": user}),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-broken")
+            .unwrap();
+    let injected = layer_items(
+        &detail.context_manifest.as_ref().unwrap().items,
+        ConversationContextLayer::Injected,
+    );
+    assert!(
+        injected
+            .iter()
+            .any(|item| item.id == "user_info" && item.kind == ConversationContextKind::Instruction),
+        "broken skill must not take down env parsing: {injected:?}"
+    );
+    assert!(
+        !injected
+            .iter()
+            .any(|item| item.kind == ConversationContextKind::Skill),
+        "unclosed skill tag should degrade only that section: {injected:?}"
+    );
+    let sum: u64 = injected.iter().filter_map(|item| item.char_count).sum();
+    assert_eq!(sum, user.chars().count() as u64);
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    assert!(!dto_json.contains("UNIQUE_CURSOR_BROKEN_SKILL"));
+}

@@ -16,6 +16,7 @@ mod context_manifest;
 mod copilot;
 mod cursor;
 mod cursor_bridge;
+mod cursor_inject;
 mod discover;
 mod droid;
 mod dsh;
