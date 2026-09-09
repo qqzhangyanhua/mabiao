@@ -23,7 +23,7 @@ import {
   timelineVisibleRange,
   type TimelineHeightAnchor,
 } from "../lib/conversationTimelineVirtual";
-import type { ConversationAgentLink } from "../types";
+import type { ConversationAgentLink, ConversationContextFirstUse } from "../types";
 import { TimelineRowView, TimelineVirtualRow } from "./ConversationTimelineRow";
 import { EmptyState } from "./EmptyState";
 import { Spinner } from "./Spinner";
@@ -46,6 +46,8 @@ export type ConversationTimelineProps = {
   highlightEventId?: string | null;
   highlightQuery?: string | null;
   highlightSnippet?: string | null;
+  firstUses?: ConversationContextFirstUse[];
+  onRevealContextItem?: (itemKey: string) => void;
   onToggleChild: (link: ConversationAgentLink) => void;
   onOpenChild: (link: ConversationAgentLink) => void;
   timelineRef?: RefObject<HTMLDivElement | null>;
@@ -68,6 +70,8 @@ export function ConversationTimeline({
   highlightEventId = null,
   highlightQuery = null,
   highlightSnippet = null,
+  firstUses = [],
+  onRevealContextItem,
   onToggleChild,
   onOpenChild,
   timelineRef,
@@ -122,8 +126,9 @@ export function ConversationTimeline({
         hasMoreAfter: eventWindow.hasMoreAfter,
         error,
         agentLinks,
+        firstUses,
       }),
-    [agentLinks, error, eventWindow.hasMoreAfter, eventWindow.hasMoreBefore, events],
+    [agentLinks, error, eventWindow.hasMoreAfter, eventWindow.hasMoreBefore, events, firstUses],
   );
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
@@ -361,6 +366,7 @@ export function ConversationTimeline({
                   onOpenChild={onOpenChild}
                   onEventContentLoaded={applyEventContent}
                   onRevealAdjacent={revealAdjacent}
+                  onRevealContextItem={onRevealContextItem}
                 />
               </TimelineVirtualRow>
             ))}

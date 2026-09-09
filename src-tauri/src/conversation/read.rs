@@ -32,8 +32,8 @@ use super::trusted_path::{
     session_source_paths, trusted_paths_for_session,
 };
 use super::{
-    context_cache, context_manifest, conversation_adapter, cursor, event_index, line_direct,
-    parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
+    context_cache, context_first_use, context_manifest, conversation_adapter, cursor, event_index,
+    line_direct, parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
     write_session_file_events, PreparedConversationDetail, PreparedDetailRead,
     CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
@@ -61,8 +61,14 @@ pub(crate) fn prepare_detail_read(
     };
     if event_index_ready(conn, home, &prepared)? {
         let event_count = event_index::indexed_event_count(conn, source, session_id)?;
-        let observed_context = if context_manifest::supported_source(prepared.source) {
+        let supported = context_manifest::supported_source(prepared.source);
+        let observed_context = if supported {
             context_manifest::observed_from_index(conn, prepared.source, session_id)?
+        } else {
+            Vec::new()
+        };
+        let first_use_events = if supported {
+            context_first_use::candidates_from_index(conn, prepared.source, session_id)?
         } else {
             Vec::new()
         };
@@ -71,6 +77,7 @@ pub(crate) fn prepare_detail_read(
             event_count,
             observed_context,
             context_metrics,
+            first_use_events,
         });
     }
     Ok(PreparedDetailRead::Parsed {
@@ -89,12 +96,14 @@ pub(crate) fn finish_prepared_detail(
             event_count,
             observed_context,
             context_metrics,
+            first_use_events,
         } => assemble_indexed_detail(
             home,
             prepared,
             event_count,
             observed_context,
             context_metrics,
+            first_use_events,
         ),
         PreparedDetailRead::Parsed {
             prepared,
@@ -150,12 +159,14 @@ pub(crate) fn load_prepared_detail(
     let source = prepared.source;
     let parsed = load_prepared_parsed(home, prepared)?;
     let observed = context_manifest::observed_from_events(&parsed.events);
+    let first_use_events = context_first_use::candidates_from_events(&parsed.events);
     Ok(with_context_manifest(
         home,
         source,
         parsed_detail_to_dto(parsed, usage_record_count),
         observed,
         context_metrics,
+        &first_use_events,
     ))
 }
 
@@ -255,6 +266,7 @@ pub(crate) fn assemble_indexed_detail(
     event_count: u32,
     observed_context: Vec<ConversationContextItem>,
     context_metrics: Option<context_cache::CachedContextMetrics>,
+    first_use_events: Vec<context_first_use::Candidate>,
 ) -> Result<ConversationDetailDto, String> {
     let PreparedConversationDetail {
         source,
@@ -285,6 +297,7 @@ pub(crate) fn assemble_indexed_detail(
         },
         observed_context,
         context_metrics,
+        &first_use_events,
     ))
 }
 
@@ -294,9 +307,15 @@ fn with_context_manifest(
     mut dto: ConversationDetailDto,
     observed: Vec<ConversationContextItem>,
     cached: Option<context_cache::CachedContextMetrics>,
+    first_use_events: &[context_first_use::Candidate],
 ) -> ConversationDetailDto {
     dto.context_manifest =
-        context_manifest::for_session(home, source, &dto.session, observed, cached);
+        context_manifest::for_session(home, source, &dto.session, observed, cached).map(
+            |mut manifest| {
+                manifest.first_uses = context_first_use::collect(first_use_events, &manifest.items);
+                manifest
+            },
+        );
     dto
 }
 

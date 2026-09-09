@@ -171,6 +171,7 @@ pub(crate) fn assemble(
         metrics_from_cache: false,
         volume_is_estimate: false,
         completeness_note: None,
+        first_uses: Vec::new(),
     }
 }
 
@@ -631,15 +632,23 @@ fn status_from_parts(
 }
 
 /// 只认事件 `name`/`text` 与工具 `details.input.skill`；不扫用户/助手正文。
+pub(crate) fn skill_id_from_call(
+    name: &str,
+    text: Option<&str>,
+    details: Option<&serde_json::Value>,
+) -> Option<String> {
+    skill_id_from_details(details)
+        .or_else(|| skill_id_from_skill_tool(name, text))
+        .or_else(|| literal_skill_id(name))
+        .or_else(|| text.and_then(literal_skill_id))
+}
+
 fn observed_skill_item(
     name: &str,
     text: Option<&str>,
     details: Option<&serde_json::Value>,
 ) -> Option<ConversationContextItem> {
-    let id = skill_id_from_details(details)
-        .or_else(|| skill_id_from_skill_tool(name, text))
-        .or_else(|| literal_skill_id(name))
-        .or_else(|| text.and_then(literal_skill_id))?;
+    let id = skill_id_from_call(name, text, details)?;
     Some(ConversationContextItem {
         layer: ConversationContextLayer::Observed,
         kind: ConversationContextKind::Skill,

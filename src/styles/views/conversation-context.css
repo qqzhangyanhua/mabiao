@@ -132,6 +132,11 @@
   background: rgba(251, 113, 133, 0.08);
 }
 
+.conversation-context-layer li.is-focus {
+  outline: 1px solid var(--cyan-fg);
+  background: rgba(34, 211, 238, 0.08);
+}
+
 .conversation-context-layer li.is-noise strong {
   color: var(--red-fg);
 }

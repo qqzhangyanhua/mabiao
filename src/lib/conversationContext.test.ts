@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ConversationContextManifest } from "../types";
+import type { ConversationContextFirstUse, ConversationContextManifest } from "../types";
 import {
   CHANGED_AFTER_SESSION_NOTE,
   CONTEXT_LAYER_HINT,
@@ -10,6 +10,7 @@ import {
   contextHasInjectedSnapshot,
   contextInjectedDegraded,
   contextItemCharText,
+  contextItemKey,
   contextItemMetaText,
   contextItemsTokenSummary,
   contextKindLabel,
@@ -21,6 +22,8 @@ import {
   contextManifestSummary,
   contextMcpInitSummary,
   contextMetricsFromCache,
+  firstUseItemKey,
+  firstUseMarkerText,
   isDisconnectedMcp,
   partitionContextItems,
 } from "./conversationContext";
@@ -282,5 +285,21 @@ describe("conversationContext", () => {
         completeness_note: "上下文采集不完整：gitRepos、mcp",
       }),
     ).toBe("上下文采集不完整：gitRepos、mcp");
+  });
+
+  it("formats first-use markers and jump keys without dumping the first-round list", () => {
+    const marker: ConversationContextFirstUse = {
+      event_id: "evt-skill",
+      sequence: 4,
+      item_id: "/tmp/home/.cursor/skills/review/SKILL.md",
+      item_kind: "skill",
+      item_layer: "injected",
+      label: "review",
+    };
+    expect(firstUseMarkerText(marker)).toBe("本轮引入 review");
+    expect(firstUseItemKey(marker)).toBe(
+      contextItemKey("injected", "skill", "/tmp/home/.cursor/skills/review/SKILL.md"),
+    );
+    expect(firstUseMarkerText(marker)).not.toContain("AGENTS.md");
   });
 });

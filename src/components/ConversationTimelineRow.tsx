@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { TimelineRow } from "../lib/conversationTimelineVirtual";
+import { firstUseItemKey, firstUseMarkerText } from "../lib/conversationContext";
 import type {
   ConversationAgentLink,
   ConversationEvent,
@@ -55,6 +56,7 @@ export function TimelineRowView({
   onOpenChild,
   onEventContentLoaded,
   onRevealAdjacent,
+  onRevealContextItem,
 }: {
   row: TimelineRow;
   source: string;
@@ -71,6 +73,7 @@ export function TimelineRowView({
   onOpenChild: (link: ConversationAgentLink) => void;
   onEventContentLoaded: (content: ConversationEventContentDto) => void;
   onRevealAdjacent: (direction: "earlier" | "later") => void;
+  onRevealContextItem?: (itemKey: string) => void;
 }) {
   const linksForEvent = (eventId: string) =>
     agentLinks.filter((link) => link.launch_event_id === eventId);
@@ -141,6 +144,17 @@ export function TimelineRowView({
   }
   if (row.type === "trailing") {
     return <>{renderAgentLinks(row.links)}</>;
+  }
+  if (row.type === "first_use") {
+    return (
+      <button
+        type="button"
+        className="conversation-first-use-marker"
+        onClick={() => onRevealContextItem?.(firstUseItemKey(row.marker))}
+      >
+        {firstUseMarkerText(row.marker)}
+      </button>
+    );
   }
   return renderTimelineEvent(row.event);
 }

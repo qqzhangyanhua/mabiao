@@ -458,6 +458,20 @@ pub struct ConversationContextManifest {
     /// `requestContextCompleteness` 含 false 时点名；全 true 或缺失则不下发。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completeness_note: Option<String>,
+    /// skill / MCP 工具 / 子代理第一次被调用的那一轮。不进事件表。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub first_uses: Vec<ConversationContextFirstUse>,
+}
+
+/// 消息流里的单行「本轮引入 X」。`item_*` 指向顶部总账对应条目。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationContextFirstUse {
+    pub event_id: String,
+    pub sequence: u32,
+    pub item_id: String,
+    pub item_kind: ConversationContextKind,
+    pub item_layer: ConversationContextLayer,
+    pub label: String,
 }
 
 fn default_true() -> bool {

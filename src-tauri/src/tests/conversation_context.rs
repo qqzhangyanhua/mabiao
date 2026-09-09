@@ -2303,3 +2303,290 @@ fn grok_detail_uses_cached_metrics_after_snapshot_removed() {
         "cached detail must still omit bodies"
     );
 }
+
+fn load_session_events(
+    conn: &rusqlite::Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+) -> Vec<crate::domain::ConversationEvent> {
+    crate::conversation::load_events(
+        conn,
+        home,
+        source,
+        session_id,
+        ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap()
+    .events
+}
+
+fn first_named<'a>(
+    events: &'a [crate::domain::ConversationEvent],
+    name: &str,
+) -> &'a crate::domain::ConversationEvent {
+    events
+        .iter()
+        .find(|event| event.name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("missing event named {name}"))
+}
+
+fn named_count(events: &[crate::domain::ConversationEvent], name: &str) -> usize {
+    events
+        .iter()
+        .filter(|event| event.name.as_deref() == Some(name))
+        .count()
+}
+
+fn append_grok_update(updates: &Path, event_id: &str, timestamp: u64, update: serde_json::Value) {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(updates)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        serde_json::json!({
+            "timestamp": timestamp,
+            "method": "session/update",
+            "params": {
+                "_meta": {"eventId": event_id},
+                "update": update
+            }
+        })
+    )
+    .unwrap();
+}
+
+#[test]
+fn grok_detail_marks_first_mcp_and_subagent_calls_once_and_skips_compaction() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let updates = seed_grok_session(home, "sess-grok-first-use");
+    write_grok_events(
+        &updates,
+        &[
+            serde_json::json!({
+                "type": "mcp_config_resolved",
+                "servers": [{"name": "idle", "transport": "stdio", "source": "local"}],
+                "disabled": []
+            }),
+            serde_json::json!({
+                "type": "mcp_server_connected",
+                "server_name": "idle",
+                "tools": ["zzz_idle"]
+            }),
+            serde_json::json!({
+                "type": "mcp_init_completed",
+                "total_servers": 1,
+                "succeeded": 1,
+                "failed": 0,
+                "total_tools": 1
+            }),
+        ],
+    );
+    append_grok_update(
+        &updates,
+        "compact",
+        1_787_100_008,
+        serde_json::json!({
+            "sessionUpdate": "auto_compact_started",
+            "reason": "context"
+        }),
+    );
+    append_grok_update(
+        &updates,
+        "mcp-1",
+        1_787_100_009,
+        serde_json::json!({
+            "sessionUpdate": "tool_call",
+            "title": "zzz_idle",
+            "name": "zzz_idle",
+            "toolCallId": "call-idle-1"
+        }),
+    );
+    append_grok_update(
+        &updates,
+        "mcp-2",
+        1_787_100_010,
+        serde_json::json!({
+            "sessionUpdate": "tool_call",
+            "title": "zzz_idle",
+            "name": "zzz_idle",
+            "toolCallId": "call-idle-2"
+        }),
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "grok", "sess-grok-first-use").unwrap();
+    let events = load_session_events(&conn, home, "grok", "sess-grok-first-use");
+    let manifest = detail.context_manifest.as_ref().unwrap();
+
+    assert_eq!(detail.event_count as usize, events.len());
+    assert_eq!(named_count(&events, "zzz_idle"), 2);
+    assert!(events
+        .iter()
+        .any(|event| event.name.as_deref() == Some("auto_compact_started")));
+
+    let first_uses = &manifest.first_uses;
+    assert!(
+        first_uses
+            .iter()
+            .all(|marker| marker.label != "Read" && marker.item_id != "Read"),
+        "builtin tools must not get first-use markers: {first_uses:?}"
+    );
+    assert!(
+        first_uses
+            .iter()
+            .all(|marker| marker.item_id != "auto_compact_started"
+                && !marker.label.contains("compact")),
+        "compaction is not a first-use trigger: {first_uses:?}"
+    );
+
+    let idle = first_uses
+        .iter()
+        .filter(|marker| marker.item_id == "idle" || marker.label == "zzz_idle")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        idle.len(),
+        1,
+        "same MCP tool must mark once: {first_uses:?}"
+    );
+    let idle = idle[0];
+    let first_idle = first_named(&events, "zzz_idle");
+    assert_eq!(idle.event_id, first_idle.event_id);
+    assert_eq!(idle.item_id, "idle");
+    assert_eq!(idle.item_kind, ConversationContextKind::McpServer);
+    assert_eq!(idle.item_layer, ConversationContextLayer::Injected);
+    assert_eq!(idle.label, "zzz_idle");
+
+    let subagent = first_uses
+        .iter()
+        .filter(|marker| {
+            marker.item_id == "subagent_spawned"
+                || marker.label == "Spec review"
+                || marker.label == "general-purpose"
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        subagent.len(),
+        1,
+        "subagent spawn must mark once: {first_uses:?}"
+    );
+    let spawned = first_named(&events, "subagent_spawned");
+    assert_eq!(subagent[0].event_id, spawned.event_id);
+
+    assert!(
+        !events.iter().any(|event| event
+            .text
+            .as_deref()
+            .is_some_and(|text| text.contains("本轮引入"))),
+        "first-use copy must not be written into conversation events"
+    );
+}
+
+#[test]
+fn cursor_detail_marks_first_skill_mcp_and_subagent_calls_not_first_round_list() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let session_id = "sess-cursor-first-use";
+    let path = home
+        .join(".cursor/projects/Users-workspace-project/agent-transcripts")
+        .join(session_id)
+        .join(format!("{session_id}.jsonl"));
+    write_text(
+        &path,
+        concat!(
+            "{\"role\":\"user\",\"timestamp\":\"2026-09-08T00:00:00Z\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n",
+            "{\"role\":\"assistant\",\"timestamp\":\"2026-09-08T00:00:01Z\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Working\"},{\"type\":\"tool_use\",\"id\":\"call-read\",\"name\":\"Read\",\"input\":{\"path\":\"src/lib.rs\"}}]}}\n",
+            "{\"type\":\"turn_ended\",\"timestamp\":\"2026-09-08T00:00:02Z\",\"status\":\"success\"}\n",
+            "{\"role\":\"user\",\"timestamp\":\"2026-09-08T00:01:00Z\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"use skill\"}]}}\n",
+            "{\"role\":\"assistant\",\"timestamp\":\"2026-09-08T00:01:01Z\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"Calling\"},{\"type\":\"tool_use\",\"id\":\"call-skill-1\",\"name\":\"Skill\",\"input\":{\"skill\":\"review\"}},{\"type\":\"tool_use\",\"id\":\"call-skill-2\",\"name\":\"Skill\",\"input\":{\"skill\":\"review\"}},{\"type\":\"tool_use\",\"id\":\"call-task\",\"name\":\"Task\",\"input\":{\"description\":\"Spec review\"}},{\"type\":\"tool_use\",\"id\":\"call-mcp-1\",\"name\":\"search_docs\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-mcp-2\",\"name\":\"search_docs\",\"input\":{}}]}}\n",
+            "{\"type\":\"turn_ended\",\"timestamp\":\"2026-09-08T00:01:02Z\",\"status\":\"success\"}\n"
+        ),
+    );
+    write_cursor_chat_store(
+        home,
+        session_id,
+        &[
+            serde_json::json!({"role":"system","content": cursor_system_prompt()}),
+            serde_json::json!({"role":"user","content": fixture("cursor-inject-first-turn.txt")}),
+        ],
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail = crate::conversation::load_detail(&conn, home, "cursor_agent", session_id).unwrap();
+    let events = load_session_events(&conn, home, "cursor_agent", session_id);
+    let manifest = detail.context_manifest.as_ref().unwrap();
+
+    assert_eq!(detail.event_count as usize, events.len());
+    let first_user = events
+        .iter()
+        .find(|event| event.kind == ConversationEventKind::Message)
+        .expect("user message");
+    assert!(
+        manifest
+            .first_uses
+            .iter()
+            .all(|marker| marker.event_id != first_user.event_id),
+        "first-round injected list must stay out of the message stream: {:?}",
+        manifest.first_uses
+    );
+    assert!(
+        layer_items(&manifest.items, ConversationContextLayer::Injected)
+            .iter()
+            .any(|item| item.kind == ConversationContextKind::Skill),
+        "first-round list still lives on the top ledger"
+    );
+
+    let first_uses = &manifest.first_uses;
+    assert!(
+        first_uses
+            .iter()
+            .all(|marker| marker.item_id != "Read" && marker.label != "Read"),
+        "builtin Read must not get a first-use marker: {first_uses:?}"
+    );
+
+    let skill = first_uses
+        .iter()
+        .filter(|marker| marker.item_kind == ConversationContextKind::Skill)
+        .collect::<Vec<_>>();
+    assert_eq!(skill.len(), 1, "same skill must mark once: {first_uses:?}");
+    let first_skill = events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("Skill"))
+        .expect("skill tool call");
+    assert_eq!(skill[0].event_id, first_skill.event_id);
+    assert_eq!(skill[0].item_id, "/tmp/home/.cursor/skills/review/SKILL.md");
+    assert_eq!(skill[0].item_layer, ConversationContextLayer::Injected);
+    assert_eq!(skill[0].label, "review");
+
+    let mcp = first_uses
+        .iter()
+        .filter(|marker| marker.item_kind == ConversationContextKind::McpServer)
+        .collect::<Vec<_>>();
+    assert_eq!(mcp.len(), 1, "same MCP tool must mark once: {first_uses:?}");
+    let first_mcp = first_named(&events, "search_docs");
+    assert_eq!(mcp[0].event_id, first_mcp.event_id);
+    assert_eq!(mcp[0].item_id, "docs");
+    assert_eq!(mcp[0].label, "search_docs");
+
+    let subagent = first_uses
+        .iter()
+        .filter(|marker| marker.item_id == "available_subagent_types" || marker.label == "Task")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        subagent.len(),
+        1,
+        "subagent spawn must mark once: {first_uses:?}"
+    );
+    let task = first_named(&events, "Task");
+    assert_eq!(subagent[0].event_id, task.event_id);
+    assert_eq!(subagent[0].item_id, "available_subagent_types");
+    assert_eq!(subagent[0].item_layer, ConversationContextLayer::Injected);
+}

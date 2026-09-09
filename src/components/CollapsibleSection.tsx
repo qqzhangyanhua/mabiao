@@ -8,6 +8,7 @@ export function CollapsibleSection({
   title,
   collapsedSummary,
   defaultOpen = true,
+  forceOpen = false,
   extra,
   className,
   children,
@@ -16,11 +17,16 @@ export function CollapsibleSection({
   title: string;
   collapsedSummary: string;
   defaultOpen?: boolean;
+  forceOpen?: boolean;
   extra?: ReactNode;
   className?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(() => readSectionOpen(sectionId, defaultOpen));
+  const [open, setOpen] = useState(() => forceOpen || readSectionOpen(sectionId, defaultOpen));
+  if (forceOpen && !open) {
+    setOpen(true);
+    writeSectionOpen(sectionId, true);
+  }
   const bodyId = `overview-section-${sectionId}`;
 
   function toggle() {

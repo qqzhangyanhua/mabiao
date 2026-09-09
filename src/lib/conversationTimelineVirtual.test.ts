@@ -211,6 +211,31 @@ describe("buildTimelineRows", () => {
       "child-trailing",
     ]);
   });
+
+  it("把本轮引入标记插在对应事件前面，不重复铺首轮清单", () => {
+    const rows = buildTimelineRows({
+      events: [event("m1"), event("t1", "tool_call")],
+      hasMoreBefore: false,
+      hasMoreAfter: false,
+      error: null,
+      agentLinks: [],
+      firstUses: [
+        {
+          event_id: "t1",
+          sequence: 1,
+          item_id: "docs",
+          item_kind: "mcp_server",
+          item_layer: "injected",
+          label: "search_docs",
+        },
+      ],
+    });
+    expect(rows.map((row) => row.key)).toEqual([
+      "event:m1",
+      "first-use:t1:mcp_server:docs:search_docs",
+      "event:t1",
+    ]);
+  });
 });
 
 describe("timelineHighlightIndex", () => {

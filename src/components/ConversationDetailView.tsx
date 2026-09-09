@@ -92,10 +92,17 @@ export function ConversationDetailView({
 }) {
   const [usageIdentitySeen, setUsageIdentitySeen] = useState("");
   const [usageTotal, setUsageTotal] = useState<number | null>(null);
+  const [contextFocusKey, setContextFocusKey] = useState<string | null>(null);
+  const [focusSession, setFocusSession] = useState(`${session.source}:${session.session_id}`);
   const pinTimelineLayout = follow.pinTimelineLayout;
+  const sessionKey = `${session.source}:${session.session_id}`;
   if (usageIdentity !== usageIdentitySeen) {
     setUsageIdentitySeen(usageIdentity);
     setUsageTotal(null);
+  }
+  if (focusSession !== sessionKey) {
+    setFocusSession(sessionKey);
+    setContextFocusKey(null);
   }
 
   useLayoutEffect(() => {
@@ -163,7 +170,10 @@ export function ConversationDetailView({
           </div>
         ) : null}
         {detail?.context_manifest ? (
-          <ConversationContextManifestPanel manifest={detail.context_manifest} />
+          <ConversationContextManifestPanel
+            manifest={detail.context_manifest}
+            highlightItemKey={contextFocusKey}
+          />
         ) : null}
         {pollError ? (
           <div className="conversation-detail-notice" role="status">
@@ -224,6 +234,8 @@ export function ConversationDetailView({
                 highlightEventId={matchFocus?.eventId ?? null}
                 highlightQuery={matchFocus?.query ?? null}
                 highlightSnippet={matchFocus?.snippet ?? null}
+                firstUses={detail.context_manifest?.first_uses ?? []}
+                onRevealContextItem={setContextFocusKey}
                 onToggleChild={onToggleChild}
                 onOpenChild={onOpenChild}
                 timelineRef={follow.timelineRef}

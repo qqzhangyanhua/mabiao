@@ -1,8 +1,10 @@
+import { useLayoutEffect } from "react";
 import { CollapsibleSection } from "./CollapsibleSection";
 import {
   contextCompletenessNote,
   contextInjectedDegraded,
   contextItemCharText,
+  contextItemKey,
   contextItemMetaText,
   contextItemsTokenSummary,
   contextKindLabel,
@@ -26,17 +28,29 @@ const LAYERS: ConversationContextLayer[] = ["injected", "observed", "on_disk_pos
 
 export function ConversationContextManifestPanel({
   manifest,
+  highlightItemKey = null,
 }: {
   manifest: ConversationContextManifest;
+  highlightItemKey?: string | null;
 }) {
   const mcpSummary = contextMcpInitSummary(manifest);
   const completeness = contextCompletenessNote(manifest);
   const volumeIsEstimate = manifest.volume_is_estimate === true;
+  useLayoutEffect(() => {
+    if (!highlightItemKey) {
+      return;
+    }
+    const node = document.querySelector(
+      `[data-context-item-key="${CSS.escape(highlightItemKey)}"]`,
+    );
+    node?.scrollIntoView({ block: "nearest" });
+  }, [highlightItemKey]);
   return (
     <CollapsibleSection
       sectionId="conversation-context-manifest"
       title="上下文清单"
       defaultOpen={false}
+      forceOpen={Boolean(highlightItemKey)}
       className="conversation-context-manifest"
       collapsedSummary={contextManifestSummary(manifest)}
     >
@@ -56,6 +70,7 @@ export function ConversationContextManifestPanel({
             note={contextLayerNote(manifest, layer)}
             manifest={manifest}
             volumeIsEstimate={volumeIsEstimate}
+            highlightItemKey={highlightItemKey}
           />
         ))}
       </div>
@@ -69,12 +84,14 @@ function ContextLayer({
   note,
   manifest,
   volumeIsEstimate,
+  highlightItemKey,
 }: {
   layer: ConversationContextLayer;
   items: ConversationContextItem[];
   note?: string | null;
   manifest: ConversationContextManifest;
   volumeIsEstimate: boolean;
+  highlightItemKey: string | null;
 }) {
   const title = contextLayerTitle(layer, manifest);
   const degraded = contextInjectedDegraded(layer, manifest);
@@ -98,7 +115,11 @@ function ContextLayer({
           {note ?? "源文件未落盘，无法确认。"}
         </p>
       ) : (
-        <ContextItemGroups items={items} volumeIsEstimate={volumeIsEstimate} />
+        <ContextItemGroups
+          items={items}
+          volumeIsEstimate={volumeIsEstimate}
+          highlightItemKey={highlightItemKey}
+        />
       )}
       {items.length > 0 && note ? <p className="muted conversation-context-note">{note}</p> : null}
     </section>
@@ -108,9 +129,11 @@ function ContextLayer({
 function ContextItemGroups({
   items,
   volumeIsEstimate,
+  highlightItemKey,
 }: {
   items: ConversationContextItem[];
   volumeIsEstimate: boolean;
+  highlightItemKey: string | null;
 }) {
   const { primary, unusedInstalls, editorBuiltin, disconnectedMcp } =
     partitionContextItems(items);
@@ -124,6 +147,7 @@ function ContextItemGroups({
               key={`${item.layer}:${item.kind}:${item.id}`}
               item={item}
               volumeIsEstimate={volumeIsEstimate}
+              highlightItemKey={highlightItemKey}
             />
           ))}
         </ul>
@@ -137,13 +161,21 @@ function ContextItemGroups({
                 key={`${item.layer}:${item.kind}:${item.id}`}
                 item={item}
                 volumeIsEstimate={volumeIsEstimate}
+                highlightItemKey={highlightItemKey}
               />
             ))}
           </ul>
         </div>
       ) : null}
       {editorBuiltin.length > 0 ? (
-        <details className="conversation-context-builtin">
+        <details
+          className="conversation-context-builtin"
+          {...(editorBuiltin.some(
+            (item) => contextItemKey(item.layer, item.kind, item.id) === highlightItemKey,
+          )
+            ? { open: true }
+            : {})}
+        >
           <summary>
             编辑器内置 · {editorBuiltin.length}
             {builtinSummary ? ` · ${builtinSummary}` : ""}
@@ -154,6 +186,7 @@ function ContextItemGroups({
                 key={`${item.layer}:${item.kind}:${item.id}`}
                 item={item}
                 volumeIsEstimate={volumeIsEstimate}
+                highlightItemKey={highlightItemKey}
               />
             ))}
           </ul>
@@ -168,6 +201,7 @@ function ContextItemGroups({
                 key={`${item.layer}:${item.kind}:${item.id}`}
                 item={item}
                 volumeIsEstimate={volumeIsEstimate}
+                highlightItemKey={highlightItemKey}
               />
             ))}
           </ul>
@@ -180,13 +214,22 @@ function ContextItemGroups({
 function ContextItemRow({
   item,
   volumeIsEstimate,
+  highlightItemKey,
 }: {
   item: ConversationContextItem;
   volumeIsEstimate: boolean;
+  highlightItemKey: string | null;
 }) {
   const meta = contextItemMetaText(item, { volumeIsEstimate });
+  const itemKey = contextItemKey(item.layer, item.kind, item.id);
+  const focused = itemKey === highlightItemKey;
   return (
-    <li className={item.is_noise ? "is-noise" : undefined}>
+    <li
+      className={[item.is_noise ? "is-noise" : "", focused ? "is-focus" : ""]
+        .filter(Boolean)
+        .join(" ") || undefined}
+      data-context-item-key={itemKey}
+    >
       <span className="conversation-context-kind">{contextKindLabel(item.kind)}</span>
       <div>
         <strong>{item.label}</strong>

@@ -21,6 +21,32 @@
   border-bottom: 1px solid var(--line);
 }
 
+.conversation-first-use-marker {
+  display: block;
+  width: 100%;
+  margin: 6px 0 2px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  background: transparent;
+  color: var(--cyan-fg);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conversation-first-use-marker:hover,
+.conversation-first-use-marker:focus-visible {
+  color: var(--text);
+}
+
+.conversation-first-use-marker:focus-visible {
+  outline: 2px solid var(--purple-fg);
+  outline-offset: 3px;
+}
+
 .conversation-timeline-spacer {
   width: 100%;
   pointer-events: none;

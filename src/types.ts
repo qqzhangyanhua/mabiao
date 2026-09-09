@@ -642,8 +642,17 @@ export type ConversationContextManifest = {
   metrics_from_cache?: boolean;
   volume_is_estimate?: boolean;
   completeness_note?: string | null;
+  first_uses?: ConversationContextFirstUse[];
 };
 
+export type ConversationContextFirstUse = {
+  event_id: string;
+  sequence: number;
+  item_id: string;
+  item_kind: ConversationContextKind;
+  item_layer: ConversationContextLayer;
+  label: string;
+};
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;

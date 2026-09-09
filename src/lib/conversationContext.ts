@@ -1,4 +1,5 @@
 import type {
+  ConversationContextFirstUse,
   ConversationContextInjectionStatus,
   ConversationContextItem,
   ConversationContextKind,
@@ -311,4 +312,20 @@ export function partitionContextItems(items: ConversationContextItem[]): {
   );
   const primary = rest.filter((item) => !isEditorBuiltin(item) && !isUnusedInstall(item));
   return { primary, unusedInstalls, editorBuiltin, disconnectedMcp };
+}
+
+export function contextItemKey(
+  layer: ConversationContextLayer,
+  kind: ConversationContextKind,
+  id: string,
+): string {
+  return `${layer}:${kind}:${id}`;
+}
+
+export function firstUseItemKey(marker: ConversationContextFirstUse): string {
+  return contextItemKey(marker.item_layer, marker.item_kind, marker.item_id);
+}
+
+export function firstUseMarkerText(marker: ConversationContextFirstUse): string {
+  return `本轮引入 ${marker.label}`;
 }
