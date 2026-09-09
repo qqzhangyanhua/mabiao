@@ -3,7 +3,7 @@
  */
 
 import { groupTimelineEvents } from "./conversationEventDisplay";
-import type { ConversationAgentLink, ConversationEvent } from "../types";
+import type { ConversationAgentLink, ConversationContextFirstUse, ConversationEvent } from "../types";
 
 export const TIMELINE_ROW_ESTIMATE = 96;
 export const TIMELINE_OVERSCAN = 12;
@@ -180,7 +180,8 @@ export type TimelineRow =
   | { key: string; type: "error"; message: string }
   | { key: string; type: "event"; event: ConversationEvent }
   | { key: string; type: "unadapted"; events: ConversationEvent[] }
-  | { key: string; type: "trailing"; links: ConversationAgentLink[] };
+  | { key: string; type: "trailing"; links: ConversationAgentLink[] }
+  | { key: string; type: "first_use"; marker: ConversationContextFirstUse };
 
 export function buildTimelineRows({
   events,
@@ -188,14 +189,22 @@ export function buildTimelineRows({
   hasMoreAfter,
   error,
   agentLinks,
+  firstUses = [],
 }: {
   events: readonly ConversationEvent[];
   hasMoreBefore: boolean;
   hasMoreAfter: boolean;
   error: string | null;
   agentLinks: readonly ConversationAgentLink[];
+  firstUses?: readonly ConversationContextFirstUse[];
 }): TimelineRow[] {
   const eventIds = new Set(events.map((event) => event.event_id));
+  const markersByEvent = new Map<string, ConversationContextFirstUse[]>();
+  for (const marker of firstUses) {
+    const list = markersByEvent.get(marker.event_id) ?? [];
+    list.push(marker);
+    markersByEvent.set(marker.event_id, list);
+  }
   const rows: TimelineRow[] = [];
   if (hasMoreBefore) {
     rows.push({ key: "gate:before", type: "gate", edge: "before" });
@@ -207,6 +216,13 @@ export function buildTimelineRows({
     if (group.type === "unadapted") {
       rows.push({ key: "unadapted", type: "unadapted", events: group.events });
     } else {
+      for (const marker of markersByEvent.get(group.event.event_id) ?? []) {
+        rows.push({
+          key: `first-use:${marker.event_id}:${marker.item_kind}:${marker.item_id}:${marker.label}`,
+          type: "first_use",
+          marker,
+        });
+      }
       rows.push({ key: `event:${group.event.event_id}`, type: "event", event: group.event });
     }
   }

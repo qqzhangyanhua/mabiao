@@ -326,6 +326,67 @@ fn backup_omits_conversation_event_bodies_and_restore_reads_via_fallback() {
 }
 
 #[test]
+fn backup_omits_context_metrics_cache() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("home");
+    let live = root.path().join("live");
+    let dest = root.path().join("backup");
+    std::fs::create_dir_all(&live).unwrap();
+    const BODY: &str = "UNIQUE_BACKUP_CONTEXT_BODY";
+    let session_id = "sess-backup-ctx";
+    let transcript = home
+        .join(".cursor/projects/Users-workspace-project/agent-transcripts")
+        .join(session_id)
+        .join(format!("{session_id}.jsonl"));
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(
+        &transcript,
+        "{\"role\":\"user\",\"timestamp\":\"2026-09-08T00:00:00Z\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}}\n",
+    )
+    .unwrap();
+    write_cursor_chat_store(
+        &home,
+        session_id,
+        &[
+            serde_json::json!({"role":"system","content":"sys"}),
+            serde_json::json!({
+                "role":"user",
+                "content": format!("<user_rules>{BODY}</user_rules>")
+            }),
+        ],
+    );
+    let paths = backup_paths(&live);
+    let conn = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    crate::conversation::refresh(&conn, Source::CursorAgent, &[home.join(".cursor/projects")])
+        .unwrap();
+    let cached: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_context_metrics",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(cached > 0, "refresh should persist context metrics");
+
+    let manifest = backup::backup_to(&conn, &dest, &paths).unwrap();
+    assert!(manifest.note.contains("上下文清单"));
+    drop(conn);
+
+    let backup_db = rusqlite::Connection::open(dest.join(backup::DB_NAME)).unwrap();
+    let has_metrics: bool = backup_db
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversation_context_metrics')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!has_metrics, "备份产物不得包含上下文清单度量缓存");
+    let raw = std::fs::read(dest.join(backup::DB_NAME)).unwrap();
+    let raw = String::from_utf8_lossy(&raw);
+    assert!(!raw.contains(BODY), "VACUUM 后备份文件不得残留注入正文");
+}
+
+#[test]
 fn restore_accepts_legacy_backup_without_conversation_events_table() {
     let root = tempfile::tempdir().unwrap();
     let live = root.path().join("live");

@@ -320,10 +320,11 @@ pub struct ConversationDetailDto {
     pub context_manifest: Option<ConversationContextManifest>,
 }
 
-/// 证据层级。文案不得把 `on_disk_possible` 说成「已注入」。
+/// 证据层级。`injected` 层可表述为已注入；`on_disk_possible` 不得。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConversationContextLayer {
+    Injected,
     Observed,
     OnDiskPossible,
 }
@@ -331,8 +332,53 @@ pub enum ConversationContextLayer {
 impl ConversationContextLayer {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Injected => "injected",
             Self::Observed => "observed",
             Self::OnDiskPossible => "on_disk_possible",
+        }
+    }
+}
+
+/// 条目何时进入上下文。取代抽象置信度。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextLoadMode {
+    Always,
+    OnMatch,
+    OnDemand,
+    Manual,
+    Observed,
+}
+
+impl ConversationContextLoadMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::OnMatch => "on_match",
+            Self::OnDemand => "on_demand",
+            Self::Manual => "manual",
+            Self::Observed => "observed",
+        }
+    }
+}
+
+/// MCP 连接结论。仅 MCP 条目使用。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextInjectionStatus {
+    Connected,
+    Failed,
+    AuthRequired,
+    Disabled,
+}
+
+impl ConversationContextInjectionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Connected => "connected",
+            Self::Failed => "failed",
+            Self::AuthRequired => "auth_required",
+            Self::Disabled => "disabled",
         }
     }
 }
@@ -365,6 +411,7 @@ impl ConversationContextKind {
 }
 
 /// 一条上下文痕迹。`id` 是稳定键；磁盘项另带 `path`。
+/// 体积以 `char_count` 为权威值；token 只在展示层换算。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationContextItem {
     pub layer: ConversationContextLayer,
@@ -374,17 +421,61 @@ pub struct ConversationContextItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_mode: Option<ConversationContextLoadMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub injection_status: Option<ConversationContextInjectionStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub char_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_noise: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_unused_install: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<serde_json::Value>,
 }
 
-/// 两层证据的扁平清单，供对话详情复用。
+/// 三层证据的扁平清单，供对话详情复用。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationContextManifest {
     pub items: Vec<ConversationContextItem>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub injected_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_disk_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_init_summary: Option<String>,
+    /// Cursor 无注入快照时为 false，界面不得装成已注入。
+    #[serde(default = "default_true")]
+    pub has_injected_snapshot: bool,
+    /// 源快照已不在，条目来自摄取时写入的度量缓存。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub metrics_from_cache: bool,
+    /// Cursor 本机拿不到逐轮实测 token，体积只是估算。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub volume_is_estimate: bool,
+    /// `requestContextCompleteness` 含 false 时点名；全 true 或缺失则不下发。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completeness_note: Option<String>,
+    /// skill / MCP 工具 / 子代理第一次被调用的那一轮。不进事件表。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub first_uses: Vec<ConversationContextFirstUse>,
+}
+
+/// 消息流里的单行「本轮引入 X」。`item_*` 指向顶部总账对应条目。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationContextFirstUse {
+    pub event_id: String,
+    pub sequence: u32,
+    pub item_id: String,
+    pub item_kind: ConversationContextKind,
+    pub item_layer: ConversationContextLayer,
+    pub label: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

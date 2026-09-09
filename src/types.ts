@@ -594,7 +594,20 @@ export type ConversationEventPage = {
   has_more_after: boolean;
 };
 
-export type ConversationContextLayer = "observed" | "on_disk_possible";
+export type ConversationContextLayer = "injected" | "observed" | "on_disk_possible";
+
+export type ConversationContextLoadMode =
+  | "always"
+  | "on_match"
+  | "on_demand"
+  | "manual"
+  | "observed";
+
+export type ConversationContextInjectionStatus =
+  | "connected"
+  | "failed"
+  | "auth_required"
+  | "disabled";
 
 export type ConversationContextKind =
   | "tool"
@@ -611,15 +624,35 @@ export type ConversationContextItem = {
   id: string;
   label: string;
   path?: string | null;
+  load_mode?: ConversationContextLoadMode | null;
+  injection_status?: ConversationContextInjectionStatus | null;
+  char_count?: number | null;
+  is_noise?: boolean;
+  is_unused_install?: boolean;
   meta?: Record<string, unknown> | null;
 };
 
 export type ConversationContextManifest = {
   items: ConversationContextItem[];
+  injected_note?: string | null;
   observed_note?: string | null;
   on_disk_note?: string | null;
+  mcp_init_summary?: string | null;
+  has_injected_snapshot?: boolean;
+  metrics_from_cache?: boolean;
+  volume_is_estimate?: boolean;
+  completeness_note?: string | null;
+  first_uses?: ConversationContextFirstUse[];
 };
 
+export type ConversationContextFirstUse = {
+  event_id: string;
+  sequence: number;
+  item_id: string;
+  item_kind: ConversationContextKind;
+  item_layer: ConversationContextLayer;
+  label: string;
+};
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;

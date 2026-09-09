@@ -16,6 +16,7 @@ pub const CURSOR_SKILLS_DIR: &str = ".cursor/skills";
 pub const CURSOR_MCP_REL: &str = ".cursor/mcp.json";
 pub const CURSOR_USER_MCP_REL: &str = ".cursor/mcp.json";
 pub const CURSOR_USER_SKILLS_DIR: &str = ".cursor/skills";
+pub const CURSOR_BUILTIN_SKILLS_DIR: &str = ".cursor/skills-cursor";
 
 pub fn existing_file(root: &Path, rel: &Path) -> Option<PathBuf> {
     let path = root.join(rel);

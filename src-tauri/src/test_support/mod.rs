@@ -1,10 +1,12 @@
 mod agy_fixture;
 pub mod conversation_boundary;
+mod cursor_store;
 mod helpers;
 mod hermes_fixture;
 mod work_notes_conn;
 
 pub use agy_fixture::*;
+pub use cursor_store::*;
 pub use helpers::*;
 pub use hermes_fixture::*;
 pub use work_notes_conn::*;

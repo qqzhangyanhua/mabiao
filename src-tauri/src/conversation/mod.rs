@@ -12,10 +12,13 @@ mod catalog;
 mod catalog_search;
 mod claude;
 mod codex;
+mod context_cache;
+mod context_first_use;
 mod context_manifest;
 mod copilot;
 mod cursor;
 mod cursor_bridge;
+mod cursor_inject;
 mod discover;
 mod droid;
 mod dsh;
@@ -25,6 +28,7 @@ mod event_tables;
 mod export;
 mod gemini;
 mod grok;
+mod grok_inject;
 mod hydrate;
 mod incremental;
 mod kimi;
@@ -48,6 +52,8 @@ pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
     usage_records_page,
 };
+#[cfg(test)]
+pub(crate) use context_manifest::assemble;
 pub(crate) use discover::{
     detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
     discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,
@@ -304,9 +310,12 @@ pub(crate) enum PreparedDetailRead {
         prepared: PreparedConversationDetail,
         event_count: u32,
         observed_context: Vec<crate::domain::ConversationContextItem>,
+        context_metrics: Option<context_cache::CachedContextMetrics>,
+        first_use_events: Vec<context_first_use::Candidate>,
     },
     Parsed {
         prepared: PreparedConversationDetail,
+        context_metrics: Option<context_cache::CachedContextMetrics>,
     },
 }
 

@@ -1,0 +1,22 @@
+<user_info>
+OS Version: testdarwin
+Shell: zsh
+Workspace Path: /tmp/workspace/demo
+UNIQUE_CURSOR_INJECT_ENV
+</user_info>
+<always_applied_workspace_rules description="workspace rules">
+<always_applied_workspace_rule name="/tmp/workspace/demo/AGENTS.md">UNIQUE_CURSOR_INJECT_RULE
+</always_applied_workspace_rule>
+</always_applied_workspace_rules>
+<user_rules description="user rules">
+<user_rule>UNIQUE_CURSOR_INJECT_USER</user_rule>
+</user_rules>
+<available_skills description="skills">
+<agent_skill fullPath="/tmp/home/.cursor/skills/review/SKILL.md">UNIQUE_CURSOR_INJECT_SKILL</agent_skill>
+</available_skills>
+<dynamic_tool_namespaces>
+<namespace name="docs" tools="search_docs,get_page" source="mcp" />
+</dynamic_tool_namespaces>
+<available_subagent_types>
+UNIQUE_CURSOR_INJECT_SUBAGENT
+</available_subagent_types>
