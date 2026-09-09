@@ -1,0 +1,38 @@
+CONTEXT.md
+  h_4132837b09b7e7 36
+docs/adr/0022-context-manifest-load-modes.md
+  h_4132837b09b7e7 25
+src-tauri/src/conversation/context_manifest.rs
+  h_4132837b09b7e7 3-5,10-12,16,23-25,31,67-76,84-85,91,95-96,107,123-212,214,380,382,417,419,445,447
+src-tauri/src/conversation/grok_inject.rs
+  h_4132837b09b7e7 3-6,8-10,14,17-18,22-29,47-56,58-65,68,72,75,97,99,106-343
+src-tauri/src/domain/conversation.rs
+  h_4132837b09b7e7 365-385,426-427,429-430,445-446
+src-tauri/src/instructions/cursor_disk.rs
+  h_4132837b09b7e7 171,173,207,209
+src-tauri/src/instructions/grok_disk.rs
+  h_4132837b09b7e7 451,453,497,499
+src-tauri/src/tests/conversation_context.rs
+  h_4132837b09b7e7 7-9,90-135,1073-1321
+src/components/ConversationContextManifest.tsx
+  h_4132837b09b7e7 12-13,28,40,78,84-127
+src/lib/conversationContext.test.ts
+  h_4132837b09b7e7 14-15,120-153
+src/lib/conversationContext.ts
+  h_4132837b09b7e7 2,41-47,98-106,111-114,124-127,164-178
+src/styles/views/conversation-context.css
+  h_4132837b09b7e7 17-23,101-122
+src/types.ts
+  h_4132837b09b7e7 606-611,628,630,639
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8385756d736f287b258fa47cb266cb733530f1b4",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
