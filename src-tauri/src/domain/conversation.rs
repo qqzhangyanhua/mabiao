@@ -320,10 +320,11 @@ pub struct ConversationDetailDto {
     pub context_manifest: Option<ConversationContextManifest>,
 }
 
-/// 证据层级。文案不得把 `on_disk_possible` 说成「已注入」。
+/// 证据层级。`injected` 层可表述为已注入；`on_disk_possible` 不得。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConversationContextLayer {
+    Injected,
     Observed,
     OnDiskPossible,
 }
@@ -331,8 +332,32 @@ pub enum ConversationContextLayer {
 impl ConversationContextLayer {
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::Injected => "injected",
             Self::Observed => "observed",
             Self::OnDiskPossible => "on_disk_possible",
+        }
+    }
+}
+
+/// 条目何时进入上下文。取代抽象置信度。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextLoadMode {
+    Always,
+    OnMatch,
+    OnDemand,
+    Manual,
+    Observed,
+}
+
+impl ConversationContextLoadMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::OnMatch => "on_match",
+            Self::OnDemand => "on_demand",
+            Self::Manual => "manual",
+            Self::Observed => "observed",
         }
     }
 }
@@ -365,6 +390,7 @@ impl ConversationContextKind {
 }
 
 /// 一条上下文痕迹。`id` 是稳定键；磁盘项另带 `path`。
+/// 体积以 `char_count` 为权威值；token 只在展示层换算。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationContextItem {
     pub layer: ConversationContextLayer,
@@ -374,13 +400,19 @@ pub struct ConversationContextItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub load_mode: Option<ConversationContextLoadMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub char_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<serde_json::Value>,
 }
 
-/// 两层证据的扁平清单，供对话详情复用。
+/// 三层证据的扁平清单，供对话详情复用。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConversationContextManifest {
     pub items: Vec<ConversationContextItem>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub injected_note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

@@ -1,10 +1,13 @@
 import { CollapsibleSection } from "./CollapsibleSection";
 import {
+  CONTEXT_LAYER_BADGE,
   CONTEXT_LAYER_HINT,
   CONTEXT_LAYER_TITLE,
+  contextItemCharText,
   contextItemMetaText,
   contextKindLabel,
   contextLayerItems,
+  contextLayerNote,
   contextManifestSummary,
 } from "../lib/conversationContext";
 import type {
@@ -13,7 +16,7 @@ import type {
   ConversationContextManifest,
 } from "../types";
 
-const LAYERS: ConversationContextLayer[] = ["observed", "on_disk_possible"];
+const LAYERS: ConversationContextLayer[] = ["injected", "observed", "on_disk_possible"];
 
 export function ConversationContextManifestPanel({
   manifest,
@@ -29,7 +32,7 @@ export function ConversationContextManifestPanel({
       collapsedSummary={contextManifestSummary(manifest)}
     >
       <p className="muted conversation-context-lead">
-        复盘噪音用。已观测来自本会话事件；磁盘项只表示可能生效，不是本轮一定进了上下文。
+        复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效，不是本轮一定进了上下文。
       </p>
       <div className="conversation-context-layers">
         {LAYERS.map((layer) => (
@@ -37,7 +40,7 @@ export function ConversationContextManifestPanel({
             key={layer}
             layer={layer}
             items={contextLayerItems(manifest, layer)}
-            note={layer === "observed" ? manifest.observed_note : manifest.on_disk_note}
+            note={contextLayerNote(manifest, layer)}
           />
         ))}
       </div>
@@ -59,7 +62,7 @@ function ContextLayer({
       <header>
         <h3>{CONTEXT_LAYER_TITLE[layer]}</h3>
         <span className={`conversation-context-badge layer-${layer}`}>
-          {layer === "observed" ? "已观测" : "可能生效 / 磁盘存在"}
+          {CONTEXT_LAYER_BADGE[layer]}
         </span>
       </header>
       <p className="muted">{CONTEXT_LAYER_HINT[layer]}</p>
@@ -77,6 +80,9 @@ function ContextLayer({
                 {item.path ? <code>{item.path}</code> : null}
                 {contextItemMetaText(item) ? (
                   <span className="muted">{contextItemMetaText(item)}</span>
+                ) : null}
+                {contextItemCharText(item) ? (
+                  <span className="muted">{contextItemCharText(item)}</span>
                 ) : null}
               </div>
             </li>

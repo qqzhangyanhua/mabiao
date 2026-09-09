@@ -594,7 +594,14 @@ export type ConversationEventPage = {
   has_more_after: boolean;
 };
 
-export type ConversationContextLayer = "observed" | "on_disk_possible";
+export type ConversationContextLayer = "injected" | "observed" | "on_disk_possible";
+
+export type ConversationContextLoadMode =
+  | "always"
+  | "on_match"
+  | "on_demand"
+  | "manual"
+  | "observed";
 
 export type ConversationContextKind =
   | "tool"
@@ -611,11 +618,14 @@ export type ConversationContextItem = {
   id: string;
   label: string;
   path?: string | null;
+  load_mode?: ConversationContextLoadMode | null;
+  char_count?: number | null;
   meta?: Record<string, unknown> | null;
 };
 
 export type ConversationContextManifest = {
   items: ConversationContextItem[];
+  injected_note?: string | null;
   observed_note?: string | null;
   on_disk_note?: string | null;
 };

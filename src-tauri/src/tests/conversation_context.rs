@@ -5,7 +5,7 @@ use rusqlite::params;
 
 use crate::domain::{
     ConversationContextItem, ConversationContextKind, ConversationContextLayer,
-    ConversationEventAnchor, ConversationEventKind, Source,
+    ConversationContextLoadMode, ConversationEventAnchor, ConversationEventKind, Source,
 };
 use crate::test_support::*;
 
@@ -65,6 +65,27 @@ fn seed_grok_session_at(home: &Path, encoded_cwd: &str, session_id: &str) -> Pat
     path
 }
 
+fn write_grok_prompt_context(updates: &Path, files: &[(&str, &str, &str)]) {
+    let agents: Vec<serde_json::Value> = files
+        .iter()
+        .map(|(name, path, content)| {
+            serde_json::json!({
+                "file_name": name,
+                "file_path": path,
+                "content": content,
+            })
+        })
+        .collect();
+    write_text(
+        &updates.parent().unwrap().join("prompt_context.json"),
+        &serde_json::json!({
+            "version": 1,
+            "agents_md_files": agents,
+        })
+        .to_string(),
+    );
+}
+
 fn scan_grok(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
     crate::instructions::grok_disk::scan(home, project)
 }
@@ -102,6 +123,9 @@ fn kind_ids(items: &[&ConversationContextItem], kind: ConversationContextKind) -
 
 fn assert_no_injected(items: &[ConversationContextItem], notes: &[Option<&str>]) {
     for item in items {
+        if item.layer == ConversationContextLayer::Injected {
+            continue;
+        }
         let blob = format!(
             "{} {} {} {}",
             item.layer.as_str(),
@@ -114,13 +138,13 @@ fn assert_no_injected(items: &[ConversationContextItem], notes: &[Option<&str>])
         );
         assert!(
             !blob.contains("已注入"),
-            "context item must not claim injection: {blob}"
+            "non-injected context item must not claim injection: {blob}"
         );
     }
     for note in notes.iter().flatten() {
         assert!(
             !note.contains("已注入"),
-            "note must not claim injection: {note}"
+            "non-injected note must not claim injection: {note}"
         );
         if note.contains("磁盘") || note.contains("可能") {
             assert!(
@@ -695,6 +719,10 @@ fn grok_detail_context_manifest_matches_timeline_tools_and_home_disk() {
             manifest.on_disk_note.as_deref(),
         ],
     );
+    assert!(
+        layer_items(&manifest.items, ConversationContextLayer::Injected).is_empty(),
+        "missing prompt_context.json must not invent injected instructions"
+    );
     assert!(manifest.on_disk_note.as_deref().is_some_and(|note| {
         note.contains("可能生效")
             && note.contains("skills")
@@ -889,4 +917,109 @@ fn non_cursor_detail_leaves_shared_manifest_slot_empty() {
     crate::conversation::refresh_codex(&conn, home).unwrap();
     let detail = crate::conversation::load_detail(&conn, home, "codex", "conv-1").unwrap();
     assert!(detail.context_manifest.is_none());
+}
+
+#[test]
+fn grok_detail_lists_injected_agents_md_from_prompt_context() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    const PROJECT_BODY: &str = "UNIQUE_GROK_INJECT_BODY_project";
+    const GLOBAL_BODY: &str = "UNIQUE_GROK_INJECT_BODY_global";
+    let injected_updates = seed_grok_session(home, "sess-grok-injected");
+    write_grok_prompt_context(
+        &injected_updates,
+        &[
+            ("AGENTS.md", "/workspace/proj/AGENTS.md", PROJECT_BODY),
+            ("Agents.md", "/tmp/home/.grok/Agents.md", GLOBAL_BODY),
+        ],
+    );
+    seed_grok_session(home, "sess-grok-plain");
+    let bad_updates = seed_grok_session(home, "sess-grok-bad-ctx");
+    write_text(
+        &bad_updates.parent().unwrap().join("prompt_context.json"),
+        "{not-json",
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+
+    let injected =
+        crate::conversation::load_detail(&conn, home, "grok", "sess-grok-injected").unwrap();
+    let plain = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-plain").unwrap();
+    let bad = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-bad-ctx").unwrap();
+    assert_eq!(injected.event_count, plain.event_count);
+    assert_eq!(bad.event_count, plain.event_count);
+
+    let manifest = injected
+        .context_manifest
+        .as_ref()
+        .expect("grok detail should carry a context manifest");
+    assert_no_injected(
+        &manifest.items,
+        &[
+            manifest.observed_note.as_deref(),
+            manifest.on_disk_note.as_deref(),
+        ],
+    );
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("已注入")));
+    assert!(manifest
+        .on_disk_note
+        .as_deref()
+        .is_some_and(|note| !note.contains("已注入")));
+
+    let items = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    assert_eq!(items.len(), 2, "{items:?}");
+    assert!(items.iter().all(|item| {
+        item.kind == ConversationContextKind::Instruction
+            && item.load_mode == Some(ConversationContextLoadMode::Always)
+    }));
+
+    let project = items
+        .iter()
+        .find(|item| item.path.as_deref() == Some("/workspace/proj/AGENTS.md"))
+        .expect("project AGENTS.md should be injected");
+    assert_eq!(project.id, "/workspace/proj/AGENTS.md");
+    assert_eq!(project.label, "AGENTS.md");
+    assert_eq!(
+        project.char_count,
+        Some(PROJECT_BODY.chars().count() as u64)
+    );
+
+    let global = items
+        .iter()
+        .find(|item| item.path.as_deref() == Some("/tmp/home/.grok/Agents.md"))
+        .expect("user-level Agents.md should be injected");
+    assert_eq!(global.label, "Agents.md");
+    assert_eq!(global.char_count, Some(GLOBAL_BODY.chars().count() as u64));
+
+    let dto_json = serde_json::to_string(&injected).unwrap();
+    assert!(
+        !dto_json.contains(PROJECT_BODY) && !dto_json.contains(GLOBAL_BODY),
+        "injection body must not enter the detail DTO"
+    );
+    let event_hits: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_events WHERE coalesce(text, '') LIKE '%UNIQUE_GROK_INJECT_BODY%'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        event_hits, 0,
+        "injection body must not enter conversation_events"
+    );
+
+    let plain_items = layer_items(
+        &plain.context_manifest.as_ref().unwrap().items,
+        ConversationContextLayer::Injected,
+    );
+    assert!(plain_items.is_empty(), "{plain_items:?}");
+    let bad_items = layer_items(
+        &bad.context_manifest.as_ref().unwrap().items,
+        ConversationContextLayer::Injected,
+    );
+    assert!(bad_items.is_empty(), "{bad_items:?}");
 }

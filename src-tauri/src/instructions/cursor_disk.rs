@@ -167,6 +167,8 @@ fn push_mcp(items: &mut Vec<ConversationContextItem>, path: &Path, scope: &str, 
             id: format!("{scope}:{name}"),
             label: name,
             path: Some(path.to_string_lossy().into_owned()),
+            load_mode: None,
+            char_count: None,
             meta: Some(serde_json::json!({
                 "byte_size": byte_size,
                 "modified_at": modified_at,
@@ -199,6 +201,8 @@ fn file_item(
         id: id.to_string(),
         label: label.to_string(),
         path: Some(path.to_string_lossy().into_owned()),
+        load_mode: None,
+        char_count: None,
         meta: Some(Value::Object(meta)),
     })
 }

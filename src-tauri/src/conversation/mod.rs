@@ -25,6 +25,7 @@ mod event_tables;
 mod export;
 mod gemini;
 mod grok;
+mod grok_inject;
 mod hydrate;
 mod incremental;
 mod kimi;

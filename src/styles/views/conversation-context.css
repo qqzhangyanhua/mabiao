@@ -28,6 +28,10 @@
   background: var(--overlay-1);
 }
 
+
+.conversation-context-layer.layer-injected {
+  border-left: 3px solid var(--green-fg);
+}
 .conversation-context-layer.layer-observed {
   border-left: 3px solid var(--cyan-fg);
 }
@@ -57,6 +61,11 @@
   letter-spacing: 0.02em;
 }
 
+
+.conversation-context-badge.layer-injected {
+  color: var(--green-fg);
+  background: rgba(134, 239, 172, 0.12);
+}
 .conversation-context-badge.layer-observed {
   color: var(--cyan-fg);
   background: rgba(34, 211, 238, 0.1);
