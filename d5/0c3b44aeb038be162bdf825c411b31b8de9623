@@ -1,0 +1,28 @@
+CONTEXT.md
+  h_4132837b09b7e7 36
+src-tauri/Cargo.lock
+  h_4132837b09b7e7 2228,4317,4342-4347
+src-tauri/Cargo.toml
+  h_4132837b09b7e7 37
+src-tauri/src/conversation/context_manifest.rs
+  h_4132837b09b7e7 10,38,40,56-58
+src-tauri/src/instructions/grok_disk.rs
+  h_4132837b09b7e7 11-26,29,31-33,39-56,66,78,83-195,205-465,476,485
+src-tauri/src/tests/conversation_context.rs
+  h_4132837b09b7e7 40-43,45-46,68-78,355,361-364,375,379,390,394,398-672,699-703,771-812,834-835,837
+src/lib/conversationContext.test.ts
+  h_4132837b09b7e7 58-75,80,83-84
+src/lib/conversationContext.ts
+  h_4132837b09b7e7 28-39,76-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d50c3b44aeb038be162bdf825c411b31b8de9623",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
