@@ -1,30 +1,34 @@
 //! 对话详情「上下文清单」：已注入 + 会话内已观测 + 可能生效 / 磁盘存在。
 //!
-//! Grok 注入层读会话目录 `prompt_context.json` 的 `agents_md_files[]`，
-//! 与 `updates.jsonl` 解析隔离，正文不进缓存。Cursor 注入快照本期不读。
+//! Grok 注入层读会话目录 `prompt_context.json` 的 `agents_md_files[]`，以及
+//! `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成。与
+//! `updates.jsonl` 解析隔离，正文和 MCP 错误全文不进缓存。Cursor 注入快照本期不读。
 //! 合成的 `transcript_missing` 不算已观测。Skill 认事件 `name`/`text`
 //! 字面引用，以及 Cursor `Skill` 工具的 `input.skill`（解析路径读
 //! `details`；索引路径靠工具 `text`）。
 //!
+//! 噪音差集（injected 减 observed）对 skill 与 MCP 通用；指令与规则不参与。
+//! 未连上的 MCP 不占 token、不吃红标。
+//!
 //! Grok 复用同一套 `ConversationContextManifest` / `ConversationContextItem`，
 //! 磁盘层扫用户级 `~/.grok` 指令 / skills 与四条 MCP 加载链，不要另造第三套 DTO。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use rusqlite::{params, Connection};
 use serde_json::json;
 
 use crate::domain::{
-    ConversationContextItem, ConversationContextKind, ConversationContextLayer,
-    ConversationContextLoadMode, ConversationContextManifest, ConversationEvent,
-    ConversationEventKind as EventKind, ConversationSessionRow, Source,
+    ConversationContextInjectionStatus, ConversationContextItem, ConversationContextKind,
+    ConversationContextLayer, ConversationContextLoadMode, ConversationContextManifest,
+    ConversationEvent, ConversationEventKind as EventKind, ConversationSessionRow, Source,
 };
 
 use super::{event_index, grok_inject};
 
 const INJECTED_EMPTY: &str = "未发现本轮注入条目。";
-const INJECTED_PRESENT: &str = "下列指令已注入本会话首轮上下文。";
+const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。";
 const OBSERVED_EMPTY: &str =
     "源文件未留下可观测的工具、系统状态或 skill 引用，无法确认本轮注入了什么。";
 const ON_DISK_POSSIBLE: &str =
@@ -60,9 +64,16 @@ pub(crate) fn for_session(
         }
         _ => return None,
     };
-    let injected = match source {
-        Source::Grok => grok_inject::from_session(session),
-        _ => Vec::new(),
+    let (injected, mcp_init_summary, called_mcp) = match source {
+        Source::Grok => {
+            let snapshot = grok_inject::from_session(session);
+            (
+                snapshot.items,
+                snapshot.mcp_init_summary,
+                snapshot.called_mcp,
+            )
+        }
+        _ => (Vec::new(), None, BTreeSet::new()),
     };
     Some(assemble(
         source,
@@ -70,15 +81,19 @@ pub(crate) fn for_session(
         observed,
         on_disk,
         session.project.as_str(),
+        mcp_init_summary,
+        &called_mcp,
     ))
 }
 
 pub(crate) fn assemble(
     source: Source,
-    injected: Vec<ConversationContextItem>,
+    mut injected: Vec<ConversationContextItem>,
     observed: Vec<ConversationContextItem>,
     on_disk: Vec<ConversationContextItem>,
     project: &str,
+    mcp_init_summary: Option<String>,
+    extra_observed: &BTreeSet<String>,
 ) -> ConversationContextManifest {
     debug_assert!(injected
         .iter()
@@ -89,6 +104,7 @@ pub(crate) fn assemble(
     debug_assert!(on_disk
         .iter()
         .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
+    mark_injected_noise(&mut injected, &observed, extra_observed);
     let injected_note = Some(if injected.is_empty() {
         INJECTED_EMPTY.to_string()
     } else {
@@ -104,7 +120,98 @@ pub(crate) fn assemble(
         injected_note,
         observed_note,
         on_disk_note,
+        mcp_init_summary,
     }
+}
+
+fn mark_injected_noise(
+    injected: &mut [ConversationContextItem],
+    observed: &[ConversationContextItem],
+    extra_observed: &BTreeSet<String>,
+) {
+    for item in injected.iter_mut() {
+        if !matches!(
+            item.kind,
+            ConversationContextKind::Skill | ConversationContextKind::McpServer
+        ) {
+            item.is_noise = false;
+            continue;
+        }
+        if item.kind == ConversationContextKind::McpServer
+            && item.injection_status != Some(ConversationContextInjectionStatus::Connected)
+        {
+            item.is_noise = false;
+            continue;
+        }
+        item.is_noise = !item_was_observed(item, observed, extra_observed);
+    }
+}
+
+fn item_was_observed(
+    item: &ConversationContextItem,
+    observed: &[ConversationContextItem],
+    extra_observed: &BTreeSet<String>,
+) -> bool {
+    match item.kind {
+        ConversationContextKind::Skill => {
+            extra_observed.contains(&item.id)
+                || extra_observed.contains(&item.label)
+                || observed.iter().any(|other| {
+                    other.kind == ConversationContextKind::Skill
+                        && (other.id == item.id || other.label == item.label)
+                })
+        }
+        ConversationContextKind::McpServer => mcp_was_observed(item, observed, extra_observed),
+        _ => false,
+    }
+}
+
+fn mcp_was_observed(
+    item: &ConversationContextItem,
+    observed: &[ConversationContextItem],
+    extra_observed: &BTreeSet<String>,
+) -> bool {
+    if extra_observed.contains(&item.id) || extra_observed.contains(&item.label) {
+        return true;
+    }
+    let prefix = format!("{}__", item.label);
+    let id_prefix = format!("{}__", item.id);
+    if observed.iter().any(|other| {
+        other.kind == ConversationContextKind::McpServer
+            && (other.id == item.id || other.label == item.label)
+            || other.kind == ConversationContextKind::Tool
+                && (other.id.starts_with(&prefix)
+                    || other.label.starts_with(&prefix)
+                    || other.id.starts_with(&id_prefix))
+    }) {
+        return true;
+    }
+    let tools = item
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("tools"))
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str());
+    for tool in tools {
+        if extra_observed.contains(tool)
+            || extra_observed.contains(&format!("{}__{tool}", item.label))
+            || extra_observed.contains(&format!("{}__{tool}", item.id))
+        {
+            return true;
+        }
+        if observed.iter().any(|other| {
+            other.kind == ConversationContextKind::Tool
+                && (other.id == tool
+                    || other.label == tool
+                    || other.id == format!("{}__{tool}", item.label)
+                    || other.id == format!("{}__{tool}", item.id))
+        }) {
+            return true;
+        }
+    }
+    false
 }
 
 pub(crate) fn observed_from_events(events: &[ConversationEvent]) -> Vec<ConversationContextItem> {
@@ -270,7 +377,9 @@ fn tool_item(name: String, call_count: u64) -> ConversationContextItem {
         label: name,
         path: None,
         load_mode: Some(ConversationContextLoadMode::Observed),
+        injection_status: None,
         char_count: None,
+        is_noise: false,
         meta: Some(json!({ "call_count": call_count })),
     }
 }
@@ -305,7 +414,9 @@ fn status_from_parts(
         label,
         path: None,
         load_mode: Some(ConversationContextLoadMode::Observed),
+        injection_status: None,
         char_count: None,
+        is_noise: false,
         meta: if meta.is_empty() {
             None
         } else {
@@ -331,7 +442,9 @@ fn observed_skill_item(
         label: id,
         path: None,
         load_mode: Some(ConversationContextLoadMode::Observed),
+        injection_status: None,
         char_count: None,
+        is_noise: false,
         meta: Some(json!({ "source": "event" })),
     })
 }

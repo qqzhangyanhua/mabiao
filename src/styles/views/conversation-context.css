@@ -14,6 +14,13 @@
   line-height: 1.5;
 }
 
+.conversation-context-mcp-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
 .conversation-context-layers {
   display: grid;
   gap: 10px;
@@ -89,6 +96,28 @@
   grid-template-columns: auto minmax(0, 1fr);
   gap: 8px 10px;
   align-items: start;
+}
+
+.conversation-context-layer li.is-noise {
+  border-radius: 6px;
+  outline: 1px solid rgba(251, 113, 133, 0.45);
+  background: rgba(251, 113, 133, 0.08);
+}
+
+.conversation-context-layer li.is-noise strong {
+  color: var(--red-fg);
+}
+
+.conversation-context-mcp-failed {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.conversation-context-mcp-failed > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .conversation-context-kind {

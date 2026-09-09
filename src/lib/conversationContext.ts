@@ -1,4 +1,5 @@
 import type {
+  ConversationContextInjectionStatus,
   ConversationContextItem,
   ConversationContextKind,
   ConversationContextLayer,
@@ -35,6 +36,13 @@ const KIND_LABELS: Record<ConversationContextKind, string> = {
   instruction: "指令",
   rule: "规则",
   mcp_server: "MCP",
+};
+
+const INJECTION_STATUS_LABELS: Record<ConversationContextInjectionStatus, string> = {
+  connected: "已连上",
+  failed: "连接失败",
+  auth_required: "需鉴权",
+  disabled: "已禁用",
 };
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -87,9 +95,22 @@ export function contextManifestSummary(manifest: ConversationContextManifest): s
 export function contextItemMetaText(item: ConversationContextItem): string | null {
   const meta = item.meta;
   const parts: string[] = [];
+  if (item.is_noise) {
+    parts.push("噪音");
+  }
+  if (item.injection_status && item.injection_status !== "connected") {
+    parts.push(INJECTION_STATUS_LABELS[item.injection_status]);
+  }
+  if (isDisconnectedMcp(item)) {
+    parts.push("不占 token");
+  }
   const callCount = meta ? readFiniteNumber(meta.call_count) : null;
   if (callCount !== null) {
     parts.push(`${callCount} 次`);
+  }
+  const toolCount = meta ? readFiniteNumber(meta.tool_count) : null;
+  if (toolCount !== null) {
+    parts.push(`${toolCount} 个工具`);
   }
   const charCount = readFiniteNumber(item.char_count);
   if (charCount !== null) {
@@ -99,6 +120,10 @@ export function contextItemMetaText(item: ConversationContextItem): string | nul
     if (byteSize !== null) {
       parts.push(`${byteSize} B`);
     }
+  }
+  const errorType = meta ? readString(meta.error_type) : null;
+  if (errorType && item.injection_status !== "auth_required") {
+    parts.push(errorType);
   }
   const modifiedAt = meta ? readString(meta.modified_at) : null;
   if (modifiedAt) {
@@ -135,4 +160,19 @@ export function contextForbiddenCopy(text: string, layer: ConversationContextLay
     return false;
   }
   return text.includes("已注入");
+}
+
+export function contextMcpInitSummary(
+  manifest: ConversationContextManifest,
+): string | null {
+  const summary = manifest.mcp_init_summary?.trim();
+  return summary ? summary : null;
+}
+
+export function isDisconnectedMcp(item: ConversationContextItem): boolean {
+  return (
+    item.kind === "mcp_server" &&
+    item.injection_status != null &&
+    item.injection_status !== "connected"
+  );
 }

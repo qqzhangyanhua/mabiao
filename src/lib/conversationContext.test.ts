@@ -11,6 +11,8 @@ import {
   contextLayerItems,
   contextLayerNote,
   contextManifestSummary,
+  contextMcpInitSummary,
+  isDisconnectedMcp,
 } from "./conversationContext";
 
 const manifest: ConversationContextManifest = {
@@ -114,5 +116,39 @@ describe("conversationContext", () => {
     expect(grokEmpty).toContain("未发现");
     expect(grokEmpty).not.toContain("未扫描");
     expect(grokEmpty).not.toContain("已注入");
+  });
+
+  it("formats MCP injection status, noise, and init summary", () => {
+    expect(
+      contextMcpInitSummary({
+        items: [],
+        mcp_init_summary: "配置 4 台 / 连上 2 台 / 失败 1 台 / 共注入 3 个工具",
+      }),
+    ).toBe("配置 4 台 / 连上 2 台 / 失败 1 台 / 共注入 3 个工具");
+    expect(contextMcpInitSummary({ items: [] })).toBeNull();
+    expect(
+      contextItemMetaText({
+        layer: "injected",
+        kind: "mcp_server",
+        id: "idle",
+        label: "idle",
+        injection_status: "connected",
+        char_count: 8,
+        is_noise: true,
+        meta: { tool_count: 1 },
+      }),
+    ).toBe("噪音 · 1 个工具 · 约 2 tok");
+    const failed = {
+      layer: "injected" as const,
+      kind: "mcp_server" as const,
+      id: "figma",
+      label: "figma",
+      injection_status: "auth_required" as const,
+      is_noise: false,
+      meta: { error_type: "auth_required" },
+    };
+    expect(isDisconnectedMcp(failed)).toBe(true);
+    expect(contextItemMetaText(failed)).toBe("需鉴权 · 不占 token");
+    expect(contextItemCharText(failed)).toBeNull();
   });
 });

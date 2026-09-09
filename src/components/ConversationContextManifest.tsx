@@ -9,6 +9,8 @@ import {
   contextLayerItems,
   contextLayerNote,
   contextManifestSummary,
+  contextMcpInitSummary,
+  isDisconnectedMcp,
 } from "../lib/conversationContext";
 import type {
   ConversationContextItem,
@@ -23,6 +25,7 @@ export function ConversationContextManifestPanel({
 }: {
   manifest: ConversationContextManifest;
 }) {
+  const mcpSummary = contextMcpInitSummary(manifest);
   return (
     <CollapsibleSection
       sectionId="conversation-context-manifest"
@@ -34,6 +37,7 @@ export function ConversationContextManifestPanel({
       <p className="muted conversation-context-lead">
         复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效，不是本轮一定进了上下文。
       </p>
+      {mcpSummary ? <p className="conversation-context-mcp-summary">{mcpSummary}</p> : null}
       <div className="conversation-context-layers">
         {LAYERS.map((layer) => (
           <ContextLayer
@@ -71,25 +75,53 @@ function ContextLayer({
           {note ?? "源文件未落盘，无法确认。"}
         </p>
       ) : (
-        <ul>
-          {items.map((item) => (
-            <li key={`${item.layer}:${item.kind}:${item.id}`}>
-              <span className="conversation-context-kind">{contextKindLabel(item.kind)}</span>
-              <div>
-                <strong>{item.label}</strong>
-                {item.path ? <code>{item.path}</code> : null}
-                {contextItemMetaText(item) ? (
-                  <span className="muted">{contextItemMetaText(item)}</span>
-                ) : null}
-                {contextItemCharText(item) ? (
-                  <span className="muted">{contextItemCharText(item)}</span>
-                ) : null}
-              </div>
-            </li>
-          ))}
-        </ul>
+        <ContextItemGroups items={items} />
       )}
       {items.length > 0 && note ? <p className="muted conversation-context-note">{note}</p> : null}
     </section>
+  );
+}
+
+function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
+  const disconnected = items.filter(isDisconnectedMcp);
+  const primary = items.filter((item) => !isDisconnectedMcp(item));
+  return (
+    <>
+      {primary.length > 0 ? (
+        <ul>
+          {primary.map((item) => (
+            <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+          ))}
+        </ul>
+      ) : null}
+      {disconnected.length > 0 ? (
+        <div className="conversation-context-mcp-failed">
+          <p className="muted">未连上（不占 token，不是噪音）</p>
+          <ul>
+            {disconnected.map((item) => (
+              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function ContextItemRow({ item }: { item: ConversationContextItem }) {
+  return (
+    <li className={item.is_noise ? "is-noise" : undefined}>
+      <span className="conversation-context-kind">{contextKindLabel(item.kind)}</span>
+      <div>
+        <strong>{item.label}</strong>
+        {item.path ? <code>{item.path}</code> : null}
+        {contextItemMetaText(item) ? (
+          <span className="muted">{contextItemMetaText(item)}</span>
+        ) : null}
+        {contextItemCharText(item) ? (
+          <span className="muted">{contextItemCharText(item)}</span>
+        ) : null}
+      </div>
+    </li>
   );
 }

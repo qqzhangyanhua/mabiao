@@ -448,7 +448,9 @@ fn mcp_item(entry: &McpEntry) -> Option<ConversationContextItem> {
         label: entry.name.clone(),
         path: Some(entry.path.to_string_lossy().into_owned()),
         load_mode: None,
+        injection_status: None,
         char_count: None,
+        is_noise: false,
         meta: Some(serde_json::json!({
             "byte_size": byte_size,
             "modified_at": modified_at,
@@ -492,7 +494,9 @@ fn file_item(
         label: label.to_string(),
         path: Some(path.to_string_lossy().into_owned()),
         load_mode: None,
+        injection_status: None,
         char_count: None,
+        is_noise: false,
         meta: Some(Value::Object(meta)),
     })
 }

@@ -603,6 +603,12 @@ export type ConversationContextLoadMode =
   | "manual"
   | "observed";
 
+export type ConversationContextInjectionStatus =
+  | "connected"
+  | "failed"
+  | "auth_required"
+  | "disabled";
+
 export type ConversationContextKind =
   | "tool"
   | "system_status"
@@ -619,7 +625,9 @@ export type ConversationContextItem = {
   label: string;
   path?: string | null;
   load_mode?: ConversationContextLoadMode | null;
+  injection_status?: ConversationContextInjectionStatus | null;
   char_count?: number | null;
+  is_noise?: boolean;
   meta?: Record<string, unknown> | null;
 };
 
@@ -628,6 +636,7 @@ export type ConversationContextManifest = {
   injected_note?: string | null;
   observed_note?: string | null;
   on_disk_note?: string | null;
+  mcp_init_summary?: string | null;
 };
 
 export interface ConversationDetailDto {

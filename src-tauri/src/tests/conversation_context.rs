@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use rusqlite::params;
 
 use crate::domain::{
-    ConversationContextItem, ConversationContextKind, ConversationContextLayer,
-    ConversationContextLoadMode, ConversationEventAnchor, ConversationEventKind, Source,
+    ConversationContextInjectionStatus, ConversationContextItem, ConversationContextKind,
+    ConversationContextLayer, ConversationContextLoadMode, ConversationEventAnchor,
+    ConversationEventKind, Source,
 };
 use crate::test_support::*;
 
@@ -84,6 +85,52 @@ fn write_grok_prompt_context(updates: &Path, files: &[(&str, &str, &str)]) {
         })
         .to_string(),
     );
+}
+
+fn write_grok_events(updates: &Path, events: &[serde_json::Value]) {
+    let body = events
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(
+        &updates.parent().unwrap().join("events.jsonl"),
+        &format!("{body}\n"),
+    );
+}
+
+fn append_grok_tool_call(updates: &Path, title: &str) {
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(updates)
+        .unwrap();
+    writeln!(
+        file,
+        "{}",
+        serde_json::json!({
+            "timestamp": 1787100007u64,
+            "method": "session/update",
+            "params": {
+                "_meta": {"eventId": "tool-mcp"},
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "title": title,
+                    "name": title,
+                    "toolCallId": "call-mcp-1"
+                }
+            }
+        })
+    )
+    .unwrap();
+}
+
+fn mcp_item<'a>(items: &'a [&ConversationContextItem], id: &str) -> &'a ConversationContextItem {
+    items
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::McpServer && item.id == id)
+        .copied()
+        .unwrap_or_else(|| panic!("missing injected MCP {id} in {items:?}"))
 }
 
 fn scan_grok(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
@@ -1022,4 +1069,253 @@ fn grok_detail_lists_injected_agents_md_from_prompt_context() {
         ConversationContextLayer::Injected,
     );
     assert!(bad_items.is_empty(), "{bad_items:?}");
+}
+
+#[test]
+fn grok_detail_lists_injected_mcp_three_states_and_noise_set_diff() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    const PROJECT_BODY: &str = "UNIQUE_GROK_MCP_INSTRUCTION";
+    const ERROR_BODY: &str = "UNIQUE_MCP_ERROR_BODY handshake failed";
+    let updates = seed_grok_session(home, "sess-grok-mcp");
+    write_grok_prompt_context(
+        &updates,
+        &[("AGENTS.md", "/workspace/proj/AGENTS.md", PROJECT_BODY)],
+    );
+    append_grok_tool_call(&updates, "alpha_docs");
+    write_grok_events(
+        &updates,
+        &[
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:00Z",
+                "type": "mcp_config_resolved",
+                "servers": [
+                    {"name": "docs", "transport": "stdio", "source": "local"},
+                    {"name": "idle", "transport": "stdio", "source": "local"},
+                    {"name": "figma", "transport": "http", "source": "local"},
+                    {"name": "chrome", "transport": "stdio", "source": "local"},
+                    {"name": "legacy", "transport": "stdio", "source": "local"}
+                ],
+                "disabled": ["legacy"]
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:01Z",
+                "type": "mcp_server_connected",
+                "server_name": "docs",
+                "transport": "stdio",
+                "tool_count": 2,
+                "tools": ["alpha_docs", "beta_ping"]
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:02Z",
+                "type": "mcp_server_connected",
+                "server_name": "idle",
+                "transport": "stdio",
+                "tool_count": 1,
+                "tools": ["zzz_idle"]
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:03Z",
+                "type": "mcp_server_failed",
+                "server_name": "figma",
+                "transport": "http",
+                "error_type": "auth_required",
+                "error_message": ERROR_BODY
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:03Z",
+                "type": "mcp_server_failed",
+                "server_name": "chrome",
+                "transport": "stdio",
+                "error_type": "handshake_failed",
+                "error_message": ERROR_BODY
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:04Z",
+                "type": "mcp_init_completed",
+                "total_servers": 5,
+                "succeeded": 2,
+                "failed": 2,
+                "auth_required": 1,
+                "total_tools": 3,
+                "duration_ms": 12,
+                "is_reinit": false,
+                "failed_servers": ["figma", "chrome"]
+            }),
+        ],
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-mcp").unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("grok detail should carry a context manifest");
+    assert_no_injected(
+        &manifest.items,
+        &[
+            manifest.observed_note.as_deref(),
+            manifest.on_disk_note.as_deref(),
+        ],
+    );
+    assert_eq!(
+        manifest.mcp_init_summary.as_deref(),
+        Some("配置 5 台 / 连上 2 台 / 失败 2 台 / 共注入 3 个工具")
+    );
+
+    let injected = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    let instruction = injected
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::Instruction)
+        .expect("instruction should still be injected");
+    assert!(!instruction.is_noise, "{instruction:?}");
+
+    let docs = mcp_item(&injected, "docs");
+    assert_eq!(
+        docs.injection_status,
+        Some(ConversationContextInjectionStatus::Connected)
+    );
+    assert_eq!(docs.load_mode, Some(ConversationContextLoadMode::Always));
+    assert_eq!(
+        docs.char_count,
+        Some("alpha_docs,beta_ping".chars().count() as u64)
+    );
+    assert!(!docs.is_noise, "called MCP must not be noise: {docs:?}");
+    assert_eq!(
+        docs.meta
+            .as_ref()
+            .and_then(|meta| meta.get("tool_count"))
+            .and_then(|value| value.as_u64()),
+        Some(2)
+    );
+
+    let idle = mcp_item(&injected, "idle");
+    assert_eq!(
+        idle.injection_status,
+        Some(ConversationContextInjectionStatus::Connected)
+    );
+    assert!(idle.is_noise, "zero-call connected MCP is noise: {idle:?}");
+    assert_eq!(idle.char_count, Some("zzz_idle".chars().count() as u64));
+
+    let figma = mcp_item(&injected, "figma");
+    assert_eq!(
+        figma.injection_status,
+        Some(ConversationContextInjectionStatus::AuthRequired)
+    );
+    assert!(!figma.is_noise, "failed MCP must not take the noise flag");
+    assert_eq!(figma.char_count, None);
+    assert_eq!(
+        figma
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("error_type"))
+            .and_then(|value| value.as_str()),
+        Some("auth_required")
+    );
+
+    let chrome = mcp_item(&injected, "chrome");
+    assert_eq!(
+        chrome.injection_status,
+        Some(ConversationContextInjectionStatus::Failed)
+    );
+    assert!(!chrome.is_noise);
+    assert_eq!(chrome.char_count, None);
+    assert_eq!(
+        chrome
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("error_type"))
+            .and_then(|value| value.as_str()),
+        Some("handshake_failed")
+    );
+
+    let legacy = mcp_item(&injected, "legacy");
+    assert_eq!(
+        legacy.injection_status,
+        Some(ConversationContextInjectionStatus::Disabled)
+    );
+    assert!(!legacy.is_noise);
+    assert_eq!(legacy.char_count, None);
+
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    assert!(
+        !dto_json.contains(ERROR_BODY) && !dto_json.contains("error_message"),
+        "MCP error message must not enter the detail DTO"
+    );
+    let event_hits: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_events WHERE coalesce(text, '') LIKE '%UNIQUE_MCP_ERROR_BODY%'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        event_hits, 0,
+        "MCP error message must not enter conversation_events"
+    );
+}
+
+#[test]
+fn grok_detail_treats_events_jsonl_mcp_tool_call_as_observed() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let updates = seed_grok_session(home, "sess-grok-mcp-call");
+    write_grok_events(
+        &updates,
+        &[
+            serde_json::json!({
+                "type": "mcp_config_resolved",
+                "servers": [{"name": "idle", "transport": "stdio", "source": "local"}],
+                "disabled": []
+            }),
+            serde_json::json!({
+                "type": "mcp_server_connected",
+                "server_name": "idle",
+                "tools": ["zzz_idle"]
+            }),
+            serde_json::json!({
+                "type": "mcp_init_completed",
+                "total_servers": 1,
+                "succeeded": 1,
+                "failed": 0,
+                "total_tools": 1
+            }),
+            serde_json::json!({
+                "type": "mcp_tool_call_started",
+                "server_name": "idle",
+                "tool_name": "zzz_idle",
+                "call_id": "idle__zzz_idle"
+            }),
+        ],
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "grok", "sess-grok-mcp-call").unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    let injected = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    let idle = mcp_item(&injected, "idle");
+    assert!(
+        !idle.is_noise,
+        "events.jsonl mcp_tool_call should count as observed: {idle:?}"
+    );
+}
+
+#[test]
+fn grok_detail_omits_mcp_summary_without_mcp_events() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_grok_session(home, "sess-grok-no-mcp");
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-no-mcp").unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    assert_eq!(manifest.mcp_init_summary, None);
+    assert!(
+        layer_items(&manifest.items, ConversationContextLayer::Injected)
+            .iter()
+            .all(|item| item.kind != ConversationContextKind::McpServer)
+    );
 }

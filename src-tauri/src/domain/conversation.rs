@@ -362,6 +362,27 @@ impl ConversationContextLoadMode {
     }
 }
 
+/// MCP 连接结论。仅 MCP 条目使用。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConversationContextInjectionStatus {
+    Connected,
+    Failed,
+    AuthRequired,
+    Disabled,
+}
+
+impl ConversationContextInjectionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Connected => "connected",
+            Self::Failed => "failed",
+            Self::AuthRequired => "auth_required",
+            Self::Disabled => "disabled",
+        }
+    }
+}
+
 /// 清单条目种类。Cursor / Grok 共用，避免下一票另造一套。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -402,7 +423,11 @@ pub struct ConversationContextItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub load_mode: Option<ConversationContextLoadMode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub injection_status: Option<ConversationContextInjectionStatus>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub char_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_noise: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<serde_json::Value>,
 }
@@ -417,6 +442,8 @@ pub struct ConversationContextManifest {
     pub observed_note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_disk_note: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_init_summary: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
