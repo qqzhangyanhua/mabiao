@@ -28,11 +28,13 @@ use crate::domain::{
     ConversationEvent, ConversationEventKind as EventKind, ConversationSessionRow, Source,
 };
 
+use super::context_cache::CachedContextMetrics;
 use super::{cursor_inject, event_index, grok_inject};
 
 const INJECTED_EMPTY: &str = "未发现本轮注入条目。";
 const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。";
 const INJECTED_DEGRADED: &str = "注入快照已过期（Cursor 只保留约 40 天），以下为按当前磁盘状态重建";
+const INJECTED_FROM_CACHE: &str = "注入快照已清理，下列度量结果来自缓存。";
 
 const OBSERVED_EMPTY: &str =
     "源文件未留下可观测的工具、系统状态或 skill 引用，无法确认本轮注入了什么。";
@@ -58,6 +60,7 @@ pub(crate) fn for_session(
     source: Source,
     session: &ConversationSessionRow,
     observed: Vec<ConversationContextItem>,
+    cached: Option<CachedContextMetrics>,
 ) -> Option<ConversationContextManifest> {
     let on_disk = match source {
         Source::CursorAgent => {
@@ -68,29 +71,46 @@ pub(crate) fn for_session(
         }
         _ => return None,
     };
-    let (injected, mcp_init_summary, called_mcp, snapshot_found, incomplete_keys) = match source {
+    let live = match source {
         Source::Grok => {
             let snapshot = grok_inject::from_session(session);
-            (
+            snapshot.found.then_some((
                 snapshot.items,
                 snapshot.mcp_init_summary,
                 snapshot.called_mcp,
-                true,
+                snapshot.found,
                 None,
-            )
+            ))
         }
         Source::CursorAgent => {
             let snapshot = cursor_inject::from_session(home, session);
-            (
+            snapshot.found.then_some((
                 snapshot.items,
                 None,
                 BTreeSet::new(),
                 snapshot.found,
                 snapshot.incomplete_keys,
-            )
+            ))
         }
-        _ => (Vec::new(), None, BTreeSet::new(), true, None),
+        _ => None,
     };
+    let from_cache = live.is_none() && cached.is_some();
+    let (injected, mcp_init_summary, extra_observed, snapshot_found, incomplete_keys) =
+        if let Some(live) = live {
+            live
+        } else if let Some(cached) = cached {
+            (
+                cached.items,
+                cached.mcp_init_summary,
+                BTreeSet::new(),
+                true,
+                cached.incomplete_keys,
+            )
+        } else if source == Source::Grok {
+            (Vec::new(), None, BTreeSet::new(), true, None)
+        } else {
+            (Vec::new(), None, BTreeSet::new(), false, None)
+        };
     let mut manifest = assemble(
         source,
         injected,
@@ -98,13 +118,14 @@ pub(crate) fn for_session(
         on_disk,
         session.project.as_str(),
         mcp_init_summary,
-        &called_mcp,
+        &extra_observed,
     );
     apply_honesty(
         &mut manifest,
         source,
         session,
         snapshot_found,
+        from_cache,
         incomplete_keys,
     );
     Some(manifest)
@@ -147,6 +168,7 @@ pub(crate) fn assemble(
         on_disk_note,
         mcp_init_summary,
         has_injected_snapshot: true,
+        metrics_from_cache: false,
         volume_is_estimate: false,
         completeness_note: None,
     }
@@ -157,11 +179,17 @@ fn apply_honesty(
     source: Source,
     session: &ConversationSessionRow,
     snapshot_found: bool,
+    from_cache: bool,
     incomplete_keys: Option<Vec<String>>,
 ) {
+    if from_cache {
+        manifest.metrics_from_cache = true;
+        manifest.has_injected_snapshot = true;
+        manifest.injected_note = Some(INJECTED_FROM_CACHE.to_string());
+    }
     if source == Source::CursorAgent {
         manifest.volume_is_estimate = true;
-        if !snapshot_found {
+        if !snapshot_found && !from_cache {
             manifest.has_injected_snapshot = false;
             manifest.injected_note = Some(INJECTED_DEGRADED.to_string());
         }

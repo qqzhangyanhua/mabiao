@@ -639,6 +639,7 @@ export type ConversationContextManifest = {
   on_disk_note?: string | null;
   mcp_init_summary?: string | null;
   has_injected_snapshot?: boolean;
+  metrics_from_cache?: boolean;
   volume_is_estimate?: boolean;
   completeness_note?: string | null;
 };

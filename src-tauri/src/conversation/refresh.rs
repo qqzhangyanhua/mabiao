@@ -22,7 +22,7 @@ use super::session_store::{
 use super::toolbox::FileIndexCursor;
 use super::trusted_path::modified_nanos;
 use super::{
-    conversation_adapter, plan_conversation_file_index, ConversationFileFingerprint,
+    context_cache, conversation_adapter, plan_conversation_file_index, ConversationFileFingerprint,
     ConversationFileIndexPlan, ConversationIndexIssue,
 };
 
@@ -343,6 +343,9 @@ pub(crate) fn refresh(
             }
         }
     }
+    let mut persist_skip = blocked_session_ids;
+    persist_skip.extend(incomplete_session_ids.iter().cloned());
+    context_cache::persist_seen_sessions(conn, source, &seen_session_ids, &persist_skip)?;
     if blocking_issues.is_empty() {
         tombstone_missing_sessions(conn, source, &seen_session_ids)?;
     }

@@ -103,15 +103,21 @@ export function contextManifestSummary(manifest: ConversationContextManifest): s
   const observed = contextLayerItems(manifest, "observed").length;
   const possible = contextLayerItems(manifest, "on_disk_possible").length;
   const unused = manifest.items.filter((item) => item.is_unused_install).length;
-  const injectedLabel = contextHasInjectedSnapshot(manifest)
-    ? `已注入 ${injected}`
-    : "快照已过期";
+  const injectedLabel = contextMetricsFromCache(manifest)
+    ? `已注入 ${injected}（缓存）`
+    : contextHasInjectedSnapshot(manifest)
+      ? `已注入 ${injected}`
+      : "快照已过期";
   const base = `${injectedLabel} · 已观测 ${observed} · 可能生效 ${possible}`;
   return unused > 0 ? `${base} · 白装了 ${unused}` : base;
 }
 
 export function contextHasInjectedSnapshot(manifest: ConversationContextManifest): boolean {
   return manifest.has_injected_snapshot !== false;
+}
+
+export function contextMetricsFromCache(manifest: ConversationContextManifest): boolean {
+  return manifest.metrics_from_cache === true;
 }
 
 export function contextInjectedDegraded(
@@ -128,6 +134,9 @@ export function contextLayerTitle(
   if (contextInjectedDegraded(layer, manifest)) {
     return "注入快照已过期";
   }
+  if (layer === "injected" && contextMetricsFromCache(manifest)) {
+    return "已注入（缓存）";
+  }
   return CONTEXT_LAYER_TITLE[layer];
 }
 
@@ -138,6 +147,9 @@ export function contextLayerBadge(
   if (contextInjectedDegraded(layer, manifest)) {
     return "已过期";
   }
+  if (layer === "injected" && contextMetricsFromCache(manifest)) {
+    return "缓存";
+  }
   return CONTEXT_LAYER_BADGE[layer];
 }
 
@@ -147,6 +159,9 @@ export function contextLayerHint(
 ): string {
   if (contextInjectedDegraded(layer, manifest)) {
     return "Cursor 只保留约 40 天会话存储。没有首轮注入快照，当前内容为按当前磁盘状态重建。";
+  }
+  if (layer === "injected" && contextMetricsFromCache(manifest)) {
+    return "注入快照已不在源文件里。下列条目名与体积来自缓存的度量结果。";
   }
   return CONTEXT_LAYER_HINT[layer];
 }

@@ -52,6 +52,10 @@
   border-left-color: var(--orange-fg);
 }
 
+.conversation-context-layer.layer-injected.is-from-cache {
+  border-left-style: dashed;
+}
+
 .conversation-context-layer.layer-observed {
   border-left: 3px solid var(--cyan-fg);
 }
@@ -90,6 +94,11 @@
 .conversation-context-badge.layer-injected.is-degraded {
   color: var(--orange-fg);
   background: rgba(245, 158, 11, 0.12);
+}
+
+.conversation-context-badge.layer-injected.is-from-cache {
+  color: var(--cyan-fg);
+  background: rgba(34, 211, 238, 0.1);
 }
 
 .conversation-context-badge.layer-observed {

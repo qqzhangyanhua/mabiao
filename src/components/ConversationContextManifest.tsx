@@ -13,6 +13,7 @@ import {
   contextLayerTitle,
   contextManifestSummary,
   contextMcpInitSummary,
+  contextMetricsFromCache,
   partitionContextItems,
 } from "../lib/conversationContext";
 import type {
@@ -77,15 +78,17 @@ function ContextLayer({
 }) {
   const title = contextLayerTitle(layer, manifest);
   const degraded = contextInjectedDegraded(layer, manifest);
+  const fromCache = layer === "injected" && contextMetricsFromCache(manifest);
+  const stateClass = degraded ? " is-degraded" : fromCache ? " is-from-cache" : "";
 
   return (
     <section
-      className={`conversation-context-layer layer-${layer}${degraded ? " is-degraded" : ""}`}
+      className={`conversation-context-layer layer-${layer}${stateClass}`}
       aria-label={title}
     >
       <header>
         <h3>{title}</h3>
-        <span className={`conversation-context-badge layer-${layer}${degraded ? " is-degraded" : ""}`}>
+        <span className={`conversation-context-badge layer-${layer}${stateClass}`}>
           {contextLayerBadge(layer, manifest)}
         </span>
       </header>

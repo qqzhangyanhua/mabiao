@@ -12,6 +12,7 @@ mod catalog;
 mod catalog_search;
 mod claude;
 mod codex;
+mod context_cache;
 mod context_manifest;
 mod copilot;
 mod cursor;
@@ -308,9 +309,11 @@ pub(crate) enum PreparedDetailRead {
         prepared: PreparedConversationDetail,
         event_count: u32,
         observed_context: Vec<crate::domain::ConversationContextItem>,
+        context_metrics: Option<context_cache::CachedContextMetrics>,
     },
     Parsed {
         prepared: PreparedConversationDetail,
+        context_metrics: Option<context_cache::CachedContextMetrics>,
     },
 }
 

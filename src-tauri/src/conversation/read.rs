@@ -32,7 +32,7 @@ use super::trusted_path::{
     session_source_paths, trusted_paths_for_session,
 };
 use super::{
-    context_manifest, conversation_adapter, cursor, event_index, line_direct,
+    context_cache, context_manifest, conversation_adapter, cursor, event_index, line_direct,
     parse_conversation_file, parse_conversation_files, persist_session_file_cursors,
     write_session_file_events, PreparedConversationDetail, PreparedDetailRead,
     CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
@@ -54,6 +54,11 @@ pub(crate) fn prepare_detail_read(
     session_id: &str,
 ) -> Result<PreparedDetailRead, String> {
     let prepared = prepare_detail(conn, source, session_id)?;
+    let context_metrics = if context_manifest::supported_source(prepared.source) {
+        context_cache::load(conn, prepared.source, session_id)?
+    } else {
+        None
+    };
     if event_index_ready(conn, home, &prepared)? {
         let event_count = event_index::indexed_event_count(conn, source, session_id)?;
         let observed_context = if context_manifest::supported_source(prepared.source) {
@@ -65,9 +70,13 @@ pub(crate) fn prepare_detail_read(
             prepared,
             event_count,
             observed_context,
+            context_metrics,
         });
     }
-    Ok(PreparedDetailRead::Parsed { prepared })
+    Ok(PreparedDetailRead::Parsed {
+        prepared,
+        context_metrics,
+    })
 }
 
 pub(crate) fn finish_prepared_detail(
@@ -79,8 +88,18 @@ pub(crate) fn finish_prepared_detail(
             prepared,
             event_count,
             observed_context,
-        } => assemble_indexed_detail(home, prepared, event_count, observed_context),
-        PreparedDetailRead::Parsed { prepared } => load_prepared_detail(home, prepared),
+            context_metrics,
+        } => assemble_indexed_detail(
+            home,
+            prepared,
+            event_count,
+            observed_context,
+            context_metrics,
+        ),
+        PreparedDetailRead::Parsed {
+            prepared,
+            context_metrics,
+        } => load_prepared_detail(home, prepared, context_metrics),
     }
 }
 
@@ -125,6 +144,7 @@ pub(crate) fn prepare_detail(
 pub(crate) fn load_prepared_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
+    context_metrics: Option<context_cache::CachedContextMetrics>,
 ) -> Result<ConversationDetailDto, String> {
     let usage_record_count = prepared.usage_records.len() as u32;
     let source = prepared.source;
@@ -135,6 +155,7 @@ pub(crate) fn load_prepared_detail(
         source,
         parsed_detail_to_dto(parsed, usage_record_count),
         observed,
+        context_metrics,
     ))
 }
 
@@ -233,6 +254,7 @@ pub(crate) fn assemble_indexed_detail(
     prepared: PreparedConversationDetail,
     event_count: u32,
     observed_context: Vec<ConversationContextItem>,
+    context_metrics: Option<context_cache::CachedContextMetrics>,
 ) -> Result<ConversationDetailDto, String> {
     let PreparedConversationDetail {
         source,
@@ -262,6 +284,7 @@ pub(crate) fn assemble_indexed_detail(
             context_manifest: None,
         },
         observed_context,
+        context_metrics,
     ))
 }
 
@@ -270,8 +293,10 @@ fn with_context_manifest(
     source: Source,
     mut dto: ConversationDetailDto,
     observed: Vec<ConversationContextItem>,
+    cached: Option<context_cache::CachedContextMetrics>,
 ) -> ConversationDetailDto {
-    dto.context_manifest = context_manifest::for_session(home, source, &dto.session, observed);
+    dto.context_manifest =
+        context_manifest::for_session(home, source, &dto.session, observed, cached);
     dto
 }
 

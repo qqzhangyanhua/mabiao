@@ -368,6 +368,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     ensure_conversation_event_tables(conn)?;
     ensure_conversation_events_fts(conn)?;
     ensure_work_notes_tables(conn)?;
+    ensure_conversation_context_metrics(conn)?;
     migrate_lowercase_model(conn)
 }
 
@@ -451,6 +452,22 @@ fn ensure_work_notes_tables(conn: &Connection) -> Result<(), String> {
         "INTEGER NOT NULL DEFAULT 1",
     )?;
     Ok(())
+}
+
+fn ensure_conversation_context_metrics(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS conversation_context_metrics (
+            source TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            items_json TEXT NOT NULL,
+            mcp_init_summary TEXT,
+            incomplete_keys_json TEXT,
+            PRIMARY KEY (source, session_id)
+        );
+        "#,
+    )
+    .map_err(|error| error.to_string())
 }
 
 /// 事件表、路径字典与工具汇总表建在一起：三者是同一份派生缓存的三个部分，列定义要被

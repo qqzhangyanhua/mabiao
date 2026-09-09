@@ -41,7 +41,7 @@ pub struct BackupManifest {
 }
 
 fn default_note() -> String {
-    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken，也不含对话事件正文和自定义提供商密钥；恢复会覆盖当前缓存、单价/预算/扫描路径配置与自定义提供商配置（不含密钥）。"
+    "不含 Cursor 钥匙串中的 WorkosCursorSessionToken，也不含对话事件正文、上下文清单度量和自定义提供商密钥；恢复会覆盖当前缓存、单价/预算/扫描路径配置与自定义提供商配置（不含密钥）。"
         .to_string()
 }
 
@@ -97,7 +97,7 @@ fn conversation_sessions_has_generation(conn: &Connection) -> Result<bool, Strin
     Ok(names.iter().any(|name| name == "event_index_generation"))
 }
 
-/// 事件索引是派生缓存，且含完整对话正文。备份只留目录元数据，恢复后走回退路径再渐进补建。
+/// 事件索引与上下文清单度量都是派生缓存。备份只留目录元数据，恢复后走回退路径再渐进补建。
 fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
@@ -112,10 +112,12 @@ fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
             .map_err(|e| e.to_string())?;
     }
     // 路径字典与工具汇总都是事件表的派生物，事件表不进备份，它们跟着一起走。
+    // 上下文清单度量同样不进备份：条目名来自家目录路径，且快照正文绝不能被复制走。
     for table in [
         "conversation_events",
         "conversation_session_tools",
         "conversation_files",
+        "conversation_context_metrics",
     ] {
         if table_exists(conn, table)? {
             conn.execute(&format!("DROP TABLE {table}"), [])

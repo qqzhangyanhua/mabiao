@@ -8,6 +8,7 @@ import {
   contextCompletenessNote,
   contextForbiddenCopy,
   contextHasInjectedSnapshot,
+  contextInjectedDegraded,
   contextItemCharText,
   contextItemMetaText,
   contextItemsTokenSummary,
@@ -19,6 +20,7 @@ import {
   contextLayerTitle,
   contextManifestSummary,
   contextMcpInitSummary,
+  contextMetricsFromCache,
   isDisconnectedMcp,
   partitionContextItems,
 } from "./conversationContext";
@@ -222,6 +224,33 @@ describe("conversationContext", () => {
     expect(contextManifestSummary(degraded)).toContain("快照已过期");
 
     expect(contextForbiddenCopy(degraded.injected_note ?? "", "injected")).toBe(false);
+  });
+
+  it("marks cached metrics as injected-from-cache, not degraded rebuild", () => {
+    const cached: ConversationContextManifest = {
+      items: [
+        {
+          layer: "injected",
+          kind: "skill",
+          id: "review",
+          label: "review",
+          char_count: 40,
+        },
+      ],
+      has_injected_snapshot: true,
+      metrics_from_cache: true,
+      injected_note: "注入快照已清理，下列度量结果来自缓存。",
+      volume_is_estimate: true,
+    };
+    expect(contextHasInjectedSnapshot(cached)).toBe(true);
+    expect(contextMetricsFromCache(cached)).toBe(true);
+    expect(contextInjectedDegraded("injected", cached)).toBe(false);
+    expect(contextLayerTitle("injected", cached)).toBe("已注入（缓存）");
+    expect(contextLayerBadge("injected", cached)).toBe("缓存");
+    expect(contextLayerHint("injected", cached)).toContain("缓存");
+    expect(contextLayerHint("injected", cached)).not.toContain("重建");
+    expect(contextManifestSummary(cached)).toContain("已注入 1（缓存）");
+    expect(contextForbiddenCopy(cached.injected_note ?? "", "injected")).toBe(false);
   });
 
   it("labels Cursor volume as an estimate and names stale disk files", () => {

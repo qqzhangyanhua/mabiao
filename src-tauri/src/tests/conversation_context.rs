@@ -2029,3 +2029,277 @@ fn cursor_detail_names_incomplete_context_keys() {
         "true keys must not appear: {note}"
     );
 }
+
+fn context_metrics_blob(conn: &rusqlite::Connection) -> String {
+    let mut statement = conn
+        .prepare(
+            "SELECT items_json, coalesce(mcp_init_summary, ''), coalesce(incomplete_keys_json, '') FROM conversation_context_metrics",
+        )
+        .unwrap();
+    let rows = statement
+        .query_map([], |row| {
+            Ok(format!(
+                "{}{}{}",
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?
+            ))
+        })
+        .unwrap();
+    rows.map(|row| row.unwrap()).collect::<Vec<_>>().join("\n")
+}
+
+#[test]
+fn cursor_detail_uses_cached_metrics_after_snapshot_removed() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let first_turn = fixture("cursor-inject-first-turn.txt");
+    seed_cursor_transcript(home, "sess-cursor-cache");
+    let store_path = write_cursor_chat_store(
+        home,
+        "sess-cursor-cache",
+        &[
+            serde_json::json!({"role":"system","content": cursor_system_prompt()}),
+            cursor_user_with_completeness(&first_turn, &["gitRepos"]),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let blob = context_metrics_blob(&conn);
+    for needle in [
+        "UNIQUE_CURSOR_INJECT_SKILL",
+        "UNIQUE_CURSOR_INJECT_RULE",
+        "UNIQUE_CURSOR_INJECT_USER",
+        "UNIQUE_CURSOR_INJECT_ENV",
+        "UNIQUE_CURSOR_INJECT_SUBAGENT",
+        "UNIQUE_CURSOR_SYSTEM_SKILL",
+    ] {
+        assert!(
+            !blob.contains(needle),
+            "injection body must not enter metrics cache: {needle}"
+        );
+    }
+    std::fs::remove_file(&store_path).unwrap();
+
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-cache").unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("cached cursor detail should still carry a context manifest");
+    assert!(manifest.has_injected_snapshot);
+    assert!(
+        manifest.metrics_from_cache,
+        "missing store.db must read cached metrics: {manifest:?}"
+    );
+    let note = manifest
+        .injected_note
+        .as_deref()
+        .expect("cached sessions need an injected note");
+    assert!(
+        note.contains("缓存") && !note.contains("按当前磁盘状态重建"),
+        "cache note must not look like disk rebuild: {note}"
+    );
+    let injected = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    let skill = injected
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::Skill)
+        .expect("cached skill metrics should remain");
+    assert_eq!(skill.id, "/tmp/home/.cursor/skills/review/SKILL.md");
+    assert_eq!(
+        skill.char_count,
+        Some(CURSOR_SKILL_BLOCK.chars().count() as u64)
+    );
+    assert_eq!(skill.load_mode, Some(ConversationContextLoadMode::Always));
+    let mcp = mcp_item(&injected, "docs");
+    assert_eq!(
+        mcp.injection_status,
+        Some(ConversationContextInjectionStatus::Connected)
+    );
+    assert_eq!(
+        mcp.meta
+            .as_ref()
+            .and_then(|meta| meta.get("tool_count"))
+            .and_then(|value| value.as_u64()),
+        Some(2)
+    );
+    assert!(
+        mcp.meta
+            .as_ref()
+            .and_then(|meta| meta.get("tools"))
+            .is_none(),
+        "cached MCP meta must keep tool_count only: {:?}",
+        mcp.meta
+    );
+    assert!(
+        manifest
+            .completeness_note
+            .as_deref()
+            .is_some_and(|note| note.contains("gitRepos")),
+        "cached completeness keys should survive: {:?}",
+        manifest.completeness_note
+    );
+    assert!(manifest.volume_is_estimate);
+}
+
+#[test]
+fn cursor_detail_rebuilds_from_disk_when_metrics_cache_dropped() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_cursor_transcript(home, "sess-cursor-drop-cache");
+    let store_path = write_cursor_chat_store(
+        home,
+        "sess-cursor-drop-cache",
+        &[
+            serde_json::json!({"role":"system","content":"sys"}),
+            cursor_user_with_completeness("hello", &[]),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let sessions_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM conversation_sessions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    conn.execute("DELETE FROM conversation_context_metrics", [])
+        .unwrap();
+    std::fs::remove_file(&store_path).unwrap();
+    let sessions_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM conversation_sessions", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(sessions_before, sessions_after);
+
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-drop-cache")
+            .unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    assert!(!manifest.has_injected_snapshot);
+    assert!(!manifest.metrics_from_cache);
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("按当前磁盘状态重建")));
+    assert!(layer_items(&manifest.items, ConversationContextLayer::Injected).is_empty());
+}
+
+#[test]
+fn dropping_metrics_cache_rebuilds_from_live_snapshot() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_cursor_transcript(home, "sess-cursor-rebuild");
+    write_cursor_chat_store(
+        home,
+        "sess-cursor-rebuild",
+        &[
+            serde_json::json!({"role":"system","content":"sys"}),
+            cursor_user_with_completeness("hello", &[]),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    conn.execute("DELETE FROM conversation_context_metrics", [])
+        .unwrap();
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-cursor-rebuild")
+            .unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    assert!(manifest.has_injected_snapshot);
+    assert!(!manifest.metrics_from_cache);
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("已注入") && !note.contains("缓存")));
+}
+
+#[test]
+fn grok_detail_uses_cached_metrics_after_snapshot_removed() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    const PROJECT_BODY: &str = "UNIQUE_GROK_CACHE_BODY";
+    const ERROR_BODY: &str = "UNIQUE_GROK_CACHE_ERROR handshake failed";
+    let updates = seed_grok_session(home, "sess-grok-cache");
+    write_grok_prompt_context(
+        &updates,
+        &[("AGENTS.md", "/workspace/proj/AGENTS.md", PROJECT_BODY)],
+    );
+    write_grok_events(
+        &updates,
+        &[
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:00Z",
+                "type": "mcp_config_resolved",
+                "servers": [{"name": "figma", "transport": "http", "source": "local"}]
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:01Z",
+                "type": "mcp_server_failed",
+                "server_name": "figma",
+                "error_type": "auth_required",
+                "error_message": ERROR_BODY
+            }),
+            serde_json::json!({
+                "ts": "2026-09-08T00:00:02Z",
+                "type": "mcp_init_completed",
+                "total_servers": 1,
+                "succeeded": 0,
+                "failed": 1,
+                "total_tools": 0
+            }),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let blob = context_metrics_blob(&conn);
+    assert!(
+        !blob.contains(PROJECT_BODY)
+            && !blob.contains(ERROR_BODY)
+            && !blob.contains("error_message"),
+        "instruction body and MCP error text must not enter metrics cache: {blob}"
+    );
+    let dir = updates.parent().unwrap();
+    std::fs::remove_file(dir.join("prompt_context.json")).unwrap();
+    std::fs::remove_file(dir.join("events.jsonl")).unwrap();
+
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-cache").unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    assert!(manifest.metrics_from_cache);
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("缓存")));
+    assert_eq!(
+        manifest.mcp_init_summary.as_deref(),
+        Some("配置 1 台 / 连上 0 台 / 失败 1 台 / 共注入 0 个工具")
+    );
+    let injected = layer_items(&manifest.items, ConversationContextLayer::Injected);
+    let instruction = injected
+        .iter()
+        .find(|item| item.kind == ConversationContextKind::Instruction)
+        .expect("cached instruction metrics should remain");
+    assert_eq!(instruction.id, "/workspace/proj/AGENTS.md");
+    assert_eq!(
+        instruction.char_count,
+        Some(PROJECT_BODY.chars().count() as u64)
+    );
+    let figma = mcp_item(&injected, "figma");
+    assert_eq!(
+        figma.injection_status,
+        Some(ConversationContextInjectionStatus::AuthRequired)
+    );
+    assert_eq!(
+        figma
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("error_type"))
+            .and_then(|value| value.as_str()),
+        Some("auth_required")
+    );
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    assert!(
+        !dto_json.contains(PROJECT_BODY) && !dto_json.contains(ERROR_BODY),
+        "cached detail must still omit bodies"
+    );
+}

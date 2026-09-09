@@ -449,6 +449,9 @@ pub struct ConversationContextManifest {
     /// Cursor 无注入快照时为 false，界面不得装成已注入。
     #[serde(default = "default_true")]
     pub has_injected_snapshot: bool,
+    /// 源快照已不在，条目来自摄取时写入的度量缓存。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub metrics_from_cache: bool,
     /// Cursor 本机拿不到逐轮实测 token，体积只是估算。
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub volume_is_estimate: bool,

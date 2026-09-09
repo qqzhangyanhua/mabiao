@@ -26,6 +26,7 @@ pub(crate) struct GrokSnapshot {
     pub items: Vec<ConversationContextItem>,
     pub mcp_init_summary: Option<String>,
     pub called_mcp: BTreeSet<String>,
+    pub found: bool,
 }
 
 #[derive(Deserialize)]
@@ -55,13 +56,16 @@ pub(crate) fn from_session(session: &ConversationSessionRow) -> GrokSnapshot {
     let Some(dir) = session_dir(&session.source_file) else {
         return GrokSnapshot::default();
     };
-    let mut items = from_prompt_context(&dir.join(PROMPT_CONTEXT));
+    let prompt = from_prompt_context(&dir.join(PROMPT_CONTEXT));
     let mcp = from_events(&dir.join(EVENTS));
+    let found = prompt.is_some() || dir.join(EVENTS).is_file();
+    let mut items = prompt.unwrap_or_default();
     items.extend(mcp.items);
     GrokSnapshot {
         items,
         mcp_init_summary: mcp.mcp_init_summary,
         called_mcp: mcp.called_mcp,
+        found,
     }
 }
 
@@ -72,13 +76,9 @@ fn session_dir(source_file: &str) -> Option<PathBuf> {
     Some(Path::new(source_file).parent()?.to_path_buf())
 }
 
-fn from_prompt_context(path: &Path) -> Vec<ConversationContextItem> {
-    let Ok(text) = fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    let Ok(parsed) = serde_json::from_str::<PromptContext>(&text) else {
-        return Vec::new();
-    };
+fn from_prompt_context(path: &Path) -> Option<Vec<ConversationContextItem>> {
+    let text = fs::read_to_string(path).ok()?;
+    let parsed = serde_json::from_str::<PromptContext>(&text).ok()?;
     let mut items = Vec::new();
     let mut seen = BTreeSet::new();
     for file in parsed.agents_md_files {
@@ -101,7 +101,7 @@ fn from_prompt_context(path: &Path) -> Vec<ConversationContextItem> {
             meta: None,
         });
     }
-    items
+    Some(items)
 }
 
 fn from_events(path: &Path) -> GrokSnapshot {
@@ -205,6 +205,7 @@ fn from_events(path: &Path) -> GrokSnapshot {
         items,
         mcp_init_summary,
         called_mcp: called,
+        found: true,
     }
 }
 
