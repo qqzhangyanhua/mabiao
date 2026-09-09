@@ -129,7 +129,10 @@ export function TrendBucketSessions({
           </span>
         ) : null}
       </div>
-      <LoadingOverlay active={loading && data.rows.length > 0} className="table-scroll">
+      <LoadingOverlay
+        active={loading && data.rows.length > 0}
+        className="table-scroll session-metric-table"
+      >
         <table>
           <thead>
             <tr>
@@ -139,7 +142,7 @@ export function TrendBucketSessions({
               <th>模型</th>
               <th>Token</th>
               <th>费用</th>
-              <th>最近活动</th>
+              <th className="session-metric-range">最近活动</th>
             </tr>
           </thead>
           <tbody>
@@ -212,7 +215,9 @@ function TrendSessionRow({
       <td>
         <SourceLabel source={row.source} size={14} />
       </td>
-      <td title={row.project}>{projectLabel(row.project)}</td>
+      <td className="session-metric-clip" title={row.project}>
+        {projectLabel(row.project)}
+      </td>
       <td>
         {row.model ? (
           <ModelLabel name={row.model} size={14} />
@@ -229,7 +234,9 @@ function TrendSessionRow({
           <span className="muted"> *</span>
         ) : null}
       </td>
-      <td title={row.ended_at || row.started_at}>{relativeTime(row.ended_at || row.started_at)}</td>
+      <td className="session-metric-range" title={row.ended_at || row.started_at}>
+        {relativeTime(row.ended_at || row.started_at)}
+      </td>
     </tr>
   );
 }

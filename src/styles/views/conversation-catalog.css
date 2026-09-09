@@ -310,7 +310,8 @@
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .conversation-detail-body > .table-scroll,

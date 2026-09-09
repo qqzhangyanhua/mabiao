@@ -108,7 +108,7 @@ export function BreakdownProjectSessions({
       </div>
       <LoadingOverlay
         active={loading && data.rows.length > 0}
-        className="table-scroll breakdown-session-table"
+        className="table-scroll session-metric-table breakdown-session-table"
       >
         <table>
           <thead>
@@ -118,7 +118,7 @@ export function BreakdownProjectSessions({
               <th>模型</th>
               <th>Token</th>
               <th>费用</th>
-              <th className="breakdown-session-range">时间</th>
+              <th className="session-metric-range">时间</th>
             </tr>
           </thead>
           <tbody>
@@ -213,7 +213,7 @@ function ProjectSessionRow({
           <span className="muted"> *</span>
         ) : null}
       </td>
-      <td className="breakdown-session-range" title={conversationRangeTitle(row) || undefined}>
+      <td className="session-metric-range" title={conversationRangeTitle(row) || undefined}>
         {conversationRangeLabel(row)}
       </td>
     </tr>

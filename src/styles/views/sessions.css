@@ -265,6 +265,38 @@ tr.breakdown-expand-row > td {
   color: var(--muted);
 }
 
+.session-metric-table table {
+  min-width: 780px;
+}
+
+.session-metric-table th:first-child,
+.session-metric-table td:first-child {
+  width: 100%;
+  min-width: 0;
+}
+
+.session-metric-table .conversation-title-cell {
+  min-width: 0;
+  max-width: none;
+}
+
+.session-metric-table th:not(:first-child),
+.session-metric-table td:not(:first-child) {
+  white-space: nowrap;
+}
+
+.session-metric-range {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.session-metric-clip {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .breakdown-session-table {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -272,28 +304,8 @@ tr.breakdown-expand-row > td {
   background: var(--sticky-col-bg);
 }
 
-.breakdown-session-table table {
-  min-width: 780px;
-}
-
 .breakdown-session-table thead th {
   position: static;
-}
-
-.breakdown-session-table th:first-child,
-.breakdown-session-table td:first-child {
-  width: 100%;
-  min-width: 0;
-}
-
-.breakdown-session-table .conversation-title-cell {
-  min-width: 0;
-  max-width: none;
-}
-
-.breakdown-session-table th:not(:first-child),
-.breakdown-session-table td:not(:first-child) {
-  white-space: nowrap;
 }
 
 .breakdown-session-table td:nth-child(2),
@@ -303,12 +315,6 @@ tr.breakdown-expand-row > td {
 
 .breakdown-session-table th:nth-child(n + 4),
 .breakdown-session-table td:nth-child(n + 4) {
-  text-align: right;
-}
-
-.breakdown-session-range {
-  width: 1%;
-  white-space: nowrap;
   text-align: right;
 }
 

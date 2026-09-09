@@ -1,5 +1,6 @@
 .conversation-context-manifest {
   flex: 0 0 auto;
+  min-width: 0;
 }
 
 .conversation-context-manifest .collapsible-body {

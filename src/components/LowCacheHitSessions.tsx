@@ -99,7 +99,10 @@ export function LowCacheHitSessions({
         </div>
         {computable ? <span className="muted">共 {formatTokens(rows.length)} 条</span> : null}
       </div>
-      <LoadingOverlay active={loading && rows.length > 0} className="table-scroll">
+      <LoadingOverlay
+        active={loading && rows.length > 0}
+        className="table-scroll session-metric-table"
+      >
         <table>
           <thead>
             <tr>
@@ -108,7 +111,7 @@ export function LowCacheHitSessions({
               <th>模型</th>
               <th>缓存命中率</th>
               <th>总 Token</th>
-              <th>最近活动</th>
+              <th className="session-metric-range">最近活动</th>
             </tr>
           </thead>
           <tbody>
@@ -177,13 +180,15 @@ function LowCacheHitRow({
           {canOpen ? <span className="muted">{SESSION_ENTRY_COPY.openConversationRow}</span> : null}
         </div>
       </td>
-      <td title={row.project}>{projectLabel(row.project)}</td>
+      <td className="session-metric-clip" title={row.project}>
+        {projectLabel(row.project)}
+      </td>
       <td>
         {row.model ? <ModelLabel name={row.model} size={14} /> : <span className="muted">—</span>}
       </td>
       <td>{formatCacheHitRate(row.cache_hit_rate)}</td>
       <td>{formatCompact(row.total_tokens)}</td>
-      <td>{relativeTime(row.ended_at)}</td>
+      <td className="session-metric-range">{relativeTime(row.ended_at)}</td>
     </tr>
   );
 }
