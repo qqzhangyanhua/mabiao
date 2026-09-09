@@ -451,6 +451,7 @@ fn mcp_item(entry: &McpEntry) -> Option<ConversationContextItem> {
         injection_status: None,
         char_count: None,
         is_noise: false,
+        is_unused_install: false,
         meta: Some(serde_json::json!({
             "byte_size": byte_size,
             "modified_at": modified_at,
@@ -497,6 +498,7 @@ fn file_item(
         injection_status: None,
         char_count: None,
         is_noise: false,
+        is_unused_install: false,
         meta: Some(Value::Object(meta)),
     })
 }

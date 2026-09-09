@@ -280,6 +280,7 @@ fn parse_namespace(_text: &str, element: Element<'_>) -> Option<ParsedItem> {
             injection_status: Some(ConversationContextInjectionStatus::Connected),
             char_count: Some(tools_raw.chars().count() as u64),
             is_noise: false,
+            is_unused_install: false,
             meta: Some(Value::Object(meta)),
         },
     })
@@ -332,6 +333,7 @@ fn span_item(
             injection_status: None,
             char_count: Some(char_count),
             is_noise: false,
+            is_unused_install: false,
             meta,
         },
     }
@@ -348,6 +350,7 @@ fn unrecognized_item(char_count: u64) -> ConversationContextItem {
         injection_status: None,
         char_count: Some(char_count),
         is_noise: false,
+        is_unused_install: false,
         meta: None,
     }
 }

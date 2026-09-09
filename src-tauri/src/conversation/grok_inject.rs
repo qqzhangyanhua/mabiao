@@ -97,6 +97,7 @@ fn from_prompt_context(path: &Path) -> Vec<ConversationContextItem> {
             injection_status: None,
             char_count: Some(file.content.chars().count() as u64),
             is_noise: false,
+            is_unused_install: false,
             meta: None,
         });
     }
@@ -258,6 +259,7 @@ fn mcp_item(server: McpServerAcc) -> ConversationContextItem {
         injection_status: server.status,
         char_count,
         is_noise: false,
+        is_unused_install: false,
         meta: if meta.is_empty() {
             None
         } else {

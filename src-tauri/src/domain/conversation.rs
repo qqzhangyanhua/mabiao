@@ -428,6 +428,8 @@ pub struct ConversationContextItem {
     pub char_count: Option<u64>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_noise: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_unused_install: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub meta: Option<serde_json::Value>,
 }

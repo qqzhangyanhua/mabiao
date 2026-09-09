@@ -8,7 +8,9 @@
 //! 以及 Cursor `Skill` 工具的 `input.skill`（解析路径读 `details`；索引路径靠工具 `text`）。
 //!
 //! 噪音差集（injected 减 observed）对 skill 与 MCP 通用；指令与规则不参与。
-//! 未连上的 MCP 不占 token、不吃红标。
+//! 未连上的 MCP 不占 token、不吃红标。编辑器内置 skill 计入体积，不吃红标。
+//! 磁盘有、注入快照没有的条目标 `is_unused_install`（白装了）；`on_match`
+//! 未命中的规则本来就不该加载，不进这个差集。
 //!
 //! Grok 复用同一套 `ConversationContextManifest` / `ConversationContextItem`，
 //! 磁盘层扫用户级 `~/.grok` 指令 / skills 与四条 MCP 加载链，不要另造第三套 DTO。
@@ -32,13 +34,12 @@ const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。
 const OBSERVED_EMPTY: &str =
     "源文件未留下可观测的工具、系统状态或 skill 引用，无法确认本轮注入了什么。";
 const ON_DISK_POSSIBLE: &str =
-    "下列文件与 MCP server 名来自磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
+    "下列文件与 MCP server 名来自磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。";
 const NO_PROJECT: &str =
-    "会话没有项目路径，且用户级 MCP/skills 未发现；源文件未落盘注入清单，无法确认。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
+    "会话没有项目路径，且用户级 MCP/skills 未发现；源文件未落盘注入清单，无法确认。";
 const MISSING_PROJECT: &str =
-    "项目路径在本机不存在，且未发现用户级 MCP/skills；源文件未落盘注入清单，无法确认。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
-const PROJECT_EMPTY: &str =
-    "项目下未发现指令文件、rules、skills 或 MCP 配置。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
+    "项目路径在本机不存在，且未发现用户级 MCP/skills；源文件未落盘注入清单，无法确认。";
+const PROJECT_EMPTY: &str = "项目下未发现指令文件、rules、skills 或 MCP 配置。";
 const SYNTHETIC_STATUS: &[&str] = &["transcript_missing"];
 const GROK_ON_DISK_POSSIBLE: &str =
     "下列文件、skills 与 MCP server 来自 Grok 磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。不扫描项目根 AGENTS.md 或 .cursor/rules。";
@@ -95,7 +96,7 @@ pub(crate) fn assemble(
     source: Source,
     mut injected: Vec<ConversationContextItem>,
     observed: Vec<ConversationContextItem>,
-    on_disk: Vec<ConversationContextItem>,
+    mut on_disk: Vec<ConversationContextItem>,
     project: &str,
     mcp_init_summary: Option<String>,
     extra_observed: &BTreeSet<String>,
@@ -110,6 +111,7 @@ pub(crate) fn assemble(
         .iter()
         .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
     mark_injected_noise(&mut injected, &observed, extra_observed);
+    mark_unused_installs(&mut on_disk, &injected);
     let injected_note = Some(if injected.is_empty() {
         INJECTED_EMPTY.to_string()
     } else {
@@ -142,6 +144,10 @@ fn mark_injected_noise(
             item.is_noise = false;
             continue;
         }
+        if is_editor_builtin(item) {
+            item.is_noise = false;
+            continue;
+        }
         if item.kind == ConversationContextKind::McpServer
             && item.injection_status != Some(ConversationContextInjectionStatus::Connected)
         {
@@ -150,6 +156,97 @@ fn mark_injected_noise(
         }
         item.is_noise = !item_was_observed(item, observed, extra_observed);
     }
+}
+
+fn mark_unused_installs(
+    on_disk: &mut [ConversationContextItem],
+    injected: &[ConversationContextItem],
+) {
+    for item in on_disk.iter_mut() {
+        item.is_unused_install = unused_install(item, injected);
+    }
+}
+
+fn unused_install(item: &ConversationContextItem, injected: &[ConversationContextItem]) -> bool {
+    if is_editor_builtin(item) {
+        return false;
+    }
+    if item.load_mode == Some(ConversationContextLoadMode::OnMatch) {
+        return false;
+    }
+    !injected.iter().any(|other| same_context_item(item, other))
+}
+
+fn is_editor_builtin(item: &ConversationContextItem) -> bool {
+    if item.id.starts_with("editor_builtin:") {
+        return true;
+    }
+    if item
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get("config_scope"))
+        .and_then(|value| value.as_str())
+        == Some("editor_builtin")
+    {
+        return true;
+    }
+    path_has_segment(item.path.as_deref(), "skills-cursor")
+        || path_has_segment(Some(item.id.as_str()), "skills-cursor")
+}
+
+fn path_has_segment(path: Option<&str>, segment: &str) -> bool {
+    path.is_some_and(|path| path.split(['/', '\\']).any(|part| part == segment))
+}
+
+fn same_context_item(disk: &ConversationContextItem, injected: &ConversationContextItem) -> bool {
+    if !kinds_compatible(disk.kind, injected.kind) {
+        return false;
+    }
+    if matches!(
+        disk.kind,
+        ConversationContextKind::Skill | ConversationContextKind::McpServer
+    ) && !disk.label.is_empty()
+        && disk.label == injected.label
+    {
+        return true;
+    }
+    if disk.kind == ConversationContextKind::McpServer
+        && (disk.id == injected.id
+            || disk.id == format!("user:{}", injected.id)
+            || disk.id == format!("project:{}", injected.id))
+    {
+        return true;
+    }
+    path_eq_or_suffix(disk.path.as_deref(), injected.path.as_deref())
+        || path_eq_or_suffix(disk.path.as_deref(), Some(injected.id.as_str()))
+        || path_eq_or_suffix(Some(disk.id.as_str()), injected.path.as_deref())
+        || path_eq_or_suffix(Some(disk.id.as_str()), Some(injected.id.as_str()))
+}
+
+fn kinds_compatible(disk: ConversationContextKind, injected: ConversationContextKind) -> bool {
+    disk == injected
+        || matches!(
+            (disk, injected),
+            (
+                ConversationContextKind::Instruction,
+                ConversationContextKind::Rule
+            ) | (
+                ConversationContextKind::Rule,
+                ConversationContextKind::Instruction
+            )
+        )
+}
+
+fn path_eq_or_suffix(left: Option<&str>, right: Option<&str>) -> bool {
+    let (Some(left), Some(right)) = (left, right) else {
+        return false;
+    };
+    let left = left.replace('\\', "/");
+    let right = right.replace('\\', "/");
+    if left.is_empty() || right.is_empty() {
+        return false;
+    }
+    left == right || left.ends_with(&right) || right.ends_with(&left)
 }
 
 fn item_was_observed(
@@ -385,6 +482,7 @@ fn tool_item(name: String, call_count: u64) -> ConversationContextItem {
         injection_status: None,
         char_count: None,
         is_noise: false,
+        is_unused_install: false,
         meta: Some(json!({ "call_count": call_count })),
     }
 }
@@ -422,6 +520,7 @@ fn status_from_parts(
         injection_status: None,
         char_count: None,
         is_noise: false,
+        is_unused_install: false,
         meta: if meta.is_empty() {
             None
         } else {
@@ -450,6 +549,7 @@ fn observed_skill_item(
         injection_status: None,
         char_count: None,
         is_noise: false,
+        is_unused_install: false,
         meta: Some(json!({ "source": "event" })),
     })
 }

@@ -5,12 +5,13 @@ import {
   CONTEXT_LAYER_TITLE,
   contextItemCharText,
   contextItemMetaText,
+  contextItemsTokenSummary,
   contextKindLabel,
   contextLayerItems,
   contextLayerNote,
   contextManifestSummary,
   contextMcpInitSummary,
-  isDisconnectedMcp,
+  partitionContextItems,
 } from "../lib/conversationContext";
 import type {
   ConversationContextItem,
@@ -35,7 +36,7 @@ export function ConversationContextManifestPanel({
       collapsedSummary={contextManifestSummary(manifest)}
     >
       <p className="muted conversation-context-lead">
-        复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效，不是本轮一定进了上下文。
+        复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效。白装了是磁盘有、本轮没送进上下文的差集。
       </p>
       {mcpSummary ? <p className="conversation-context-mcp-summary">{mcpSummary}</p> : null}
       <div className="conversation-context-layers">
@@ -83,8 +84,9 @@ function ContextLayer({
 }
 
 function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
-  const disconnected = items.filter(isDisconnectedMcp);
-  const primary = items.filter((item) => !isDisconnectedMcp(item));
+  const { primary, unusedInstalls, editorBuiltin, disconnectedMcp } =
+    partitionContextItems(items);
+  const builtinSummary = contextItemsTokenSummary(editorBuiltin);
   return (
     <>
       {primary.length > 0 ? (
@@ -94,11 +96,34 @@ function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
           ))}
         </ul>
       ) : null}
-      {disconnected.length > 0 ? (
+      {unusedInstalls.length > 0 ? (
+        <div className="conversation-context-unused">
+          <p className="muted">白装了（磁盘有、本轮没送进上下文）</p>
+          <ul>
+            {unusedInstalls.map((item) => (
+              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {editorBuiltin.length > 0 ? (
+        <details className="conversation-context-builtin">
+          <summary>
+            编辑器内置 · {editorBuiltin.length}
+            {builtinSummary ? ` · ${builtinSummary}` : ""}
+          </summary>
+          <ul>
+            {editorBuiltin.map((item) => (
+              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      {disconnectedMcp.length > 0 ? (
         <div className="conversation-context-mcp-failed">
           <p className="muted">未连上（不占 token，不是噪音）</p>
           <ul>
-            {disconnected.map((item) => (
+            {disconnectedMcp.map((item) => (
               <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
             ))}
           </ul>

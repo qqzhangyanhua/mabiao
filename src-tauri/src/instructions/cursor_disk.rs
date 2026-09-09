@@ -13,45 +13,36 @@
 //! 物，不是用户声明的本轮挂载。
 //!
 //! Skills：项目级 `.cursor/skills/**/SKILL.md` 按 #251 点名列入。用户自建
-//! `~/.cursor/skills/` 官方有约定、本机未创建，存在才列。`instructions::*`
-//! **没有**用户级 Cursor skills 口径。本机另有 `~/.cursor/skills-cursor/`
-//! （Cursor 内置 skill，frontmatter 含 `name`），产品未给口径，**不列入**，
-//! 避免把编辑器自带 skill 标成用户指令。
+//! `~/.cursor/skills/` 官方有约定、本机未创建，存在才列。
+//! `~/.cursor/skills-cursor/`（Cursor 内置 skill，frontmatter 含 `name`）
+//! 单独成一档 `editor_builtin`：计入体积，不标成用户可删的噪音。
+//!
+//! `.cursor/rules` 下的 `.mdc` / `.md` 按 frontmatter 分成 `always` /
+//! `on_match` / `on_demand` / `manual` 四档。分档用来算「白装了」差集，
+//! 不是推测本轮会不会加载。
 //!
 //! 指令/rules 相对路径与 `conflict` / `project_walk` 共用，不另造第三套。
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
 use serde_json::Value;
 
-use crate::domain::{ConversationContextItem, ConversationContextKind, ConversationContextLayer};
+use crate::domain::{
+    ConversationContextItem, ConversationContextKind, ConversationContextLayer,
+    ConversationContextLoadMode,
+};
 
 use super::project_walk::{
-    existing_file, file_stat, is_cursor_rule_file, is_skill_file, walk_files, CURSOR_MCP_REL,
-    CURSOR_PROJECT_INSTRUCTION_NAMES, CURSOR_RULES_DIR, CURSOR_SKILLS_DIR, CURSOR_USER_MCP_REL,
-    CURSOR_USER_SKILLS_DIR,
+    existing_file, file_stat, is_cursor_rule_file, is_skill_file, walk_files,
+    CURSOR_BUILTIN_SKILLS_DIR, CURSOR_MCP_REL, CURSOR_PROJECT_INSTRUCTION_NAMES, CURSOR_RULES_DIR,
+    CURSOR_SKILLS_DIR, CURSOR_USER_MCP_REL, CURSOR_USER_SKILLS_DIR,
 };
 
 pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
     let mut items = Vec::new();
-    if project.as_os_str().is_empty() {
-        push_mcp(
-            &mut items,
-            &home.join(CURSOR_USER_MCP_REL),
-            "user",
-            "~/.cursor/mcp.json",
-        );
-        push_skills(
-            &mut items,
-            &home.join(CURSOR_USER_SKILLS_DIR),
-            "user",
-            "~/.cursor/skills",
-        );
-        return items;
-    }
-
-    if project.is_dir() {
+    if !project.as_os_str().is_empty() && project.is_dir() {
         for name in CURSOR_PROJECT_INSTRUCTION_NAMES {
             if let Some(path) = existing_file(project, Path::new(name)) {
                 if let Some(item) = file_item(
@@ -60,6 +51,8 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
                     name,
                     &path,
                     Some(name.to_string()),
+                    None,
+                    None,
                 ) {
                     items.push(item);
                 }
@@ -73,6 +66,8 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
                 &rel,
                 &path,
                 Some(rel.clone()),
+                None,
+                None,
             ) {
                 items.push(item);
             }
@@ -82,6 +77,7 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
             &project.join(CURSOR_SKILLS_DIR),
             "project",
             CURSOR_SKILLS_DIR,
+            None,
         );
         push_mcp(
             &mut items,
@@ -91,18 +87,7 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
         );
     }
 
-    push_mcp(
-        &mut items,
-        &home.join(CURSOR_USER_MCP_REL),
-        "user",
-        "~/.cursor/mcp.json",
-    );
-    push_skills(
-        &mut items,
-        &home.join(CURSOR_USER_SKILLS_DIR),
-        "user",
-        "~/.cursor/skills",
-    );
+    push_user_and_builtin(&mut items, home);
     items.sort_by(|left, right| {
         left.kind
             .as_str()
@@ -112,7 +97,36 @@ pub fn scan(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
     items
 }
 
-fn push_skills(items: &mut Vec<ConversationContextItem>, dir: &Path, scope: &str, prefix: &str) {
+fn push_user_and_builtin(items: &mut Vec<ConversationContextItem>, home: &Path) {
+    push_mcp(
+        items,
+        &home.join(CURSOR_USER_MCP_REL),
+        "user",
+        "~/.cursor/mcp.json",
+    );
+    push_skills(
+        items,
+        &home.join(CURSOR_USER_SKILLS_DIR),
+        "user",
+        "~/.cursor/skills",
+        None,
+    );
+    push_skills(
+        items,
+        &home.join(CURSOR_BUILTIN_SKILLS_DIR),
+        "editor_builtin",
+        "~/.cursor/skills-cursor",
+        Some(ConversationContextLoadMode::Always),
+    );
+}
+
+fn push_skills(
+    items: &mut Vec<ConversationContextItem>,
+    dir: &Path,
+    scope: &str,
+    prefix: &str,
+    load_mode: Option<ConversationContextLoadMode>,
+) {
     if !dir.is_dir() {
         return;
     }
@@ -136,6 +150,8 @@ fn push_skills(items: &mut Vec<ConversationContextItem>, dir: &Path, scope: &str
             skill_id,
             &path,
             Some(rel),
+            Some(scope),
+            load_mode,
         ) {
             items.push(item);
         }
@@ -171,6 +187,7 @@ fn push_mcp(items: &mut Vec<ConversationContextItem>, path: &Path, scope: &str, 
             injection_status: None,
             char_count: None,
             is_noise: false,
+            is_unused_install: false,
             meta: Some(serde_json::json!({
                 "byte_size": byte_size,
                 "modified_at": modified_at,
@@ -187,8 +204,17 @@ fn file_item(
     label: &str,
     path: &Path,
     display: Option<String>,
+    scope: Option<&str>,
+    load_mode: Option<ConversationContextLoadMode>,
 ) -> Option<ConversationContextItem> {
     let (byte_size, modified_at) = file_stat(path)?;
+    let text = fs::read_to_string(path).ok();
+    let char_count = text.as_ref().map(|text| text.chars().count() as u64);
+    let load_mode = if kind == ConversationContextKind::Rule {
+        Some(mdc_load_mode(text.as_deref().unwrap_or("")))
+    } else {
+        load_mode
+    };
     let mut meta = serde_json::Map::new();
     meta.insert("byte_size".into(), serde_json::json!(byte_size));
     if let Some(modified_at) = modified_at {
@@ -197,16 +223,20 @@ fn file_item(
     if let Some(display) = display {
         meta.insert("display_path".into(), serde_json::json!(display));
     }
+    if let Some(scope) = scope {
+        meta.insert("config_scope".into(), serde_json::json!(scope));
+    }
     Some(ConversationContextItem {
         layer: ConversationContextLayer::OnDiskPossible,
         kind,
         id: id.to_string(),
         label: label.to_string(),
         path: Some(path.to_string_lossy().into_owned()),
-        load_mode: None,
+        load_mode,
         injection_status: None,
-        char_count: None,
+        char_count,
         is_noise: false,
+        is_unused_install: false,
         meta: Some(Value::Object(meta)),
     })
 }
@@ -216,4 +246,107 @@ fn rel_posix(root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn mdc_load_mode(text: &str) -> ConversationContextLoadMode {
+    let Some(map) = parse_frontmatter(text) else {
+        return ConversationContextLoadMode::Manual;
+    };
+    if yaml_true(map.get("alwaysApply")) {
+        return ConversationContextLoadMode::Always;
+    }
+    if yaml_present(map.get("globs")) {
+        return ConversationContextLoadMode::OnMatch;
+    }
+    if yaml_present(map.get("description")) {
+        return ConversationContextLoadMode::OnDemand;
+    }
+    ConversationContextLoadMode::Manual
+}
+
+fn parse_frontmatter(text: &str) -> Option<BTreeMap<String, String>> {
+    let body = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let rest = body.strip_prefix("---")?;
+    let rest = rest
+        .strip_prefix("\r\n")
+        .or_else(|| rest.strip_prefix('\n'))?;
+    let end = rest.find("\n---")?;
+    Some(parse_simple_yaml_map(&rest[..end]))
+}
+
+fn parse_simple_yaml_map(front: &str) -> BTreeMap<String, String> {
+    let mut map = BTreeMap::new();
+    let mut current_key: Option<String> = None;
+    let mut list_vals = Vec::new();
+    for line in front.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some(item) = trimmed.strip_prefix("- ") {
+            if current_key.is_some() {
+                let item = unquote(item.trim());
+                if !item.is_empty() {
+                    list_vals.push(item);
+                }
+            }
+            continue;
+        }
+        flush_yaml_key(&mut map, &mut current_key, &mut list_vals);
+        let Some((key, value)) = trimmed.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        let value = unquote(value.trim());
+        if value.is_empty() {
+            current_key = Some(key.to_string());
+        } else {
+            map.insert(key.to_string(), value);
+        }
+    }
+    flush_yaml_key(&mut map, &mut current_key, &mut list_vals);
+    map
+}
+
+fn flush_yaml_key(
+    map: &mut BTreeMap<String, String>,
+    current_key: &mut Option<String>,
+    list_vals: &mut Vec<String>,
+) {
+    if let Some(key) = current_key.take() {
+        if !list_vals.is_empty() {
+            map.insert(key, list_vals.join(","));
+        }
+        list_vals.clear();
+    }
+}
+
+fn unquote(value: &str) -> String {
+    let value = value.trim();
+    if value.len() >= 2 {
+        let bytes = value.as_bytes();
+        if (bytes[0] == b'"' && bytes[value.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[value.len() - 1] == b'\'')
+        {
+            return value[1..value.len() - 1].to_string();
+        }
+    }
+    value.to_string()
+}
+
+fn yaml_true(value: Option<&String>) -> bool {
+    matches!(
+        value.map(String::as_str),
+        Some("true" | "True" | "TRUE" | "yes" | "Yes")
+    )
+}
+
+fn yaml_present(value: Option<&String>) -> bool {
+    value.is_some_and(|value| {
+        let trimmed = value.trim();
+        !trimmed.is_empty() && trimmed != "~" && !trimmed.eq_ignore_ascii_case("null")
+    })
 }

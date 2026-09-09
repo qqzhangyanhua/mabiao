@@ -108,16 +108,25 @@
   color: var(--red-fg);
 }
 
-.conversation-context-mcp-failed {
+.conversation-context-mcp-failed,
+.conversation-context-unused,
+.conversation-context-builtin {
   display: grid;
   gap: 8px;
-  padding-top: 4px;
+  padding-top: 8px;
 }
 
-.conversation-context-mcp-failed > p {
+.conversation-context-mcp-failed > p,
+.conversation-context-unused > p,
+.conversation-context-builtin summary {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.conversation-context-builtin summary {
+  cursor: pointer;
+  color: var(--text-soft);
 }
 
 .conversation-context-kind {

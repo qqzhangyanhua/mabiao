@@ -628,6 +628,7 @@ export type ConversationContextItem = {
   injection_status?: ConversationContextInjectionStatus | null;
   char_count?: number | null;
   is_noise?: boolean;
+  is_unused_install?: boolean;
   meta?: Record<string, unknown> | null;
 };
 

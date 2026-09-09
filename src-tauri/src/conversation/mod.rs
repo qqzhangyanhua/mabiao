@@ -50,6 +50,8 @@ pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
     usage_records_page,
 };
+#[cfg(test)]
+pub(crate) use context_manifest::assemble;
 pub(crate) use discover::{
     detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
     discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,

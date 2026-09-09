@@ -244,7 +244,7 @@ fn cursor_disk_lists_existing_project_files_and_omits_missing_paths() {
         .iter()
         .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
     assert!(items.iter().all(|item| !item.label.contains("已注入")));
-    assert!(!ids.iter().any(|id| id.contains("env-setup")));
+    assert!(ids.iter().any(|id| id.contains("env-setup")));
     assert!(!ids.iter().any(|id| id.contains("CLAUDE.md")));
 
     let empty = tempfile::tempdir().unwrap();
@@ -265,6 +265,256 @@ fn cursor_disk_lists_existing_project_files_and_omits_missing_paths() {
         .iter()
         .any(|item| item.kind == ConversationContextKind::McpServer
             && item.id.starts_with("project:")));
+}
+
+fn meta_scope(item: &ConversationContextItem) -> Option<&str> {
+    item.meta
+        .as_ref()
+        .and_then(|meta| meta.get("config_scope"))
+        .and_then(|value| value.as_str())
+}
+
+fn context_item(
+    layer: ConversationContextLayer,
+    kind: ConversationContextKind,
+    id: &str,
+    label: &str,
+    path: Option<&str>,
+    load_mode: Option<ConversationContextLoadMode>,
+    scope: Option<&str>,
+) -> ConversationContextItem {
+    ConversationContextItem {
+        layer,
+        kind,
+        id: id.to_string(),
+        label: label.to_string(),
+        path: path.map(str::to_string),
+        load_mode,
+        injection_status: None,
+        char_count: Some(10),
+        is_noise: false,
+        is_unused_install: false,
+        meta: scope.map(|scope| serde_json::json!({ "config_scope": scope })),
+    }
+}
+
+#[test]
+fn cursor_disk_classifies_mdc_frontmatter_into_four_load_modes() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    write_text(
+        &project.path().join(".cursor/rules/always.mdc"),
+        "---\nalwaysApply: true\ndescription: always\n---\nbody\n",
+    );
+    write_text(
+        &project.path().join(".cursor/rules/glob.mdc"),
+        "---\nglobs: src/**/*.rs\nalwaysApply: false\n---\nbody\n",
+    );
+    write_text(
+        &project.path().join(".cursor/rules/glob-list.mdc"),
+        "---\nglobs:\n  - src/**/*.ts\n  - src/**/*.tsx\nalwaysApply: false\n---\n",
+    );
+    write_text(
+        &project.path().join(".cursor/rules/demand.mdc"),
+        "---\ndescription: on demand\n---\nbody\n",
+    );
+    write_text(
+        &project.path().join(".cursor/rules/manual.mdc"),
+        "no frontmatter\n",
+    );
+
+    let items = crate::instructions::cursor_disk::scan(home.path(), project.path());
+    let mode = |suffix: &str| {
+        items
+            .iter()
+            .find(|item| item.id.ends_with(suffix))
+            .map(|item| item.load_mode)
+    };
+    assert_eq!(
+        mode("always.mdc"),
+        Some(Some(ConversationContextLoadMode::Always))
+    );
+    assert_eq!(
+        mode("glob.mdc"),
+        Some(Some(ConversationContextLoadMode::OnMatch))
+    );
+    assert_eq!(
+        mode("glob-list.mdc"),
+        Some(Some(ConversationContextLoadMode::OnMatch))
+    );
+    assert_eq!(
+        mode("demand.mdc"),
+        Some(Some(ConversationContextLoadMode::OnDemand))
+    );
+    assert_eq!(
+        mode("manual.mdc"),
+        Some(Some(ConversationContextLoadMode::Manual))
+    );
+}
+
+#[test]
+fn cursor_disk_lists_builtin_skills_with_size_and_skips_plugin_cache_mcp() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let builtin = "---\nname: env-setup\n---\n# env\n";
+    write_text(
+        &home.path().join(".cursor/skills-cursor/env-setup/SKILL.md"),
+        builtin,
+    );
+    write_text(
+        &home.path().join(".cursor/plugins/cache/ext/mcp.json"),
+        r#"{"mcpServers":{"plugin-bot":{"command":"npx"}}}"#,
+    );
+    write_text(
+        &project.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"docs":{"command":"npx"}}}"#,
+    );
+
+    let items = crate::instructions::cursor_disk::scan(home.path(), project.path());
+    let env = items
+        .iter()
+        .find(|item| item.id.contains("env-setup"))
+        .expect("builtin skill should be listed");
+    assert_eq!(env.kind, ConversationContextKind::Skill);
+    assert_eq!(env.layer, ConversationContextLayer::OnDiskPossible);
+    assert_eq!(meta_scope(env), Some("editor_builtin"));
+    assert_eq!(env.char_count, Some(builtin.chars().count() as u64));
+    assert!(!env.is_noise);
+    assert!(!env.is_unused_install);
+    assert!(items.iter().all(|item| !item.id.contains("plugin-bot")));
+    assert!(items.iter().any(|item| item.id == "project:docs"));
+}
+
+#[test]
+fn cursor_assemble_marks_unused_installs_excluding_unmatched_globs_and_builtins() {
+    let injected = vec![context_item(
+        ConversationContextLayer::Injected,
+        ConversationContextKind::Skill,
+        "/tmp/home/.cursor/skills/review/SKILL.md",
+        "review",
+        Some("/tmp/home/.cursor/skills/review/SKILL.md"),
+        Some(ConversationContextLoadMode::Always),
+        None,
+    )];
+    let on_disk = vec![
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::Skill,
+            "user:review",
+            "review",
+            Some("/tmp/home/.cursor/skills/review/SKILL.md"),
+            None,
+            Some("user"),
+        ),
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::Skill,
+            "user:deploy",
+            "deploy",
+            Some("/tmp/home/.cursor/skills/deploy/SKILL.md"),
+            None,
+            Some("user"),
+        ),
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::Skill,
+            "editor_builtin:env-setup",
+            "env-setup",
+            Some("/tmp/home/.cursor/skills-cursor/env-setup/SKILL.md"),
+            Some(ConversationContextLoadMode::Always),
+            Some("editor_builtin"),
+        ),
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::Rule,
+            ".cursor/rules/glob.mdc",
+            "glob.mdc",
+            Some("/tmp/proj/.cursor/rules/glob.mdc"),
+            Some(ConversationContextLoadMode::OnMatch),
+            None,
+        ),
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::Rule,
+            ".cursor/rules/demand.mdc",
+            "demand.mdc",
+            Some("/tmp/proj/.cursor/rules/demand.mdc"),
+            Some(ConversationContextLoadMode::OnDemand),
+            None,
+        ),
+        context_item(
+            ConversationContextLayer::OnDiskPossible,
+            ConversationContextKind::McpServer,
+            "user:search",
+            "search",
+            Some("/tmp/home/.cursor/mcp.json"),
+            None,
+            Some("user"),
+        ),
+    ];
+    let manifest = crate::conversation::assemble(
+        Source::CursorAgent,
+        injected,
+        Vec::new(),
+        on_disk,
+        "/tmp/proj",
+        None,
+        &Default::default(),
+    );
+    let disk = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
+    let unused: Vec<&str> = disk
+        .iter()
+        .filter(|item| item.is_unused_install)
+        .map(|item| item.id.as_str())
+        .collect();
+    assert!(unused.contains(&"user:deploy"));
+    assert!(unused.contains(&".cursor/rules/demand.mdc"));
+    assert!(unused.contains(&"user:search"));
+    assert!(!unused.contains(&"user:review"));
+    assert!(
+        !unused.contains(&".cursor/rules/glob.mdc"),
+        "unmatched glob rules are not unused installs: {unused:?}"
+    );
+    assert!(
+        !unused.contains(&"editor_builtin:env-setup"),
+        "builtin skills are not unused installs: {unused:?}"
+    );
+    let builtin = disk
+        .iter()
+        .find(|item| item.id == "editor_builtin:env-setup")
+        .expect("builtin remains on disk layer");
+    assert!(!builtin.is_noise);
+    assert_eq!(builtin.char_count, Some(10));
+}
+
+#[test]
+fn cursor_injected_builtin_skill_is_not_noise() {
+    let injected = vec![context_item(
+        ConversationContextLayer::Injected,
+        ConversationContextKind::Skill,
+        "/tmp/home/.cursor/skills-cursor/create-rule/SKILL.md",
+        "create-rule",
+        Some("/tmp/home/.cursor/skills-cursor/create-rule/SKILL.md"),
+        Some(ConversationContextLoadMode::Always),
+        None,
+    )];
+    let manifest = crate::conversation::assemble(
+        Source::CursorAgent,
+        injected,
+        Vec::new(),
+        Vec::new(),
+        "/tmp/proj",
+        None,
+        &Default::default(),
+    );
+    let skill = layer_items(&manifest.items, ConversationContextLayer::Injected)
+        .into_iter()
+        .find(|item| item.label == "create-rule")
+        .expect("injected builtin skill");
+    assert!(
+        !skill.is_noise,
+        "editor builtin skills must not take the noise flag: {skill:?}"
+    );
 }
 
 #[test]

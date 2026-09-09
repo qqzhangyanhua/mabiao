@@ -7,12 +7,14 @@ import {
   contextForbiddenCopy,
   contextItemCharText,
   contextItemMetaText,
+  contextItemsTokenSummary,
   contextKindLabel,
   contextLayerItems,
   contextLayerNote,
   contextManifestSummary,
   contextMcpInitSummary,
   isDisconnectedMcp,
+  partitionContextItems,
 } from "./conversationContext";
 
 const manifest: ConversationContextManifest = {
@@ -150,5 +152,49 @@ describe("conversationContext", () => {
     expect(isDisconnectedMcp(failed)).toBe(true);
     expect(contextItemMetaText(failed)).toBe("需鉴权 · 不占 token");
     expect(contextItemCharText(failed)).toBeNull();
+  });
+
+  it("partitions unused installs and editor builtin skills", () => {
+    const unused = {
+      layer: "on_disk_possible" as const,
+      kind: "skill" as const,
+      id: "user:deploy",
+      label: "deploy",
+      load_mode: "on_demand" as const,
+      char_count: 12,
+      is_unused_install: true,
+      meta: { config_scope: "user" },
+    };
+    const glob = {
+      layer: "on_disk_possible" as const,
+      kind: "rule" as const,
+      id: ".cursor/rules/glob.mdc",
+      label: "glob.mdc",
+      load_mode: "on_match" as const,
+      char_count: 8,
+    };
+    const builtin = {
+      layer: "on_disk_possible" as const,
+      kind: "skill" as const,
+      id: "editor_builtin:env-setup",
+      label: "env-setup",
+      load_mode: "always" as const,
+      char_count: 20,
+      meta: { config_scope: "editor_builtin" },
+    };
+    const groups = partitionContextItems([unused, glob, builtin]);
+    expect(groups.primary.map((item) => item.id)).toEqual([".cursor/rules/glob.mdc"]);
+    expect(groups.unusedInstalls.map((item) => item.id)).toEqual(["user:deploy"]);
+    expect(groups.editorBuiltin.map((item) => item.id)).toEqual([
+      "editor_builtin:env-setup",
+    ]);
+    expect(contextItemMetaText(glob)).toBe("路径命中 · 约 2 tok");
+    expect(contextItemMetaText(builtin)).toBe("常驻 · 约 5 tok · 编辑器内置");
+    expect(contextItemsTokenSummary(groups.editorBuiltin)).toBe("约 5 tok");
+    expect(
+      contextManifestSummary({
+        items: [unused, glob, builtin],
+      }),
+    ).toBe("已注入 0 · 已观测 0 · 可能生效 3 · 白装了 1");
   });
 });

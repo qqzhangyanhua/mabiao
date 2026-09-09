@@ -3,6 +3,7 @@ import type {
   ConversationContextItem,
   ConversationContextKind,
   ConversationContextLayer,
+  ConversationContextLoadMode,
   ConversationContextManifest,
 } from "../types";
 import { formatTokens } from "./format";
@@ -55,6 +56,15 @@ const SCOPE_LABELS: Record<string, string> = {
   "cursor-project": "Cursor 项目级",
   mcp_json: ".mcp.json",
   config: "配置 paths",
+  editor_builtin: "编辑器内置",
+};
+
+const LOAD_MODE_LABELS: Record<ConversationContextLoadMode, string> = {
+  always: "常驻",
+  on_match: "路径命中",
+  on_demand: "按需",
+  manual: "手动",
+  observed: "已观测",
 };
 
 export function charsToTokens(chars: number): number {
@@ -89,7 +99,9 @@ export function contextManifestSummary(manifest: ConversationContextManifest): s
   const injected = contextLayerItems(manifest, "injected").length;
   const observed = contextLayerItems(manifest, "observed").length;
   const possible = contextLayerItems(manifest, "on_disk_possible").length;
-  return `已注入 ${injected} · 已观测 ${observed} · 可能生效 ${possible}`;
+  const unused = manifest.items.filter((item) => item.is_unused_install).length;
+  const base = `已注入 ${injected} · 已观测 ${observed} · 可能生效 ${possible}`;
+  return unused > 0 ? `${base} · 白装了 ${unused}` : base;
 }
 
 export function contextItemMetaText(item: ConversationContextItem): string | null {
@@ -97,6 +109,9 @@ export function contextItemMetaText(item: ConversationContextItem): string | nul
   const parts: string[] = [];
   if (item.is_noise) {
     parts.push("噪音");
+  }
+  if (item.layer === "on_disk_possible" && item.load_mode) {
+    parts.push(LOAD_MODE_LABELS[item.load_mode]);
   }
   if (item.injection_status && item.injection_status !== "connected") {
     parts.push(INJECTION_STATUS_LABELS[item.injection_status]);
@@ -175,4 +190,42 @@ export function isDisconnectedMcp(item: ConversationContextItem): boolean {
     item.injection_status != null &&
     item.injection_status !== "connected"
   );
+}
+
+export function isEditorBuiltin(item: ConversationContextItem): boolean {
+  return (
+    item.id.startsWith("editor_builtin:") ||
+    readString(item.meta?.config_scope) === "editor_builtin"
+  );
+}
+
+export function isUnusedInstall(item: ConversationContextItem): boolean {
+  return item.is_unused_install === true;
+}
+
+export function contextItemsTokenSummary(items: ConversationContextItem[]): string | null {
+  const chars = items.reduce((sum, item) => {
+    const count = readFiniteNumber(item.char_count);
+    return count === null ? sum : sum + count;
+  }, 0);
+  if (chars <= 0) {
+    return null;
+  }
+  return `约 ${formatTokens(charsToTokens(chars))} tok`;
+}
+
+export function partitionContextItems(items: ConversationContextItem[]): {
+  primary: ConversationContextItem[];
+  unusedInstalls: ConversationContextItem[];
+  editorBuiltin: ConversationContextItem[];
+  disconnectedMcp: ConversationContextItem[];
+} {
+  const disconnectedMcp = items.filter(isDisconnectedMcp);
+  const rest = items.filter((item) => !isDisconnectedMcp(item));
+  const editorBuiltin = rest.filter(isEditorBuiltin);
+  const unusedInstalls = rest.filter(
+    (item) => isUnusedInstall(item) && !isEditorBuiltin(item),
+  );
+  const primary = rest.filter((item) => !isEditorBuiltin(item) && !isUnusedInstall(item));
+  return { primary, unusedInstalls, editorBuiltin, disconnectedMcp };
 }
