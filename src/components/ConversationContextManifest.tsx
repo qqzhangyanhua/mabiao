@@ -1,14 +1,16 @@
 import { CollapsibleSection } from "./CollapsibleSection";
 import {
-  CONTEXT_LAYER_BADGE,
-  CONTEXT_LAYER_HINT,
-  CONTEXT_LAYER_TITLE,
+  contextCompletenessNote,
+  contextInjectedDegraded,
   contextItemCharText,
   contextItemMetaText,
   contextItemsTokenSummary,
   contextKindLabel,
+  contextLayerBadge,
+  contextLayerHint,
   contextLayerItems,
   contextLayerNote,
+  contextLayerTitle,
   contextManifestSummary,
   contextMcpInitSummary,
   partitionContextItems,
@@ -27,6 +29,8 @@ export function ConversationContextManifestPanel({
   manifest: ConversationContextManifest;
 }) {
   const mcpSummary = contextMcpInitSummary(manifest);
+  const completeness = contextCompletenessNote(manifest);
+  const volumeIsEstimate = manifest.volume_is_estimate === true;
   return (
     <CollapsibleSection
       sectionId="conversation-context-manifest"
@@ -39,6 +43,9 @@ export function ConversationContextManifestPanel({
         复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效。白装了是磁盘有、本轮没送进上下文的差集。
       </p>
       {mcpSummary ? <p className="conversation-context-mcp-summary">{mcpSummary}</p> : null}
+      {completeness ? (
+        <p className="conversation-context-completeness">{completeness}</p>
+      ) : null}
       <div className="conversation-context-layers">
         {LAYERS.map((layer) => (
           <ContextLayer
@@ -46,6 +53,8 @@ export function ConversationContextManifestPanel({
             layer={layer}
             items={contextLayerItems(manifest, layer)}
             note={contextLayerNote(manifest, layer)}
+            manifest={manifest}
+            volumeIsEstimate={volumeIsEstimate}
           />
         ))}
       </div>
@@ -57,42 +66,62 @@ function ContextLayer({
   layer,
   items,
   note,
+  manifest,
+  volumeIsEstimate,
 }: {
   layer: ConversationContextLayer;
   items: ConversationContextItem[];
   note?: string | null;
+  manifest: ConversationContextManifest;
+  volumeIsEstimate: boolean;
 }) {
+  const title = contextLayerTitle(layer, manifest);
+  const degraded = contextInjectedDegraded(layer, manifest);
+
   return (
-    <section className={`conversation-context-layer layer-${layer}`} aria-label={CONTEXT_LAYER_TITLE[layer]}>
+    <section
+      className={`conversation-context-layer layer-${layer}${degraded ? " is-degraded" : ""}`}
+      aria-label={title}
+    >
       <header>
-        <h3>{CONTEXT_LAYER_TITLE[layer]}</h3>
-        <span className={`conversation-context-badge layer-${layer}`}>
-          {CONTEXT_LAYER_BADGE[layer]}
+        <h3>{title}</h3>
+        <span className={`conversation-context-badge layer-${layer}${degraded ? " is-degraded" : ""}`}>
+          {contextLayerBadge(layer, manifest)}
         </span>
       </header>
-      <p className="muted">{CONTEXT_LAYER_HINT[layer]}</p>
+      <p className="muted">{contextLayerHint(layer, manifest)}</p>
       {items.length === 0 ? (
         <p className="conversation-context-empty" role="status">
           {note ?? "源文件未落盘，无法确认。"}
         </p>
       ) : (
-        <ContextItemGroups items={items} />
+        <ContextItemGroups items={items} volumeIsEstimate={volumeIsEstimate} />
       )}
       {items.length > 0 && note ? <p className="muted conversation-context-note">{note}</p> : null}
     </section>
   );
 }
 
-function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
+function ContextItemGroups({
+  items,
+  volumeIsEstimate,
+}: {
+  items: ConversationContextItem[];
+  volumeIsEstimate: boolean;
+}) {
   const { primary, unusedInstalls, editorBuiltin, disconnectedMcp } =
     partitionContextItems(items);
-  const builtinSummary = contextItemsTokenSummary(editorBuiltin);
+  const builtinSummary = contextItemsTokenSummary(editorBuiltin, volumeIsEstimate);
   return (
     <>
       {primary.length > 0 ? (
         <ul>
           {primary.map((item) => (
-            <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+            <ContextItemRow
+              key={`${item.layer}:${item.kind}:${item.id}`}
+              item={item}
+              volumeIsEstimate={volumeIsEstimate}
+            />
           ))}
         </ul>
       ) : null}
@@ -101,7 +130,11 @@ function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
           <p className="muted">白装了（磁盘有、本轮没送进上下文）</p>
           <ul>
             {unusedInstalls.map((item) => (
-              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+              <ContextItemRow
+                key={`${item.layer}:${item.kind}:${item.id}`}
+                item={item}
+                volumeIsEstimate={volumeIsEstimate}
+              />
             ))}
           </ul>
         </div>
@@ -114,7 +147,11 @@ function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
           </summary>
           <ul>
             {editorBuiltin.map((item) => (
-              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+              <ContextItemRow
+                key={`${item.layer}:${item.kind}:${item.id}`}
+                item={item}
+                volumeIsEstimate={volumeIsEstimate}
+              />
             ))}
           </ul>
         </details>
@@ -124,7 +161,11 @@ function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
           <p className="muted">未连上（不占 token，不是噪音）</p>
           <ul>
             {disconnectedMcp.map((item) => (
-              <ContextItemRow key={`${item.layer}:${item.kind}:${item.id}`} item={item} />
+              <ContextItemRow
+                key={`${item.layer}:${item.kind}:${item.id}`}
+                item={item}
+                volumeIsEstimate={volumeIsEstimate}
+              />
             ))}
           </ul>
         </div>
@@ -133,16 +174,21 @@ function ContextItemGroups({ items }: { items: ConversationContextItem[] }) {
   );
 }
 
-function ContextItemRow({ item }: { item: ConversationContextItem }) {
+function ContextItemRow({
+  item,
+  volumeIsEstimate,
+}: {
+  item: ConversationContextItem;
+  volumeIsEstimate: boolean;
+}) {
+  const meta = contextItemMetaText(item, { volumeIsEstimate });
   return (
     <li className={item.is_noise ? "is-noise" : undefined}>
       <span className="conversation-context-kind">{contextKindLabel(item.kind)}</span>
       <div>
         <strong>{item.label}</strong>
         {item.path ? <code>{item.path}</code> : null}
-        {contextItemMetaText(item) ? (
-          <span className="muted">{contextItemMetaText(item)}</span>
-        ) : null}
+        {meta ? <span className="muted">{meta}</span> : null}
         {contextItemCharText(item) ? (
           <span className="muted">{contextItemCharText(item)}</span>
         ) : null}

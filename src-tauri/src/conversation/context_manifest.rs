@@ -18,8 +18,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use chrono::DateTime;
 use rusqlite::{params, Connection};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::domain::{
     ConversationContextInjectionStatus, ConversationContextItem, ConversationContextKind,
@@ -31,6 +32,8 @@ use super::{cursor_inject, event_index, grok_inject};
 
 const INJECTED_EMPTY: &str = "未发现本轮注入条目。";
 const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。";
+const INJECTED_DEGRADED: &str = "注入快照已过期（Cursor 只保留约 40 天），以下为按当前磁盘状态重建";
+
 const OBSERVED_EMPTY: &str =
     "源文件未留下可观测的工具、系统状态或 skill 引用，无法确认本轮注入了什么。";
 const ON_DISK_POSSIBLE: &str =
@@ -65,23 +68,30 @@ pub(crate) fn for_session(
         }
         _ => return None,
     };
-    let (injected, mcp_init_summary, called_mcp) = match source {
+    let (injected, mcp_init_summary, called_mcp, snapshot_found, incomplete_keys) = match source {
         Source::Grok => {
             let snapshot = grok_inject::from_session(session);
             (
                 snapshot.items,
                 snapshot.mcp_init_summary,
                 snapshot.called_mcp,
+                true,
+                None,
             )
         }
-        Source::CursorAgent => (
-            cursor_inject::from_session(home, session),
-            None,
-            BTreeSet::new(),
-        ),
-        _ => (Vec::new(), None, BTreeSet::new()),
+        Source::CursorAgent => {
+            let snapshot = cursor_inject::from_session(home, session);
+            (
+                snapshot.items,
+                None,
+                BTreeSet::new(),
+                snapshot.found,
+                snapshot.incomplete_keys,
+            )
+        }
+        _ => (Vec::new(), None, BTreeSet::new(), true, None),
     };
-    Some(assemble(
+    let mut manifest = assemble(
         source,
         injected,
         observed,
@@ -89,7 +99,15 @@ pub(crate) fn for_session(
         session.project.as_str(),
         mcp_init_summary,
         &called_mcp,
-    ))
+    );
+    apply_honesty(
+        &mut manifest,
+        source,
+        session,
+        snapshot_found,
+        incomplete_keys,
+    );
+    Some(manifest)
 }
 
 pub(crate) fn assemble(
@@ -128,6 +146,61 @@ pub(crate) fn assemble(
         observed_note,
         on_disk_note,
         mcp_init_summary,
+        has_injected_snapshot: true,
+        volume_is_estimate: false,
+        completeness_note: None,
+    }
+}
+
+fn apply_honesty(
+    manifest: &mut ConversationContextManifest,
+    source: Source,
+    session: &ConversationSessionRow,
+    snapshot_found: bool,
+    incomplete_keys: Option<Vec<String>>,
+) {
+    if source == Source::CursorAgent {
+        manifest.volume_is_estimate = true;
+        if !snapshot_found {
+            manifest.has_injected_snapshot = false;
+            manifest.injected_note = Some(INJECTED_DEGRADED.to_string());
+        }
+        if let Some(keys) = incomplete_keys {
+            if !keys.is_empty() {
+                manifest.completeness_note = Some(format!("上下文采集不完整：{}", keys.join("、")));
+            }
+        }
+    }
+    mark_changed_after_session(&mut manifest.items, &session.ended_at);
+}
+
+fn mark_changed_after_session(items: &mut [ConversationContextItem], session_ended_at: &str) {
+    if session_ended_at.is_empty() {
+        return;
+    }
+    let Ok(ended) = DateTime::parse_from_rfc3339(session_ended_at) else {
+        return;
+    };
+    for item in items {
+        if item.layer != ConversationContextLayer::OnDiskPossible {
+            continue;
+        }
+        let Some(meta) = item.meta.as_mut().and_then(Value::as_object_mut) else {
+            continue;
+        };
+        let Some(mtime) = meta
+            .get("modified_at")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let Ok(modified) = DateTime::parse_from_rfc3339(&mtime) else {
+            continue;
+        };
+        if modified > ended {
+            meta.insert("changed_after_session".into(), json!(true));
+        }
     }
 }
 

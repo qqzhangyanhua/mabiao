@@ -638,6 +638,9 @@ export type ConversationContextManifest = {
   observed_note?: string | null;
   on_disk_note?: string | null;
   mcp_init_summary?: string | null;
+  has_injected_snapshot?: boolean;
+  volume_is_estimate?: boolean;
+  completeness_note?: string | null;
 };
 
 export interface ConversationDetailDto {

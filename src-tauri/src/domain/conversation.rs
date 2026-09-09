@@ -446,6 +446,19 @@ pub struct ConversationContextManifest {
     pub on_disk_note: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_init_summary: Option<String>,
+    /// Cursor 无注入快照时为 false，界面不得装成已注入。
+    #[serde(default = "default_true")]
+    pub has_injected_snapshot: bool,
+    /// Cursor 本机拿不到逐轮实测 token，体积只是估算。
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub volume_is_estimate: bool,
+    /// `requestContextCompleteness` 含 false 时点名；全 true 或缺失则不下发。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completeness_note: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

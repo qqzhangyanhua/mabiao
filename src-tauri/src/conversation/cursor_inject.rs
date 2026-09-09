@@ -18,18 +18,43 @@ use crate::domain::{
 use crate::proto_wire;
 
 const UNRECOGNIZED_ID: &str = "unrecognized";
+const COMPLETENESS_KEYS: [&str; 9] = [
+    "agentSkills",
+    "customSubagents",
+    "env",
+    "gitRepos",
+    "gitStatus",
+    "mcp",
+    "mcpFileSystem",
+    "repositoryInfo",
+    "rules",
+];
 
-pub(crate) fn from_session(
-    home: &Path,
-    session: &ConversationSessionRow,
-) -> Vec<ConversationContextItem> {
+#[derive(Default)]
+pub(crate) struct CursorSnapshot {
+    pub items: Vec<ConversationContextItem>,
+    pub found: bool,
+    pub incomplete_keys: Option<Vec<String>>,
+}
+
+pub(crate) fn from_session(home: &Path, session: &ConversationSessionRow) -> CursorSnapshot {
     let Some(path) = find_store_db(home, &session.session_id) else {
-        return Vec::new();
+        return CursorSnapshot::default();
     };
-    let Some(text) = first_turn_user_text(&path) else {
-        return Vec::new();
+    let messages = restore_messages(&path);
+    let Some(user) = messages.get(1) else {
+        return CursorSnapshot::default();
     };
-    items_from_text(&text)
+    if user.get("role").and_then(Value::as_str) != Some("user") {
+        return CursorSnapshot::default();
+    }
+    CursorSnapshot {
+        items: json_message_text(user)
+            .map(|text| items_from_text(&text))
+            .unwrap_or_default(),
+        found: true,
+        incomplete_keys: incomplete_keys(user),
+    }
 }
 
 fn find_store_db(home: &Path, session_id: &str) -> Option<PathBuf> {
@@ -55,13 +80,20 @@ fn find_store_db(home: &Path, session_id: &str) -> Option<PathBuf> {
     found
 }
 
-fn first_turn_user_text(path: &Path) -> Option<String> {
-    let messages = restore_messages(path);
-    let user = messages.get(1)?;
-    if user.get("role").and_then(Value::as_str) != Some("user") {
-        return None;
-    }
-    json_message_text(user)
+fn incomplete_keys(message: &Value) -> Option<Vec<String>> {
+    let obj = message
+        .get("providerOptions")?
+        .get("cursor")?
+        .get("requestContextCompleteness")?
+        .as_object()?;
+    Some(
+        COMPLETENESS_KEYS
+            .iter()
+            .copied()
+            .filter(|key| obj.get(*key) == Some(&Value::Bool(false)))
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 fn restore_messages(path: &Path) -> Vec<Value> {

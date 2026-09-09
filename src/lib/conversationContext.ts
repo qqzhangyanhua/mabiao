@@ -29,6 +29,9 @@ export const CONTEXT_LAYER_BADGE: Record<ConversationContextLayer, string> = {
   on_disk_possible: "可能生效 / 磁盘存在",
 };
 
+export const CHANGED_AFTER_SESSION_NOTE = "会话后已改动，当时内容可能不同";
+
+
 const KIND_LABELS: Record<ConversationContextKind, string> = {
   tool: "工具",
   system_status: "系统状态",
@@ -100,11 +103,70 @@ export function contextManifestSummary(manifest: ConversationContextManifest): s
   const observed = contextLayerItems(manifest, "observed").length;
   const possible = contextLayerItems(manifest, "on_disk_possible").length;
   const unused = manifest.items.filter((item) => item.is_unused_install).length;
-  const base = `已注入 ${injected} · 已观测 ${observed} · 可能生效 ${possible}`;
+  const injectedLabel = contextHasInjectedSnapshot(manifest)
+    ? `已注入 ${injected}`
+    : "快照已过期";
+  const base = `${injectedLabel} · 已观测 ${observed} · 可能生效 ${possible}`;
   return unused > 0 ? `${base} · 白装了 ${unused}` : base;
 }
 
-export function contextItemMetaText(item: ConversationContextItem): string | null {
+export function contextHasInjectedSnapshot(manifest: ConversationContextManifest): boolean {
+  return manifest.has_injected_snapshot !== false;
+}
+
+export function contextInjectedDegraded(
+  layer: ConversationContextLayer,
+  manifest: ConversationContextManifest,
+): boolean {
+  return layer === "injected" && !contextHasInjectedSnapshot(manifest);
+}
+
+export function contextLayerTitle(
+  layer: ConversationContextLayer,
+  manifest: ConversationContextManifest,
+): string {
+  if (contextInjectedDegraded(layer, manifest)) {
+    return "注入快照已过期";
+  }
+  return CONTEXT_LAYER_TITLE[layer];
+}
+
+export function contextLayerBadge(
+  layer: ConversationContextLayer,
+  manifest: ConversationContextManifest,
+): string {
+  if (contextInjectedDegraded(layer, manifest)) {
+    return "已过期";
+  }
+  return CONTEXT_LAYER_BADGE[layer];
+}
+
+export function contextLayerHint(
+  layer: ConversationContextLayer,
+  manifest: ConversationContextManifest,
+): string {
+  if (contextInjectedDegraded(layer, manifest)) {
+    return "Cursor 只保留约 40 天会话存储。没有首轮注入快照，当前内容为按当前磁盘状态重建。";
+  }
+  return CONTEXT_LAYER_HINT[layer];
+}
+
+
+export function contextCompletenessNote(manifest: ConversationContextManifest): string | null {
+  const note = manifest.completeness_note?.trim();
+  return note ? note : null;
+}
+
+function volumeText(chars: number, estimated: boolean): string {
+  const body = `约 ${formatTokens(charsToTokens(chars))} tok`;
+  return estimated ? `估算${body}` : body;
+}
+
+
+export function contextItemMetaText(
+  item: ConversationContextItem,
+  options?: { volumeIsEstimate?: boolean },
+): string | null {
   const meta = item.meta;
   const parts: string[] = [];
   if (item.is_noise) {
@@ -129,7 +191,7 @@ export function contextItemMetaText(item: ConversationContextItem): string | nul
   }
   const charCount = readFiniteNumber(item.char_count);
   if (charCount !== null) {
-    parts.push(`约 ${formatTokens(charsToTokens(charCount))} tok`);
+    parts.push(volumeText(charCount, options?.volumeIsEstimate === true));
   } else {
     const byteSize = meta ? readFiniteNumber(meta.byte_size) : null;
     if (byteSize !== null) {
@@ -143,6 +205,9 @@ export function contextItemMetaText(item: ConversationContextItem): string | nul
   const modifiedAt = meta ? readString(meta.modified_at) : null;
   if (modifiedAt) {
     parts.push(modifiedAt);
+  }
+  if (meta?.changed_after_session === true) {
+    parts.push(CHANGED_AFTER_SESSION_NOTE);
   }
   const scope = meta ? readString(meta.config_scope) : null;
   if (scope) {
@@ -203,7 +268,10 @@ export function isUnusedInstall(item: ConversationContextItem): boolean {
   return item.is_unused_install === true;
 }
 
-export function contextItemsTokenSummary(items: ConversationContextItem[]): string | null {
+export function contextItemsTokenSummary(
+  items: ConversationContextItem[],
+  volumeIsEstimate = false,
+): string | null {
   const chars = items.reduce((sum, item) => {
     const count = readFiniteNumber(item.char_count);
     return count === null ? sum : sum + count;
@@ -211,7 +279,7 @@ export function contextItemsTokenSummary(items: ConversationContextItem[]): stri
   if (chars <= 0) {
     return null;
   }
-  return `约 ${formatTokens(charsToTokens(chars))} tok`;
+  return volumeText(chars, volumeIsEstimate);
 }
 
 export function partitionContextItems(items: ConversationContextItem[]): {

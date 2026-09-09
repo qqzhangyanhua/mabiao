@@ -1,16 +1,22 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationContextManifest } from "../types";
 import {
+  CHANGED_AFTER_SESSION_NOTE,
   CONTEXT_LAYER_HINT,
   CONTEXT_LAYER_TITLE,
   charsToTokens,
+  contextCompletenessNote,
   contextForbiddenCopy,
+  contextHasInjectedSnapshot,
   contextItemCharText,
   contextItemMetaText,
   contextItemsTokenSummary,
   contextKindLabel,
+  contextLayerBadge,
+  contextLayerHint,
   contextLayerItems,
   contextLayerNote,
+  contextLayerTitle,
   contextManifestSummary,
   contextMcpInitSummary,
   isDisconnectedMcp,
@@ -196,5 +202,56 @@ describe("conversationContext", () => {
         items: [unused, glob, builtin],
       }),
     ).toBe("已注入 0 · 已观测 0 · 可能生效 3 · 白装了 1");
+  });
+
+  it("distinguishes missing Cursor snapshot copy from injected snapshot copy", () => {
+    const degraded: ConversationContextManifest = {
+      items: [],
+      has_injected_snapshot: false,
+      injected_note: "注入快照已过期（Cursor 只保留约 40 天），以下为按当前磁盘状态重建",
+      volume_is_estimate: true,
+    };
+    expect(contextHasInjectedSnapshot(manifest)).toBe(true);
+    expect(contextHasInjectedSnapshot(degraded)).toBe(false);
+    expect(contextLayerTitle("injected", degraded)).toBe("注入快照已过期");
+    expect(contextLayerBadge("injected", degraded)).toBe("已过期");
+    expect(contextLayerHint("injected", degraded)).toContain("40 天");
+    expect(contextLayerHint("injected", degraded)).toContain("重建");
+    expect(contextLayerTitle("injected", manifest)).toBe(CONTEXT_LAYER_TITLE.injected);
+    expect(contextLayerHint("injected", manifest)).toBe(CONTEXT_LAYER_HINT.injected);
+    expect(contextManifestSummary(degraded)).toContain("快照已过期");
+
+    expect(contextForbiddenCopy(degraded.injected_note ?? "", "injected")).toBe(false);
+  });
+
+  it("labels Cursor volume as an estimate and names stale disk files", () => {
+    expect(contextItemMetaText(manifest.items[0])).toBe("约 3 tok");
+    expect(contextItemMetaText(manifest.items[0], { volumeIsEstimate: true })).toBe(
+      "估算约 3 tok",
+    );
+    expect(contextItemsTokenSummary(manifest.items, true)).toBe("估算约 3 tok");
+    expect(
+      contextItemMetaText({
+        layer: "on_disk_possible",
+        kind: "instruction",
+        id: "AGENTS.md",
+        label: "AGENTS.md",
+        meta: {
+          byte_size: 12,
+          modified_at: "2026-09-09T12:00:00Z",
+          changed_after_session: true,
+        },
+      }),
+    ).toBe(`12 B · 2026-09-09T12:00:00Z · ${CHANGED_AFTER_SESSION_NOTE}`);
+  });
+
+  it("surfaces completeness note only when present", () => {
+    expect(contextCompletenessNote(manifest)).toBeNull();
+    expect(
+      contextCompletenessNote({
+        items: [],
+        completeness_note: "上下文采集不完整：gitRepos、mcp",
+      }),
+    ).toBe("上下文采集不完整：gitRepos、mcp");
   });
 });

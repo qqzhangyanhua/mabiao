@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, UNIX_EPOCH};
 
 use rusqlite::params;
 
@@ -1821,4 +1822,210 @@ fn cursor_inject_degrades_one_broken_section() {
     assert_eq!(sum, user.chars().count() as u64);
     let dto_json = serde_json::to_string(&detail).unwrap();
     assert!(!dto_json.contains("UNIQUE_CURSOR_BROKEN_SKILL"));
+}
+
+fn completeness_map(false_keys: &[&str]) -> serde_json::Value {
+    let keys = [
+        "agentSkills",
+        "customSubagents",
+        "env",
+        "gitRepos",
+        "gitStatus",
+        "mcp",
+        "mcpFileSystem",
+        "repositoryInfo",
+        "rules",
+    ];
+    let mut map = serde_json::Map::new();
+    for key in keys {
+        map.insert(
+            key.to_string(),
+            serde_json::json!(!false_keys.contains(&key)),
+        );
+    }
+    serde_json::Value::Object(map)
+}
+
+fn cursor_user_with_completeness(content: &str, false_keys: &[&str]) -> serde_json::Value {
+    serde_json::json!({
+        "role": "user",
+        "content": content,
+        "providerOptions": {
+            "cursor": {
+                "requestContextCompleteness": completeness_map(false_keys)
+            }
+        }
+    })
+}
+
+fn set_mtime(path: &Path, rfc3339: &str) {
+    let dt = chrono::DateTime::parse_from_rfc3339(rfc3339).expect("mtime rfc3339");
+    let system = UNIX_EPOCH + Duration::new(dt.timestamp() as u64, dt.timestamp_subsec_nanos());
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("open for mtime")
+        .set_modified(system)
+        .expect("set mtime");
+}
+
+fn changed_after_session(item: &ConversationContextItem) -> bool {
+    item.meta
+        .as_ref()
+        .and_then(|meta| meta.get("changed_after_session"))
+        .and_then(|value| value.as_bool())
+        == Some(true)
+}
+
+#[test]
+fn cursor_detail_without_inject_snapshot_shows_degraded_rebuild_note() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = tempfile::tempdir().unwrap();
+    seed_cursor_transcript(home, "sess-expired-snap");
+    write_text(&project.path().join("AGENTS.md"), "# agents\n");
+
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    conn.execute(
+        "UPDATE conversation_sessions SET project = ?1 WHERE source = 'cursor_agent' AND session_id = 'sess-expired-snap'",
+        params![project.path().to_string_lossy()],
+    )
+    .unwrap();
+
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-expired-snap").unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("cursor detail should carry a context manifest");
+    assert!(
+        !manifest.has_injected_snapshot,
+        "missing store.db must not look like a snapshot: {manifest:?}"
+    );
+    let note = manifest
+        .injected_note
+        .as_deref()
+        .expect("degraded sessions need an injected note");
+    assert!(
+        note.contains("40 天") && note.contains("按当前磁盘状态重建"),
+        "degraded note must name the retention window and rebuild: {note}"
+    );
+    assert!(
+        !note.contains("已注入"),
+        "degraded note must not claim injection: {note}"
+    );
+    assert!(layer_items(&manifest.items, ConversationContextLayer::Injected).is_empty());
+    let possible = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
+    assert!(
+        kind_ids(&possible, ConversationContextKind::Instruction).contains(&"AGENTS.md".into()),
+        "rebuild still lists current disk files: {possible:?}"
+    );
+    assert!(manifest.volume_is_estimate);
+}
+
+#[test]
+fn cursor_detail_with_inject_snapshot_stays_distinct_from_degraded() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_cursor_transcript(home, "sess-snap-present");
+    write_cursor_chat_store(
+        home,
+        "sess-snap-present",
+        &[
+            serde_json::json!({"role":"system","content":"sys"}),
+            cursor_user_with_completeness("hello", &[]),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-snap-present").unwrap();
+    let manifest = detail.context_manifest.as_ref().unwrap();
+    assert!(manifest.has_injected_snapshot);
+    assert!(manifest
+        .injected_note
+        .as_deref()
+        .is_some_and(|note| note.contains("已注入") && !note.contains("40 天")));
+    assert!(manifest.completeness_note.is_none());
+    assert!(manifest.volume_is_estimate);
+}
+
+#[test]
+fn cursor_detail_marks_disk_files_changed_after_session() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = tempfile::tempdir().unwrap();
+    seed_cursor_transcript(home, "sess-stale-disk");
+    let agents = project.path().join("AGENTS.md");
+    let rule = project.path().join(".cursor/rules/rust.mdc");
+    write_text(&agents, "# agents\n");
+    write_text(&rule, "always use rust\n");
+    set_mtime(&agents, "2026-06-01T00:00:00Z");
+    set_mtime(&rule, "2026-09-09T12:00:00Z");
+
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    conn.execute(
+        "UPDATE conversation_sessions SET project = ?1 WHERE source = 'cursor_agent' AND session_id = 'sess-stale-disk'",
+        params![project.path().to_string_lossy()],
+    )
+    .unwrap();
+
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-stale-disk").unwrap();
+    let possible = layer_items(
+        &detail.context_manifest.as_ref().unwrap().items,
+        ConversationContextLayer::OnDiskPossible,
+    );
+    let agents_item = possible
+        .iter()
+        .find(|item| item.id == "AGENTS.md")
+        .expect("AGENTS.md on disk");
+    let rule_item = possible
+        .iter()
+        .find(|item| item.id.ends_with("rust.mdc"))
+        .expect("rule on disk");
+    assert!(
+        !changed_after_session(agents_item),
+        "mtime before session must not be marked stale: {agents_item:?}"
+    );
+    assert!(
+        changed_after_session(rule_item),
+        "mtime after session must be marked stale: {rule_item:?}"
+    );
+}
+
+#[test]
+fn cursor_detail_names_incomplete_context_keys() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    seed_cursor_transcript(home, "sess-incomplete");
+    write_cursor_chat_store(
+        home,
+        "sess-incomplete",
+        &[
+            serde_json::json!({"role":"system","content":"sys"}),
+            cursor_user_with_completeness("hi", &["gitRepos", "mcp"]),
+        ],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-incomplete").unwrap();
+    let note = detail
+        .context_manifest
+        .as_ref()
+        .unwrap()
+        .completeness_note
+        .as_deref()
+        .expect("false completeness keys must produce a note");
+    assert!(
+        note.contains("gitRepos") && note.contains("mcp"),
+        "note must name the false keys: {note}"
+    );
+    assert!(
+        !note.contains("agentSkills"),
+        "true keys must not appear: {note}"
+    );
 }
