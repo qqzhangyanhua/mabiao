@@ -37,8 +37,13 @@ fn refresh_cursor(conn: &rusqlite::Connection, home: &Path) {
 }
 
 fn seed_grok_session(home: &Path, session_id: &str) -> PathBuf {
+    seed_grok_session_at(home, "%2Fworkspace%2Fgrok", session_id)
+}
+
+fn seed_grok_session_at(home: &Path, encoded_cwd: &str, session_id: &str) -> PathBuf {
     let path = home
-        .join(".grok/sessions/%2Fworkspace%2Fgrok")
+        .join(".grok/sessions")
+        .join(encoded_cwd)
         .join(session_id)
         .join("updates.jsonl");
     write_text(
@@ -58,6 +63,17 @@ fn seed_grok_session(home: &Path, session_id: &str) -> PathBuf {
         r#"{"current_model_id":"grok-test"}"#,
     );
     path
+}
+
+fn scan_grok(home: &Path, project: &Path) -> Vec<ConversationContextItem> {
+    crate::instructions::grok_disk::scan(home, project)
+}
+
+fn item_scope(item: &ConversationContextItem) -> Option<&str> {
+    item.meta
+        .as_ref()
+        .and_then(|meta| meta.get("config_scope"))
+        .and_then(|value| value.as_str())
 }
 
 fn refresh_grok(conn: &rusqlite::Connection, home: &Path) {
@@ -336,12 +352,16 @@ fn cursor_context_omits_missing_disk_paths_and_does_not_invent_skills() {
 }
 
 #[test]
-fn grok_disk_lists_existing_home_files_and_omits_project_and_unverified_kinds() {
+fn grok_disk_lists_existing_home_files_and_omits_project_agents() {
     let home = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     write_text(&home.path().join(".grok/AGENTS.md"), "# grok-global\n");
     write_text(&home.path().join(".grok/rules/style.md"), "prefer rust\n");
     write_text(&home.path().join(".grok/rules/ignore.txt"), "skip\n");
+    write_text(
+        &home.path().join(".grok/skills/commit/SKILL.md"),
+        "---\nname: commit\n---\n",
+    );
     write_text(
         &home.path().join(".grok/config.toml"),
         "not-an-instruction\n",
@@ -351,15 +371,12 @@ fn grok_disk_lists_existing_home_files_and_omits_project_and_unverified_kinds() 
         &project.path().join(".cursor/rules/style.mdc"),
         "cursor-only\n",
     );
-    write_text(
-        &home.path().join(".cursor/skills/review/SKILL.md"),
-        "---\nname: review\n---\n",
-    );
 
-    let items = crate::instructions::grok_disk::scan(home.path());
+    let items = scan_grok(home.path(), project.path());
     let ids: Vec<&str> = items.iter().map(|item| item.id.as_str()).collect();
     assert!(ids.contains(&"~/.grok/AGENTS.md"));
     assert!(ids.contains(&"~/.grok/rules/style.md"));
+    assert!(ids.contains(&"user:commit"));
     assert!(items
         .iter()
         .all(|item| item.layer == ConversationContextLayer::OnDiskPossible));
@@ -368,16 +385,289 @@ fn grok_disk_lists_existing_home_files_and_omits_project_and_unverified_kinds() 
     assert!(!ids.iter().any(|id| id.contains("config.toml")));
     assert!(!ids.contains(&"AGENTS.md"));
     assert!(!ids.iter().any(|id| id.contains("style.mdc")));
-    assert!(!ids.iter().any(|id| id.contains("review")));
     assert!(items
         .iter()
-        .all(|item| item.kind != ConversationContextKind::McpServer
-            && item.kind != ConversationContextKind::Skill));
+        .all(|item| item.kind != ConversationContextKind::McpServer));
 
     let empty_home = tempfile::tempdir().unwrap();
     write_text(&empty_home.path().join("AGENTS.md"), "# not grok\n");
-    let empty = crate::instructions::grok_disk::scan(empty_home.path());
+    let empty = scan_grok(empty_home.path(), Path::new(""));
     assert!(empty.is_empty(), "{empty:?}");
+}
+
+#[test]
+fn grok_disk_lists_user_skills_honoring_paths_ignore_and_disabled() {
+    let home = tempfile::tempdir().unwrap();
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[skills]\n",
+            "paths = [\"~/team-skills\"]\n",
+            "ignore = [\"~/team-skills/wip\"]\n",
+            "disabled = [\"secret\"]\n",
+        ),
+    );
+    write_text(
+        &home.path().join(".grok/skills/commit/SKILL.md"),
+        "---\nname: commit\n---\n",
+    );
+    write_text(
+        &home.path().join(".grok/skills/secret/SKILL.md"),
+        "---\nname: secret\n---\n",
+    );
+    write_text(
+        &home.path().join("team-skills/ok/SKILL.md"),
+        "---\nname: ok\n---\n",
+    );
+    write_text(
+        &home.path().join("team-skills/wip/hidden/SKILL.md"),
+        "---\nname: hidden\n---\n",
+    );
+    write_text(
+        &home.path().join(".cursor/skills-cursor/shell/SKILL.md"),
+        "---\nname: shell\n---\n",
+    );
+
+    let items = scan_grok(home.path(), Path::new(""));
+    let skill_ids = kind_ids(
+        &items.iter().collect::<Vec<_>>(),
+        ConversationContextKind::Skill,
+    );
+    assert!(skill_ids.contains(&"user:commit".into()));
+    assert!(skill_ids.contains(&"config:ok".into()));
+    assert!(skill_ids.contains(&"user:secret".into()));
+    let secret = items
+        .iter()
+        .find(|item| item.id == "user:secret")
+        .expect("disabled skill stays listed");
+    assert_eq!(
+        secret
+            .meta
+            .as_ref()
+            .and_then(|meta| meta.get("disabled"))
+            .and_then(|value| value.as_bool()),
+        Some(true)
+    );
+    assert!(!skill_ids.iter().any(|id| id.contains("hidden")));
+    assert!(!skill_ids.iter().any(|id| id.contains("shell")));
+}
+
+#[test]
+fn grok_disk_follows_compat_skill_switches() {
+    let home = tempfile::tempdir().unwrap();
+    write_text(
+        &home.path().join(".grok/skills/native/SKILL.md"),
+        "---\nname: native\n---\n",
+    );
+    write_text(
+        &home.path().join(".claude/skills/from-claude/SKILL.md"),
+        "---\nname: from-claude\n---\n",
+    );
+    write_text(
+        &home.path().join(".cursor/skills/from-cursor/SKILL.md"),
+        "---\nname: from-cursor\n---\n",
+    );
+
+    let enabled = scan_grok(home.path(), Path::new(""));
+    let enabled_ids = kind_ids(
+        &enabled.iter().collect::<Vec<_>>(),
+        ConversationContextKind::Skill,
+    );
+    assert!(enabled_ids.contains(&"user:native".into()));
+    assert!(enabled_ids.contains(&"claude:from-claude".into()));
+    assert!(enabled_ids.contains(&"cursor:from-cursor".into()));
+
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[compat.claude]\n",
+            "skills = false\n",
+            "[compat.cursor]\n",
+            "skills = false\n",
+        ),
+    );
+    let disabled = scan_grok(home.path(), Path::new(""));
+    let disabled_ids = kind_ids(
+        &disabled.iter().collect::<Vec<_>>(),
+        ConversationContextKind::Skill,
+    );
+    assert_eq!(disabled_ids, vec!["user:native".to_string()]);
+}
+
+#[test]
+fn grok_disk_merges_mcp_sources_with_config_toml_winning() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".git")).unwrap();
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[mcp_servers.dup]\n",
+            "command = \"toml\"\n",
+            "[mcp_servers.toml-only]\n",
+            "command = \"toml\"\n",
+        ),
+    );
+    write_text(
+        &home.path().join(".claude.json"),
+        r#"{"mcpServers":{"dup":{"command":"claude"},"claude-only":{"command":"claude"}}}"#,
+    );
+    write_text(
+        &home.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"dup":{"command":"cursor"},"cursor-only":{"command":"cursor"}}}"#,
+    );
+    write_text(
+        &project.path().join(".mcp.json"),
+        r#"{"mcpServers":{"dup":{"command":"json"},"json-only":{"command":"json"}}}"#,
+    );
+
+    let items = scan_grok(home.path(), project.path());
+    let mcp: Vec<_> = items
+        .iter()
+        .filter(|item| item.kind == ConversationContextKind::McpServer)
+        .collect();
+    let ids = kind_ids(&mcp, ConversationContextKind::McpServer);
+    assert!(ids.contains(&"grok:dup".into()));
+    assert!(ids.contains(&"grok:toml-only".into()));
+    assert!(ids.contains(&"claude:claude-only".into()));
+    assert!(ids.contains(&"cursor:cursor-only".into()));
+    assert!(ids.contains(&"mcp_json:json-only".into()));
+    assert!(!ids
+        .iter()
+        .any(|id| id.ends_with(":dup") && !id.starts_with("grok:")));
+    let dup = mcp.iter().find(|item| item.label == "dup").unwrap();
+    assert_eq!(item_scope(dup), Some("grok"));
+    assert_eq!(
+        item_scope(mcp.iter().find(|item| item.label == "claude-only").unwrap()),
+        Some("claude")
+    );
+    assert_eq!(
+        item_scope(mcp.iter().find(|item| item.label == "cursor-only").unwrap()),
+        Some("cursor")
+    );
+    assert_eq!(
+        item_scope(mcp.iter().find(|item| item.label == "json-only").unwrap()),
+        Some("mcp_json")
+    );
+}
+
+#[test]
+fn grok_disk_toml_disabled_mcp_occupies_name_against_lower_sources() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".git")).unwrap();
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[mcp_servers.dup]\n",
+            "command = \"toml\"\n",
+            "enabled = false\n",
+            "[mcp_servers.toml-only]\n",
+            "command = \"toml\"\n",
+        ),
+    );
+    write_text(
+        &home.path().join(".claude.json"),
+        r#"{"mcpServers":{"dup":{"command":"claude"},"claude-only":{"command":"claude"}}}"#,
+    );
+
+    let items = scan_grok(home.path(), project.path());
+    let ids = kind_ids(
+        &items.iter().collect::<Vec<_>>(),
+        ConversationContextKind::McpServer,
+    );
+    assert!(ids.contains(&"grok:toml-only".into()));
+    assert!(ids.contains(&"claude:claude-only".into()));
+    assert!(!ids.iter().any(|id| id.contains("dup")));
+}
+
+#[test]
+fn grok_disk_project_toml_deepest_wins_over_user_and_git_root() {
+    let home = tempfile::tempdir().unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::create_dir(repo.path().join(".git")).unwrap();
+    let nested = repo.path().join("nested");
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[mcp_servers.shared]\n",
+            "command = \"user\"\n",
+            "[mcp_servers.user-only]\n",
+            "command = \"user\"\n",
+        ),
+    );
+    write_text(
+        &repo.path().join(".grok/config.toml"),
+        concat!(
+            "[mcp_servers.shared]\n",
+            "command = \"root\"\n",
+            "[mcp_servers.root-only]\n",
+            "command = \"root\"\n",
+        ),
+    );
+    write_text(
+        &nested.join(".grok/config.toml"),
+        concat!("[mcp_servers.shared]\n", "command = \"deep\"\n",),
+    );
+
+    let items = scan_grok(home.path(), &nested);
+    let mcp: Vec<_> = items
+        .iter()
+        .filter(|item| item.kind == ConversationContextKind::McpServer)
+        .collect();
+    let ids = kind_ids(&mcp, ConversationContextKind::McpServer);
+    assert!(ids.contains(&"grok-project:shared".into()));
+    assert!(ids.contains(&"grok-project:root-only".into()));
+    assert!(ids.contains(&"grok:user-only".into()));
+    let shared = mcp.iter().find(|item| item.label == "shared").unwrap();
+    assert_eq!(item_scope(shared), Some("grok-project"));
+    assert!(shared
+        .path
+        .as_deref()
+        .is_some_and(|path| path.ends_with("nested/.grok/config.toml")));
+}
+
+#[test]
+fn grok_disk_compat_mcp_off_skips_vendor_sources() {
+    let home = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".git")).unwrap();
+    write_text(
+        &home.path().join(".grok/config.toml"),
+        concat!(
+            "[compat.claude]\n",
+            "mcps = false\n",
+            "[compat.cursor]\n",
+            "mcps = false\n",
+            "[mcp_servers.toml-only]\n",
+            "command = \"toml\"\n",
+        ),
+    );
+    write_text(
+        &home.path().join(".claude.json"),
+        r#"{"mcpServers":{"claude-only":{"command":"claude"}}}"#,
+    );
+    write_text(
+        &home.path().join(".cursor/mcp.json"),
+        r#"{"mcpServers":{"cursor-only":{"command":"cursor"}}}"#,
+    );
+    write_text(
+        &project.path().join(".mcp.json"),
+        r#"{"mcpServers":{"json-only":{"command":"json"}}}"#,
+    );
+
+    let items = scan_grok(home.path(), project.path());
+    let ids = kind_ids(
+        &items.iter().collect::<Vec<_>>(),
+        ConversationContextKind::McpServer,
+    );
+    assert_eq!(
+        ids,
+        vec![
+            "grok:toml-only".to_string(),
+            "mcp_json:json-only".to_string()
+        ]
+    );
 }
 
 #[test]
@@ -406,7 +696,11 @@ fn grok_detail_context_manifest_matches_timeline_tools_and_home_disk() {
         ],
     );
     assert!(manifest.on_disk_note.as_deref().is_some_and(|note| {
-        note.contains("可能生效") && note.contains("未扫描") && !note.contains("已注入")
+        note.contains("可能生效")
+            && note.contains("skills")
+            && note.contains("MCP")
+            && !note.contains("已注入")
+            && !note.contains("未扫描")
     }));
 
     let events = crate::conversation::load_events(
@@ -475,6 +769,48 @@ fn grok_detail_context_manifest_matches_timeline_tools_and_home_disk() {
 }
 
 #[test]
+fn grok_detail_lists_skills_and_mcp_from_session_project() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join(".git")).unwrap();
+    let project_cwd = project.path().to_string_lossy().into_owned();
+    let encoded = urlencoding::encode(&project_cwd);
+    seed_grok_session_at(home, encoded.as_ref(), "sess-grok-skill-mcp");
+    write_text(
+        &home.join(".grok/skills/commit/SKILL.md"),
+        "---\nname: commit\n---\n",
+    );
+    write_text(
+        &home.join(".grok/config.toml"),
+        "[mcp_servers.docs]\ncommand = \"npx\"\n",
+    );
+    write_text(
+        &project.path().join(".mcp.json"),
+        r#"{"mcpServers":{"proj":{"command":"npx"}}}"#,
+    );
+
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail =
+        crate::conversation::load_detail(&conn, home, "grok", "sess-grok-skill-mcp").unwrap();
+    let manifest = detail.context_manifest.unwrap();
+    assert_no_injected(
+        &manifest.items,
+        &[
+            manifest.observed_note.as_deref(),
+            manifest.on_disk_note.as_deref(),
+        ],
+    );
+    let possible = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
+    assert!(kind_ids(&possible, ConversationContextKind::Skill).contains(&"user:commit".into()));
+    assert!(kind_ids(&possible, ConversationContextKind::McpServer).contains(&"grok:docs".into()));
+    assert!(
+        kind_ids(&possible, ConversationContextKind::McpServer).contains(&"mcp_json:proj".into())
+    );
+}
+
+#[test]
 fn grok_context_omits_missing_home_files_and_does_not_invent_agents() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
@@ -495,9 +831,10 @@ fn grok_context_omits_missing_home_files_and_does_not_invent_agents() {
     assert!(possible.is_empty(), "{possible:?}");
     assert!(manifest.on_disk_note.as_deref().is_some_and(|note| {
         note.contains("未发现")
-            && note.contains("未扫描")
+            && note.contains("skills")
+            && note.contains("MCP")
             && !note.contains("已注入")
-            && note.contains("~/.grok")
+            && !note.contains("未扫描")
     }));
     assert!(!manifest.items.iter().any(|item| item.id == "AGENTS.md"
         || item.label == "AGENTS.md"

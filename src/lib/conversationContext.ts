@@ -25,6 +25,18 @@ const KIND_LABELS: Record<ConversationContextKind, string> = {
   mcp_server: "MCP",
 };
 
+const SCOPE_LABELS: Record<string, string> = {
+  user: "用户级",
+  project: "项目级",
+  grok: "Grok",
+  "grok-project": "Grok 项目级",
+  claude: "Claude",
+  cursor: "Cursor",
+  "cursor-project": "Cursor 项目级",
+  mcp_json: ".mcp.json",
+  config: "配置 paths",
+};
+
 export function contextKindLabel(kind: ConversationContextKind): string {
   return KIND_LABELS[kind];
 }
@@ -61,10 +73,11 @@ export function contextItemMetaText(item: ConversationContextItem): string | nul
     parts.push(modifiedAt);
   }
   const scope = readString(meta.config_scope);
-  if (scope === "user") {
-    parts.push("用户级");
-  } else if (scope === "project") {
-    parts.push("项目级");
+  if (scope) {
+    parts.push(SCOPE_LABELS[scope] ?? scope);
+  }
+  if (meta.disabled === true) {
+    parts.push("已禁用");
   }
   return parts.length > 0 ? parts.join(" · ") : null;
 }

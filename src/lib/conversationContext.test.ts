@@ -55,13 +55,32 @@ describe("conversationContext", () => {
     expect(contextKindLabel("mcp_server")).toBe("MCP");
     expect(contextItemMetaText(manifest.items[0])).toBe("2 次");
     expect(contextItemMetaText(manifest.items[1])).toBe("12 B");
+    expect(
+      contextItemMetaText({
+        layer: "on_disk_possible",
+        kind: "mcp_server",
+        id: "claude:docs",
+        label: "docs",
+        meta: { byte_size: 8, config_scope: "claude" },
+      }),
+    ).toBe("8 B · Claude");
+    expect(
+      contextItemMetaText({
+        layer: "on_disk_possible",
+        kind: "skill",
+        id: "user:secret",
+        label: "secret",
+        meta: { byte_size: 4, config_scope: "user", disabled: true },
+      }),
+    ).toBe("4 B · 用户级 · 已禁用");
   });
 
   it("keeps Grok-style honest empty disk notes free of injection claims", () => {
     const grokEmpty =
-      "Grok 只加载用户级 ~/.grok 指令（AGENTS.md / Agents.md / AGENT.md / CLAUDE.md / Claude.md / CLAUDE.local.md 与 rules/*.md）；本机未发现这些文件。不扫描项目根 AGENTS.md 或 .cursor/rules。MCP / skills 未扫描：产品口径无本机落盘。";
+      "未发现 Grok 会加载的指令、skills 或 MCP 配置。不扫描项目根 AGENTS.md 或 .cursor/rules。";
     expect(contextForbiddenCopy(grokEmpty)).toBe(false);
     expect(grokEmpty).toContain("未发现");
-    expect(grokEmpty).toContain("未扫描");
+    expect(grokEmpty).not.toContain("未扫描");
+    expect(grokEmpty).not.toContain("已注入");
   });
 });

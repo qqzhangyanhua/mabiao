@@ -7,7 +7,7 @@
 //! `details`；索引路径靠工具 `text`）。
 //!
 //! Grok 复用同一套 `ConversationContextManifest` / `ConversationContextItem`，
-//! 磁盘层只扫已验证的用户级 `~/.grok`，不要另造第三套 DTO。
+//! 磁盘层扫用户级 `~/.grok` 指令 / skills 与四条 MCP 加载链，不要另造第三套 DTO。
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -35,9 +35,9 @@ const PROJECT_EMPTY: &str =
     "项目下未发现指令文件、rules、skills 或 MCP 配置。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
 const SYNTHETIC_STATUS: &[&str] = &["transcript_missing"];
 const GROK_ON_DISK_POSSIBLE: &str =
-    "下列文件来自用户级 ~/.grok 官方 Project Rules 扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。MCP / skills 未扫描：产品口径无本机落盘。";
+    "下列文件、skills 与 MCP server 来自 Grok 磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。不扫描项目根 AGENTS.md 或 .cursor/rules。";
 const GROK_ON_DISK_EMPTY: &str =
-    "Grok 只加载用户级 ~/.grok 指令（AGENTS.md / Agents.md / AGENT.md / CLAUDE.md / Claude.md / CLAUDE.local.md 与 rules/*.md）；本机未发现这些文件。不扫描项目根 AGENTS.md 或 .cursor/rules。MCP / skills 未扫描：产品口径无本机落盘。";
+    "未发现 Grok 会加载的指令、skills 或 MCP 配置。不扫描项目根 AGENTS.md 或 .cursor/rules。";
 
 pub(crate) fn supported_source(source: Source) -> bool {
     matches!(source, Source::CursorAgent | Source::Grok)
@@ -53,7 +53,9 @@ pub(crate) fn for_session(
         Source::CursorAgent => {
             crate::instructions::cursor_disk::scan(home, Path::new(session.project.as_str()))
         }
-        Source::Grok => crate::instructions::grok_disk::scan(home),
+        Source::Grok => {
+            crate::instructions::grok_disk::scan(home, Path::new(session.project.as_str()))
+        }
         _ => return None,
     };
     Some(assemble(
