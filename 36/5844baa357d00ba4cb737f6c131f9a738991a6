@@ -1,0 +1,44 @@
+src/lib/conversationContext.test.ts
+  s_8f2523da30c5f5::t_64ec9ec04fbabe 38-39
+src-tauri/src/conversation/mod.rs
+  s_8f2523da30c5f5::t_719e0954c0e2ec 95
+src-tauri/src/conversation/context_manifest.rs
+  s_8f2523da30c5f5::t_2bb4993fd9d392 1,5-7
+  s_8f2523da30c5f5::t_67726d0acb15e9 29,31,33-36
+  s_8f2523da30c5f5::t_cc5f5843db84ce 293-302,313-336
+  s_8f2523da30c5f5::t_f98a86798951fe 406-408
+  s_8f2523da30c5f5::t_f385285da800f3 368,370-371,373
+  s_8f2523da30c5f5::t_898f2ff71cadea 269-271
+  s_8f2523da30c5f5::t_be4355fb3c5281 337,365-367,374,398-399,403-404,409-412,417,420-421
+  s_8f2523da30c5f5::t_ab4af48ddd216d 101-103
+  s_8f2523da30c5f5::t_7615519f093338 195
+  s_8f2523da30c5f5::t_bf381be19b54dc 369,372,375-397,400-402,405,413-416,418-419
+  s_8f2523da30c5f5::t_27c43386724b94 338
+src-tauri/src/tests/conversation_context.rs
+  s_8f2523da30c5f5::t_930a51092e4bf6 277-282
+  s_8f2523da30c5f5::t_0dbe3e5700469b 321,323,325-334
+  s_8f2523da30c5f5::t_742ba1c9b898bb 508-538
+  s_8f2523da30c5f5::t_f0751b8fe3a933 507
+CONTEXT.md
+  s_8f2523da30c5f5::t_691c6dff9cd5bc 36
+src/lib/conversationContext.ts
+  s_8f2523da30c5f5::t_e2e3333b04eb33 10
+src-tauri/src/conversation/cursor.rs
+  s_8f2523da30c5f5::t_4584bc01eff1d5 316-323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "365844baa357d00ba4cb737f6c131f9a738991a6",
+  "prompts": {},
+  "sessions": {
+    "s_8f2523da30c5f5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bf0dd787-81f0-4bd6-bb79-2c7c35f772e3",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
