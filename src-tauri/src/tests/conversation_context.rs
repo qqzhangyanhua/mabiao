@@ -274,6 +274,12 @@ fn cursor_detail_context_manifest_matches_timeline_tools_and_disk_scan() {
     assert!(!observed
         .iter()
         .any(|item| item.label.contains("AGENTS.md") || item.id.contains("AGENTS.md")));
+    assert!(
+        observed
+            .iter()
+            .any(|item| item.kind == ConversationContextKind::Skill && item.id == "deploy"),
+        "Skill tool_use input.skill should appear as an observed skill"
+    );
 
     let possible = layer_items(&manifest.items, ConversationContextLayer::OnDiskPossible);
     assert!(kind_ids(&possible, ConversationContextKind::Instruction).contains(&"AGENTS.md".into()));
@@ -312,10 +318,20 @@ fn cursor_context_omits_missing_disk_paths_and_does_not_invent_skills() {
         .on_disk_note
         .as_deref()
         .is_some_and(|note| note.contains("未发现") && !note.contains("已注入")));
+    let observed = layer_items(&manifest.items, ConversationContextLayer::Observed);
     assert!(
-        layer_items(&manifest.items, ConversationContextLayer::Observed)
+        observed
             .iter()
-            .all(|item| item.kind != ConversationContextKind::Skill)
+            .any(|item| item.kind == ConversationContextKind::Skill && item.id == "deploy"),
+        "Skill tool_use is a transcript trace, not an invented skill"
+    );
+    assert_eq!(
+        observed
+            .iter()
+            .filter(|item| item.kind == ConversationContextKind::Skill)
+            .count(),
+        1,
+        "user/assistant prose must not invent extra skills"
     );
 }
 
@@ -486,6 +502,38 @@ fn grok_context_omits_missing_home_files_and_does_not_invent_agents() {
     assert!(!manifest.items.iter().any(|item| item.id == "AGENTS.md"
         || item.label == "AGENTS.md"
         || item.id.contains("project-only")));
+}
+
+#[test]
+fn cursor_missing_transcript_does_not_treat_synthetic_status_as_observed() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_text(
+        &home.join(".cursor-agent-usage/sess-usage-only.jsonl"),
+        concat!(
+            "{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"cursor-test-model\",\"cwd\":\"/workspace/project\",\"session_id\":\"sess-usage-only\"}\n",
+            "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"session_id\":\"sess-usage-only\",\"request_id\":\"request-sess-usage-only\",\"duration_ms\":1000,\"usage\":{\"inputTokens\":10,\"outputTokens\":5,\"cacheReadTokens\":2,\"cacheWriteTokens\":1},\"captured_at\":\"2026-08-22T02:00:00Z\"}\n"
+        ),
+    );
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+
+    let detail =
+        crate::conversation::load_detail(&conn, home, "cursor_agent", "sess-usage-only").unwrap();
+    let manifest = detail
+        .context_manifest
+        .as_ref()
+        .expect("cursor detail should still carry a context manifest");
+    let observed = layer_items(&manifest.items, ConversationContextLayer::Observed);
+    assert!(
+        observed.is_empty(),
+        "synthetic transcript_missing must not count as observed: {observed:?}"
+    );
+    assert!(manifest
+        .observed_note
+        .as_deref()
+        .is_some_and(|note| { note.contains("无法确认") && !note.contains("已注入") }));
+    assert!(observed.iter().all(|item| item.id != "transcript_missing"));
 }
 
 #[test]

@@ -35,7 +35,8 @@ const manifest: ConversationContextManifest = {
 describe("conversationContext", () => {
   it("keeps the two evidence layers visually distinct in copy", () => {
     expect(CONTEXT_LAYER_TITLE.observed).toBe("会话内已观测");
-    expect(CONTEXT_LAYER_TITLE.on_disk_possible).toBe("项目上可能生效");
+    expect(CONTEXT_LAYER_TITLE.on_disk_possible).toBe("可能生效 / 磁盘存在");
+    expect(CONTEXT_LAYER_TITLE.on_disk_possible).not.toContain("项目上");
     expect(CONTEXT_LAYER_HINT.on_disk_possible).toContain("可能生效");
     expect(CONTEXT_LAYER_HINT.on_disk_possible).not.toContain("已注入");
     expect(contextForbiddenCopy(CONTEXT_LAYER_TITLE.observed)).toBe(false);

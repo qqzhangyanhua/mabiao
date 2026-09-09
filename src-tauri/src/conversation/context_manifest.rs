@@ -1,8 +1,10 @@
-//! 对话详情「上下文清单」：会话内已观测 + 项目上可能生效。
+//! 对话详情「上下文清单」：会话内已观测 + 可能生效 / 磁盘存在。
 //!
 //! Cursor transcript **不落**发送时完整注入清单（见 `instructions/cursor_disk.rs`
 //! 探测注释）。本模块只聚合已有事件索引 / 解析结果，再叠加实时磁盘扫描。
-//! 不改事件归一化，因此不递增 `CONVERSATION_ADAPTER_VERSION`。
+//! 合成的 `transcript_missing` 不算已观测。Skill 认事件 `name`/`text`
+//! 字面引用，以及 Cursor `Skill` 工具的 `input.skill`（解析路径读
+//! `details`；索引路径靠工具 `text`）。
 //!
 //! Grok 复用同一套 `ConversationContextManifest` / `ConversationContextItem`，
 //! 磁盘层只扫已验证的用户级 `~/.grok`，不要另造第三套 DTO。
@@ -24,12 +26,14 @@ use super::event_index;
 const OBSERVED_EMPTY: &str =
     "源文件未留下可观测的工具、系统状态或 skill 引用，无法确认本轮注入了什么。";
 const ON_DISK_POSSIBLE: &str =
-    "下列文件与 MCP server 名来自磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。";
+    "下列文件与 MCP server 名来自磁盘扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
 const NO_PROJECT: &str =
-    "会话没有项目路径，且用户级 MCP/skills 未发现；源文件未落盘注入清单，无法确认。";
+    "会话没有项目路径，且用户级 MCP/skills 未发现；源文件未落盘注入清单，无法确认。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
 const MISSING_PROJECT: &str =
-    "项目路径在本机不存在，且未发现用户级 MCP/skills；源文件未落盘注入清单，无法确认。";
-const PROJECT_EMPTY: &str = "项目下未发现指令文件、rules、skills 或 MCP 配置。";
+    "项目路径在本机不存在，且未发现用户级 MCP/skills；源文件未落盘注入清单，无法确认。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
+const PROJECT_EMPTY: &str =
+    "项目下未发现指令文件、rules、skills 或 MCP 配置。未列入 ~/.cursor/skills-cursor：Cursor 内置 skill，产品未给口径。";
+const SYNTHETIC_STATUS: &[&str] = &["transcript_missing"];
 const GROK_ON_DISK_POSSIBLE: &str =
     "下列文件来自用户级 ~/.grok 官方 Project Rules 扫描，可能生效 / 磁盘存在，不是本轮一定进了上下文。MCP / skills 未扫描：产品口径无本机落盘。";
 const GROK_ON_DISK_EMPTY: &str =
@@ -94,7 +98,9 @@ pub(crate) fn observed_from_events(events: &[ConversationEvent]) -> Vec<Conversa
                     continue;
                 };
                 *tools.entry(name.to_string()).or_default() += 1;
-                if let Some(item) = observed_skill_item(name, event.text.as_deref()) {
+                if let Some(item) =
+                    observed_skill_item(name, event.text.as_deref(), Some(&event.details))
+                {
                     skills.entry(item.id.clone()).or_insert(item);
                 }
             }
@@ -186,7 +192,7 @@ pub(crate) fn observed_from_index(
             match kind.as_str() {
                 "tool_call" => {
                     if let Some(name) = name.as_deref().filter(|name| !name.is_empty()) {
-                        if let Some(item) = observed_skill_item(name, text.as_deref()) {
+                        if let Some(item) = observed_skill_item(name, text.as_deref(), None) {
                             skills.entry(item.id.clone()).or_insert(item);
                         }
                     }
@@ -260,6 +266,9 @@ fn status_from_parts(
     text: Option<&str>,
 ) -> Option<ConversationContextItem> {
     let name = name.map(str::trim).filter(|name| !name.is_empty());
+    if name.is_some_and(|name| SYNTHETIC_STATUS.contains(&name)) {
+        return None;
+    }
     let text = text.map(str::trim).filter(|text| !text.is_empty());
     let id = name.or(text).filter(|value| !value.is_empty())?.to_string();
     let label = name.unwrap_or(id.as_str()).to_string();
@@ -281,9 +290,16 @@ fn status_from_parts(
     })
 }
 
-/// 只认事件 `name`/`text` 里字面出现的 skill 引用；不扫用户/助手正文。
-fn observed_skill_item(name: &str, text: Option<&str>) -> Option<ConversationContextItem> {
-    let id = literal_skill_id(name).or_else(|| text.and_then(literal_skill_id))?;
+/// 只认事件 `name`/`text` 与工具 `details.input.skill`；不扫用户/助手正文。
+fn observed_skill_item(
+    name: &str,
+    text: Option<&str>,
+    details: Option<&serde_json::Value>,
+) -> Option<ConversationContextItem> {
+    let id = skill_id_from_details(details)
+        .or_else(|| skill_id_from_skill_tool(name, text))
+        .or_else(|| literal_skill_id(name))
+        .or_else(|| text.and_then(literal_skill_id))?;
     Some(ConversationContextItem {
         layer: ConversationContextLayer::Observed,
         kind: ConversationContextKind::Skill,
@@ -292,6 +308,32 @@ fn observed_skill_item(name: &str, text: Option<&str>) -> Option<ConversationCon
         path: None,
         meta: Some(json!({ "source": "event" })),
     })
+}
+
+fn skill_id_from_details(details: Option<&serde_json::Value>) -> Option<String> {
+    let details = details?;
+    details
+        .get("input")
+        .and_then(|input| json_nonempty_str(input, "skill"))
+        .or_else(|| json_nonempty_str(details, "skill"))
+}
+
+fn skill_id_from_skill_tool(name: &str, text: Option<&str>) -> Option<String> {
+    if !name.eq_ignore_ascii_case("skill") {
+        return None;
+    }
+    text.map(str::trim)
+        .filter(|value| !value.is_empty() && !value.eq_ignore_ascii_case("skill"))
+        .map(ToString::to_string)
+}
+
+fn json_nonempty_str(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
 }
 
 fn literal_skill_id(raw: &str) -> Option<String> {
@@ -319,4 +361,61 @@ fn literal_skill_id(raw: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::observed_from_events;
+    use crate::domain::{
+        ConversationContextKind, ConversationEvent, ConversationEventCapabilityStatus,
+        ConversationEventContentStatus, ConversationEventKind,
+    };
+    use serde_json::json;
+
+    fn event(
+        kind: ConversationEventKind,
+        name: Option<&str>,
+        text: Option<&str>,
+        details: serde_json::Value,
+    ) -> ConversationEvent {
+        ConversationEvent {
+            event_id: String::new(),
+            sequence: 0,
+            source_file: String::new(),
+            source_sequence: 0,
+            kind,
+            occurred_at: Some("2026-09-08T00:00:00Z".to_string()),
+            actor: None,
+            name: name.map(ToString::to_string),
+            text: text.map(ToString::to_string),
+            details,
+            attachments: Vec::new(),
+            capability_status: ConversationEventCapabilityStatus::Complete,
+            content_status: ConversationEventContentStatus::Complete,
+        }
+    }
+
+    #[test]
+    fn observed_from_events_reads_skill_from_tool_details() {
+        let items = observed_from_events(&[event(
+            ConversationEventKind::ToolCall,
+            Some("Skill"),
+            None,
+            json!({"input":{"skill":"deploy"}}),
+        )]);
+        assert!(items
+            .iter()
+            .any(|item| { item.kind == ConversationContextKind::Skill && item.id == "deploy" }));
+    }
+
+    #[test]
+    fn observed_from_events_skips_synthetic_transcript_missing() {
+        let items = observed_from_events(&[event(
+            ConversationEventKind::SystemStatus,
+            Some("transcript_missing"),
+            Some("Cursor transcript 不可读取；仅展示确定性关联的用量与状态"),
+            json!({}),
+        )]);
+        assert!(items.is_empty());
+    }
 }

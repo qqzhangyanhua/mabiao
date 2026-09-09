@@ -313,7 +313,14 @@ fn cursor_tool_call_text(block: &Value) -> Option<String> {
         let input = block.get("input")?;
         optional_text(
             input,
-            &["path", "command", "query", "pattern", "description"],
+            &[
+                "skill",
+                "path",
+                "command",
+                "query",
+                "pattern",
+                "description",
+            ],
         )
         .or_else(|| {
             input

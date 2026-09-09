@@ -7,7 +7,7 @@ import type {
 
 export const CONTEXT_LAYER_TITLE: Record<ConversationContextLayer, string> = {
   observed: "会话内已观测",
-  on_disk_possible: "项目上可能生效",
+  on_disk_possible: "可能生效 / 磁盘存在",
 };
 
 export const CONTEXT_LAYER_HINT: Record<ConversationContextLayer, string> = {
