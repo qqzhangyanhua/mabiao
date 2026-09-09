@@ -1,0 +1,42 @@
+CONTEXT.md
+  h_4132837b09b7e7 36
+src-tauri/src/conversation/context_manifest.rs
+  h_4132837b09b7e7 11-13,37,39,41-42,99,114,147-150,161-251,485,523,552
+src-tauri/src/conversation/cursor_inject.rs
+  h_4132837b09b7e7 283,336,353
+src-tauri/src/conversation/grok_inject.rs
+  h_4132837b09b7e7 100,262
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 53-54
+src-tauri/src/domain/conversation.rs
+  h_4132837b09b7e7 431-432
+src-tauri/src/instructions/cursor_disk.rs
+  h_4132837b09b7e7 16-22,26,32-35,38-40,45,54-55,69-70,80,90-100,102,108,112-119,123-129,153-154,190,207-208,211-217,226-228,235,237,239,250-352
+src-tauri/src/instructions/grok_disk.rs
+  h_4132837b09b7e7 454,501
+src-tauri/src/instructions/project_walk.rs
+  h_4132837b09b7e7 19
+src-tauri/src/tests/conversation_context.rs
+  h_4132837b09b7e7 247,270-519
+src/components/ConversationContextManifest.tsx
+  h_4132837b09b7e7 8,14,39,87-89,99-122,126
+src/lib/conversationContext.test.ts
+  h_4132837b09b7e7 10,17,156-199
+src/lib/conversationContext.ts
+  h_4132837b09b7e7 6,59-67,102-104,113-115,194-231
+src/styles/views/conversation-context.css
+  h_4132837b09b7e7 111-113,116,119-121,127-131
+src/types.ts
+  h_4132837b09b7e7 631
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "bf6039a6b12f0e357e7c65729f1eef7079ac1a81",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
