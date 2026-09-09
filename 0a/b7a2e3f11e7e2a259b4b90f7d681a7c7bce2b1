@@ -1,0 +1,47 @@
+src/styles/views/conversation-context.css
+  s_8f2523da30c5f5::t_ecc7da680eefd2 3
+src/components/TrendBucketSessions.tsx
+  s_43eee0d889ef74::t_d9f04c142518db 218-220,239
+  s_43eee0d889ef74::t_c7ad1a0f7f62c6 237-238
+  s_43eee0d889ef74::t_8807e87d3b19c3 132-135,145
+src/styles/views/conversation-catalog.css
+  s_8f2523da30c5f5::t_2d742a71920ae1 313-314
+src/components/LowCacheHitSessions.tsx
+  s_43eee0d889ef74::t_8fabaad1d69206 191
+  s_43eee0d889ef74::t_3a44a7f2779a37 183-185
+  s_43eee0d889ef74::t_d9ebca2dbc012f 102-105,114
+src/components/BreakdownProjectSessions.tsx
+  s_43eee0d889ef74::t_205c74d9fe01c9 111
+  s_43eee0d889ef74::t_bdf3270e8b1403 121
+  s_43eee0d889ef74::t_420955df61b590 216
+src/styles/views/sessions.css
+  s_43eee0d889ef74::t_a407eba20fc42b 268,272-273,278,283-284,288-292,300-310
+  s_43eee0d889ef74::t_fceff1267ffeec 294-299
+  s_43eee0d889ef74::t_14e67033fed2e1 293
+src/styles/views/conversation-timeline.css
+  s_8f2523da30c5f5::t_7a171e2869cc3c 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0ab7a2e3f11e7e2a259b4b90f7d681a7c7bce2b1",
+  "prompts": {},
+  "sessions": {
+    "s_43eee0d889ef74": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "8f132527-6db2-4240-8baa-ecbf927ac8c4",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_8f2523da30c5f5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "bf0dd787-81f0-4bd6-bb79-2c7c35f772e3",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
