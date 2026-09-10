@@ -114,12 +114,9 @@ export function GlobalInstructionPanel() {
   }
 
   return (
-    <article className="panel instruction-panel">
-      <div className="panel-head">
-        <div>
-          <h2>全局指令</h2>
-          <p className="muted">每次进入或切回应用时重新读盘，不缓存。</p>
-        </div>
+    <div className="stack instruction-panel">
+      <div className="instruction-toolbar">
+        <p className="muted">每次进入或切回应用时重新读盘，不缓存。</p>
         <Button type="button" variant="ghost" disabled={busy} onClick={() => load(true)}>
           重新读取
         </Button>
@@ -170,19 +167,22 @@ export function GlobalInstructionPanel() {
             ))
         : null}
       {data && data.sources.some(isIdleSource) ? (
-        <section className="instruction-idle">
-          <header className="instruction-section-head">
+        <section className="panel instruction-idle">
+          <div className="panel-head">
             <div>
-              <h3>未创建 / 无机制</h3>
-              <p className="muted">
+              <h2>未创建 / 无机制</h2>
+              <p className="panel-note">
                 没有已加载或被屏蔽的指令。展开后仍可查看路径或创建白名单内的文件。
               </p>
             </div>
-          </header>
+          </div>
           {data.sources.filter(isIdleSource).map((row) => {
             const open = openIdle === row.source;
             return (
-              <div className="instruction-idle-source" key={row.source}>
+              <div
+                className={open ? "instruction-idle-source is-open" : "instruction-idle-source"}
+                key={row.source}
+              >
                 <button
                   type="button"
                   className="instruction-idle-head"
@@ -219,7 +219,7 @@ export function GlobalInstructionPanel() {
           })}
         </section>
       ) : null}
-    </article>
+    </div>
   );
 }
 
@@ -238,12 +238,12 @@ function SourceFiles({
   onOpenExternal,
 }: FileListProps) {
   return (
-    <section className="instruction-source">
-      <header className="instruction-section-head">
-        <h3>
+    <section className="panel instruction-source">
+      <div className="panel-head">
+        <h2>
           <SourceLabel source={row.source} fallback={row.application} />
-        </h3>
-      </header>
+        </h2>
+      </div>
       <FileList
         row={row}
         drafts={drafts}
@@ -321,7 +321,9 @@ function InstructionRow({
   onOpenExternal: () => void;
 }) {
   return (
-    <li className={`instruction-row status-${file.load_status} evidence-${file.evidence}`}>
+    <li
+      className={`instruction-row status-${file.load_status} evidence-${file.evidence}${open ? " is-open" : ""}`}
+    >
       <div className="instruction-row-bar">
         <button type="button" className="instruction-row-head" onClick={onToggle}>
           <div className="instruction-row-title">

@@ -8,20 +8,23 @@ export function InstructionClaudeMemory({ repos }: { repos: ClaudeAutoMemoryRepo
     return null;
   }
   return (
-    <section className="instruction-memory">
-      <header className="instruction-section-head">
+    <section className="panel instruction-memory">
+      <div className="panel-head">
         <div>
-          <h3>Claude 自动记忆</h3>
-          <p className="muted">
+          <h2>Claude 自动记忆</h2>
+          <p className="panel-note">
             会话开始时会把各仓库 MEMORY.md 的开头注入上下文。这里只读，不能改也不能删。
           </p>
         </div>
-      </header>
+      </div>
       <ul className="instruction-memory-list">
         {repos.map((repo) => {
           const open = openRepo === repo.abs_path;
           return (
-            <li key={repo.abs_path} className="instruction-memory-item">
+            <li
+              key={repo.abs_path}
+              className={open ? "instruction-memory-item is-open" : "instruction-memory-item"}
+            >
               <button
                 type="button"
                 className="instruction-memory-head"

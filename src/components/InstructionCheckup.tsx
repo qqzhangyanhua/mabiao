@@ -10,10 +10,10 @@ const SEVERITY_LABEL: Record<InstructionCheckupSeverity, string> = {
 
 export function InstructionCheckup({ findings }: { findings: InstructionCheckupFinding[] }) {
   return (
-    <section className="instruction-checkup">
-      <header className="instruction-section-head">
-        <h3>体检</h3>
-      </header>
+    <section className="panel instruction-checkup">
+      <div className="panel-head">
+        <h2>体检</h2>
+      </div>
       {findings.length === 0 ? (
         <p className="instruction-checkup-ok">未发现静默失效</p>
       ) : (
