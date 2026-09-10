@@ -653,6 +653,11 @@ export type ConversationContextFirstUse = {
   item_layer: ConversationContextLayer;
   label: string;
 };
+
+export type ConversationContextItemContentDto = {
+  item_id: string;
+  content: string;
+};
 export interface ConversationDetailDto {
   revision: string;
   session: ConversationSessionRow;

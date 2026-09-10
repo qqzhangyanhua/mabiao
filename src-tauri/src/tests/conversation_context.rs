@@ -1323,6 +1323,54 @@ fn grok_detail_lists_injected_agents_md_from_prompt_context() {
 }
 
 #[test]
+fn grok_context_item_content_reads_prompt_context_without_entering_detail_dto() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    const GLOBAL_BODY: &str = "UNIQUE_GROK_INJECT_BODY_global_view";
+    let updates = seed_grok_session(home, "sess-grok-view");
+    write_grok_prompt_context(
+        &updates,
+        &[("Agents.md", "/tmp/home/.grok/Agents.md", GLOBAL_BODY)],
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_grok(&conn, home);
+    let detail = crate::conversation::load_detail(&conn, home, "grok", "sess-grok-view").unwrap();
+    let dto_json = serde_json::to_string(&detail).unwrap();
+    assert!(
+        !dto_json.contains(GLOBAL_BODY),
+        "injection body must not enter the detail DTO"
+    );
+    let content = crate::conversation::load_context_item_content(
+        &conn,
+        home,
+        "grok",
+        "sess-grok-view",
+        "/tmp/home/.grok/Agents.md",
+    )
+    .unwrap();
+    assert_eq!(content.item_id, "/tmp/home/.grok/Agents.md");
+    assert_eq!(content.content, GLOBAL_BODY);
+    let missing = crate::conversation::load_context_item_content(
+        &conn,
+        home,
+        "grok",
+        "sess-grok-view",
+        "/no/such/Agents.md",
+    )
+    .unwrap_err();
+    assert!(missing.contains("正文"), "{missing}");
+    let unsupported = crate::conversation::load_context_item_content(
+        &conn,
+        home,
+        "codex",
+        "sess-grok-view",
+        "/tmp/home/.grok/Agents.md",
+    )
+    .unwrap_err();
+    assert!(unsupported.contains("注入快照"), "{unsupported}");
+}
+
+#[test]
 fn grok_detail_lists_injected_mcp_three_states_and_noise_set_diff() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
@@ -1750,6 +1798,25 @@ fn cursor_detail_lists_injected_sections_from_chat_store() {
         event_hits, 0,
         "injection body must not enter conversation_events"
     );
+
+    let skill_content = crate::conversation::load_context_item_content(
+        &conn,
+        home,
+        "cursor_agent",
+        "sess-cursor-inject",
+        "/tmp/home/.cursor/skills/review/SKILL.md",
+    )
+    .unwrap();
+    assert_eq!(skill_content.content, "UNIQUE_CURSOR_INJECT_SKILL");
+    let rule_content = crate::conversation::load_context_item_content(
+        &conn,
+        home,
+        "cursor_agent",
+        "sess-cursor-inject",
+        "/tmp/workspace/demo/AGENTS.md",
+    )
+    .unwrap();
+    assert_eq!(rule_content.content, "UNIQUE_CURSOR_INJECT_RULE\n");
 }
 
 #[test]

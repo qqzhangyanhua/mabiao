@@ -13,6 +13,7 @@ mod catalog_search;
 mod claude;
 mod codex;
 mod context_cache;
+mod context_content;
 mod context_first_use;
 mod context_manifest;
 mod copilot;
@@ -52,6 +53,7 @@ pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
     usage_records_page,
 };
+pub use context_content::load_context_item_content;
 #[cfg(test)]
 pub(crate) use context_manifest::assemble;
 pub(crate) use discover::{

@@ -474,6 +474,13 @@ pub struct ConversationContextFirstUse {
     pub label: String,
 }
 
+/// 按需读取的注入快照正文。不进详情 DTO、不进缓存、不进备份。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ConversationContextItemContentDto {
+    pub item_id: String,
+    pub content: String,
+}
+
 fn default_true() -> bool {
     true
 }

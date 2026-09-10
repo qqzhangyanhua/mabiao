@@ -2,10 +2,10 @@ use crate::{conversation, ingest, user_files};
 use tauri::Manager;
 
 use crate::domain::{
-    ConversationAttachmentContentDto, ConversationDetailDto, ConversationDetailStateDto,
-    ConversationEventAnchor, ConversationEventContentDto, ConversationEventPage,
-    ConversationExportFormat, ConversationIndexProgressDto, ConversationPage, ConversationQuery,
-    ConversationUsagePage,
+    ConversationAttachmentContentDto, ConversationContextItemContentDto, ConversationDetailDto,
+    ConversationDetailStateDto, ConversationEventAnchor, ConversationEventContentDto,
+    ConversationEventPage, ConversationExportFormat, ConversationIndexProgressDto,
+    ConversationPage, ConversationQuery, ConversationUsagePage,
 };
 use crate::AppState;
 
@@ -124,6 +124,28 @@ pub async fn get_conversation_detail_state(
             &source,
             &session_id,
             &known_revision,
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_conversation_context_item_content(
+    app: tauri::AppHandle,
+    source: String,
+    session_id: String,
+    item_id: String,
+) -> Result<ConversationContextItemContentDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        conversation::load_context_item_content(
+            &conn,
+            &ingest::default_home(),
+            &source,
+            &session_id,
+            &item_id,
         )
     })
     .await

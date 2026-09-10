@@ -142,7 +142,6 @@
 }
 
 .conversation-context-mcp-failed,
-.conversation-context-unused,
 .conversation-context-builtin {
   display: grid;
   gap: 8px;
@@ -150,7 +149,6 @@
 }
 
 .conversation-context-mcp-failed > p,
-.conversation-context-unused > p,
 .conversation-context-builtin summary {
   margin: 0;
   font-size: 12px;
@@ -186,6 +184,37 @@
   font-size: 10px;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.conversation-context-item-details {
+  min-width: 0;
+}
+
+.conversation-context-item-details summary {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.conversation-context-item-body {
+  max-height: 320px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--overlay-recessed);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.conversation-context-item-error {
+  margin: 8px 0 0;
 }
 
 .conversation-context-empty,

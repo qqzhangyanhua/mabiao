@@ -172,6 +172,8 @@ export function ConversationDetailView({
         {detail?.context_manifest ? (
           <ConversationContextManifestPanel
             manifest={detail.context_manifest}
+            source={session.source}
+            sessionId={session.session_id}
             highlightItemKey={contextFocusKey}
           />
         ) : null}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationContextFirstUse, ConversationContextManifest } from "../types";
+import { formatClock } from "./format";
 import {
   CHANGED_AFTER_SESSION_NOTE,
   CONTEXT_LAYER_HINT,
@@ -10,6 +11,7 @@ import {
   contextHasInjectedSnapshot,
   contextInjectedDegraded,
   contextItemCharText,
+  contextItemExpandable,
   contextItemKey,
   contextItemMetaText,
   contextItemsTokenSummary,
@@ -206,7 +208,29 @@ describe("conversationContext", () => {
       contextManifestSummary({
         items: [unused, glob, builtin],
       }),
-    ).toBe("已注入 0 · 已观测 0 · 可能生效 3 · 白装了 1");
+    ).toBe("已注入 0 · 已观测 0 · 可能生效 2");
+  });
+
+  it("lets injected instruction files expand and keeps unused installs out of the summary", () => {
+    expect(contextItemExpandable(manifest.items[0])).toBe(true);
+    expect(contextItemExpandable(manifest.items[1])).toBe(false);
+    expect(
+      contextItemExpandable({
+        layer: "injected",
+        kind: "instruction",
+        id: "unrecognized",
+        label: "未识别 12 字符",
+      }),
+    ).toBe(false);
+    expect(
+      contextItemExpandable({
+        layer: "injected",
+        kind: "mcp_server",
+        id: "docs",
+        label: "docs",
+      }),
+    ).toBe(false);
+    expect(contextManifestSummary(manifest)).not.toContain("白装了");
   });
 
   it("distinguishes missing Cursor snapshot copy from injected snapshot copy", () => {
@@ -274,7 +298,16 @@ describe("conversationContext", () => {
           changed_after_session: true,
         },
       }),
-    ).toBe(`12 B · 2026-09-09T12:00:00Z · ${CHANGED_AFTER_SESSION_NOTE}`);
+    ).toBe(`12 B · ${formatClock("2026-09-09T12:00:00Z")} · ${CHANGED_AFTER_SESSION_NOTE}`);
+    expect(
+      contextItemMetaText({
+        layer: "on_disk_possible",
+        kind: "instruction",
+        id: "SKILL.md",
+        label: "SKILL.md",
+        meta: { modified_at: "2026-05-23T15:25:08.812559851+00:00" },
+      }),
+    ).toBe(formatClock("2026-05-23T15:25:08.812559851+00:00"));
   });
 
   it("surfaces completeness note only when present", () => {

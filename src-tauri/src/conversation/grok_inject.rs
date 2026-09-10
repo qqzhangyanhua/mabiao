@@ -104,6 +104,16 @@ fn from_prompt_context(path: &Path) -> Option<Vec<ConversationContextItem>> {
     Some(items)
 }
 
+pub(crate) fn content_for_item(session: &ConversationSessionRow, item_id: &str) -> Option<String> {
+    let dir = session_dir(&session.source_file)?;
+    let text = fs::read_to_string(dir.join(PROMPT_CONTEXT)).ok()?;
+    let parsed = serde_json::from_str::<PromptContext>(&text).ok()?;
+    parsed.agents_md_files.into_iter().find_map(|file| {
+        let path = file.file_path.trim();
+        (path == item_id).then_some(file.content)
+    })
+}
+
 fn from_events(path: &Path) -> GrokSnapshot {
     let Ok(file) = File::open(path) else {
         return GrokSnapshot::default();

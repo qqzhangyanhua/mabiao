@@ -422,6 +422,7 @@ pub fn run() {
             commands::get_conversation_index_progress,
             commands::get_conversation_usage_records,
             commands::get_conversation_detail_state,
+            commands::get_conversation_context_item_content,
             commands::get_conversation_event_content,
             commands::get_conversation_attachment,
             commands::get_conversation_attachment_thumbnail,

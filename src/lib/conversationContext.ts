@@ -7,7 +7,7 @@ import type {
   ConversationContextLoadMode,
   ConversationContextManifest,
 } from "../types";
-import { formatTokens } from "./format";
+import { formatClock, formatTokens } from "./format";
 
 /** 与 `work_notes::estimate::CHARS_PER_TOKEN` 同口径。 */
 export const CHARS_PER_TOKEN = 4;
@@ -86,6 +86,18 @@ export function contextLayerItems(
   return manifest.items.filter((item) => item.layer === layer);
 }
 
+export function isUnusedInstall(item: ConversationContextItem): boolean {
+  return item.is_unused_install === true;
+}
+
+export function contextItemExpandable(item: ConversationContextItem): boolean {
+  return (
+    item.layer === "injected" &&
+    item.id !== "unrecognized" &&
+    (item.kind === "instruction" || item.kind === "rule" || item.kind === "skill")
+  );
+}
+
 export function contextLayerNote(
   manifest: ConversationContextManifest,
   layer: ConversationContextLayer,
@@ -102,15 +114,15 @@ export function contextLayerNote(
 export function contextManifestSummary(manifest: ConversationContextManifest): string {
   const injected = contextLayerItems(manifest, "injected").length;
   const observed = contextLayerItems(manifest, "observed").length;
-  const possible = contextLayerItems(manifest, "on_disk_possible").length;
-  const unused = manifest.items.filter((item) => item.is_unused_install).length;
+  const possible = contextLayerItems(manifest, "on_disk_possible").filter(
+    (item) => !isUnusedInstall(item),
+  ).length;
   const injectedLabel = contextMetricsFromCache(manifest)
     ? `已注入 ${injected}（缓存）`
     : contextHasInjectedSnapshot(manifest)
       ? `已注入 ${injected}`
       : "快照已过期";
-  const base = `${injectedLabel} · 已观测 ${observed} · 可能生效 ${possible}`;
-  return unused > 0 ? `${base} · 白装了 ${unused}` : base;
+  return `${injectedLabel} · 已观测 ${observed} · 可能生效 ${possible}`;
 }
 
 export function contextHasInjectedSnapshot(manifest: ConversationContextManifest): boolean {
@@ -220,7 +232,7 @@ export function contextItemMetaText(
   }
   const modifiedAt = meta ? readString(meta.modified_at) : null;
   if (modifiedAt) {
-    parts.push(modifiedAt);
+    parts.push(formatClock(modifiedAt));
   }
   if (meta?.changed_after_session === true) {
     parts.push(CHANGED_AFTER_SESSION_NOTE);
@@ -278,10 +290,6 @@ export function isEditorBuiltin(item: ConversationContextItem): boolean {
     item.id.startsWith("editor_builtin:") ||
     readString(item.meta?.config_scope) === "editor_builtin"
   );
-}
-
-export function isUnusedInstall(item: ConversationContextItem): boolean {
-  return item.is_unused_install === true;
 }
 
 export function contextItemsTokenSummary(

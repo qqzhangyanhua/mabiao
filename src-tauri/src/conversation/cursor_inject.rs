@@ -179,10 +179,52 @@ struct ParsedItem {
     start: usize,
     end: usize,
     item: ConversationContextItem,
+    body: String,
+}
+
+pub(crate) fn content_for_item(
+    home: &Path,
+    session: &ConversationSessionRow,
+    item_id: &str,
+) -> Option<String> {
+    let path = find_store_db(home, &session.session_id)?;
+    let messages = restore_messages(&path);
+    let user = messages.get(1)?;
+    if user.get("role").and_then(Value::as_str) != Some("user") {
+        return None;
+    }
+    let text = json_message_text(user)?;
+    parsed_from_text(&text)
+        .into_iter()
+        .find(|parsed| {
+            parsed.item.id == item_id
+                && matches!(
+                    parsed.item.kind,
+                    ConversationContextKind::Instruction
+                        | ConversationContextKind::Rule
+                        | ConversationContextKind::Skill
+                )
+        })
+        .map(|parsed| parsed.body)
 }
 
 fn items_from_text(text: &str) -> Vec<ConversationContextItem> {
     let total = text.chars().count() as u64;
+    let accepted = parsed_from_text(text);
+    let accounted: u64 = accepted
+        .iter()
+        .filter_map(|item| item.item.char_count)
+        .sum();
+    let mut items: Vec<ConversationContextItem> =
+        accepted.into_iter().map(|item| item.item).collect();
+    if total > accounted {
+        let rest = total - accounted;
+        items.push(unrecognized_item(rest));
+    }
+    items
+}
+
+fn parsed_from_text(text: &str) -> Vec<ParsedItem> {
     let mut parsed = Vec::new();
     push_tag_items(&mut parsed, text, "agent_skill", parse_skill);
     push_tag_items(
@@ -210,17 +252,7 @@ fn items_from_text(text: &str) -> Vec<ConversationContextItem> {
         }
         accepted.push(item);
     }
-    let accounted: u64 = accepted
-        .iter()
-        .filter_map(|item| item.item.char_count)
-        .sum();
-    let mut items: Vec<ConversationContextItem> =
-        accepted.into_iter().map(|item| item.item).collect();
-    if total > accounted {
-        let rest = total - accounted;
-        items.push(unrecognized_item(rest));
-    }
-    items
+    accepted
 }
 
 fn push_tag_items(
@@ -230,9 +262,24 @@ fn push_tag_items(
     parse: fn(&str, Element<'_>) -> Option<ParsedItem>,
 ) {
     for element in find_elements(text, tag) {
-        if let Some(item) = parse(text, element) {
+        if let Some(mut item) = parse(text, element) {
+            item.body = element_inner(text, element);
             out.push(item);
         }
+    }
+}
+
+fn element_inner(text: &str, element: Element<'_>) -> String {
+    let open_end = element.open_range.1;
+    if element.end <= open_end {
+        return String::new();
+    }
+    let Some(slice) = text.get(open_end..element.end) else {
+        return String::new();
+    };
+    match slice.rfind("</") {
+        Some(idx) => slice[..idx].to_string(),
+        None => slice.to_string(),
     }
 }
 
@@ -315,6 +362,7 @@ fn parse_namespace(_text: &str, element: Element<'_>) -> Option<ParsedItem> {
             is_unused_install: false,
             meta: Some(Value::Object(meta)),
         },
+        body: String::new(),
     })
 }
 
@@ -368,6 +416,7 @@ fn span_item(
             is_unused_install: false,
             meta,
         },
+        body: String::new(),
     }
 }
 

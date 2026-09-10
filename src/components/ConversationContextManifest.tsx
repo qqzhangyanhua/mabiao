@@ -1,9 +1,10 @@
-import { useLayoutEffect } from "react";
-import { CollapsibleSection } from "./CollapsibleSection";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   contextCompletenessNote,
   contextInjectedDegraded,
   contextItemCharText,
+  contextItemExpandable,
   contextItemKey,
   contextItemMetaText,
   contextItemsTokenSummary,
@@ -16,21 +17,30 @@ import {
   contextManifestSummary,
   contextMcpInitSummary,
   contextMetricsFromCache,
+  isUnusedInstall,
   partitionContextItems,
 } from "../lib/conversationContext";
+import { useKeyedAsyncLoad } from "../lib/useKeyedAsyncLoad";
 import type {
   ConversationContextItem,
+  ConversationContextItemContentDto,
   ConversationContextLayer,
   ConversationContextManifest,
 } from "../types";
+import { CollapsibleSection } from "./CollapsibleSection";
+import { Spinner } from "./Spinner";
 
 const LAYERS: ConversationContextLayer[] = ["injected", "observed", "on_disk_possible"];
 
 export function ConversationContextManifestPanel({
   manifest,
+  source,
+  sessionId,
   highlightItemKey = null,
 }: {
   manifest: ConversationContextManifest;
+  source: string;
+  sessionId: string;
   highlightItemKey?: string | null;
 }) {
   const mcpSummary = contextMcpInitSummary(manifest);
@@ -55,24 +65,34 @@ export function ConversationContextManifestPanel({
       collapsedSummary={contextManifestSummary(manifest)}
     >
       <p className="muted conversation-context-lead">
-        复盘噪音用。已注入来自首轮快照；已观测来自本会话事件；磁盘项只表示可能生效。白装了是磁盘有、本轮没送进上下文的差集。
+        复盘噪音用。已注入来自首轮快照，可展开查看正文；已观测来自本会话事件；磁盘项只表示可能生效。
       </p>
       {mcpSummary ? <p className="conversation-context-mcp-summary">{mcpSummary}</p> : null}
       {completeness ? (
         <p className="conversation-context-completeness">{completeness}</p>
       ) : null}
       <div className="conversation-context-layers">
-        {LAYERS.map((layer) => (
-          <ContextLayer
-            key={layer}
-            layer={layer}
-            items={contextLayerItems(manifest, layer)}
-            note={contextLayerNote(manifest, layer)}
-            manifest={manifest}
-            volumeIsEstimate={volumeIsEstimate}
-            highlightItemKey={highlightItemKey}
-          />
-        ))}
+        {LAYERS.map((layer) => {
+          const items = contextLayerItems(manifest, layer).filter(
+            (item) => !isUnusedInstall(item),
+          );
+          if (layer === "on_disk_possible" && items.length === 0) {
+            return null;
+          }
+          return (
+            <ContextLayer
+              key={layer}
+              layer={layer}
+              items={items}
+              note={contextLayerNote(manifest, layer)}
+              manifest={manifest}
+              source={source}
+              sessionId={sessionId}
+              volumeIsEstimate={volumeIsEstimate}
+              highlightItemKey={highlightItemKey}
+            />
+          );
+        })}
       </div>
     </CollapsibleSection>
   );
@@ -83,6 +103,8 @@ function ContextLayer({
   items,
   note,
   manifest,
+  source,
+  sessionId,
   volumeIsEstimate,
   highlightItemKey,
 }: {
@@ -90,6 +112,8 @@ function ContextLayer({
   items: ConversationContextItem[];
   note?: string | null;
   manifest: ConversationContextManifest;
+  source: string;
+  sessionId: string;
   volumeIsEstimate: boolean;
   highlightItemKey: string | null;
 }) {
@@ -117,6 +141,8 @@ function ContextLayer({
       ) : (
         <ContextItemGroups
           items={items}
+          source={source}
+          sessionId={sessionId}
           volumeIsEstimate={volumeIsEstimate}
           highlightItemKey={highlightItemKey}
         />
@@ -128,15 +154,18 @@ function ContextLayer({
 
 function ContextItemGroups({
   items,
+  source,
+  sessionId,
   volumeIsEstimate,
   highlightItemKey,
 }: {
   items: ConversationContextItem[];
+  source: string;
+  sessionId: string;
   volumeIsEstimate: boolean;
   highlightItemKey: string | null;
 }) {
-  const { primary, unusedInstalls, editorBuiltin, disconnectedMcp } =
-    partitionContextItems(items);
+  const { primary, editorBuiltin, disconnectedMcp } = partitionContextItems(items);
   const builtinSummary = contextItemsTokenSummary(editorBuiltin, volumeIsEstimate);
   return (
     <>
@@ -146,26 +175,13 @@ function ContextItemGroups({
             <ContextItemRow
               key={`${item.layer}:${item.kind}:${item.id}`}
               item={item}
+              source={source}
+              sessionId={sessionId}
               volumeIsEstimate={volumeIsEstimate}
               highlightItemKey={highlightItemKey}
             />
           ))}
         </ul>
-      ) : null}
-      {unusedInstalls.length > 0 ? (
-        <div className="conversation-context-unused">
-          <p className="muted">白装了（磁盘有、本轮没送进上下文）</p>
-          <ul>
-            {unusedInstalls.map((item) => (
-              <ContextItemRow
-                key={`${item.layer}:${item.kind}:${item.id}`}
-                item={item}
-                volumeIsEstimate={volumeIsEstimate}
-                highlightItemKey={highlightItemKey}
-              />
-            ))}
-          </ul>
-        </div>
       ) : null}
       {editorBuiltin.length > 0 ? (
         <details
@@ -185,6 +201,8 @@ function ContextItemGroups({
               <ContextItemRow
                 key={`${item.layer}:${item.kind}:${item.id}`}
                 item={item}
+                source={source}
+                sessionId={sessionId}
                 volumeIsEstimate={volumeIsEstimate}
                 highlightItemKey={highlightItemKey}
               />
@@ -200,6 +218,8 @@ function ContextItemGroups({
               <ContextItemRow
                 key={`${item.layer}:${item.kind}:${item.id}`}
                 item={item}
+                source={source}
+                sessionId={sessionId}
                 volumeIsEstimate={volumeIsEstimate}
                 highlightItemKey={highlightItemKey}
               />
@@ -213,16 +233,57 @@ function ContextItemGroups({
 
 function ContextItemRow({
   item,
+  source,
+  sessionId,
   volumeIsEstimate,
   highlightItemKey,
 }: {
   item: ConversationContextItem;
+  source: string;
+  sessionId: string;
   volumeIsEstimate: boolean;
   highlightItemKey: string | null;
 }) {
   const meta = contextItemMetaText(item, { volumeIsEstimate });
   const itemKey = contextItemKey(item.layer, item.kind, item.id);
   const focused = itemKey === highlightItemKey;
+  const expandable = contextItemExpandable(item);
+  const [content, setContent] = useState<string | null>(null);
+  const loadedRef = useRef(false);
+  const { states, errors, run } = useKeyedAsyncLoad<string>();
+  const loadContent = useCallback(() => {
+    if (!expandable || loadedRef.current) {
+      return;
+    }
+    void run(
+      itemKey,
+      () =>
+        invoke<ConversationContextItemContentDto>("get_conversation_context_item_content", {
+          source,
+          sessionId,
+          itemId: item.id,
+        }),
+      (result) => {
+        loadedRef.current = true;
+        setContent(result.content);
+      },
+    );
+  }, [expandable, item.id, itemKey, run, sessionId, source]);
+  useEffect(() => {
+    if (focused && expandable) {
+      loadContent();
+    }
+  }, [expandable, focused, loadContent]);
+  const heading = (
+    <>
+      <strong>{item.label}</strong>
+      {item.path ? <code>{item.path}</code> : null}
+      {meta ? <span className="muted">{meta}</span> : null}
+      {contextItemCharText(item) ? (
+        <span className="muted">{contextItemCharText(item)}</span>
+      ) : null}
+    </>
+  );
   return (
     <li
       className={[item.is_noise ? "is-noise" : "", focused ? "is-focus" : ""]
@@ -232,12 +293,28 @@ function ContextItemRow({
     >
       <span className="conversation-context-kind">{contextKindLabel(item.kind)}</span>
       <div>
-        <strong>{item.label}</strong>
-        {item.path ? <code>{item.path}</code> : null}
-        {meta ? <span className="muted">{meta}</span> : null}
-        {contextItemCharText(item) ? (
-          <span className="muted">{contextItemCharText(item)}</span>
-        ) : null}
+        {expandable ? (
+          <details
+            className="conversation-context-item-details"
+            {...(focused ? { open: true } : {})}
+            onToggle={(event) => {
+              if (event.currentTarget.open) {
+                loadContent();
+              }
+            }}
+          >
+            <summary>{heading}</summary>
+            {states[itemKey] === "loading" ? <Spinner size={14} /> : null}
+            {errors[itemKey] ? (
+              <p className="muted conversation-context-item-error">{errors[itemKey]}</p>
+            ) : null}
+            {content !== null ? (
+              <pre className="conversation-context-item-body">{content}</pre>
+            ) : null}
+          </details>
+        ) : (
+          heading
+        )}
       </div>
     </li>
   );
