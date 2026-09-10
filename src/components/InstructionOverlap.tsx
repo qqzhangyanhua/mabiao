@@ -15,11 +15,11 @@ export function InstructionOverlap({
   onProjectChange: (project: string) => void;
 }) {
   return (
-    <section className="instruction-overlap">
-      <header className="instruction-section-head">
+    <section className="panel instruction-overlap">
+      <div className="panel-head">
         <div>
-          <h3>与项目规则交叉</h3>
-          <p className="muted">两侧出现相同关键词并不等于已经冲突，请对照原文自行判断。</p>
+          <h2>与项目规则交叉</h2>
+          <p className="panel-note">两侧出现相同关键词并不等于已经冲突，请对照原文自行判断。</p>
         </div>
         {projects.length > 0 ? (
           <Select
@@ -30,7 +30,7 @@ export function InstructionOverlap({
             onChange={onProjectChange}
           />
         ) : null}
-      </header>
+      </div>
       {projects.length === 0 ? (
         <EmptyState
           compact

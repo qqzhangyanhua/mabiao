@@ -10,13 +10,13 @@ export function InstructionInsight({
   imbalances: InstructionImbalance[];
 }) {
   return (
-    <section className="instruction-insight">
-      <header className="instruction-section-head">
+    <section className="panel instruction-insight">
+      <div className="panel-head">
         <div>
-          <h3>投入与用量</h3>
-          <p className="muted">对照已加载指令的字节数和本机用量。久未修改不是问题。</p>
+          <h2>投入与用量</h2>
+          <p className="panel-note">对照已加载指令的字节数和本机用量。久未修改不是问题。</p>
         </div>
-      </header>
+      </div>
       <ul className="instruction-insight-list">
         {investments.map((row) => (
           <li key={row.source} className="instruction-insight-row">

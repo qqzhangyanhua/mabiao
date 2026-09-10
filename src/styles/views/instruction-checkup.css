@@ -18,19 +18,20 @@
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--overlay-1);
+  background: var(--preset-row-bg);
 }
 
 .instruction-checkup-item.severity-critical {
-  border-color: var(--red-fg);
+  border-left: 3px solid var(--red-fg);
+  background: rgba(251, 113, 133, 0.08);
 }
 
 .instruction-checkup-item.severity-high {
-  border-color: var(--orange-fg);
+  border-left: 3px solid var(--orange-fg);
 }
 
 .instruction-checkup-item.severity-medium {
-  border-color: var(--cyan-fg);
+  border-left: 3px solid var(--cyan-fg);
 }
 
 .instruction-checkup-head {
@@ -38,6 +39,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  color: var(--text);
 }
 
 .instruction-checkup-head span,
@@ -61,14 +63,13 @@
   color: var(--cyan-fg);
 }
 
-.instruction-checkup-item.severity-low .instruction-checkup-severity {
-  background: var(--overlay-2);
-  color: var(--muted);
-}
-
 .instruction-checkup-problem,
 .instruction-checkup-consequence {
   margin: 0;
+}
+
+.instruction-checkup-problem {
+  color: var(--text);
 }
 
 .instruction-overlap-list {
@@ -85,12 +86,14 @@
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--overlay-1);
+  background: var(--preset-row-bg);
 }
 
 .instruction-overlap-keyword {
   margin: 0;
+  color: var(--text);
   font-size: 13px;
+  font-weight: 600;
 }
 
 .instruction-overlap-pair {
@@ -101,8 +104,8 @@
 .instruction-overlap-pair blockquote {
   margin: 0;
   padding: 8px 10px;
-  border-left: 2px solid var(--line);
-  background: var(--overlay-2);
+  border-left: 2px solid var(--line-strong);
+  background: var(--overlay-1);
   display: grid;
   gap: 4px;
 }
@@ -114,6 +117,7 @@
 
 .instruction-overlap-pair p {
   margin: 0;
+  color: var(--text-soft);
   font-size: 13px;
   white-space: pre-wrap;
 }
@@ -127,25 +131,26 @@
 }
 
 .instruction-insight-row {
-  display: grid;
-  grid-template-columns: minmax(96px, 1fr) 92px 148px 92px;
-  gap: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px 16px;
   padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--overlay-1);
+  background: var(--preset-row-bg);
   font-size: 12px;
 }
 
 .instruction-insight-row strong {
+  flex: 1 1 140px;
   min-width: 0;
+  color: var(--text);
   font-size: 13px;
 }
 
 .instruction-insight-row span {
   color: var(--muted);
-  text-align: right;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -163,7 +168,8 @@
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: var(--overlay-1);
+  background: var(--preset-row-bg);
+  color: var(--text-soft);
   font-size: 13px;
 }
 
@@ -177,12 +183,24 @@
 
 .instruction-memory-item {
   display: grid;
-  gap: 8px;
+  gap: 0;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--overlay-1);
+  background: var(--preset-row-bg);
   overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.instruction-memory-item:hover,
+.instruction-memory-item.is-open {
+  border-color: var(--line-strong);
+}
+
+.instruction-memory-item.is-open {
+  background: var(--panel-grad-2);
 }
 
 .instruction-memory-head {
@@ -195,7 +213,7 @@
   padding: 10px 12px;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--text);
   text-align: left;
   cursor: pointer;
 }
@@ -204,6 +222,13 @@
   display: grid;
   gap: 2px;
   min-width: 0;
+}
+
+.instruction-memory-title strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .instruction-memory-title span {
@@ -243,6 +268,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
+  color: var(--text);
 }
 
 .instruction-memory-file header em {
@@ -252,10 +278,12 @@
 .instruction-memory-file pre {
   margin: 0;
   padding: 8px 10px;
-  border-left: 2px solid var(--line);
-  background: var(--overlay-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--overlay-recessed);
+  color: var(--text);
   font-size: 13px;
+  line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
