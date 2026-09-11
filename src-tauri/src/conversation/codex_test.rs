@@ -1,5 +1,6 @@
-use super::{index, index_suffix, ConversationEvent, EventActor, EventKind};
+use super::{index, index_suffix, ConversationEvent, EventActor, EventKind, ParsedConversation};
 use crate::test_support::fixture;
+use serde_json::{json, Value};
 
 fn write_fixture(temp: &std::path::Path, name: &str) -> std::path::PathBuf {
     let path = temp.join(name);
@@ -386,4 +387,309 @@ fn adapter_index_rejects_missing_codex_session_id() {
     assert!(issue.message.contains("会话 ID"));
     assert_eq!(issue.event_type.as_deref(), Some("session_meta"));
     assert!(issue.line.is_none());
+}
+
+fn parse_codex(lines: &[Value]) -> ParsedConversation {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.jsonl");
+    write_jsonl(&path, lines);
+    index(&path)
+        .unwrap()
+        .conversations
+        .into_iter()
+        .next()
+        .unwrap()
+}
+
+fn write_jsonl(path: &std::path::Path, lines: &[Value]) {
+    let mut content = String::new();
+    for line in lines {
+        content.push_str(&line.to_string());
+        content.push('\n');
+    }
+    std::fs::write(path, content).unwrap();
+}
+
+fn session_meta(id: &str) -> Value {
+    json!({
+        "type": "session_meta",
+        "timestamp": "2026-08-21T00:00:00Z",
+        "payload": { "id": id, "cwd": "/workspace" }
+    })
+}
+
+fn session_meta_named(id: &str, title: &str) -> Value {
+    json!({
+        "type": "session_meta",
+        "timestamp": "2026-08-21T00:00:00Z",
+        "payload": { "id": id, "cwd": "/workspace", "title": title }
+    })
+}
+
+fn user_message(timestamp: &str, text: &str) -> Value {
+    json!({
+        "type": "response_item",
+        "timestamp": timestamp,
+        "payload": {
+            "type": "message",
+            "role": "user",
+            "content": [{ "type": "input_text", "text": text }]
+        }
+    })
+}
+
+fn named_status<'a>(parsed: &'a ParsedConversation, name: &str) -> &'a ConversationEvent {
+    parsed
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::SystemStatus && event.name.as_deref() == Some(name))
+        .unwrap_or_else(|| panic!("missing system status `{name}`"))
+}
+
+fn user_texts(parsed: &ParsedConversation) -> Vec<&str> {
+    parsed
+        .messages
+        .iter()
+        .filter(|message| message.role == "user")
+        .map(|message| message.text.as_str())
+        .collect()
+}
+
+#[test]
+fn adapter_skips_environment_context_injection_for_title_and_marks_system_status() {
+    let dump = "<environment_context>\n  <cwd>/tmp/project</cwd>\n</environment_context>";
+    let parsed = parse_codex(&[
+        session_meta("inject-env"),
+        user_message("2026-08-21T00:00:01Z", dump),
+        user_message("2026-08-21T00:00:02Z", "修登录"),
+    ]);
+
+    assert_eq!(parsed.session.title, "修登录");
+    assert_eq!(user_texts(&parsed), vec!["修登录"]);
+    let status = named_status(&parsed, "environment_context");
+    assert_eq!(status.actor, None);
+    assert_eq!(status.text.as_deref(), Some(dump));
+}
+
+#[test]
+fn adapter_skips_agents_md_injection_for_title_and_marks_system_status() {
+    let dump = "# AGENTS.md instructions for /tmp/project\n<INSTRUCTIONS>Do stuff</INSTRUCTIONS>";
+    let parsed = parse_codex(&[
+        session_meta("inject-agents"),
+        user_message("2026-08-21T00:00:01Z", dump),
+        user_message("2026-08-21T00:00:02Z", "补测试"),
+    ]);
+
+    assert_eq!(parsed.session.title, "补测试");
+    assert_eq!(user_texts(&parsed), vec!["补测试"]);
+    let status = named_status(&parsed, "agents_md");
+    assert_eq!(status.actor, None);
+    assert_eq!(status.text.as_deref(), Some(dump));
+}
+
+#[test]
+fn adapter_extracts_vscode_ide_request_as_title_and_keeps_dump_as_system_status() {
+    let dump = [
+        "# Context from my IDE setup:",
+        "",
+        "## Active file: src/main.ts",
+        "",
+        "## My request for Codex:",
+        "Fix the session title preview",
+    ]
+    .join("\n");
+    let parsed = parse_codex(&[
+        session_meta("inject-ide"),
+        user_message("2026-08-21T00:00:01Z", &dump),
+    ]);
+
+    assert_eq!(parsed.session.title, "Fix the session title preview");
+    assert_eq!(user_texts(&parsed), vec!["Fix the session title preview"]);
+    let status = named_status(&parsed, "ide_context");
+    assert_eq!(status.actor, None);
+    assert_eq!(status.text.as_deref(), Some(dump.as_str()));
+    let question = parsed
+        .events
+        .iter()
+        .find(|event| {
+            event.kind == EventKind::Message
+                && event.actor == Some(EventActor::User)
+                && event.text.as_deref() == Some("Fix the session title preview")
+        })
+        .expect("extracted user message");
+    assert_ne!(question.kind, EventKind::SystemStatus);
+}
+
+#[test]
+fn adapter_extracts_inline_vscode_ide_request_as_title() {
+    let dump = [
+        "# Context from my IDE setup:",
+        "",
+        "## My request for Codex: Fix the TOC preview",
+    ]
+    .join("\n");
+    let parsed = parse_codex(&[
+        session_meta("inject-ide-inline"),
+        user_message("2026-08-21T00:00:01Z", &dump),
+    ]);
+
+    assert_eq!(parsed.session.title, "Fix the TOC preview");
+    assert_eq!(user_texts(&parsed), vec!["Fix the TOC preview"]);
+}
+
+#[test]
+fn adapter_extracts_ide_request_with_inline_colon_dash_and_emdash() {
+    for (separator, title) in [('：', "全角冒号"), ('-', "dash"), ('—', "emdash")] {
+        let dump =
+            format!("# Context from my IDE setup:\n\n## My request for Codex{separator} {title}");
+        let parsed = parse_codex(&[
+            session_meta("inject-ide-sep"),
+            user_message("2026-08-21T00:00:01Z", &dump),
+        ]);
+        assert_eq!(parsed.session.title, title, "separator {separator}");
+        assert_eq!(user_texts(&parsed), vec![title]);
+    }
+}
+
+#[test]
+fn adapter_uses_last_ide_request_heading_when_selection_contains_one() {
+    let dump = [
+        "# Context from my IDE setup:",
+        "",
+        "## Active selection: docs/codex-format.md:10-14",
+        "## My request for Codex:",
+        "selected document content, not the real request",
+        "",
+        "## My request for Codex:",
+        "the real injected request",
+    ]
+    .join("\n");
+    let parsed = parse_codex(&[
+        session_meta("inject-ide-last"),
+        user_message("2026-08-21T00:00:01Z", &dump),
+    ]);
+
+    assert_eq!(parsed.session.title, "the real injected request");
+    assert_eq!(user_texts(&parsed), vec!["the real injected request"]);
+}
+
+#[test]
+fn adapter_skips_ide_dump_without_request_and_uses_later_user_message() {
+    let dump = "# Context from my IDE setup:\n\n## Active file: src/main.ts";
+    let parsed = parse_codex(&[
+        session_meta("inject-ide-empty"),
+        user_message("2026-08-21T00:00:01Z", dump),
+        user_message("2026-08-21T00:00:02Z", "修登录"),
+    ]);
+
+    assert_eq!(parsed.session.title, "修登录");
+    assert_eq!(user_texts(&parsed), vec!["修登录"]);
+    let status = named_status(&parsed, "ide_context");
+    assert_eq!(status.text.as_deref(), Some(dump));
+}
+
+#[test]
+fn adapter_keeps_ordinary_first_user_message_as_title() {
+    let parsed = parse_codex(&[
+        session_meta("plain-user"),
+        user_message("2026-08-21T00:00:01Z", "实现语义时间线"),
+    ]);
+
+    assert_eq!(parsed.session.title, "实现语义时间线");
+    assert_eq!(user_texts(&parsed), vec!["实现语义时间线"]);
+    assert!(parsed
+        .events
+        .iter()
+        .all(|event| event.name.as_deref() != Some("environment_context")));
+}
+
+#[test]
+fn adapter_prefers_session_meta_title_over_peeled_user_message() {
+    let parsed = parse_codex(&[
+        session_meta_named("named-session", "手起的名字"),
+        user_message(
+            "2026-08-21T00:00:01Z",
+            "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>",
+        ),
+        user_message("2026-08-21T00:00:02Z", "后面的真提问"),
+    ]);
+
+    assert_eq!(parsed.session.title, "手起的名字");
+}
+
+#[test]
+fn adapter_truncates_peeled_title_and_falls_back_to_session_id() {
+    let long_question = "修".repeat(100);
+    let truncated = parse_codex(&[
+        session_meta("long-title"),
+        user_message(
+            "2026-08-21T00:00:01Z",
+            "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>",
+        ),
+        user_message("2026-08-21T00:00:02Z", &long_question),
+    ]);
+    assert_eq!(truncated.session.title.chars().count(), 81);
+    assert!(truncated.session.title.ends_with('…'));
+    assert_eq!(
+        truncated.session.title.chars().take(80).collect::<String>(),
+        long_question.chars().take(80).collect::<String>()
+    );
+
+    let fallback = parse_codex(&[
+        session_meta("only-inject"),
+        user_message(
+            "2026-08-21T00:00:01Z",
+            "<environment_context>\n  <cwd>/tmp</cwd>\n</environment_context>",
+        ),
+    ]);
+    assert_eq!(fallback.session.title, "only-inject");
+    assert!(user_texts(&fallback).is_empty());
+}
+
+#[test]
+fn adapter_keeps_trailing_part_when_ide_request_body_repeats_heading() {
+    let dump = [
+        "# Context from my IDE setup:",
+        "",
+        "## Active file: foo.ts",
+        "",
+        "## My request for Codex:",
+        "Document the format, for example:",
+        "## My request for Codex:",
+        "and the rest follows.",
+    ]
+    .join("\n");
+    let parsed = parse_codex(&[
+        session_meta("inject-ide-repeat"),
+        user_message("2026-08-21T00:00:01Z", &dump),
+    ]);
+
+    assert_eq!(parsed.session.title, "and the rest follows.");
+    assert_eq!(user_texts(&parsed), vec!["and the rest follows."]);
+}
+
+#[test]
+fn adapter_index_suffix_peels_injection_title_like_full_index() {
+    let dump = "<environment_context>\n  <cwd>/tmp/project</cwd>\n</environment_context>";
+    let lines = [
+        session_meta("suffix-peel"),
+        user_message("2026-08-21T00:00:01Z", dump),
+        user_message("2026-08-21T00:00:02Z", "修登录"),
+    ];
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.jsonl");
+    write_jsonl(&path, &lines);
+    let content = std::fs::read_to_string(&path).unwrap();
+    let (offset, start_line) = offset_after_lines(&content, 1);
+
+    let full = &index(&path).unwrap().conversations[0];
+    let suffix = index_suffix(&path, offset, start_line, "suffix-peel").unwrap();
+
+    assert_eq!(full.session.title, "修登录");
+    assert_eq!(suffix.session.title, full.session.title);
+    assert_eq!(user_texts(&suffix), vec!["修登录"]);
+    assert_eq!(
+        named_status(&suffix, "environment_context").text.as_deref(),
+        Some(dump)
+    );
 }
