@@ -337,8 +337,6 @@ fn parse(
         tag_source_events(&mut events[event_start..], line, native_identity.as_deref());
     }
 
-    assign_native_event_ids(&mut events, Source::Grok, &session_id);
-    append_capability_degradation_status(sequence, &messages, &model, &mut events);
     let parsed = finish_source_conversation(
         Source::Grok,
         path,
@@ -351,6 +349,10 @@ fn parse(
         messages,
         events,
         true,
+        ConversationFinishPrep {
+            native_ids: NativeEventIdPrep::Assign,
+            degradation: CapabilityDegradationPrep::Inferred { sequence },
+        },
     )?;
     Ok((parsed, diagnostics))
 }

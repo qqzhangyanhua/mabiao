@@ -55,6 +55,23 @@ fn adapter_merges_kimi_native_identity_and_keeps_unknown_json_out_of_diagnostics
 }
 
 #[test]
+fn finish_prep_assigns_kimi_native_event_ids() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = seed(temp.path(), "working", false);
+    let status = index(&path).unwrap().conversations[0]
+        .events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("working"))
+        .unwrap()
+        .event_id
+        .clone();
+    assert!(
+        status.starts_with("kimi:kimi-native-id:"),
+        "Kimi 钩子应分配原生事件 id，得到 {status}"
+    );
+}
+
+#[test]
 fn adapter_maps_high_frequency_wire_kinds() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("kimi");

@@ -555,6 +555,7 @@ fn project_session(
         messages,
         events,
         true,
+        ConversationFinishPrep::NONE,
     )?;
     parsed.session.capabilities = capabilities.to_vec();
     Ok(parsed)

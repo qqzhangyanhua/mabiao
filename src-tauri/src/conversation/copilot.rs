@@ -181,8 +181,6 @@ fn parse(
     if events.iter().any(|event| event.occurred_at.is_none()) {
         missing.push("timestamp");
     }
-    append_declared_capability_degradation_status(sequence, &missing, &mut events);
-    assign_native_event_ids(&mut events, Source::Copilot, &session_id);
     let parsed = finish_source_conversation(
         Source::Copilot,
         path,
@@ -195,6 +193,13 @@ fn parse(
         messages,
         events,
         true,
+        ConversationFinishPrep {
+            native_ids: NativeEventIdPrep::Assign,
+            degradation: CapabilityDegradationPrep::Declared {
+                sequence,
+                missing: &missing,
+            },
+        },
     )?;
     Ok((parsed, diagnostics))
 }

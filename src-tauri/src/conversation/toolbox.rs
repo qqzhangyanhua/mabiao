@@ -244,6 +244,70 @@ pub(crate) fn append_declared_capability_degradation_status(
     ));
 }
 
+/// 共享收尾之前要不要按已打的 native_id 分配原生事件 id。
+pub(crate) enum NativeEventIdPrep {
+    Skip,
+    Assign,
+}
+
+/// 共享收尾之前要不要追加能力降级状态。
+pub(crate) enum CapabilityDegradationPrep<'a> {
+    None,
+    /// 根据消息、模型和工具配对推断缺失能力。
+    Inferred {
+        sequence: usize,
+    },
+    /// 追加调用方声明的缺失能力。
+    Declared {
+        sequence: usize,
+        missing: &'a [&'a str],
+    },
+}
+
+/// 共享收尾之前的准备模式。新来源选两个小枚举即可，不必记住该调哪几步。
+///
+/// `tag_source_events` 仍留在各对话记录适配器的逐行解析里：它依赖每条记录的行号和原生身份，
+/// 不能收进这份批量钩子。
+pub(crate) struct ConversationFinishPrep<'a> {
+    pub native_ids: NativeEventIdPrep,
+    pub degradation: CapabilityDegradationPrep<'a>,
+}
+
+impl ConversationFinishPrep<'static> {
+    pub const NONE: Self = Self {
+        native_ids: NativeEventIdPrep::Skip,
+        degradation: CapabilityDegradationPrep::None,
+    };
+}
+
+fn apply_conversation_finish_prep(
+    source: Source,
+    session_id: &str,
+    messages: &[ConversationMessage],
+    model: &str,
+    events: &mut Vec<ConversationEvent>,
+    prep: ConversationFinishPrep<'_>,
+) {
+    let assign_native_ids = matches!(prep.native_ids, NativeEventIdPrep::Assign);
+    let assign_before_degradation =
+        !matches!(prep.degradation, CapabilityDegradationPrep::Declared { .. });
+    if assign_native_ids && assign_before_degradation {
+        assign_native_event_ids(events, source, session_id);
+    }
+    match prep.degradation {
+        CapabilityDegradationPrep::None => {}
+        CapabilityDegradationPrep::Inferred { sequence } => {
+            append_capability_degradation_status(sequence, messages, model, events);
+        }
+        CapabilityDegradationPrep::Declared { sequence, missing } => {
+            append_declared_capability_degradation_status(sequence, missing, events);
+        }
+    }
+    if assign_native_ids && !assign_before_degradation {
+        assign_native_event_ids(events, source, session_id);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn finish_source_conversation(
     source: Source,
@@ -257,10 +321,12 @@ pub(crate) fn finish_source_conversation(
     messages: Vec<ConversationMessage>,
     mut events: Vec<ConversationEvent>,
     is_top_level: bool,
+    prep: ConversationFinishPrep<'_>,
 ) -> Result<ParsedConversation, String> {
     if session_id.is_empty() {
         return Err(format!("缺少 {} 会话 ID", source.application_name()));
     }
+    apply_conversation_finish_prep(source, &session_id, &messages, &model, &mut events, prep);
     populate_attachments(&mut events, &project);
     strip_message_bodies_from_details(&mut events);
     deduplicate_message_channels(&mut events);

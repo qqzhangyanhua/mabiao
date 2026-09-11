@@ -198,5 +198,6 @@ pub(super) fn parse_from_values(
         messages,
         events,
         is_top_level,
+        ConversationFinishPrep::NONE,
     )
 }
