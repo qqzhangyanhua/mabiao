@@ -1,0 +1,84 @@
+src/report/CursorAccountSlot.tsx
+  s_05c8ec70292861::t_17b3ae629f6ba9 1-13,15-17,19-23
+  s_05c8ec70292861::t_9ed57ccd8b13df 14,18
+src/report/poster.css
+  s_05c8ec70292861::t_5d9e3d42ba3ec7 192-201
+docs/adr/0023-report-cursor-account-partition.md
+  s_05c8ec70292861::t_dac78cd85e543f 1-9
+src/report/posterTypes.ts
+  s_05c8ec70292861::t_42c206cebbf90d 24-31,42,44-51
+src/types.ts
+  s_05c8ec70292861::t_c2dff637fb6b9f 1046-1052,1064
+src/lib/reportCopy.test.ts
+  s_05c8ec70292861::t_175632db06c561 588-626
+  s_05c8ec70292861::t_b1e0be3eb656c7 37
+src-tauri/src/domain/report.rs
+  s_05c8ec70292861::t_3e8d945d9ea873 24-25,43-54
+src-tauri/src/report.rs
+  s_05c8ec70292861::t_9424f29c2cd377 53,65,69-103
+  s_05c8ec70292861::t_4aa3081099b9d3 1-5,10,12-14
+  s_05c8ec70292861::t_58d931974bd4d6 104
+src/report/lightGlassPoster.tsx
+  s_05c8ec70292861::t_535d36144ac072 1
+  s_05c8ec70292861::t_e19bc00b74b996 72-81
+src/report/fuseBeadLayout.ts
+  s_05c8ec70292861::t_13999466665ebd 1
+  s_05c8ec70292861::t_67dd938bef6b8f 165
+src/report/inkWashLayout.ts
+  s_05c8ec70292861::t_37fdca326f3dae 2
+  s_05c8ec70292861::t_37ccdca084c813 120
+src/report/bauhausPaint.ts
+  s_05c8ec70292861::t_e0a0e95915c6a4 1
+  s_05c8ec70292861::t_cfe73016d8caca 174-175,178
+src-tauri/src/tests/report.rs
+  s_05c8ec70292861::t_9bbe0de6e900f6 947-999
+  s_05c8ec70292861::t_ae97c37288dbe6 211
+  s_05c8ec70292861::t_26f659dd608139 690-693
+  s_05c8ec70292861::t_3f797ec0dd120a 345-348
+src/lib/reportCopy.ts
+  s_05c8ec70292861::t_c7a4390e2e9fd3 1
+  s_05c8ec70292861::t_ae90e1f915a453 199-202,204-216
+  s_05c8ec70292861::t_64156a8ee9d812 203
+src/report/fakePosterData.test.ts
+  s_05c8ec70292861::t_0066652ef6120b 4
+  s_05c8ec70292861::t_7b0220ced74c0a 21-37
+src/report/castConcreteLayout.ts
+  s_05c8ec70292861::t_5867a78f9b1dde 112-113,115
+  s_05c8ec70292861::t_23ee357719bfda 2
+src/report/fakePosterData.ts
+  s_05c8ec70292861::t_4891ce37637771 47
+src/report/newsprintLayout.ts
+  s_05c8ec70292861::t_199692341dfe31 129
+  s_05c8ec70292861::t_0a59b16e7c1330 2
+docs/agent-layers.md
+  s_05c8ec70292861::t_dd840893f21b45 93
+src/report/darkAnalyticsPoster.tsx
+  s_05c8ec70292861::t_cdfb67be786ba2 1
+  s_05c8ec70292861::t_3f026c7ce4bcfc 39-48
+src/report/lightGlassPoster.css
+  s_05c8ec70292861::t_7fc8115fb01f6a 239-247
+src/lib/reportExtremeFixtures.ts
+  s_05c8ec70292861::t_e71d8098e2a1f2 56
+src/report/ticketStubLayout.ts
+  s_05c8ec70292861::t_834a7b06c24a9e 2
+  s_05c8ec70292861::t_ce438dad5c31fa 140-141,143
+CONTEXT.md
+  s_05c8ec70292861::t_a8db25134bea17 64,68-69
+  s_05c8ec70292861::t_dea4581b478112 111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "2f1c3debfb2d70b7011da25114919f2061e29d5f",
+  "prompts": {},
+  "sessions": {
+    "s_05c8ec70292861": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fc5525bc-3c3c-4d1f-a50a-2f212c7407c9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
