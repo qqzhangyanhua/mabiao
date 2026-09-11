@@ -1,37 +1,36 @@
+//! 打开一条对话记录详情。
+//!
+//! 公开面只做取详情：`load_detail` / `load_parsed_detail` / `detail_state`，
+//! 以及命令层放连接用的「准备」与「收尾」。DTO 拼装只有 `assemble_detail` 一处。
+//! 索引与解析分流、Cursor transcript 缺失、上下文清单接线都留在 implementation 里。
+//! 事件分页、按行重建、导出只用「准备」，不走「收尾」。
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::domain::{
-    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
-    ConversationContextItem, ConversationDetailDto, ConversationDetailStateDto, ConversationEvent,
-    ConversationEventContentDto, ConversationEventKind as EventKind, ConversationParsedDetail,
-    ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord, Source, UsageRecord,
+    ConversationAgentRelations, ConversationContextItem, ConversationDetailDto,
+    ConversationDetailStateDto, ConversationEvent, ConversationEventKind as EventKind,
+    ConversationParsedDetail, ConversationSessionRow, CursorSessionDetailDto, CursorSessionRecord,
+    Source, UsageRecord,
 };
 
 use super::agent_graph::load_agent_relations;
-use super::attachments::{
-    attachment_data_url, attachment_thumbnail_data_url, ensure_attachment_path_allowed,
-    read_source_payload,
-};
 use super::scan_roots::conversation_source_roots;
 use super::session_store::{
-    ensure_matching_session, load_session, load_trusted_session_files, load_usage_records,
-    usage_record_identity,
+    ensure_matching_session, load_session, load_usage_records, usage_record_identity,
 };
-use super::toolbox::{
-    attachment_candidates, compare_event_order, semantic_event, AttachmentCandidate,
-    ParsedConversation,
-};
+use super::toolbox::{compare_event_order, semantic_event, ParsedConversation};
 use super::trusted_path::{
     detail_file_revision, detail_files_revision, files_revision, session_source_paths,
     trusted_paths_for_session,
 };
 use super::{
     context_cache, context_first_use, context_manifest, conversation_adapter, cursor, event_index,
-    line_direct, parse_conversation_file, parse_conversation_files, PreparedConversationDetail,
-    PreparedDetailRead, CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+    parse_conversation_files, PreparedConversationDetail, PreparedDetailRead,
+    CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(
@@ -146,7 +145,7 @@ pub(crate) fn prepare_detail(
     })
 }
 
-pub(crate) fn load_prepared_detail(
+fn load_prepared_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
     context_metrics: Option<context_cache::CachedContextMetrics>,
@@ -156,13 +155,20 @@ pub(crate) fn load_prepared_detail(
     let parsed = load_prepared_parsed(home, prepared)?;
     let observed = context_manifest::observed_from_events(&parsed.events);
     let first_use_events = context_first_use::candidates_from_events(&parsed.events);
-    Ok(with_context_manifest(
+    Ok(assemble_detail(
         home,
         source,
-        parsed_detail_to_dto(parsed, usage_record_count),
-        observed,
-        context_metrics,
-        &first_use_events,
+        DetailParts {
+            revision: parsed.revision,
+            session: parsed.session,
+            event_count: parsed.events.len() as u32,
+            usage_record_count,
+            agent_relations: parsed.agent_relations,
+            cursor_behavior: parsed.cursor_behavior,
+            observed,
+            cached: context_metrics,
+            first_use_events: &first_use_events,
+        },
     ))
 }
 
@@ -212,21 +218,6 @@ pub(crate) fn load_prepared_parsed(
     })
 }
 
-pub(crate) fn parsed_detail_to_dto(
-    parsed: ConversationParsedDetail,
-    usage_record_count: u32,
-) -> ConversationDetailDto {
-    ConversationDetailDto {
-        revision: parsed.revision,
-        session: parsed.session,
-        event_count: parsed.events.len() as u32,
-        usage_record_count,
-        agent_relations: parsed.agent_relations,
-        cursor_behavior: parsed.cursor_behavior,
-        context_manifest: None,
-    }
-}
-
 pub(crate) fn event_index_ready(
     conn: &Connection,
     home: &Path,
@@ -256,7 +247,7 @@ pub(crate) fn event_index_ready(
     stored_revisions_match(conn, prepared.source, &prepared.session.session_id, &paths)
 }
 
-pub(crate) fn assemble_indexed_detail(
+fn assemble_indexed_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
     event_count: u32,
@@ -279,43 +270,56 @@ pub(crate) fn assemble_indexed_detail(
         .iter()
         .map(|path| path.to_string_lossy().to_string())
         .collect();
-    Ok(with_context_manifest(
+    Ok(assemble_detail(
         home,
         source,
-        ConversationDetailDto {
+        DetailParts {
             revision,
             session,
             event_count,
             usage_record_count: usage_records.len() as u32,
             agent_relations,
             cursor_behavior,
-            context_manifest: None,
+            observed: observed_context,
+            cached: context_metrics,
+            first_use_events: &first_use_events,
         },
-        observed_context,
-        context_metrics,
-        &first_use_events,
     ))
 }
 
-fn with_context_manifest(
-    home: &Path,
-    source: Source,
-    mut dto: ConversationDetailDto,
+struct DetailParts<'a> {
+    revision: String,
+    session: ConversationSessionRow,
+    event_count: u32,
+    usage_record_count: u32,
+    agent_relations: ConversationAgentRelations,
+    cursor_behavior: Option<CursorSessionDetailDto>,
     observed: Vec<ConversationContextItem>,
     cached: Option<context_cache::CachedContextMetrics>,
-    first_use_events: &[context_first_use::Candidate],
-) -> ConversationDetailDto {
+    first_use_events: &'a [context_first_use::Candidate],
+}
+
+fn assemble_detail(home: &Path, source: Source, parts: DetailParts<'_>) -> ConversationDetailDto {
+    let mut dto = ConversationDetailDto {
+        revision: parts.revision,
+        session: parts.session,
+        event_count: parts.event_count,
+        usage_record_count: parts.usage_record_count,
+        agent_relations: parts.agent_relations,
+        cursor_behavior: parts.cursor_behavior,
+        context_manifest: None,
+    };
     dto.context_manifest =
-        context_manifest::for_session(home, source, &dto.session, observed, cached).map(
-            |mut manifest| {
-                manifest.first_uses = context_first_use::collect(first_use_events, &manifest.items);
+        context_manifest::for_session(home, source, &dto.session, parts.observed, parts.cached)
+            .map(|mut manifest| {
+                manifest.first_uses =
+                    context_first_use::collect(parts.first_use_events, &manifest.items);
                 manifest
-            },
-        );
+            });
     dto
 }
 
-pub(crate) fn stored_revisions_match(
+fn stored_revisions_match(
     conn: &Connection,
     source: Source,
     session_id: &str,
@@ -367,7 +371,7 @@ pub(crate) fn stored_revisions_match(
     Ok(true)
 }
 
-pub(crate) fn load_exact_cursor_session(
+fn load_exact_cursor_session(
     conn: &Connection,
     session_id: &str,
 ) -> Result<Option<CursorSessionRecord>, String> {
@@ -384,16 +388,14 @@ pub(crate) fn load_exact_cursor_session(
     }
 }
 
-pub(crate) fn cursor_behavior_dto(
+fn cursor_behavior_dto(
     home: &Path,
     stats: Option<&CursorSessionRecord>,
 ) -> Option<CursorSessionDetailDto> {
     stats.map(|record| crate::cursor_session_detail::detail_from_record(home, record))
 }
 
-pub(crate) fn cursor_missing_transcript_events(
-    session: &ConversationSessionRow,
-) -> Vec<ConversationEvent> {
+fn cursor_missing_transcript_events(session: &ConversationSessionRow) -> Vec<ConversationEvent> {
     let mut event = semantic_event(
         0,
         EventKind::SystemStatus,
@@ -408,7 +410,7 @@ pub(crate) fn cursor_missing_transcript_events(
     vec![event]
 }
 
-pub(crate) fn cursor_metadata_revision(
+fn cursor_metadata_revision(
     usage_records: &[UsageRecord],
     stats: Option<&CursorSessionRecord>,
 ) -> String {
@@ -471,7 +473,7 @@ pub fn detail_state(
     })
 }
 
-pub(crate) fn parse_conversation_files_with_revision(
+fn parse_conversation_files_with_revision(
     source: Source,
     paths: &[PathBuf],
     session_id: &str,
@@ -496,137 +498,4 @@ pub(crate) fn read_consistent_snapshot<T>(
         return snapshot.map(|snapshot| (snapshot, after_revision));
     }
     Err("原始文件在读取期间持续变化，请重试".to_string())
-}
-
-pub fn rebuild_events_from_line(
-    source: Source,
-    path: &Path,
-    session_id: &str,
-    source_sequence: u32,
-    include_deferred_content: bool,
-) -> Result<Vec<ConversationEvent>, String> {
-    line_direct::rebuild_events_from_line(
-        source,
-        path,
-        session_id,
-        source_sequence,
-        include_deferred_content,
-    )
-}
-
-pub fn parse_session_events(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    include_deferred_content: bool,
-) -> Result<Vec<ConversationEvent>, String> {
-    line_direct::parse_session_events(conn, home, source, session_id, include_deferred_content)
-}
-
-pub fn load_event_content(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    event_id: &str,
-) -> Result<ConversationEventContentDto, String> {
-    if let Some(content) =
-        line_direct::try_load_event_content(conn, home, source, session_id, event_id)?
-    {
-        return Ok(content);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .into_iter()
-        .find(|event| event.event_id == event_id)
-        .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
-    Ok(ConversationEventContentDto {
-        event_id: event.event_id,
-        text: event.text,
-        details: event.details,
-    })
-}
-
-pub fn load_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-pub fn load_attachment_thumbnail(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_thumbnail_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-pub(crate) fn resolve_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<AttachmentCandidate, String> {
-    if let Some(candidate) =
-        line_direct::try_resolve_attachment(conn, home, source, session_id, attachment_id)?
-    {
-        return Ok(candidate);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .iter()
-        .find(|event| {
-            event
-                .attachments
-                .iter()
-                .any(|attachment| attachment.id == attachment_id)
-        })
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment_index = event
-        .attachments
-        .iter()
-        .position(|attachment| attachment.id == attachment_id)
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment = event.attachments[attachment_index].clone();
-    if attachment.kind != AttachmentKind::Image {
-        return Err("该附件不是可预览的图片".to_string());
-    }
-    let source_path = PathBuf::from(&event.source_file);
-    let source_fragment = parse_conversation_file(source, &source_path, session_id, true)?;
-    let payload = read_source_payload(source, &source_path, event.source_sequence)?;
-    let mut candidate = attachment_candidates(
-        event.source_sequence,
-        &payload,
-        &source_fragment.session.project,
-    )
-    .into_iter()
-    .nth(attachment_index)
-    .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    candidate.attachment = attachment;
-    ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
-    Ok(candidate)
 }

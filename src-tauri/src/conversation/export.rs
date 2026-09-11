@@ -9,7 +9,7 @@ use super::session_store::{ensure_matching_session, load_trusted_session_files};
 use super::toolbox::ParsedConversation;
 use super::{
     event_index, event_index_ready, line_direct, parse_conversation_files, prepare_detail, qwen,
-    raw_export_extension, rebuild_events_from_line, MAX_PAGE_SIZE,
+    raw_export_extension, MAX_PAGE_SIZE,
 };
 use crate::domain::{
     ConversationAttachmentStatus as AttachmentStatus, ConversationEvent, ConversationEventAnchor,
@@ -226,7 +226,7 @@ fn hydrate_export_event(
     session: &ConversationSessionRow,
     indexed: &ConversationEvent,
 ) -> Result<ConversationEvent, String> {
-    let rebuilt = rebuild_events_from_line(
+    let rebuilt = line_direct::rebuild_events_from_line(
         source,
         Path::new(&indexed.source_file),
         &session.session_id,

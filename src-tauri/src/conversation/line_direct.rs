@@ -3,12 +3,19 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::attachments::{ensure_attachment_path_allowed, read_source_line, read_source_payload};
+use super::attachments::{
+    attachment_data_url, attachment_thumbnail_data_url, ensure_attachment_path_allowed,
+    read_source_line, read_source_payload,
+};
 use super::session_store::{ensure_matching_session, load_trusted_session_files};
 use super::toolbox::{attachment_candidates, AttachmentCandidate};
-use super::{event_index, event_index_ready, parse_conversation_files, prepare_detail};
+use super::{
+    event_index, event_index_ready, parse_conversation_file, parse_conversation_files,
+    prepare_detail,
+};
 use crate::domain::{
-    ConversationAttachmentKind as AttachmentKind, ConversationEvent, ConversationEventContentDto,
+    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
+    ConversationEvent, ConversationEventContentDto,
     ConversationEventContentStatus as ContentStatus, Source,
 };
 
@@ -57,7 +64,111 @@ pub fn parse_session_events(
     Ok(parsed.events)
 }
 
-pub fn try_load_event_content(
+pub fn load_event_content(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    event_id: &str,
+) -> Result<ConversationEventContentDto, String> {
+    if let Some(content) = try_load_event_content(conn, home, source, session_id, event_id)? {
+        return Ok(content);
+    }
+    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
+    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
+    ensure_matching_session(&parsed, &session)?;
+    let event = parsed
+        .events
+        .into_iter()
+        .find(|event| event.event_id == event_id)
+        .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
+    Ok(ConversationEventContentDto {
+        event_id: event.event_id,
+        text: event.text,
+        details: event.details,
+    })
+}
+
+pub fn load_attachment(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<ConversationAttachmentContentDto, String> {
+    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
+    let data_url = attachment_data_url(&candidate)?;
+    Ok(ConversationAttachmentContentDto {
+        attachment: candidate.attachment,
+        data_url,
+    })
+}
+
+pub fn load_attachment_thumbnail(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<ConversationAttachmentContentDto, String> {
+    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
+    let data_url = attachment_thumbnail_data_url(&candidate)?;
+    Ok(ConversationAttachmentContentDto {
+        attachment: candidate.attachment,
+        data_url,
+    })
+}
+
+fn resolve_attachment(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<AttachmentCandidate, String> {
+    if let Some(candidate) = try_resolve_attachment(conn, home, source, session_id, attachment_id)?
+    {
+        return Ok(candidate);
+    }
+    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
+    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
+    ensure_matching_session(&parsed, &session)?;
+    let event = parsed
+        .events
+        .iter()
+        .find(|event| {
+            event
+                .attachments
+                .iter()
+                .any(|attachment| attachment.id == attachment_id)
+        })
+        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    let attachment_index = event
+        .attachments
+        .iter()
+        .position(|attachment| attachment.id == attachment_id)
+        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    let attachment = event.attachments[attachment_index].clone();
+    if attachment.kind != AttachmentKind::Image {
+        return Err("该附件不是可预览的图片".to_string());
+    }
+    let source_path = PathBuf::from(&event.source_file);
+    let source_fragment = parse_conversation_file(source, &source_path, session_id, true)?;
+    let payload = read_source_payload(source, &source_path, event.source_sequence)?;
+    let mut candidate = attachment_candidates(
+        event.source_sequence,
+        &payload,
+        &source_fragment.session.project,
+    )
+    .into_iter()
+    .nth(attachment_index)
+    .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    candidate.attachment = attachment;
+    ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
+    Ok(candidate)
+}
+
+fn try_load_event_content(
     conn: &Connection,
     home: &Path,
     source: &str,
@@ -94,7 +205,7 @@ pub fn try_load_event_content(
     }))
 }
 
-pub fn try_resolve_attachment(
+fn try_resolve_attachment(
     conn: &Connection,
     home: &Path,
     source: &str,
