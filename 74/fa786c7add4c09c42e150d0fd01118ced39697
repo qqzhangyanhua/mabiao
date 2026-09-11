@@ -1,0 +1,19 @@
+src-tauri/src/conversation/codex.rs
+  s_72ebc86d716440::t_340cd4d12edd5b 278-286,289-301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "74fa786c7add4c09c42e150d0fd01118ced39697",
+  "prompts": {},
+  "sessions": {
+    "s_72ebc86d716440": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a08f6a-5248-7763-83c5-d113c8f66ed6",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
