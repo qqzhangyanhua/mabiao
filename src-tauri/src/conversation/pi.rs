@@ -180,5 +180,6 @@ pub(super) fn parse_from_values(
         messages,
         events,
         true,
+        ConversationFinishPrep::NONE,
     )
 }

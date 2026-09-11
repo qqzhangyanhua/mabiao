@@ -70,3 +70,37 @@ fn adapter_requires_dsh_identity_and_degrades_unknown_records_without_bodies() {
     write_compressed(&path, "{\"type\":\"session\",\"cwd\":\"/workspace\"}\n");
     assert!(index(&path).is_err());
 }
+
+#[test]
+fn finish_prep_appends_inferred_capability_degradation() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.jsonl.zstd");
+    write_compressed(
+        &path,
+        concat!(
+            "{\"type\":\"session\",\"id\":\"dsh-degrade\",\"cwd\":\"/workspace\"}\n",
+            "{\"type\":\"tool/call\",\"seq\":1,\"data\":{\"callId\":\"missing-result\",\"name\":\"read\",\"arguments\":\"{}\"}}\n"
+        ),
+    );
+
+    let parsed = &index(&path).unwrap().conversations[0];
+    let call = parsed
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::ToolCall)
+        .unwrap();
+    assert!(
+        !call.event_id.starts_with("dsh:"),
+        "只追加推断式能力降级时事件 id 应走溯源，得到 {}",
+        call.event_id
+    );
+    let degraded = parsed
+        .events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("capability_degraded"))
+        .unwrap();
+    assert_eq!(
+        degraded.details.get("missing").unwrap(),
+        &serde_json::json!(["user_message", "model", "tool_result", "timestamp"])
+    );
+}

@@ -287,6 +287,7 @@ pub(super) fn parse_content(
         messages,
         events,
         true,
+        ConversationFinishPrep::NONE,
     )
     .map_err(|message| ConversationIndexIssue {
         path: path.to_string_lossy().to_string(),

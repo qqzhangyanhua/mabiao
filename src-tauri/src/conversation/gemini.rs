@@ -168,5 +168,6 @@ pub(super) fn parse(
         messages,
         events,
         true,
+        ConversationFinishPrep::NONE,
     )
 }

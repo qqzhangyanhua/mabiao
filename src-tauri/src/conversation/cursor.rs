@@ -203,6 +203,7 @@ fn parse(
         messages,
         events,
         !is_child,
+        ConversationFinishPrep::NONE,
     )?;
     Ok((parsed, diagnostics))
 }

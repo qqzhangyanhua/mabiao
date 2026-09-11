@@ -151,8 +151,6 @@ fn parse_all(
         if events.iter().any(|event| event.occurred_at.is_none()) {
             missing.push("timestamp");
         }
-        append_declared_capability_degradation_status(sequence, &missing, &mut events);
-        assign_native_event_ids(&mut events, Source::Qwen, &session_id);
         let mut parsed = finish_source_conversation(
             Source::Qwen,
             path,
@@ -165,6 +163,13 @@ fn parse_all(
             messages,
             events,
             true,
+            ConversationFinishPrep {
+                native_ids: NativeEventIdPrep::Assign,
+                degradation: CapabilityDegradationPrep::Declared {
+                    sequence,
+                    missing: &missing,
+                },
+            },
         )?;
         parsed
             .session

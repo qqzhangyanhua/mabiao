@@ -101,3 +101,37 @@ fn adapter_groups_qwen_sessions_and_uses_stable_message_identity() {
     assert!(empty.conversations.is_empty());
     assert!(empty.diagnostics.is_empty());
 }
+
+#[test]
+fn finish_prep_appends_declared_capability_degradation() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("%2Fworkspace%2Fqwen/logs.json");
+    write_records(&path, false);
+
+    let first_session = index(&path)
+        .unwrap()
+        .conversations
+        .into_iter()
+        .find(|conversation| conversation.session.session_id == "qwen-one")
+        .unwrap();
+    let degraded = first_session
+        .events
+        .iter()
+        .find(|event| event.name.as_deref() == Some("capability_degraded"))
+        .unwrap();
+    assert_eq!(
+        degraded.details.get("missing").unwrap(),
+        &serde_json::json!(["assistant_message", "model", "provider", "usage"])
+    );
+    let message_id = first_session
+        .events
+        .iter()
+        .find(|event| event.kind == EventKind::Message)
+        .unwrap()
+        .event_id
+        .clone();
+    assert!(
+        message_id.starts_with("qwen:qwen-one:"),
+        "Qwen 声明式降级同时分配原生事件 id，得到 {message_id}"
+    );
+}

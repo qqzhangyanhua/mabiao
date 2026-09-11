@@ -151,7 +151,6 @@ fn parse(
         }
     }
 
-    append_capability_degradation_status(sequence, &messages, &model, &mut events);
     let parsed = finish_source_conversation(
         Source::Factory,
         path,
@@ -164,6 +163,10 @@ fn parse(
         messages,
         events,
         true,
+        ConversationFinishPrep {
+            native_ids: NativeEventIdPrep::Skip,
+            degradation: CapabilityDegradationPrep::Inferred { sequence },
+        },
     )?;
     Ok((parsed, diagnostics))
 }
