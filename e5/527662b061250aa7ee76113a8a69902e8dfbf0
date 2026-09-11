@@ -1,0 +1,39 @@
+src-tauri/src/work_notes/engines.rs
+  s_05c8ec70292861::t_1e0046605057d2 566-567,571-575
+  s_05c8ec70292861::t_004b5205788347 480-483,485-515,517-529,531-539,546,557-563
+  s_05c8ec70292861::t_c5fa671c085c32 516
+  s_05c8ec70292861::t_57f36c091f4759 1
+  s_05c8ec70292861::t_b59b5ef0270d16 484
+  s_05c8ec70292861::t_e2f00322a0d8b8 540
+  s_05c8ec70292861::t_6ff1365e55f48d 612-613,618-622
+  s_05c8ec70292861::t_f93b90f982614d 530
+  s_05c8ec70292861::t_bf3fd60e5d274b 564
+src-tauri/src/work_notes.rs
+  s_05c8ec70292861::t_1a704a2f83c4cd 39-40
+src/styles/views/heatmap.css
+  s_05c8ec70292861::t_445341f3ff82fc 158-162
+src-tauri/src/tests/work_notes.rs
+  s_05c8ec70292861::t_63c29873850ca4 851-854
+  s_05c8ec70292861::t_b61daee10b4331 880-891
+  s_05c8ec70292861::t_553d0473bdbe9d 824-850,855-879
+src/components/WorkNotesEnginePanel.tsx
+  s_05c8ec70292861::t_2bbf8bfe258172 43-47
+src/styles/views/settings.css
+  s_05c8ec70292861::t_e361fe0a1e8a40 338-339
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e5527662b061250aa7ee76113a8a69902e8dfbf0",
+  "prompts": {},
+  "sessions": {
+    "s_05c8ec70292861": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fc5525bc-3c3c-4d1f-a50a-2f212c7407c9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
