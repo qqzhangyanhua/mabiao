@@ -11,12 +11,10 @@ use std::time::UNIX_EPOCH;
 
 use rusqlite::Connection;
 
-use crate::adapters::cursor::{parse_cursor_commits, summarize_code_volume, CursorCommitRow};
 use crate::adapters::{usage_adapter, UsageAdapter};
 use crate::cursor_session;
 use crate::domain::{
-    CodeVolumeSummary, IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport,
-    UsageRecord,
+    IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport, UsageRecord,
 };
 use crate::store;
 
@@ -793,56 +791,6 @@ pub(crate) fn metadata_fingerprint(path: &Path) -> String {
     }
     #[cfg(not(any(unix, windows)))]
     format!("{}:{modified}", meta.len())
-}
-
-pub fn load_code_volume(home: &Path) -> Result<CodeVolumeSummary, String> {
-    let db_path = home.join(".cursor/ai-tracking/ai-code-tracking.db");
-    if !db_path.exists() {
-        return Ok(CodeVolumeSummary::empty());
-    }
-    let source_db = open_readonly(&db_path)?;
-    let mut stmt = source_db
-        .prepare(
-            r#"
-            SELECT commitHash, branchName, scoredAt,
-                   COALESCE(commitMessage, ''),
-                   COALESCE(linesAdded, 0),
-                   COALESCE(linesDeleted, 0),
-                   COALESCE(composerLinesAdded, 0),
-                   COALESCE(composerLinesDeleted, 0),
-                   COALESCE(humanLinesAdded, 0),
-                   COALESCE(humanLinesDeleted, 0),
-                   COALESCE(tabLinesAdded, 0),
-                   COALESCE(tabLinesDeleted, 0),
-                   v2AiPercentage
-            FROM scored_commits
-            WHERE linesAdded IS NOT NULL OR v2AiPercentage IS NOT NULL
-            "#,
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            let percentage: Option<String> = row.get(12)?;
-            Ok(CursorCommitRow {
-                commit_hash: row.get(0)?,
-                branch: row.get(1)?,
-                scored_at_ms: row.get(2)?,
-                commit_message: row.get(3)?,
-                lines_added: row.get(4)?,
-                lines_deleted: row.get(5)?,
-                composer_lines_added: row.get(6)?,
-                composer_lines_deleted: row.get(7)?,
-                human_lines_added: row.get(8)?,
-                human_lines_deleted: row.get(9)?,
-                tab_lines_added: row.get(10)?,
-                tab_lines_deleted: row.get(11)?,
-                ai_percentage: percentage.and_then(|value| value.parse().ok()),
-            })
-        })
-        .map_err(|e| e.to_string())?;
-    let commits: Result<Vec<_>, _> = rows.collect();
-    let parsed = parse_cursor_commits(&commits.map_err(|e| e.to_string())?);
-    Ok(summarize_code_volume(&parsed))
 }
 
 pub(crate) fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String> {

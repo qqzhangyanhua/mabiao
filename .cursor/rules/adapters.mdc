@@ -24,4 +24,4 @@ alwaysApply: false
 - 每种工具都要弄清楚它是「累计用量」还是「单轮用量」，只取其一，避免重复计数（例：Codex 同时暴露 `total_token_usage` 与 `last_token_usage`，适配器只用 `last_token_usage` 并对相同 usage 指纹去重，见 `codex.rs`）
 - 会话/项目路径等元信息通常来自目录名而非 payload，优先复用 `adapters/project.rs` 的 `decode_dashed_dir`/`decode_url_dir`/`project_from_source_file`
 - 本机 token 字段格式不确定的来源（如新加的工具）应先用 `src-tauri/src/bin/probe.rs` 探测真实字段结构，再落地为 adapter；探测结果只打印字段位置，不能打印会话正文
-- Cursor 只有代码量数据、amp 等云端数据不纳入 Usage Record 模型，走独立的 `CodeVolumeSummary` 路径（`ingest.rs::load_code_volume`），不要把这类数据强塞进 token 聚合
+- Cursor 只有代码量数据、amp 等云端数据不纳入 Usage Record 模型，走独立的 `CodeVolumeSummary` 路径（`adapters/cursor.rs::load_code_volume`），不要把这类数据强塞进 token 聚合

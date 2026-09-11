@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use crate::domain::{
     CodeVolumeBranchRow, CodeVolumeCommit, CodeVolumeDailyPoint, CodeVolumeSummary,
 };
+use crate::ingest::open_readonly;
 
 #[derive(Debug, Clone, Default)]
 pub struct CursorCommitRow {
@@ -150,6 +152,56 @@ fn local_day(occurred_at: &str) -> String {
                 .to_string()
         })
         .unwrap_or_else(|_| occurred_at.get(..10).unwrap_or(occurred_at).to_string())
+}
+
+pub fn load_code_volume(home: &Path) -> Result<CodeVolumeSummary, String> {
+    let db_path = home.join(".cursor/ai-tracking/ai-code-tracking.db");
+    if !db_path.exists() {
+        return Ok(CodeVolumeSummary::empty());
+    }
+    let source_db = open_readonly(&db_path)?;
+    let mut stmt = source_db
+        .prepare(
+            r#"
+            SELECT commitHash, branchName, scoredAt,
+                   COALESCE(commitMessage, ''),
+                   COALESCE(linesAdded, 0),
+                   COALESCE(linesDeleted, 0),
+                   COALESCE(composerLinesAdded, 0),
+                   COALESCE(composerLinesDeleted, 0),
+                   COALESCE(humanLinesAdded, 0),
+                   COALESCE(humanLinesDeleted, 0),
+                   COALESCE(tabLinesAdded, 0),
+                   COALESCE(tabLinesDeleted, 0),
+                   v2AiPercentage
+            FROM scored_commits
+            WHERE linesAdded IS NOT NULL OR v2AiPercentage IS NOT NULL
+            "#,
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            let percentage: Option<String> = row.get(12)?;
+            Ok(CursorCommitRow {
+                commit_hash: row.get(0)?,
+                branch: row.get(1)?,
+                scored_at_ms: row.get(2)?,
+                commit_message: row.get(3)?,
+                lines_added: row.get(4)?,
+                lines_deleted: row.get(5)?,
+                composer_lines_added: row.get(6)?,
+                composer_lines_deleted: row.get(7)?,
+                human_lines_added: row.get(8)?,
+                human_lines_deleted: row.get(9)?,
+                tab_lines_added: row.get(10)?,
+                tab_lines_deleted: row.get(11)?,
+                ai_percentage: percentage.and_then(|value| value.parse().ok()),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let commits: Result<Vec<_>, _> = rows.collect();
+    let parsed = parse_cursor_commits(&commits.map_err(|e| e.to_string())?);
+    Ok(summarize_code_volume(&parsed))
 }
 
 /// 把「全部时间、全部来源」的消耗记录费用叠加到代码量摘要上，算出粗略的 ROI 交叉指标。

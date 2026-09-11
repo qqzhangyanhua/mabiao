@@ -10,7 +10,7 @@ use crate::AppState;
 #[tauri::command]
 pub async fn get_code_volume(app: tauri::AppHandle) -> Result<CodeVolumeSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let summary = ingest::load_code_volume(&ingest::default_home())?;
+        let summary = adapters::cursor::load_code_volume(&ingest::default_home())?;
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         let prices = state.effective_prices();

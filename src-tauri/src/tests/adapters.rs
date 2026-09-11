@@ -816,8 +816,8 @@ fn with_cost_roi_derives_cost_per_thousand_ai_lines() {
 fn load_code_volume_reads_sqlite_without_writing_usage() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
-    assert_eq!(ingest::load_code_volume(home).unwrap().commit_count, 0);
-    assert_eq!(ingest::load_code_volume(home).unwrap().ai_percentage, None);
+    assert_eq!(cursor::load_code_volume(home).unwrap().commit_count, 0);
+    assert_eq!(cursor::load_code_volume(home).unwrap().ai_percentage, None);
 
     let db_path = home.join(".cursor/ai-tracking/ai-code-tracking.db");
     std::fs::create_dir_all(db_path.parent().unwrap()).unwrap();
@@ -852,7 +852,7 @@ fn load_code_volume_reads_sqlite_without_writing_usage() {
     assert_eq!(report.records_written, 0);
     assert!(store::load_all(&conn).unwrap().is_empty());
 
-    let volume = ingest::load_code_volume(home).unwrap();
+    let volume = cursor::load_code_volume(home).unwrap();
     assert_eq!(volume.commit_count, 1);
     assert_eq!(volume.lines_added, 156);
     assert_eq!(volume.lines_deleted, 20);
