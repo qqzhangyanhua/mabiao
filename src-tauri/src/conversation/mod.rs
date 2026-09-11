@@ -67,12 +67,13 @@ pub(crate) use discover::{
     single_detail,
 };
 pub(crate) use event_index::indexed_event_count;
+pub use line_direct::{
+    load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
+    rebuild_events_from_line,
+};
 #[cfg(test)]
 pub(crate) use read::read_consistent_snapshot;
-pub use read::{
-    detail_state, load_attachment, load_attachment_thumbnail, load_detail, load_event_content,
-    load_parsed_detail, parse_session_events, rebuild_events_from_line,
-};
+pub use read::{detail_state, load_detail, load_parsed_detail};
 pub(crate) use read::{
     event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
     prepare_detail_read,
