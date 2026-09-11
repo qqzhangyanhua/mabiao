@@ -3,7 +3,7 @@ use tauri::Manager;
 use crate::domain::{
     DetectedEngine, WorkNotesDto, WorkNotesHistoryPage, WorkNotesHistoryQuery, WorkNotesParams,
     WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange, WorkNotesSessionParams,
-    WorkNotesSessionSummary,
+    WorkNotesSessionRef, WorkNotesSessionSummary,
 };
 use crate::paths;
 use crate::work_notes::{self, ProcessRunner};
@@ -15,6 +15,7 @@ fn params(
     engine: Option<String>,
     model: Option<String>,
     confirmed: Option<bool>,
+    sessions: Option<Vec<WorkNotesSessionRef>>,
 ) -> WorkNotesParams {
     WorkNotesParams {
         range,
@@ -22,6 +23,7 @@ fn params(
         engine: engine.unwrap_or_default(),
         model: model.unwrap_or_default(),
         confirmed: confirmed.unwrap_or(false),
+        sessions: sessions.unwrap_or_default(),
     }
 }
 
@@ -32,6 +34,7 @@ pub async fn preview_work_notes(
     extra_instructions: Option<String>,
     engine_id: Option<String>,
     model: Option<String>,
+    sessions: Option<Vec<WorkNotesSessionRef>>,
 ) -> Result<WorkNotesPreviewDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
@@ -40,7 +43,7 @@ pub async fn preview_work_notes(
         work_notes::preview(
             &conn,
             &prices,
-            &params(range, extra_instructions, engine_id, model, None),
+            &params(range, extra_instructions, engine_id, model, None, sessions),
             chrono::Local::now(),
         )
     })
@@ -56,6 +59,7 @@ pub async fn start_work_notes(
     model: Option<String>,
     extra_instructions: Option<String>,
     confirmed: Option<bool>,
+    sessions: Option<Vec<WorkNotesSessionRef>>,
 ) -> Result<(), String> {
     work_notes::require_engine(&engine_id)?;
     let state = app.state::<AppState>();
@@ -69,6 +73,7 @@ pub async fn start_work_notes(
         Some(engine_id.clone()),
         model,
         confirmed,
+        sessions,
     );
     std::thread::spawn(move || {
         let state = app.state::<AppState>();

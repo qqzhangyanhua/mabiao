@@ -1,0 +1,125 @@
+.work-notes-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--scrim);
+}
+
+.work-notes-picker {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  width: min(640px, 100%);
+  max-height: min(80vh, 760px);
+  padding: 18px 18px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--bg-panel);
+  box-shadow: 0 18px 48px var(--shadow-strong);
+}
+
+.work-notes-picker-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.work-notes-picker-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.work-notes-picker-count,
+.work-notes-picker-hint,
+.work-notes-picker-estimate {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.work-notes-picker-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.work-notes-picker-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.work-notes-picker-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--overlay-1);
+  cursor: pointer;
+}
+
+.work-notes-picker-row.is-on {
+  border-color: var(--line-strong);
+  background: var(--overlay-2);
+}
+
+.work-notes-picker-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.work-notes-picker-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-notes-picker-cached {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--overlay-recessed);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.work-notes-picker-meta {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.work-notes-picker-error {
+  margin: 0;
+  color: var(--orange-fg);
+  font-size: 12px;
+}
+
+.work-notes-picker footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}

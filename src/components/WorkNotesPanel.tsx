@@ -1,8 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState } from "react";
-import { formatTokens, formatUsdAmount, humanStatus } from "../lib/format";
+import { humanStatus } from "../lib/format";
 import { useWorkNotesProgress } from "../lib/useWorkNotesProgress";
-import { formatEstimatedSecs, workNotesUsageCopy } from "../lib/workNotesCopy";
 import {
   clampWorkNotesCustomRange,
   thisWeekStartDate,
@@ -19,10 +18,13 @@ import {
   saveWorkNotesPreference,
   type WorkNotesPreference,
 } from "../lib/workNotesPreference";
-import type { WorkNotesDto, WorkNotesPreviewDto, WorkNotesRangeKind } from "../types";
+import type { WorkNotesPreviewDto, WorkNotesRangeKind, WorkNotesSessionRef } from "../types";
 import { EmptyState } from "./EmptyState";
+import { WorkNotesEstimateStrip } from "./WorkNotesEstimateStrip";
 import { WorkNotesHistory } from "./WorkNotesHistory";
+import { WorkNotesSessionPicker } from "./WorkNotesSessionPicker";
 import { WorkNotesShare } from "./WorkNotesShare";
+import { WorkNotesFailures, WorkNotesProgress, WorkNotesUsage } from "./WorkNotesStatus";
 import { Button } from "./ui/Button";
 import { DatePicker } from "./ui/DatePicker";
 import { Segmented } from "./ui/Segmented";
@@ -43,7 +45,7 @@ export function WorkNotesPanel() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [startError, setStartError] = useState<string | null>(null);
-  const [pendingConfirm, setPendingConfirm] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [extraInstructions, setExtraInstructions] = useState("");
   const [preference, setPreference] = useState(loadWorkNotesPreference);
   const [pollRev, setPollRev] = useState(0);
@@ -63,13 +65,13 @@ export function WorkNotesPanel() {
   const engineId = resolveWorkNotesEngine(preference.engineId, installed);
   const model = engineId ? (preference.models[engineId] ?? "") : "";
   const selectedEngine = installed.find((engine) => engine.id === engineId) ?? null;
+  const listed = preview?.sessions ?? [];
   const generateDisabled =
     running ||
     previewLoading ||
     previewError !== null ||
     preview == null ||
-    preview.gate === "rejected" ||
-    preview.session_count === 0 ||
+    listed.length === 0 ||
     engineId == null;
   const rawDto = progress?.status === "done" ? progress.result : null;
   const progressDto =
@@ -91,6 +93,7 @@ export function WorkNotesPanel() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- 切区间时先置 loading，避免沿用上一档会话数
     setPreviewLoading(true);
     setPreviewError(null);
+    setPickerOpen(false);
     void invoke<WorkNotesPreviewDto>("preview_work_notes", {
       range,
       engineId,
@@ -121,17 +124,13 @@ export function WorkNotesPanel() {
   }, [engineId, model, range]);
 
   function resetGenerated() {
-    setPendingConfirm(false);
+    setPickerOpen(false);
     setStartError(null);
     setExtraInstructions("");
   }
 
-  function generate() {
+  function startFromPicker(sessions: WorkNotesSessionRef[], confirmed: boolean) {
     if (engineId == null) {
-      return;
-    }
-    if (preview?.gate === "confirm" && !pendingConfirm) {
-      setPendingConfirm(true);
       return;
     }
     persist({ ...preference, engineId });
@@ -141,9 +140,11 @@ export function WorkNotesPanel() {
       engineId,
       model: model.trim() === "" ? null : model.trim(),
       extraInstructions,
-      confirmed: preview?.gate === "confirm",
+      confirmed,
+      sessions,
     })
       .then(() => {
+        setPickerOpen(false);
         setPollRev((value) => value + 1);
       })
       .catch((caught: unknown) => {
@@ -262,8 +263,8 @@ export function WorkNotesPanel() {
               停止
             </Button>
           ) : (
-            <Button variant="accent" disabled={generateDisabled} onClick={generate}>
-              {pendingConfirm ? "确认生成" : cancelled ? "继续生成" : "生成"}
+            <Button variant="accent" disabled={generateDisabled} onClick={() => setPickerOpen(true)}>
+              {cancelled ? "继续生成" : "生成"}
             </Button>
           )}
         </div>
@@ -271,8 +272,8 @@ export function WorkNotesPanel() {
       <p className="work-notes-help">
         {selectedEngine
           ? selectedEngine.writes_session_dir
-            ? "以只读、禁用工具的方式运行。会在你的会话记录里留下一条。"
-            : "以只读、禁用工具的方式运行。"
+            ? "以只读、禁用工具的方式运行。会在你的会话记录里留下一条。点生成后先勾选会话。"
+            : "以只读、禁用工具的方式运行。点生成后先勾选要总结的会话。"
           : copy.help}
       </p>
       <label className="work-notes-extra">
@@ -290,48 +291,7 @@ export function WorkNotesPanel() {
         <EmptyState icon="alertTriangle" tone="warn" title="无法读取区间" hint={previewError} />
       ) : null}
       {previewLoading ? <p className="work-notes-scale">正在统计会话数…</p> : null}
-      {!previewLoading && preview && !previewError && preview.session_count > 0 ? (
-        <div className="work-notes-estimate-strip">
-          <div className="work-notes-estimate-item">
-            <span className="work-notes-estimate-label">区间范围</span>
-            <span className="work-notes-estimate-value">
-              {preview.start_date} 至 {preview.end_date}
-            </span>
-          </div>
-          <div className="work-notes-estimate-item">
-            <span className="work-notes-estimate-label">参与会话</span>
-            <span className="work-notes-estimate-value">
-              {preview.session_count} 个
-              {preview.skipped_sparse > 0 ? (
-                <span className="work-notes-estimate-sub">（略过 {preview.skipped_sparse} 零星）</span>
-              ) : null}
-            </span>
-          </div>
-          <div className="work-notes-estimate-item">
-            <span className="work-notes-estimate-label">预计耗时</span>
-            <span className="work-notes-estimate-value">
-              {formatEstimatedSecs(preview.estimated_secs)} · {preview.estimated_calls} 次调用
-            </span>
-          </div>
-          <div className="work-notes-estimate-item">
-            <span className="work-notes-estimate-label">预计消耗</span>
-            <span className="work-notes-estimate-value">
-              {preview.estimated_unpriced || preview.estimated_cost == null
-                ? "费用未定价"
-                : `约 ${formatUsdAmount(preview.estimated_cost)}`}{" "}
-              <span className="work-notes-estimate-sub">
-                （约 {formatTokens(preview.estimated_input_tokens)} tok）
-              </span>
-            </span>
-          </div>
-        </div>
-      ) : null}
-      {!previewLoading && preview && !previewError && preview.session_count === 0 ? (
-        <p className="work-notes-scale">
-          {preview.start_date} 至 {preview.end_date}，无会话
-          {preview.skipped_sparse > 0 ? `（已略过 ${preview.skipped_sparse} 个零星会话）` : ""}
-        </p>
-      ) : null}
+      {!previewLoading && preview && !previewError ? <WorkNotesEstimateStrip preview={preview} /> : null}
       {!previewLoading && preview?.message ? (
         <p
           className={
@@ -341,44 +301,13 @@ export function WorkNotesPanel() {
           {preview.message}
         </p>
       ) : null}
-      {running && progress ? (
-        <div className="work-notes-progress-box" role="status" aria-live="polite">
-          <div className="work-notes-progress-header">
-            <span className="work-notes-progress-title-meta">正在总结会话…</span>
-            <span className="work-notes-progress-count">
-              已完成 <strong>{progress.done}</strong> / {progress.total}
-              <span className="work-notes-progress-pct">
-                （{progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0}%）
-              </span>
-            </span>
-          </div>
-          <div className="work-notes-progress-track">
-            <div
-              className="work-notes-progress-bar"
-              style={{
-                width: `${
-                  progress.total > 0
-                    ? Math.min(100, Math.max(3, Math.round((progress.done / progress.total) * 100)))
-                    : 3
-                }%`,
-              }}
-            />
-          </div>
-          {progress.current_title ? (
-            <p className="work-notes-progress-current">
-              <span className="work-notes-progress-dot" aria-hidden="true" />
-              <span className="work-notes-progress-current-label">当前正在总结：</span>
-              <span className="work-notes-progress-current-title">{progress.current_title}</span>
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      {running && progress ? <WorkNotesProgress status={progress} /> : null}
       {cancelled ? (
         <p className="work-notes-progress">
           已停止。已完成的会话摘要还在，再次生成不会重复调用。
         </p>
       ) : null}
-      {jobError ? (
+      {jobError && !pickerOpen ? (
         <EmptyState icon="alertTriangle" tone="warn" title="生成失败" hint={jobError} />
       ) : null}
       {dto && dto.failures.length > 0 ? <WorkNotesFailures dto={dto} /> : null}
@@ -386,7 +315,7 @@ export function WorkNotesPanel() {
       !jobError &&
       !previewError &&
       preview &&
-      preview.session_count === 0 &&
+      listed.length === 0 &&
       !dto &&
       !running ? (
         <EmptyState icon="notes" title="这段时间没有可总结的会话" hint={emptyHint} />
@@ -411,11 +340,9 @@ export function WorkNotesPanel() {
       !dto &&
       !running &&
       !cancelled &&
-      preview &&
-      preview.session_count > 0 &&
-      preview.gate !== "rejected" &&
+      listed.length > 0 &&
       installed.length > 0 ? (
-        <EmptyState icon="notes" title="还没有生成工作纪要" hint={copy.emptyHint} />
+        <EmptyState icon="notes" title="还没有生成工作纪要" hint="点生成后勾选要总结的会话。" />
       ) : null}
       {dto && !dto.has_data && dto.failed_count === 0 ? (
         <EmptyState
@@ -429,28 +356,22 @@ export function WorkNotesPanel() {
       {dto?.has_data ? <WorkNotesShare dto={dto} /> : null}
       {dto ? <WorkNotesUsage dto={dto} /> : null}
       <WorkNotesHistory currentEngineId={engineId} />
+      {pickerOpen && preview && engineId ? (
+        <WorkNotesSessionPicker
+          sessions={listed}
+          range={range}
+          engineId={engineId}
+          model={model}
+          extraInstructions={extraInstructions}
+          initialPreview={preview}
+          startError={startError}
+          onClose={() => {
+            setPickerOpen(false);
+            setStartError(null);
+          }}
+          onConfirm={startFromPicker}
+        />
+      ) : null}
     </div>
   );
-}
-
-function WorkNotesFailures({ dto }: { dto: WorkNotesDto }) {
-  return (
-    <div className="work-notes-failures">
-      <p className="work-notes-failures-title">有 {dto.failed_count} 个会话总结失败</p>
-      {dto.failures.map((failure, index) => (
-        <pre key={`${failure.title}-${index}`} className="work-notes-stderr">
-          {failure.title ? `${failure.title}\n` : ""}
-          {failure.error}
-        </pre>
-      ))}
-    </div>
-  );
-}
-
-function WorkNotesUsage({ dto }: { dto: WorkNotesDto }) {
-  const usage = workNotesUsageCopy(dto);
-  if (!usage) {
-    return null;
-  }
-  return <p className="work-notes-usage">{usage}</p>;
 }

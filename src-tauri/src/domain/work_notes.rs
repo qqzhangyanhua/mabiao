@@ -81,6 +81,28 @@ pub struct WorkNotesPreviewDto {
     /// 该区间最近一次已生成的纪要。关掉 App 再打开时直接展示，不调引擎。
     #[serde(default)]
     pub cached: Option<WorkNotesDto>,
+    /// 区间内可勾选的会话。预览只给元数据，不读正文。
+    #[serde(default)]
+    pub sessions: Vec<WorkNotesSessionChoice>,
+}
+
+/// 预览里给勾选器用的一条会话。项目只留最后一段目录名。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesSessionChoice {
+    pub source: String,
+    pub session_id: String,
+    pub title: String,
+    pub project: String,
+    pub started_at: String,
+    pub total_tokens: i64,
+    pub cached: bool,
+}
+
+/// 用户勾选的一条会话。来源 + session_id 才能唯一定位。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkNotesSessionRef {
+    pub source: String,
+    pub session_id: String,
 }
 
 /// `preview` / `generate` 共用的请求参数。引擎、模型与补充指令计入缓存键。
@@ -95,6 +117,9 @@ pub struct WorkNotesParams {
     pub model: String,
     #[serde(default)]
     pub confirmed: bool,
+    /// 空表示区间内全部合格会话；非空则只处理这些。
+    #[serde(default)]
+    pub sessions: Vec<WorkNotesSessionRef>,
 }
 
 impl WorkNotesParams {

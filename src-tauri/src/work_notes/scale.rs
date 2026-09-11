@@ -7,7 +7,7 @@ pub fn assess(session_count: i64) -> (WorkNotesGate, String) {
     if session_count > REJECT_AFTER {
         (
             WorkNotesGate::Rejected,
-            format!("会话数 {session_count} 超过 {REJECT_AFTER}，请收窄区间后再试"),
+            format!("会话数 {session_count} 超过 {REJECT_AFTER}，请收窄区间或少选一些会话后再试"),
         )
     } else if session_count > CONFIRM_AFTER {
         (

@@ -144,7 +144,8 @@
   }
 
   .conversation-image-backdrop,
-  .conversation-summary-backdrop {
+  .conversation-summary-backdrop,
+  .work-notes-picker-backdrop {
     padding: 10px;
   }
 

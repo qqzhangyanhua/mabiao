@@ -99,6 +99,7 @@ pub fn preview(
         estimated_cost: estimate.cost,
         estimated_unpriced: estimate.unpriced,
         cached: prepared.latest,
+        sessions: prepared.choices,
     })
 }
 

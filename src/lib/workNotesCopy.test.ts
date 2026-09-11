@@ -22,6 +22,7 @@ function preview(overrides: Partial<WorkNotesPreviewDto> = {}): WorkNotesPreview
     estimated_input_tokens: 1200,
     estimated_cost: 0.12,
     estimated_unpriced: false,
+    sessions: [],
     ...overrides,
   };
 }

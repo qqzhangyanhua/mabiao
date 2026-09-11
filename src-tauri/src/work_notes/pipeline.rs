@@ -7,6 +7,7 @@
 
 use chrono::{DateTime, Local};
 use rusqlite::Connection;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
@@ -14,7 +15,7 @@ use std::sync::Mutex;
 use crate::conversation;
 use crate::domain::{
     ConversationQuery, ConversationSessionRow, EngineCommand, Filter, PriceTable, WorkNotesDto,
-    WorkNotesParams,
+    WorkNotesParams, WorkNotesSessionChoice, WorkNotesSessionRef,
 };
 use crate::query;
 
@@ -40,6 +41,7 @@ pub(super) struct PreparedWorkNotes {
     pub(super) exact: Option<WorkNotesDto>,
     pub(super) latest: Option<WorkNotesDto>,
     pub(super) eligible: Vec<EligibleSession>,
+    pub(super) choices: Vec<WorkNotesSessionChoice>,
 }
 
 pub(super) fn prepare(
@@ -57,29 +59,14 @@ pub(super) fn prepare(
     let numbers = hard_numbers(conn, prices, &filter)?;
     let sessions = load_sessions(conn, prices, &resolved.from, &resolved.to)?;
     let (skipped_sparse, eligible_sessions) = classify_sessions(conn, sessions)?;
+    let selected = resolve_selection(&eligible_sessions, &params.sessions, !skip_gate)?;
     let latest = cache::load_latest_notes(conn, &resolved, &engine, &model)?;
 
+    let mut listed = Vec::new();
     let mut parts = Vec::new();
-    for session in &eligible_sessions {
-        let fingerprint = cache::session_fingerprint(conn, &session.source, &session.session_id)?;
-        parts.push((
-            session.source.clone(),
-            session.session_id.clone(),
-            fingerprint,
-        ));
-    }
-    let session_set_hash = cache::session_set_hash(&parts);
-    let exact =
-        cache::load_exact_notes(conn, &resolved, &engine, &model, &extra, &session_set_hash)?;
-    if exact.is_none() && !skip_gate {
-        scale::enforce(eligible_sessions.len() as i64, params.confirmed)?;
-    }
-
     let mut eligible = Vec::new();
-    for (session, fingerprint) in eligible_sessions
-        .into_iter()
-        .zip(parts.into_iter().map(|part| part.2))
-    {
+    for session in eligible_sessions {
+        let fingerprint = cache::session_fingerprint(conn, &session.source, &session.session_id)?;
         let key = cache::SessionCacheKey {
             source: &session.source,
             session_id: &session.session_id,
@@ -88,7 +75,16 @@ pub(super) fn prepare(
             model: &model,
         };
         let cached_summary = cache::load_session_summary(conn, &key)?;
-        let events = if cached_summary.is_some() {
+        listed.push(session_choice(&session, cached_summary.is_some()));
+        if !selected.contains(&(session.source.clone(), session.session_id.clone())) {
+            continue;
+        }
+        parts.push((
+            session.source.clone(),
+            session.session_id.clone(),
+            fingerprint.clone(),
+        ));
+        let events = if skip_gate || cached_summary.is_some() {
             Vec::new()
         } else {
             conversation::indexed_events(conn, &session.source, &session.session_id)?
@@ -99,6 +95,12 @@ pub(super) fn prepare(
             fingerprint,
             cached_summary,
         });
+    }
+    let session_set_hash = cache::session_set_hash(&parts);
+    let exact =
+        cache::load_exact_notes(conn, &resolved, &engine, &model, &extra, &session_set_hash)?;
+    if exact.is_none() && !skip_gate {
+        scale::enforce(eligible.len() as i64, params.confirmed)?;
     }
     Ok(PreparedWorkNotes {
         resolved,
@@ -111,6 +113,7 @@ pub(super) fn prepare(
         exact,
         latest,
         eligible,
+        choices: listed,
     })
 }
 
@@ -418,6 +421,41 @@ fn hard_numbers(
         active_days,
         total_tokens: overview.total_tokens,
     })
+}
+
+fn session_choice(session: &ConversationSessionRow, cached: bool) -> WorkNotesSessionChoice {
+    WorkNotesSessionChoice {
+        source: session.source.clone(),
+        session_id: session.session_id.clone(),
+        title: session.title.clone(),
+        project: input::project_dir_name(&session.project),
+        started_at: session.started_at.clone(),
+        total_tokens: session.total_tokens,
+        cached,
+    }
+}
+
+fn resolve_selection(
+    eligible: &[ConversationSessionRow],
+    requested: &[WorkNotesSessionRef],
+    require_match: bool,
+) -> Result<HashSet<(String, String)>, String> {
+    let all: HashSet<(String, String)> = eligible
+        .iter()
+        .map(|session| (session.source.clone(), session.session_id.clone()))
+        .collect();
+    if requested.is_empty() {
+        return Ok(all);
+    }
+    let picked: HashSet<(String, String)> = requested
+        .iter()
+        .map(|session| (session.source.clone(), session.session_id.clone()))
+        .filter(|key| all.contains(key))
+        .collect();
+    if picked.is_empty() && require_match {
+        return Err("选中的会话都不在这个区间里，或已被略过".to_string());
+    }
+    Ok(picked)
 }
 
 fn classify_sessions(

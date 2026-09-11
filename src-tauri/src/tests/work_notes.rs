@@ -7,7 +7,7 @@ use crate::conversation;
 use crate::domain::{
     ConversationQuery, EngineCommand, PriceEntry, PriceOrigin, PriceTable, Source, WorkNotesDto,
     WorkNotesGate, WorkNotesHistoryQuery, WorkNotesJobStatus, WorkNotesParams, WorkNotesPreviewDto,
-    WorkNotesRange, WorkNotesRangeKind, WorkNotesSessionParams,
+    WorkNotesRange, WorkNotesRangeKind, WorkNotesSessionParams, WorkNotesSessionRef,
 };
 use crate::test_support::*;
 use crate::work_notes::{self, EngineRunner, ScriptedRunner, WorkNotesJob};
@@ -101,6 +101,7 @@ impl Harness {
                 engine: engine_id.to_string(),
                 model: model.unwrap_or("").to_string(),
                 confirmed,
+                sessions: Vec::new(),
             },
             now(),
         )
@@ -127,18 +128,18 @@ impl Harness {
     }
 
     fn preview(&self, range: WorkNotesRange) -> Result<WorkNotesPreviewDto, String> {
-        work_notes::preview(
-            &self.conn.get(),
-            &self.prices,
-            &WorkNotesParams {
-                range,
-                extra_instructions: String::new(),
-                engine: String::new(),
-                model: String::new(),
-                confirmed: false,
-            },
-            now(),
-        )
+        self.preview_params(WorkNotesParams {
+            range,
+            extra_instructions: String::new(),
+            engine: String::new(),
+            model: String::new(),
+            confirmed: false,
+            sessions: Vec::new(),
+        })
+    }
+
+    fn preview_params(&self, params: WorkNotesParams) -> Result<WorkNotesPreviewDto, String> {
+        work_notes::preview(&self.conn.get(), &self.prices, &params, now())
     }
 
     fn set_revision(&self, session_id: &str, revision: &str) {
@@ -1170,6 +1171,10 @@ fn preview_counts_sessions_without_calling_engine() {
     assert_eq!(preview.skipped_sparse, 1);
     assert_eq!(preview.gate, WorkNotesGate::Ok);
     assert!(preview.message.is_empty());
+    assert_eq!(preview.sessions.len(), 1);
+    assert_eq!(preview.sessions[0].session_id, "ok");
+    assert_eq!(preview.sessions[0].project, "statistics");
+    assert!(!preview.sessions[0].cached);
     assert!(h.runner.recorded().is_empty());
 }
 
@@ -1218,6 +1223,59 @@ fn more_than_150_eligible_sessions_are_rejected() {
     let error = h.try_build(WorkNotesRange::this_week(), true).unwrap_err();
     assert!(error.contains("150"), "{error}");
     assert!(error.contains("收窄"), "{error}");
+    assert!(h.runner.recorded().is_empty());
+}
+
+#[test]
+fn generate_only_maps_selected_sessions() {
+    let h = Harness::new(replies(&[&map_json("摘要")], &[&reduce_json()]));
+    seed_eligible_at(&h, "keep", "留下", "/proj/a", day(2026, 8, 18), 10);
+    seed_eligible_at(&h, "skip", "跳过", "/proj/b", day(2026, 8, 18), 11);
+    let mut params = extra_params("", "codex", "");
+    params.sessions = vec![session_ref("keep")];
+    let dto = h.try_params(params).unwrap();
+    assert!(dto.has_data);
+    assert_eq!(map_count(&h), 1);
+    assert_eq!(map_titles(&h), vec!["留下".to_string()]);
+}
+
+#[test]
+fn selecting_ten_of_sixty_one_does_not_require_confirmation() {
+    let maps = vec![map_json("摘要"); 10];
+    let h = Harness::new(replies(
+        &maps.iter().map(String::as_str).collect::<Vec<_>>(),
+        &[&reduce_json()],
+    ));
+    seed_eligible_n(&h, 61);
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.gate, WorkNotesGate::Confirm);
+    assert_eq!(preview.sessions.len(), 61);
+    let mut params = extra_params("", "codex", "");
+    params.sessions = (0..10)
+        .map(|index| session_ref(&format!("bulk-{index}")))
+        .collect();
+    let selected = h
+        .preview_params(WorkNotesParams {
+            sessions: params.sessions.clone(),
+            ..params.clone()
+        })
+        .unwrap();
+    assert_eq!(selected.session_count, 10);
+    assert_eq!(selected.gate, WorkNotesGate::Ok);
+    assert_eq!(selected.sessions.len(), 61);
+    let dto = h.try_params(params).unwrap();
+    assert!(dto.has_data);
+    assert_eq!(map_count(&h), 10);
+}
+
+#[test]
+fn unknown_session_selection_is_rejected() {
+    let h = Harness::new(replies(&[], &[]));
+    seed_eligible(&h, "ok", "/proj/statistics");
+    let mut params = extra_params("", "codex", "");
+    params.sessions = vec![session_ref("missing")];
+    let error = h.try_params(params).unwrap_err();
+    assert!(error.contains("选中"), "{error}");
     assert!(h.runner.recorded().is_empty());
 }
 
@@ -1970,6 +2028,14 @@ fn extra_params(extra: &str, engine: &str, model: &str) -> WorkNotesParams {
         engine: engine.to_string(),
         model: model.to_string(),
         confirmed: false,
+        sessions: Vec::new(),
+    }
+}
+
+fn session_ref(session_id: &str) -> WorkNotesSessionRef {
+    WorkNotesSessionRef {
+        source: "codex".to_string(),
+        session_id: session_id.to_string(),
     }
 }
 

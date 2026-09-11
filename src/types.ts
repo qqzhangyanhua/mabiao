@@ -1099,6 +1099,21 @@ export type WorkNotesDto = {
 
 export type WorkNotesGate = "ok" | "confirm" | "rejected";
 
+export type WorkNotesSessionRef = {
+  source: string;
+  session_id: string;
+};
+
+export type WorkNotesSessionChoice = {
+  source: string;
+  session_id: string;
+  title: string;
+  project: string;
+  started_at: string;
+  total_tokens: number;
+  cached: boolean;
+};
+
 export type WorkNotesPreviewDto = {
   range_kind: WorkNotesRangeKind;
   start_date: string;
@@ -1113,6 +1128,7 @@ export type WorkNotesPreviewDto = {
   estimated_cost: number | null;
   estimated_unpriced: boolean;
   cached?: WorkNotesDto | null;
+  sessions?: WorkNotesSessionChoice[];
 };
 
 export type WorkNotesHistoryQuery = {
