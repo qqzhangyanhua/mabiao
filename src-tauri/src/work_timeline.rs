@@ -7,7 +7,6 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Duration, Local, LocalResult, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
-use crate::aggregate::assign_latest;
 use crate::billing_window::parse_occurred_at;
 use crate::domain::{UsageRecord, WorkSegment, WorkSessionSpan, WorkTimelineDto};
 
@@ -218,6 +217,27 @@ fn merge_span(sessions: &mut BTreeMap<(String, String), SessionAcc>, span: &Work
         &span.model,
         &span.ended_at,
     );
+}
+
+/// 取「occurred_at 最晚」的非空字段值；时间并列时取字典序更大者。
+/// 与 SQL 侧 `query::sql::latest_nonempty_key_sql` 同序。
+pub(crate) fn assign_latest(
+    field: &mut String,
+    field_at: &mut Option<String>,
+    value: &str,
+    occurred_at: &str,
+) {
+    if value.is_empty() {
+        return;
+    }
+    let newer = match field_at.as_deref() {
+        None => true,
+        Some(prev) => occurred_at > prev || (occurred_at == prev && value > field.as_str()),
+    };
+    if newer {
+        *field = value.to_string();
+        *field_at = Some(occurred_at.to_string());
+    }
 }
 
 /// 扫描线求峰值并行：把每段区间拆成 (start, +1) / (end, -1) 事件，按时刻排序后累加取最大值。

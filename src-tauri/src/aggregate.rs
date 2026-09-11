@@ -12,6 +12,7 @@ use crate::domain::{
     OverviewCostBreakdown, OverviewCostSources, OverviewDto, PriceTable, ProjectApplicationRow,
     SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto, UsageRecord, WorkTimelineDto,
 };
+use crate::work_timeline::assign_latest;
 
 pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
     if let Some(from) = &filter.from {
@@ -706,27 +707,6 @@ struct SessionAcc {
     ended_at: String,
     cost: Option<f64>,
     unpriced: bool,
-}
-
-/// 取「occurred_at 最晚」的字段值；时间并列时取字典序更大者。与 SQL 侧
-/// `query.rs::latest_nonempty_expr` 同序，`work_timeline` 也复用它决定 project/model 标签。
-pub(crate) fn assign_latest(
-    field: &mut String,
-    field_at: &mut Option<String>,
-    value: &str,
-    occurred_at: &str,
-) {
-    if value.is_empty() {
-        return;
-    }
-    let newer = match field_at.as_deref() {
-        None => true,
-        Some(prev) => occurred_at > prev || (occurred_at == prev && value > field.as_str()),
-    };
-    if newer {
-        *field = value.to_string();
-        *field_at = Some(occurred_at.to_string());
-    }
 }
 
 pub fn session_turns(
