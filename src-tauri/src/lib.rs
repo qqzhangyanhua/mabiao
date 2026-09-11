@@ -1,4 +1,5 @@
 pub mod adapters;
+#[cfg(test)]
 pub mod aggregate;
 pub mod backup;
 pub mod billing_window;
@@ -9,6 +10,7 @@ pub mod conversation;
 pub mod cost;
 pub mod cursor_account;
 pub mod cursor_credentials;
+pub(crate) mod cursor_overlay;
 pub mod cursor_session;
 pub mod cursor_session_detail;
 pub mod cursor_session_query;

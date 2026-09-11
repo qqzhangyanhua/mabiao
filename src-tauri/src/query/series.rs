@@ -58,7 +58,7 @@ pub fn trend(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     let events = cursor_account::events_for_application_analytics(conn, filter)?;
-    Ok(crate::aggregate::attach_cursor_trend(
+    Ok(crate::cursor_overlay::attach_cursor_trend(
         points, &events, prices, grain,
     ))
 }
@@ -227,7 +227,7 @@ pub fn breakdown(
     });
     if dimension == "project" {
         let events = cursor_account::events_for_application_analytics(conn, filter)?;
-        return Ok(crate::aggregate::attach_cursor_project_breakdown(
+        return Ok(crate::cursor_overlay::attach_cursor_project_breakdown(
             rows, &events, prices,
         ));
     }

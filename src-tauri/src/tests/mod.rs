@@ -1,6 +1,7 @@
 // Rust integration tests split by domain.
 
 mod adapters;
+mod aggregate_boundary;
 mod antigravity_quota;
 mod backup;
 mod billing;

@@ -21,7 +21,7 @@
 
 改 `query.rs` 的费用或时段 SQL。
 
-1. 同步改 `aggregate.rs`。
+1. 同步改 `aggregate.rs`。Cursor 账号用量叠加走 crate 根 `cursor_overlay`，不进 `aggregate`。
 2. 费用优先级：`native_cost` > 用户价目 > LiteLLM 快照 > unpriced。
 3. `cargo test parity`（`sql_queries_match_in_memory_aggregates`）绿。
 

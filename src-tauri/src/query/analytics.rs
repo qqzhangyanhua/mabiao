@@ -207,7 +207,7 @@ pub fn application_analytics(
         projects,
     };
     let events = cursor_account::events_for_application_analytics(conn, filter)?;
-    Ok(crate::aggregate::attach_cursor_application(
+    Ok(crate::cursor_overlay::attach_cursor_application(
         dto, &events, grain,
     ))
 }

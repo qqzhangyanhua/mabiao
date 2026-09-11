@@ -18,6 +18,7 @@ alwaysApply: false
 - `aggregate.rs`（内存实现）与 `query.rs`（SQL 下推，生产实际使用）必须对同一组数据产生完全一致的结果；`sql_queries_match_in_memory_aggregates` 测试用同一份 `diverse_records()`/`diverse_prices()` 跑两条路径并逐字段 `assert_eq!`
 - **修改 `query.rs` 的任何聚合/过滤/费用 SQL 时，必须同步验证或更新 `aggregate.rs` 的等价实现，并确保这条 parity 测试仍然通过**；反之亦然。不要因为「SQL 更快」就删除 `aggregate.rs` 或跳过对照
 - 新增聚合维度/DTO 字段时，两边都要实现，并在 parity 测试里补上覆盖
+- 生产源码不得引用 `aggregate`（Cursor 账号用量叠加走 `cursor_overlay`）。守卫测试扫描 `src/`（排除 `tests/` 与 `test_support/`）断言零引用，无豁免清单
 
 ## Ingest / store 测试
 
