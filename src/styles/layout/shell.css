@@ -275,12 +275,17 @@
   display: none;
 }
 
-.workspace:has(.conversation-detail-view) .main {
+.workspace:has(.conversation-detail-view) .main,
+.workspace:has(.conversation-catalog) .main {
   overflow: hidden;
+}
+
+.workspace:has(.conversation-detail-view) .main {
   padding-top: 8px;
 }
 
-.workspace:has(.conversation-detail-view) .main > .loading-overlay-wrap {
+.workspace:has(.conversation-detail-view) .main > .loading-overlay-wrap,
+.workspace:has(.conversation-catalog) .main > .loading-overlay-wrap {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;

@@ -1,5 +1,9 @@
 .conversation-catalog {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
 }
 
 .conversation-catalog-head {
@@ -34,8 +38,13 @@
   white-space: nowrap;
 }
 
-.conversation-table-scroll {
-  max-height: calc(100vh - 230px);
+.conversation-catalog > :not(.conversation-table-scroll) {
+  flex: 0 0 auto;
+}
+
+.conversation-catalog > .table-scroll.conversation-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .conversation-table {

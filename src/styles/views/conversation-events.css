@@ -150,8 +150,20 @@
   object-fit: contain;
 }
 
-.conversation-usage-scroll {
-  max-height: none;
+.conversation-usage-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.conversation-usage-panel > .pagination {
+  flex: 0 0 auto;
+}
+
+.conversation-usage-panel > .table-scroll.conversation-usage-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .conversation-usage-table {
