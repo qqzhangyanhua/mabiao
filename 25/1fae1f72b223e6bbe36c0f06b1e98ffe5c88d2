@@ -1,0 +1,24 @@
+src/styles/views/conversation-events.css
+  s_f795508ebaefc6::t_6b92d7721e7581 153-155,157-166
+  s_f795508ebaefc6::t_c1ac1629efb48a 156
+src/styles/layout/shell.css
+  s_f795508ebaefc6::t_bcc264d8198e26 278-279,281-283,287-288
+src/styles/views/conversation-catalog.css
+  s_f795508ebaefc6::t_e376dda7ab1859 2-4,6,41-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "251fae1f72b223e6bbe36c0f06b1e98ffe5c88d2",
+  "prompts": {},
+  "sessions": {
+    "s_f795508ebaefc6": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a08f15-b974-7120-aec4-9e5768e66e30",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
