@@ -1,0 +1,51 @@
+src-tauri/src/tests/aggregate_boundary.rs
+  s_8db556ec5e8251::t_1e3b7ae5dbd09f 1-7,9-44,52-84,117-178
+  s_8db556ec5e8251::t_07d6b91b8a9128 8
+  s_8db556ec5e8251::t_d09aea61c302ab 85
+  s_8db556ec5e8251::t_a4847c1aae20f1 45-51
+  s_8db556ec5e8251::t_92561d0936a471 86-96
+  s_8db556ec5e8251::t_6f8d78816dc0ac 97-116
+docs/adr/0017-rust-module-boundaries.md
+  s_8db556ec5e8251::t_cb04be9db3a90b 25
+.cursor/rules/project-overview.mdc
+  s_8db556ec5e8251::t_f717e328029fd6 30
+src-tauri/src/lib.rs
+  s_8db556ec5e8251::t_bdc8e1ed3fd040 13
+  s_8db556ec5e8251::t_97882cfcf08f6c 2
+docs/agent-layers.md
+  s_8db556ec5e8251::t_1745f3d2d80a25 24
+src-tauri/src/query/analytics.rs
+  s_8db556ec5e8251::t_9188592f3ae188 210
+src-tauri/src/query/series.rs
+  s_8db556ec5e8251::t_f523a45d2648e1 61
+  s_8db556ec5e8251::t_2bdc797fcfaf78 230
+src-tauri/src/aggregate.rs
+  s_8db556ec5e8251::t_b5659a50545eff 18,47,54-56,58,96-97,99,116,134,175,194,243,372,417,514,552,556,564
+  s_8db556ec5e8251::t_696bc888983f5e 1-3
+  s_8db556ec5e8251::t_21116e3d59fbc9 9,12
+  s_8db556ec5e8251::t_458100447b9d5b 226
+  s_8db556ec5e8251::t_8a068d3827c12b 44-46,57,98
+src-tauri/src/tests/mod.rs
+  s_8db556ec5e8251::t_e0cb5f73526fb2 4
+src-tauri/src/cursor_overlay.rs
+  s_8db556ec5e8251::t_8bbdc39b6158f7 8-9
+  s_8db556ec5e8251::t_5dfd54a47c5031 1-7,10-250
+.cursor/rules/testing.mdc
+  s_8db556ec5e8251::t_f79e2a08cac258 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "92ebb730efa83c79fd6ced1d5b9a2295137d3054",
+  "prompts": {},
+  "sessions": {
+    "s_8db556ec5e8251": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7a69ef1e-85e1-4bb5-9c6d-c4094166669c",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
