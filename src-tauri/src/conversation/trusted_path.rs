@@ -10,7 +10,7 @@ use std::time::UNIX_EPOCH;
 use crate::domain::{ConversationSessionRow, Source};
 
 use super::conversation_adapter;
-use super::read::conversation_source_roots;
+use super::scan_roots::conversation_source_roots;
 
 pub(crate) fn modified_nanos(metadata: &fs::Metadata) -> i64 {
     metadata

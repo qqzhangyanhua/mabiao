@@ -8,6 +8,7 @@ use crate::domain::{
 
 mod agent_graph;
 pub(crate) mod attachments;
+mod backfill;
 mod catalog;
 mod catalog_search;
 mod claude;
@@ -42,6 +43,7 @@ mod pi;
 mod qwen;
 mod read;
 mod refresh;
+mod scan_roots;
 mod session_store;
 mod toolbox;
 pub(crate) mod trusted_path;
@@ -49,6 +51,8 @@ pub(crate) mod trusted_path;
 use merge::merge_parsed_conversations;
 use toolbox::{FileIndexCursor, ParsedConversation};
 
+pub(crate) use backfill::backfill_event_index_step_skipping;
+pub use backfill::{backfill_event_index, backfill_event_index_step, event_index_progress};
 pub use catalog::{
     catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
     usage_records_page,
@@ -63,18 +67,17 @@ pub(crate) use discover::{
     single_detail,
 };
 pub(crate) use event_index::indexed_event_count;
-pub(crate) use persist::{persist_session_file_cursors, write_session_file_events};
 #[cfg(test)]
 pub(crate) use read::read_consistent_snapshot;
 pub use read::{
-    backfill_event_index, backfill_event_index_step, detail_state, event_index_progress,
-    load_attachment, load_attachment_thumbnail, load_detail, load_event_content,
+    detail_state, load_attachment, load_attachment_thumbnail, load_detail, load_event_content,
     load_parsed_detail, parse_session_events, rebuild_events_from_line,
 };
 pub(crate) use read::{
-    backfill_event_index_step_skipping, catalog_roots, event_index_ready, finish_prepared_detail,
-    load_prepared_parsed, prepare_detail, prepare_detail_read,
+    event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
+    prepare_detail_read,
 };
+pub(crate) use scan_roots::catalog_roots;
 pub use session_store::load_session;
 
 pub use export::build_export;

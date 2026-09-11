@@ -14,7 +14,7 @@ use crate::domain::{ConversationMatchField, ConversationSessionRow, Source, Usag
 use super::conversation_adapter;
 use super::event_index;
 use super::merge::IndexedAgentMetadata;
-use super::read::conversation_source_roots;
+use super::scan_roots::conversation_source_roots;
 use super::toolbox::ParsedConversation;
 use super::trusted_path::{ensure_trusted_path, modified_nanos};
 use super::CachedConversationFingerprint;
