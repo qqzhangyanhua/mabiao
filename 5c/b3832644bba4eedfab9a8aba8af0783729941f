@@ -1,0 +1,33 @@
+src-tauri/src/tests/adapters.rs
+  s_05c8ec70292861::t_1f934a38b63bbc 819-820
+  s_05c8ec70292861::t_7b46bf45636960 855
+src-tauri/src/test_support/mod.rs
+  s_05c8ec70292861::t_88d987e53f3956 20-21
+.cursor/rules/adapters.mdc
+  s_05c8ec70292861::t_3f13d9a52766a3 27
+src-tauri/src/adapters/cursor.rs
+  s_05c8ec70292861::t_b0fe29d613d852 2
+  s_05c8ec70292861::t_5ac179a87cb69a 157-161,163-206
+  s_05c8ec70292861::t_17961ccbc2d9cc 162
+  s_05c8ec70292861::t_b2420fca3bad93 7
+src-tauri/src/ingest.rs
+  s_05c8ec70292861::t_075f21a6e3a4da 17
+src-tauri/src/commands/cursor.rs
+  s_05c8ec70292861::t_ef640948fc678c 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "5cb3832644bba4eedfab9a8aba8af0783729941f",
+  "prompts": {},
+  "sessions": {
+    "s_05c8ec70292861": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fc5525bc-3c3c-4d1f-a50a-2f212c7407c9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
