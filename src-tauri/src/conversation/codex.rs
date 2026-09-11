@@ -259,57 +259,10 @@ pub(super) fn parse_content(
         }
     }
     flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
-    populate_attachments(&mut events, &project);
-    strip_message_bodies_from_details(&mut events);
-    deduplicate_message_channels(&mut events);
-    assign_tool_result_names(&mut events);
-    let source_file = path.to_string_lossy().to_string();
-    assign_event_provenance(&mut events, &source_file);
-    events.sort_by(compare_event_order);
-
-    if session_id.is_empty() {
-        return Err(ConversationIndexIssue {
-            path: path.to_string_lossy().to_string(),
-            message: "缺少 Codex 会话 ID".to_string(),
-            event_type: Some("session_meta".to_string()),
-            line: None,
-        });
-    }
     let messages = if response_messages.is_empty() {
         event_messages
     } else {
         response_messages
-    };
-    if title.is_empty() {
-        title = messages
-            .iter()
-            .find(|message| message.role == "user")
-            .map(|message| truncate_title(&strip_prompt_wrappers(&message.text)))
-            .filter(|title| !title.is_empty())
-            .unwrap_or_else(|| session_id.clone());
-    }
-    let mut capabilities = Vec::new();
-    if !messages.is_empty() {
-        capabilities.push(CAPABILITY_MESSAGES.to_string());
-    }
-    if !events.is_empty() {
-        capabilities.push(CAPABILITY_EVENTS.to_string());
-    }
-    capabilities.push(CAPABILITY_USAGE.to_string());
-    let session = ConversationSessionRow {
-        source: Source::Codex.as_str().to_string(),
-        session_id,
-        title,
-        project,
-        model,
-        started_at,
-        ended_at,
-        source_file: path.to_string_lossy().to_string(),
-        source_files: vec![path.to_string_lossy().to_string()],
-        capabilities,
-        support_status: EXPERIMENTAL.to_string(),
-        file_available: true,
-        ..Default::default()
     };
     let (consumed_bytes, consumed_lines) = if skipped_incomplete {
         match content.rfind('\n') {
@@ -322,16 +275,30 @@ pub(super) fn parse_content(
     } else {
         (content.len() as i64, i64::from(next_line_index(content)))
     };
-    Ok(ParsedConversation {
-        session,
+    let mut parsed = finish_source_conversation(
+        Source::Codex,
+        path,
+        session_id,
+        title,
+        project,
+        model,
+        started_at,
+        ended_at,
         messages,
         events,
-        is_top_level: true,
-        index_cursor: Some(FileIndexCursor {
-            byte_offset: start_byte as i64 + consumed_bytes,
-            line: i64::from(start_line) + consumed_lines,
-        }),
-    })
+        true,
+    )
+    .map_err(|message| ConversationIndexIssue {
+        path: path.to_string_lossy().to_string(),
+        message,
+        event_type: Some("session_meta".to_string()),
+        line: None,
+    })?;
+    parsed.index_cursor = Some(FileIndexCursor {
+        byte_offset: start_byte as i64 + consumed_bytes,
+        line: i64::from(start_line) + consumed_lines,
+    });
+    Ok(parsed)
 }
 
 fn parse_file(path: &Path, include_deferred_content: bool) -> Result<ParsedConversation, String> {
