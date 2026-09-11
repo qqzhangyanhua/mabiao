@@ -1,0 +1,30 @@
+src-tauri/src/conversation/mod.rs
+  s_54c2f133de5b50::t_4c2c3f15f39ea2 103
+src-tauri/src/conversation/claude.rs
+  s_54c2f133de5b50::t_474538a1193d21 213-215,222,227,237-241,243-258
+  s_54c2f133de5b50::t_4beee8b9c4ae3e 88,167
+  s_54c2f133de5b50::t_5a4c632414b238 216-221,242
+  s_54c2f133de5b50::t_1157ebceb407aa 39-40,75-87,89-102,137-140,154
+src-tauri/src/conversation/claude_test.rs
+  s_54c2f133de5b50::t_4beee8b9c4ae3e 143,158-162
+  s_54c2f133de5b50::t_fb61a27d7a1956 233-234,236-244
+  s_54c2f133de5b50::t_9a6f982f5834f5 292-324
+  s_54c2f133de5b50::t_8d572115a44f1e 1-5
+  s_54c2f133de5b50::t_82c5143e7876d5 88-142,144-157,163-232,235,245-291,325-347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "441b8382a7193afb45ca732d6ac636314524a0a5",
+  "prompts": {},
+  "sessions": {
+    "s_54c2f133de5b50": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a08e38-e9e0-7f22-8b56-e44e8df67e93",
+        "model": "grok-4.6"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
