@@ -1,4 +1,4 @@
-import type { PosterStat, PosterViewModel } from "../report/posterTypes";
+import type { PosterCursorAccount, PosterStat, PosterViewModel } from "../report/posterTypes";
 import type { ReportDto, ReportInsight, ReportPeriodKind } from "../types";
 import { formatCompact, formatUsdAmount, projectLabel, sourceLabel } from "./format";
 import { CUSTOM_PERIOD_MAX_DAYS } from "./reportPeriod";
@@ -196,6 +196,24 @@ export function toPosterViewModel(dto: ReportDto): PosterViewModel | null {
       color: SHARE_COLORS[index % SHARE_COLORS.length] ?? SHARE_COLORS[0],
     })),
     stats,
+    cursorAccount: cursorAccountCopy(dto.cursor_account),
+  };
+}
+
+function cursorAccountCopy(row: ReportDto["cursor_account"]): PosterCursorAccount | null {
+  if (row == null || row.total_tokens <= 0) {
+    return null;
+  }
+  const tokensLabel = formatCompact(row.total_tokens);
+  const costLabel = row.cost != null && row.cost > 0 ? formatUsdAmount(row.cost) : null;
+  const named = namedModels(row.models);
+  const costPart = costLabel ? `（${costLabel}）` : "";
+  return {
+    tokensLabel,
+    costLabel,
+    modelsLabel: named.length > 0 ? named.join(" · ") : null,
+    note: "云端账号，不并入上方本机总量",
+    line: `Cursor 账号另有 ${tokensLabel} token${costPart}，云端口径，未并入上方。`,
   };
 }
 

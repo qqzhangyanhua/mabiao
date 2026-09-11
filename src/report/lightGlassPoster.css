@@ -236,3 +236,12 @@
   color: var(--lg-ink);
   word-break: break-word;
 }
+
+.lg-card .lg-stat-value,
+.lg-card .lg-stat-label {
+  margin: 0;
+}
+
+.lg-card .lg-stat-label {
+  margin-top: 8px;
+}

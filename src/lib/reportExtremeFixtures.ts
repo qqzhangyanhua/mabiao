@@ -53,6 +53,7 @@ export function extremeReportDto(overrides: Partial<ReportDto> = {}): ReportDto 
         total_tokens: 80,
       },
     ],
+    cursor_account: null,
     ...overrides,
   };
 }

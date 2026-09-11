@@ -21,7 +21,8 @@ pub enum ReportPeriodKind {
     Custom,
 }
 
-/// 报告入口 DTO。总量只来自消耗记录；洞察 payload 不含自然语言。
+/// 报告入口 DTO。七个槽位只来自消耗记录；`cursor_account` 是另开分区。
+/// 洞察 payload 不含自然语言。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ReportDto {
     pub period_kind: ReportPeriodKind,
@@ -39,6 +40,18 @@ pub struct ReportDto {
     /// 按 token 降序最多三条模型名；不足三条有几条列几条。
     pub models: Vec<String>,
     pub insights: Vec<ReportInsight>,
+    /// 当期 Cursor 账号用量。有 token 才有值；不并入 totals / days / sources / models / insights。
+    pub cursor_account: Option<ReportCursorAccount>,
+}
+
+/// 报告上单独分区的 Cursor 账号用量。云端口径，不进七个槽位。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReportCursorAccount {
+    pub total_tokens: i64,
+    pub event_count: i64,
+    pub cost: Option<f64>,
+    /// 按 token 降序最多三条具名模型。
+    pub models: Vec<String>,
 }
 
 /// 报告占比条上的一段。`name` 是来源标识；`pct` 是整数百分比。

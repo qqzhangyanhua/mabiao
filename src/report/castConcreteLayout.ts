@@ -1,5 +1,5 @@
 import { POSTER_FRAME_HEIGHT, splitFrameExtra } from "./posterFrame";
-import type { PosterViewModel } from "./posterTypes";
+import { posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 
 export const CONCRETE_W = 720;
 export const CONCRETE_SCALE = 2;
@@ -109,9 +109,10 @@ export function layoutCastConcretePoster(
   let cursor = y.unit + 40;
   const bodyFont = concreteFont(500, 17);
   const comments: { y: number; text: string }[] = [];
-  if (data.comments.length > 0) {
+  const narrative = posterNarrativeLines(data);
+  if (narrative.length > 0) {
     y.comments = cursor;
-    for (const comment of data.comments) {
+    for (const comment of narrative) {
       for (const line of wrapText(measure, bodyFont, comment, CONTENT_W)) {
         comments.push({ y: cursor, text: line });
         cursor += 26;

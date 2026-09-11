@@ -90,7 +90,7 @@
 ## 报告
 
 1. 洞察规则写在 Rust `report`；前端 `reportCopy` 只把 payload 映射成文案。
-2. 数字只取消耗记录。
+2. 七个槽位数字只取消耗记录。Cursor 账号用量可另开分区（ADR 0023），不得并进槽位数字。
 3. 新增时段聚合同步 `query.rs` 与 `aggregate.rs`，`cargo test parity` 绿。
 4. 海报 CSS 只走 `src/report/*.css` 与 `posterStyleRegistry`（ADR 0019）。
 5. 分享入口只出报告（ADR 0020）。读到 ADR 0018「周报 | 额度」时以 0020 为准。

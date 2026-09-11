@@ -208,6 +208,7 @@ fn offset_zero_is_last_complete_local_week() {
     assert_eq!(dto.end_date, "2026-08-16");
     assert!(!dto.has_data);
     assert!(dto.insights.is_empty());
+    assert!(dto.cursor_account.is_none());
 }
 
 #[test]
@@ -341,6 +342,10 @@ fn cursor_account_usage_does_not_change_report_totals() {
     let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
     assert_eq!(dto.totals.total_tokens, 100);
     assert_eq!(dto.totals.session_count, 1);
+    assert_eq!(
+        dto.cursor_account.as_ref().map(|row| row.total_tokens),
+        Some(1_999_998)
+    );
     let (night_tokens, total_tokens, _) = night_share(&dto);
     assert_eq!(night_tokens, 0);
     assert_eq!(total_tokens, 100);
@@ -682,6 +687,10 @@ fn cursor_account_usage_does_not_change_source_share() {
     let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
     assert_eq!(source_shares(&dto), vec![("claude", 100)]);
     assert_eq!(dto.models, vec!["claude-sonnet-5".to_string()]);
+    assert_eq!(
+        dto.cursor_account.as_ref().map(|row| row.models.as_slice()),
+        Some(["gpt-5".to_string()].as_slice())
+    );
 }
 
 #[test]
@@ -934,6 +943,59 @@ fn cursor_account_usage_does_not_become_top_session() {
             cost: Some(1.25),
             total_tokens: 100,
         }
+    );
+    assert!(dto.cursor_account.is_some());
+}
+
+#[test]
+fn cursor_account_usage_outside_period_is_omitted() {
+    let records = vec![usage(day(2026, 8, 12), 12, 0, 0, "local", 100)];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    store::upsert_cursor_account_events(
+        &conn,
+        &[CursorUsageEvent {
+            occurred_at: local_time_iso(day(2026, 8, 17), 12, 0, 0),
+            model: "gpt-5".into(),
+            input_tokens: 80,
+            output_tokens: 20,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        }],
+    )
+    .unwrap();
+    let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
+    assert!(dto.has_data);
+    assert!(dto.cursor_account.is_none());
+}
+
+#[test]
+fn cursor_account_only_does_not_set_has_data() {
+    let conn = store::open_memory().unwrap();
+    store::upsert_cursor_account_events(
+        &conn,
+        &[CursorUsageEvent {
+            occurred_at: local_time_iso(day(2026, 8, 12), 12, 0, 0),
+            model: "gpt-5".into(),
+            input_tokens: 80,
+            output_tokens: 20,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        }],
+    )
+    .unwrap();
+    let dto = crate::report::build(&conn, &PriceTable::default(), week(0), now()).unwrap();
+    assert!(!dto.has_data);
+    assert_eq!(dto.totals.total_tokens, 0);
+    assert_eq!(
+        dto.cursor_account.as_ref().map(|row| row.total_tokens),
+        Some(100)
+    );
+    assert_eq!(
+        dto.cursor_account.as_ref().map(|row| row.event_count),
+        Some(1)
     );
 }
 

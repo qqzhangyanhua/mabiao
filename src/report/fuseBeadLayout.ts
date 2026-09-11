@@ -1,4 +1,4 @@
-import { findPosterStat, type PosterViewModel } from "./posterTypes";
+import { findPosterStat, posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 
 export const FUSE_W = 720;
 export const FUSE_SCALE = 2;
@@ -162,7 +162,7 @@ export function layoutFuseBeadPoster(data: PosterViewModel): FuseBeadLayout {
   const commentLineH = snap(50);
   const comments: FuseBeadComment[] = [];
   let cursor = y.comments;
-  for (const text of data.comments) {
+  for (const text of posterNarrativeLines(data)) {
     comments.push({
       y: cursor,
       lines: wrapBeadText(text, FONT_COMMENT, FUSE_W - 160),

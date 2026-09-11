@@ -34,6 +34,7 @@ function dto(partial: Partial<ReportDto> & Pick<ReportDto, "has_data" | "totals"
     sources: [],
     models: [],
     insights: [],
+    cursor_account: null,
     ...partial,
   };
 }
@@ -583,5 +584,44 @@ describe("toPosterViewModel", () => {
       "这个周期的 token 全是凌晨烧掉的。",
       "最活跃的时段是 22:00 到 02:00。",
     ]);
+  });
+
+  it("maps Cursor account usage to a separate poster slot without touching comments", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        cursor_account: {
+          total_tokens: 1_200_000,
+          event_count: 4,
+          cost: 3.2,
+          models: ["gpt-5", "（未标注）"],
+        },
+      }),
+    );
+    expect(poster?.comments).toEqual(["你这周烧掉了 80 token。"]);
+    expect(poster?.cursorAccount).toEqual({
+      tokensLabel: "1.2M",
+      costLabel: "$3.20",
+      modelsLabel: "gpt-5",
+      note: "云端账号，不并入上方本机总量",
+      line: "Cursor 账号另有 1.2M token（$3.20），云端口径，未并入上方。",
+    });
+  });
+
+  it("omits the Cursor slot when the period has no account tokens", () => {
+    const poster = toPosterViewModel(
+      dto({
+        has_data: true,
+        totals: { ...emptyTotals, total_tokens: 80, session_count: 1 },
+        cursor_account: {
+          total_tokens: 0,
+          event_count: 0,
+          cost: null,
+          models: [],
+        },
+      }),
+    );
+    expect(poster?.cursorAccount).toBeNull();
   });
 });

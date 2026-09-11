@@ -189,3 +189,13 @@
   color: var(--rp-fg);
   text-align: right;
 }
+
+.rp-panel .rp-stat-value,
+.rp-panel .rp-stat-label {
+  margin: 0;
+  text-align: left;
+}
+
+.rp-panel .rp-stat-label {
+  margin-top: 8px;
+}

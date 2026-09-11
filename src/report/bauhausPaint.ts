@@ -1,4 +1,4 @@
-import type { PosterViewModel } from "./posterTypes";
+import { posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 import { framePosterLayout, sizePosterCanvas } from "./posterFrame";
 
 export const BAUHAUS_CSS_WIDTH = 720;
@@ -171,10 +171,11 @@ export function layoutBauhausPoster(data: PosterViewModel, measure: TextMeasure)
 
   let cursor = y.unit + Math.max(UNIT, costH) + 30;
   const comments: { y: number; text: string }[] = [];
-  if (data.comments.length > 0) {
+  const narrative = posterNarrativeLines(data);
+  if (narrative.length > 0) {
     y.insight = cursor;
     cursor += 28;
-    for (const text of data.comments) {
+    for (const text of narrative) {
       comments.push({ y: cursor, text });
       cursor += 26;
     }

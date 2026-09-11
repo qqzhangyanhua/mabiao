@@ -1,3 +1,4 @@
+import { CursorAccountSlot } from "./CursorAccountSlot";
 import { DailyBarChart } from "./DailyBarChart";
 import type { ReportPosterRenderProps } from "./posterStyleRegistry";
 import { ShareBar } from "./ShareBar";
@@ -33,6 +34,16 @@ export function DarkAnalyticsPoster({
         <section className="rp-panel">
           <h2 className="rp-panel-title">来源占比</h2>
           <ShareBar sources={data.sources} />
+        </section>
+      ) : null}
+      {data.cursorAccount ? (
+        <section className="rp-panel">
+          <CursorAccountSlot
+            data={data.cursorAccount}
+            titleClass="rp-panel-title"
+            tokensClass="rp-stat-value"
+            noteClass="rp-stat-label"
+          />
         </section>
       ) : null}
       {data.stats.length > 0 ? (

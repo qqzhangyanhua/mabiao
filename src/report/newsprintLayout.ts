@@ -1,5 +1,5 @@
 import { POSTER_FRAME_HEIGHT, splitFrameExtra } from "./posterFrame";
-import type { PosterViewModel } from "./posterTypes";
+import { posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 
 export const NEWSPRINT_CSS_WIDTH = 720;
 export const NEWSPRINT_SCALE = 2;
@@ -126,7 +126,7 @@ export function layoutNewsprintPoster(
 
   let cursor = y.headline + headlineLines.length * 40 + 8;
   const body: { y: number; text: string }[] = [];
-  for (const comment of data.comments) {
+  for (const comment of posterNarrativeLines(data)) {
     for (const line of wrapText(measure, bodyFont, comment, CONTENT_W)) {
       body.push({ y: cursor, text: line });
       cursor += 26;

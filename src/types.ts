@@ -1043,6 +1043,13 @@ export type ReportShareSlice = {
   pct: number;
 };
 
+export type ReportCursorAccount = {
+  total_tokens: number;
+  event_count: number;
+  cost: number | null;
+  models: string[];
+};
+
 export type ReportDto = {
   period_kind: ReportPeriodKind;
   offset: number;
@@ -1054,6 +1061,7 @@ export type ReportDto = {
   sources: ReportShareSlice[];
   models: string[];
   insights: ReportInsight[];
+  cursor_account: ReportCursorAccount | null;
 };
 
 export type WorkNotesRangeKind = "today" | "this_week" | "this_month" | "custom";

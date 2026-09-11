@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EXTREME_REPORT_CASES } from "../lib/reportExtremeFixtures";
 import { EXTREME_POSTERS, FAKE_POSTER } from "./fakePosterData";
+import { posterNarrativeLines } from "./posterTypes";
 
 describe("fake poster fixtures", () => {
   it("keeps the capture dummy populated across the seven-slot view model", () => {
@@ -17,6 +18,23 @@ describe("fake poster fixtures", () => {
       "模型 Top 3",
       "最贵的一次",
     ]);
+    expect(FAKE_POSTER.cursorAccount).toBeNull();
+  });
+
+  it("appends the Cursor account line after existing comments", () => {
+    expect(posterNarrativeLines(FAKE_POSTER)).toEqual(FAKE_POSTER.comments);
+    expect(
+      posterNarrativeLines({
+        ...FAKE_POSTER,
+        cursorAccount: {
+          tokensLabel: "1.2M",
+          costLabel: null,
+          modelsLabel: "gpt-5",
+          note: "云端账号，不并入上方本机总量",
+          line: "Cursor 账号另有 1.2M token，云端口径，未并入上方。",
+        },
+      }),
+    ).toEqual([...FAKE_POSTER.comments, "Cursor 账号另有 1.2M token，云端口径，未并入上方。"]);
   });
 
   it("maps every extreme DTO onto a seven-slot poster view model", () => {

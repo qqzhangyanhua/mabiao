@@ -1,5 +1,5 @@
 import { POSTER_FRAME_HEIGHT, offsetPackedY, splitFrameExtra } from "./posterFrame";
-import type { PosterViewModel } from "./posterTypes";
+import { posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 
 export const TICKET_WIDTH = 720;
 export const TICKET_SCALE = 2;
@@ -137,9 +137,10 @@ export function layoutTicketStubPoster(
   let cursor = y.unit + 36;
   const bodyFont = ticketFont(500, 16);
   const comments: { y: number; text: string }[] = [];
-  if (data.comments.length > 0) {
+  const narrative = posterNarrativeLines(data);
+  if (narrative.length > 0) {
     y.comments = cursor;
-    for (const comment of data.comments) {
+    for (const comment of narrative) {
       for (const line of wrapText(measure, bodyFont, comment, CONTENT_W)) {
         comments.push({ y: cursor, text: line });
         cursor += 24;

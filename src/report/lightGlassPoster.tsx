@@ -1,3 +1,4 @@
+import { CursorAccountSlot } from "./CursorAccountSlot";
 import { DailyBarChart } from "./DailyBarChart";
 import type { ReportPosterRenderProps } from "./posterStyleRegistry";
 import { ShareBar } from "./ShareBar";
@@ -66,6 +67,16 @@ export function LightGlassPoster({
         <section className="lg-card">
           <h2 className="lg-card-title">来源占比</h2>
           <ShareBar sources={data.sources} />
+        </section>
+      ) : null}
+      {data.cursorAccount ? (
+        <section className="lg-card">
+          <CursorAccountSlot
+            data={data.cursorAccount}
+            titleClass="lg-card-title"
+            tokensClass="lg-stat-value"
+            noteClass="lg-stat-label"
+          />
         </section>
       ) : null}
       {data.stats.length > 0 ? (

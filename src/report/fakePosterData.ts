@@ -44,6 +44,7 @@ export const FAKE_POSTER: PosterViewModel = {
       project: "重构鉴权中间件",
     },
   ],
+  cursorAccount: null,
 };
 
 function requirePoster(id: string, dto: Parameters<typeof toPosterViewModel>[0]): PosterViewModel {

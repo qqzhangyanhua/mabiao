@@ -1,5 +1,5 @@
 import { POSTER_FRAME_HEIGHT, offsetPackedY, splitFrameExtra } from "./posterFrame";
-import type { PosterViewModel } from "./posterTypes";
+import { posterNarrativeLines, type PosterViewModel } from "./posterTypes";
 
 export const INK_WASH_WIDTH = 720;
 export const INK_WASH_SCALE = 2;
@@ -117,7 +117,7 @@ export function layoutInkWashPoster(data: PosterViewModel, measure: TextMeasure)
   let cursor = y.unit + 36;
   const bodyFont = inkKai(500, 18);
   const comments: { y: number; text: string }[] = [];
-  for (const comment of data.comments) {
+  for (const comment of posterNarrativeLines(data)) {
     for (const line of wrapText(measure, bodyFont, comment, CONTENT_W)) {
       comments.push({ y: cursor, text: line });
       cursor += 30;

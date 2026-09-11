@@ -1,12 +1,17 @@
-//! 报告：已结束自然周期或用户选定的闭区间内、仅基于消耗记录的可分享汇总。
-//! 洞察规则在本模块；前端只做措辞与排版（ADR 0015）。
+//! 报告：已结束自然周期或用户选定的闭区间内、以消耗记录为主的可分享汇总。
+//! 七个槽位只读消耗记录；Cursor 账号用量另开分区（ADR 0015 / 0023）。
+//! 洞察规则在本模块；前端只做措辞与排版。
+
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Datelike, Duration, Local, Months, NaiveDate};
 use rusqlite::{params_from_iter, Connection};
 
+use crate::cost::sum_cursor_event_costs;
 use crate::domain::{
-    Filter, NamedAmount, PriceTable, ReportDayPoint, ReportDto, ReportInsight, ReportPeriod,
-    ReportPeriodKind, ReportShareSlice, ReportTopSessionBy, SessionRow,
+    CursorUsageEvent, Filter, NamedAmount, PriceTable, ReportCursorAccount, ReportDayPoint,
+    ReportDto, ReportInsight, ReportPeriod, ReportPeriodKind, ReportShareSlice, ReportTopSessionBy,
+    SessionRow,
 };
 use crate::query;
 use crate::rollup_source::rollup_source;
@@ -45,6 +50,7 @@ pub fn build(
     };
     let sources = share_slices(&query::breakdown(conn, &filter, prices, "source")?);
     let models = top_models(&query::breakdown(conn, &filter, prices, "model")?);
+    let cursor_account = cursor_account_slice(conn, &filter, prices)?;
     Ok(ReportDto {
         period_kind: period.kind,
         offset: period.offset,
@@ -56,7 +62,44 @@ pub fn build(
         sources,
         models,
         insights,
+        cursor_account,
     })
+}
+
+fn cursor_account_slice(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+) -> Result<Option<ReportCursorAccount>, String> {
+    let events = crate::cursor_account::events_for_application_analytics(conn, filter)?;
+    let total_tokens: i64 = events.iter().map(CursorUsageEvent::total_tokens).sum();
+    if total_tokens <= 0 {
+        return Ok(None);
+    }
+    let refs: Vec<&CursorUsageEvent> = events.iter().collect();
+    let (cost, _) = sum_cursor_event_costs(&refs, prices);
+    Ok(Some(ReportCursorAccount {
+        total_tokens,
+        event_count: i64::try_from(events.len()).unwrap_or(i64::MAX),
+        cost: cost.filter(|amount| *amount > 0.0),
+        models: cursor_models(&events),
+    }))
+}
+
+fn cursor_models(events: &[CursorUsageEvent]) -> Vec<String> {
+    let mut totals: BTreeMap<&str, i64> = BTreeMap::new();
+    for event in events {
+        if unlabeled_model(&event.model) {
+            continue;
+        }
+        *totals.entry(event.model.as_str()).or_insert(0) += event.total_tokens();
+    }
+    let mut rows: Vec<(&str, i64)> = totals.into_iter().collect();
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    rows.into_iter()
+        .take(3)
+        .map(|(name, _)| name.to_string())
+        .collect()
 }
 
 fn share_slices(rows: &[NamedAmount]) -> Vec<ReportShareSlice> {
