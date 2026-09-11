@@ -27,6 +27,7 @@ src-tauri/src/
   report/                 # 报告 / 洞察（Rust）
   cursor_session.rs       # Cursor 会话 KPI 摄取
   cursor_account.rs       # Cursor 账号用量联网
+  cursor_overlay.rs       # Cursor 账号用量叠进趋势 / 项目 / 应用分析
   ingest.rs               # 扫描、可信摄取、归档对账
   store.rs / store/       # sqlite；ADAPTER_VERSION 在 store 根
   query.rs / query/       # 聚合 SQL（analytics / billing / …）

@@ -1,20 +1,21 @@
+//! 消耗记录的内存聚合预言机，只给 parity / 查询测试用。
+//! 生产查询不得引用本模块。
+
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Datelike, Local, Timelike, Utc};
 
 use crate::billing_window;
-use crate::cost::{
-    derive_cost, finish_unpriced_groups, overview_costs, sum_cursor_event_costs, UnpricedGroupAcc,
-};
+use crate::cost::{derive_cost, finish_unpriced_groups, overview_costs, UnpricedGroupAcc};
 use crate::domain::{
     cache_hit_rate, ApplicationAnalyticsDto, ApplicationEfficiency, ApplicationTrendPoint,
-    BillingWindowsDto, CursorUsageEvent, EfficiencyMetrics, Filter, FilterOptions, NamedAmount,
+    BillingWindowsDto, EfficiencyMetrics, Filter, FilterOptions, NamedAmount,
     OverviewCostBreakdown, OverviewCostSources, OverviewDto, PriceTable, ProjectApplicationRow,
     SeriesPoint, SessionRow, TurnRow, UnpricedGroupDto, UsageRecord, WorkTimelineDto,
 };
 use crate::work_timeline::assign_latest;
 
-pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
+pub(crate) fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
     if let Some(from) = &filter.from {
         if record.occurred_at.as_str() < from.as_str() {
             return false;
@@ -40,14 +41,21 @@ pub fn matches_filter(record: &UsageRecord, filter: &Filter) -> bool {
     true
 }
 
-pub fn apply_filter<'a>(records: &'a [UsageRecord], filter: &Filter) -> Vec<&'a UsageRecord> {
+pub(crate) fn apply_filter<'a>(
+    records: &'a [UsageRecord],
+    filter: &Filter,
+) -> Vec<&'a UsageRecord> {
     records
         .iter()
         .filter(|r| matches_filter(r, filter))
         .collect()
 }
 
-pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -> OverviewDto {
+pub(crate) fn overview(
+    records: &[UsageRecord],
+    filter: &Filter,
+    prices: &PriceTable,
+) -> OverviewDto {
     let filtered = apply_filter(records, filter);
     let mut sessions = std::collections::BTreeSet::new();
     let mut dto = OverviewDto {
@@ -85,7 +93,10 @@ pub fn overview(records: &[UsageRecord], filter: &Filter, prices: &PriceTable) -
 }
 
 /// 全库未定价诊断。不接筛选，语义与 `query::unpriced_diagnosis` 对齐。
-pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<UnpricedGroupDto> {
+pub(crate) fn unpriced_diagnosis(
+    records: &[UsageRecord],
+    prices: &PriceTable,
+) -> Vec<UnpricedGroupDto> {
     let mut groups: BTreeMap<(String, String), UnpricedGroupAcc> = BTreeMap::new();
     for record in records {
         let derived = derive_cost(record, prices);
@@ -102,7 +113,7 @@ pub fn unpriced_diagnosis(records: &[UsageRecord], prices: &PriceTable) -> Vec<U
     finish_unpriced_groups(groups, prices)
 }
 
-pub fn billing_windows(
+pub(crate) fn billing_windows(
     records: &[UsageRecord],
     filter: &Filter,
     prices: &PriceTable,
@@ -120,7 +131,7 @@ pub fn billing_windows(
     billing_window::summarize(apply_filter(records, &scoped), prices, now)
 }
 
-pub fn trend(
+pub(crate) fn trend(
     records: &[UsageRecord],
     filter: &Filter,
     prices: &PriceTable,
@@ -161,7 +172,7 @@ pub fn trend(
 }
 
 /// 按本地一天中的第几个小时（0–23）跨天汇总 token。与 `query::hour_of_day` 同口径。
-pub fn hour_of_day(records: &[UsageRecord], filter: &Filter) -> [i64; 24] {
+pub(crate) fn hour_of_day(records: &[UsageRecord], filter: &Filter) -> [i64; 24] {
     let mut hours = [0i64; 24];
     for record in apply_filter(records, filter) {
         if let Some(hour) = local_hour_of_day(&record.occurred_at) {
@@ -180,7 +191,7 @@ fn local_hour_of_day(occurred_at: &str) -> Option<u8> {
 }
 
 /// 按本地日历日汇总 token。与 `query::tokens_by_local_day` 同口径。
-pub fn tokens_by_local_day(records: &[UsageRecord], filter: &Filter) -> Vec<(String, i64)> {
+pub(crate) fn tokens_by_local_day(records: &[UsageRecord], filter: &Filter) -> Vec<(String, i64)> {
     let mut days: BTreeMap<String, i64> = BTreeMap::new();
     for record in apply_filter(records, filter) {
         if let Some(date) = local_calendar_day(&record.occurred_at) {
@@ -200,94 +211,6 @@ fn local_calendar_day(occurred_at: &str) -> Option<String> {
     )
 }
 
-/// 把 Cursor 账号用量并进使用统计时间桶（本机消耗记录之上叠加）。
-pub fn attach_cursor_trend(
-    points: Vec<SeriesPoint>,
-    events: &[CursorUsageEvent],
-    prices: &PriceTable,
-    grain: &str,
-) -> Vec<SeriesPoint> {
-    if events.is_empty() {
-        return points;
-    }
-    let mut buckets: BTreeMap<String, SeriesPoint> = points
-        .into_iter()
-        .map(|point| (point.bucket.clone(), point))
-        .collect();
-    let mut events_by_bucket: BTreeMap<String, Vec<&CursorUsageEvent>> = BTreeMap::new();
-    for event in events {
-        events_by_bucket
-            .entry(bucket_key(&event.occurred_at, grain))
-            .or_default()
-            .push(event);
-    }
-    for (bucket, bucket_events) in events_by_bucket {
-        let point = buckets
-            .entry(bucket.clone())
-            .or_insert_with(|| SeriesPoint {
-                bucket,
-                total_tokens: 0,
-                input_tokens: 0,
-                output_tokens: 0,
-                cache_read_tokens: 0,
-                cache_creation_tokens: 0,
-                reasoning_tokens: 0,
-                cost: None,
-            });
-        for event in &bucket_events {
-            point.total_tokens += event.total_tokens();
-            point.input_tokens += event.input_tokens;
-            point.output_tokens += event.output_tokens;
-            point.cache_read_tokens += event.cache_read_tokens;
-            point.cache_creation_tokens += event.cache_creation_tokens;
-        }
-        let (cost, _) = sum_cursor_event_costs(&bucket_events, prices);
-        if let Some(amount) = cost {
-            point.cost = Some(point.cost.unwrap_or(0.0) + amount);
-        }
-    }
-    buckets.into_values().collect()
-}
-
-/// 项目统计没有账号级 cwd：单独挂一行 `Cursor`，不和本机「未标注」混在一起。
-pub fn attach_cursor_project_breakdown(
-    mut rows: Vec<NamedAmount>,
-    events: &[CursorUsageEvent],
-    prices: &PriceTable,
-) -> Vec<NamedAmount> {
-    rows.retain(|row| row.name != billing_window::CURSOR_WEEKLY_APPLICATION);
-    if events.is_empty() {
-        return rows;
-    }
-    let total_tokens: i64 = events.iter().map(CursorUsageEvent::total_tokens).sum();
-    if total_tokens == 0 {
-        return rows;
-    }
-    let event_refs: Vec<&CursorUsageEvent> = events.iter().collect();
-    let (cost, unpriced) = sum_cursor_event_costs(&event_refs, prices);
-    rows.push(NamedAmount {
-        name: billing_window::CURSOR_WEEKLY_APPLICATION.to_string(),
-        total_tokens,
-        share: 0.0,
-        cost,
-        unpriced,
-    });
-    let grand: i64 = rows.iter().map(|row| row.total_tokens).sum();
-    for row in &mut rows {
-        row.share = if grand == 0 {
-            0.0
-        } else {
-            row.total_tokens as f64 / grand as f64
-        };
-    }
-    rows.sort_by(|a, b| {
-        b.total_tokens
-            .cmp(&a.total_tokens)
-            .then_with(|| a.name.cmp(&b.name))
-    });
-    rows
-}
-
 #[derive(Default)]
 struct TrendBucket {
     total_tokens: i64,
@@ -300,7 +223,7 @@ struct TrendBucket {
     unpriced: bool,
 }
 
-pub(crate) fn bucket_key(occurred_at: &str, grain: &str) -> String {
+fn bucket_key(occurred_at: &str, grain: &str) -> String {
     if grain == "hour" {
         return occurred_at.get(0..13).unwrap_or(occurred_at).to_string();
     }
@@ -317,7 +240,7 @@ pub(crate) fn bucket_key(occurred_at: &str, grain: &str) -> String {
     date.to_string()
 }
 
-pub fn application_analytics(
+pub(crate) fn application_analytics(
     records: &[UsageRecord],
     filter: &Filter,
     grain: &str,
@@ -398,127 +321,6 @@ pub fn application_analytics(
     }
 }
 
-/// 把 Cursor 账号用量挂进来源统计（不改 summary，不进本机 Token KPI）。
-pub fn attach_cursor_application(
-    mut dto: ApplicationAnalyticsDto,
-    events: &[CursorUsageEvent],
-    grain: &str,
-) -> ApplicationAnalyticsDto {
-    strip_cursor_application(&mut dto);
-    if events.is_empty() {
-        return dto;
-    }
-
-    let mut total_tokens = 0i64;
-    let mut input_tokens = 0i64;
-    let mut cache_read_tokens = 0i64;
-    let mut cache_creation_tokens = 0i64;
-    let reasoning_tokens = 0i64;
-    for event in events {
-        total_tokens += event.total_tokens();
-        input_tokens += event.input_tokens;
-        cache_read_tokens += event.cache_read_tokens;
-        cache_creation_tokens += event.cache_creation_tokens;
-    }
-    let session_count = events.len() as i64;
-    dto.by_application.push(ApplicationEfficiency {
-        source: billing_window::CURSOR_WEEKLY_SOURCE.to_string(),
-        application: billing_window::CURSOR_WEEKLY_APPLICATION.to_string(),
-        metrics: EfficiencyMetrics {
-            total_tokens,
-            session_count,
-            cache_hit_rate: cache_hit_rate(cache_read_tokens, cache_creation_tokens, input_tokens),
-            average_session_tokens: if session_count == 0 {
-                None
-            } else {
-                Some(total_tokens as f64 / session_count as f64)
-            },
-            reasoning_share: ratio(reasoning_tokens, total_tokens),
-        },
-    });
-    dto.by_application.sort_by(|a, b| {
-        b.metrics
-            .total_tokens
-            .cmp(&a.metrics.total_tokens)
-            .then_with(|| a.application.cmp(&b.application))
-    });
-
-    let mut trend: BTreeMap<String, ApplicationTrendPoint> = dto
-        .trend
-        .into_iter()
-        .map(|point| (point.bucket.clone(), point))
-        .collect();
-    for event in events {
-        let total = event.total_tokens();
-        if total == 0 {
-            continue;
-        }
-        let bucket = bucket_key(&event.occurred_at, grain);
-        let point = trend
-            .entry(bucket.clone())
-            .or_insert_with(|| ApplicationTrendPoint {
-                bucket,
-                total_tokens: 0,
-                values: BTreeMap::new(),
-            });
-        point.total_tokens += total;
-        *point
-            .values
-            .entry(billing_window::CURSOR_WEEKLY_SOURCE.to_string())
-            .or_default() += total;
-    }
-    dto.trend = trend.into_values().collect();
-
-    let unlabeled = "（未标注）".to_string();
-    let cursor_project_total: i64 = events.iter().map(CursorUsageEvent::total_tokens).sum();
-    if cursor_project_total > 0 {
-        let mut projects: BTreeMap<String, ProjectApplicationRow> = dto
-            .projects
-            .into_iter()
-            .map(|row| (row.project.clone(), row))
-            .collect();
-        let row = projects
-            .entry(unlabeled.clone())
-            .or_insert_with(|| ProjectApplicationRow {
-                project: unlabeled,
-                total_tokens: 0,
-                values: BTreeMap::new(),
-            });
-        row.total_tokens += cursor_project_total;
-        *row.values
-            .entry(billing_window::CURSOR_WEEKLY_SOURCE.to_string())
-            .or_default() += cursor_project_total;
-        let mut project_rows: Vec<ProjectApplicationRow> = projects.into_values().collect();
-        project_rows.sort_by(|a, b| {
-            b.total_tokens
-                .cmp(&a.total_tokens)
-                .then_with(|| a.project.cmp(&b.project))
-        });
-        dto.projects = project_rows;
-    }
-
-    dto
-}
-
-fn strip_cursor_application(dto: &mut ApplicationAnalyticsDto) {
-    dto.by_application
-        .retain(|row| row.source != billing_window::CURSOR_WEEKLY_SOURCE);
-    for point in &mut dto.trend {
-        if let Some(value) = point.values.remove(billing_window::CURSOR_WEEKLY_SOURCE) {
-            point.total_tokens -= value;
-        }
-    }
-    dto.trend
-        .retain(|point| !point.values.is_empty() || point.total_tokens > 0);
-    for row in &mut dto.projects {
-        if let Some(value) = row.values.remove(billing_window::CURSOR_WEEKLY_SOURCE) {
-            row.total_tokens -= value;
-        }
-    }
-    dto.projects
-        .retain(|row| !row.values.is_empty() || row.total_tokens > 0);
-}
-
 #[derive(Default)]
 struct EfficiencyAcc {
     total_tokens: i64,
@@ -567,7 +369,7 @@ fn ratio(numerator: i64, denominator: i64) -> Option<f64> {
     }
 }
 
-pub fn by_name(
+pub(crate) fn by_name(
     records: &[UsageRecord],
     filter: &Filter,
     prices: &PriceTable,
@@ -612,7 +414,7 @@ pub fn by_name(
     rows
 }
 
-pub fn top_sessions(
+pub(crate) fn top_sessions(
     records: &[UsageRecord],
     filter: &Filter,
     prices: &PriceTable,
@@ -709,7 +511,7 @@ struct SessionAcc {
     unpriced: bool,
 }
 
-pub fn session_turns(
+pub(crate) fn session_turns(
     records: &[UsageRecord],
     session_id: &str,
     source: Option<&str>,
@@ -747,11 +549,11 @@ pub fn session_turns(
 
 /// 单日工作时间线：不经 `Filter`，只看 `day`（本地日历日）这一天，独立于顶栏范围筛选。
 /// 内存路径默认不带 Cursor 本机会话区间；带区间的对照走 `work_timeline_with_spans`。
-pub fn work_timeline(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
+pub(crate) fn work_timeline(records: &[UsageRecord], day: &str) -> WorkTimelineDto {
     crate::work_timeline::build(records, &[], day)
 }
 
-pub fn work_timeline_with_spans(
+pub(crate) fn work_timeline_with_spans(
     records: &[UsageRecord],
     extra: &[crate::domain::WorkSessionSpan],
     day: &str,
@@ -759,7 +561,7 @@ pub fn work_timeline_with_spans(
     crate::work_timeline::build(records, extra, day)
 }
 
-pub fn filter_options(records: &[UsageRecord]) -> FilterOptions {
+pub(crate) fn filter_options(records: &[UsageRecord]) -> FilterOptions {
     let mut sources = std::collections::BTreeSet::new();
     let mut models = std::collections::BTreeSet::new();
     let mut projects = std::collections::BTreeSet::new();
