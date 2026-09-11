@@ -1,0 +1,78 @@
+docs/adr/0021-work-notes-llm-summary.md
+  s_05c8ec70292861::t_acb89e2c3004c6 68-70
+src-tauri/src/work_notes/scale.rs
+  s_05c8ec70292861::t_99c3002ffa658b 10
+src/types.ts
+  s_05c8ec70292861::t_418d77ac76bf9b 1102-1116,1131
+docs/agent-layers.md
+  s_05c8ec70292861::t_b4afdc0e9e904c 102
+src/components/WorkNotesStatus.tsx
+  s_05c8ec70292861::t_3474441eb00a72 1-56
+src/styles/layout/responsive.css
+  s_05c8ec70292861::t_242f1b79eb7611 147-148
+src/lib/workNotesSessions.ts
+  s_05c8ec70292861::t_dee877cbcb3e7b 1-24
+src-tauri/src/domain/work_notes.rs
+  s_05c8ec70292861::t_b9b43a447edf2a 84-105,120-122
+src/styles/views/work-notes-picker.css
+  s_05c8ec70292861::t_15adafc62e8709 1-125
+src/lib/workNotesCopy.test.ts
+  s_05c8ec70292861::t_b594788cc22ce8 25
+src-tauri/src/work_notes.rs
+  s_05c8ec70292861::t_a2161125ad1cef 102
+src-tauri/src/work_notes/pipeline.rs
+  s_05c8ec70292861::t_e78d37d19e61a9 79
+  s_05c8ec70292861::t_bfb78de57b6809 62,65,68-69,78,80-87,99-104,116
+  s_05c8ec70292861::t_baea83b03d6162 10
+  s_05c8ec70292861::t_7750e32a3cc09d 426-460
+  s_05c8ec70292861::t_1c9eb9e56b6f24 44
+  s_05c8ec70292861::t_defa31ef075db4 18
+CONTEXT.md
+  s_05c8ec70292861::t_4079f827480723 76
+src/lib/workNotesSessions.test.ts
+  s_05c8ec70292861::t_2d6a4084eddbc5 1-53
+src/components/WorkNotesPanel.tsx
+  s_05c8ec70292861::t_b8a85c43ab6aed 3,23,25,48,68,74,96,127,132,143-144,147,266-267,275-276,294,304,310,318,343,345,359-374
+  s_05c8ec70292861::t_21abc94b2900ef 27
+  s_05c8ec70292861::t_0cc264dff3564a 21
+src-tauri/src/commands/work_notes.rs
+  s_05c8ec70292861::t_10ac1490b20aa3 18,26
+  s_05c8ec70292861::t_ff8b466f48541d 37,46
+  s_05c8ec70292861::t_d8f50e025ea079 76
+  s_05c8ec70292861::t_52f793114109f5 6
+  s_05c8ec70292861::t_4e1d60f3adc862 62
+src-tauri/src/tests/work_notes.rs
+  s_05c8ec70292861::t_3282fbab640925 104
+  s_05c8ec70292861::t_238496cefc997f 1254-1256
+  s_05c8ec70292861::t_fc0230199d9a2c 10
+  s_05c8ec70292861::t_432c40ab1ebea8 1174-1177
+  s_05c8ec70292861::t_30353c827313f6 1229-1253,1257-1281
+  s_05c8ec70292861::t_db6c4a6d35cc6a 2031-2038
+  s_05c8ec70292861::t_f9adc8410dfd00 131-142
+src/components/WorkNotesSessionPicker.tsx
+  s_05c8ec70292861::t_d98f4ab83b339a 49,56-57
+  s_05c8ec70292861::t_1ecedfa41f7ecd 64,72,90
+  s_05c8ec70292861::t_2ca2cfd3cd9b6c 82
+  s_05c8ec70292861::t_3349d375370706 45-48,51-55,60,63,76
+  s_05c8ec70292861::t_7df49bb228f8d5 1-44,50,58-59,61-62,65-71,73-75,77-81,83-89,91-264
+src/styles.css
+  s_05c8ec70292861::t_897d0fcc148a8d 29
+src/components/WorkNotesEstimateStrip.tsx
+  s_05c8ec70292861::t_87fc8065f2eee1 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "af0343480d202ecc7bed9e4db0d41ba2c02d5c90",
+  "prompts": {},
+  "sessions": {
+    "s_05c8ec70292861": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fc5525bc-3c3c-4d1f-a50a-2f212c7407c9",
+        "model": "claude-opus-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
