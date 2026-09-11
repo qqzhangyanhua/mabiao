@@ -335,6 +335,7 @@
 }
 
 [id^="settings-"] {
-  scroll-margin-top: 8px;
+  /* sticky 分类 tab 约 44px，锚点滚进来时不要把「检测」压在下面 */
+  scroll-margin-top: 56px;
 }
 

@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -476,13 +477,73 @@ fn push_model(args: &mut Vec<String>, model: Option<&str>) {
 }
 
 fn which_named(name: &str) -> Option<PathBuf> {
-    let path = std::env::var_os("PATH")?;
+    which_in_dirs(name, &bin_search_dirs())
+}
+
+/// Dock / Finder 打开的 GUI 进程往往只有 `/usr/bin:/bin`，找不到 Homebrew、pnpm、`~/.local/bin`。
+pub fn extra_bin_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        for rel in [
+            ".local/bin",
+            ".cargo/bin",
+            ".claude/bin",
+            ".grok/bin",
+            ".npm-global/bin",
+            ".bun/bin",
+            ".deno/bin",
+            ".volta/bin",
+            ".local/share/pnpm",
+            "bin",
+            "Library/pnpm",
+            "AppData/Local/pnpm",
+            "AppData/Roaming/npm",
+        ] {
+            dirs.push(home.join(rel));
+        }
+    }
+    if cfg!(target_os = "macos") {
+        dirs.push(PathBuf::from("/opt/homebrew/bin"));
+        dirs.push(PathBuf::from("/usr/local/bin"));
+    }
+    if cfg!(target_os = "linux") {
+        dirs.push(PathBuf::from("/usr/local/bin"));
+        dirs.push(PathBuf::from("/home/linuxbrew/.linuxbrew/bin"));
+    }
+    dirs
+}
+
+pub fn merge_search_dirs(
+    path_dirs: impl IntoIterator<Item = PathBuf>,
+    extras: impl IntoIterator<Item = PathBuf>,
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    for dir in path_dirs.into_iter().chain(extras) {
+        if !dirs.contains(&dir) {
+            dirs.push(dir);
+        }
+    }
+    dirs
+}
+
+fn bin_search_dirs() -> Vec<PathBuf> {
+    let path_dirs: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|path| std::env::split_paths(&path).collect())
+        .unwrap_or_default();
+    merge_search_dirs(path_dirs, extra_bin_dirs())
+}
+
+fn path_osstring() -> Option<OsString> {
+    std::env::join_paths(bin_search_dirs()).ok()
+}
+
+pub fn which_in_dirs(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
     let mut names = vec![name.to_string()];
     if cfg!(windows) && !name.ends_with(".exe") && !name.ends_with(".cmd") {
         names.push(format!("{name}.exe"));
         names.push(format!("{name}.cmd"));
     }
-    for dir in std::env::split_paths(&path) {
+    for dir in dirs {
         for candidate in &names {
             let file = dir.join(candidate);
             if file.is_file() {
@@ -493,14 +554,25 @@ fn which_named(name: &str) -> Option<PathBuf> {
     None
 }
 
+fn resolve_program(program: &str) -> PathBuf {
+    let path = Path::new(program);
+    if path.is_absolute() {
+        return path.to_path_buf();
+    }
+    which_named(program).unwrap_or_else(|| path.to_path_buf())
+}
+
 fn read_version(program: &Path) -> Result<String, String> {
-    let mut child = Command::new(program)
+    let mut process = Command::new(program);
+    process
         .arg("--version")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| error.to_string())?;
+        .stderr(Stdio::piped());
+    if let Some(path) = path_osstring() {
+        process.env("PATH", path);
+    }
+    let mut child = process.spawn().map_err(|error| error.to_string())?;
     let mut stdout = child
         .stdout
         .take()
@@ -537,12 +609,17 @@ fn first_line(raw: &str) -> String {
 }
 
 fn spawn(command: &EngineCommand, cancel: &AtomicBool) -> Result<String, EngineError> {
-    let mut child = Command::new(&command.program)
+    let mut process = Command::new(resolve_program(&command.program));
+    process
         .args(&command.args)
         .current_dir(&command.cwd)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+    if let Some(path) = path_osstring() {
+        process.env("PATH", path);
+    }
+    let mut child = process
         .spawn()
         .map_err(|error| EngineError::Failed(error.to_string()))?;
     let mut stdin = child

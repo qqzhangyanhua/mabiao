@@ -155,6 +155,11 @@ button.heat-cell {
   margin-bottom: 6px;
 }
 
+.panel-head > :first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .panel-head-actions {
   display: flex;
   flex-wrap: wrap;

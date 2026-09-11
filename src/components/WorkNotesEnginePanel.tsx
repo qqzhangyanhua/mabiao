@@ -40,9 +40,11 @@ export function WorkNotesEnginePanel() {
             手动检测本机已装的 CLI 及其版本。启动时不会自动探测。工作纪要只列出检测为已安装的引擎。
           </p>
         </div>
-        <Button disabled={busy} onClick={detect}>
-          {busy ? "正在检测…" : "检测"}
-        </Button>
+        <div className="row-actions">
+          <Button disabled={busy} onClick={detect}>
+            {busy ? "正在检测…" : "检测"}
+          </Button>
+        </div>
       </div>
       {error ? (
         <p className="panel-note snapshot-error" role="alert">

@@ -822,6 +822,74 @@ fn unknown_engine_is_rejected_before_spawn() {
 }
 
 #[test]
+fn extra_bin_dirs_include_user_local_and_homebrew() {
+    let dirs = work_notes::extra_bin_dirs();
+    let as_str: Vec<String> = dirs
+        .iter()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect();
+    assert!(
+        as_str.iter().any(|p| p.ends_with(".local/bin")),
+        "{as_str:?}"
+    );
+    assert!(
+        as_str.iter().any(|p| p.ends_with(".cargo/bin")),
+        "{as_str:?}"
+    );
+    if cfg!(target_os = "macos") {
+        assert!(
+            as_str.iter().any(|p| p == "/opt/homebrew/bin"),
+            "{as_str:?}"
+        );
+    }
+}
+
+#[test]
+fn merge_search_dirs_appends_new_extras_only() {
+    let merged = work_notes::merge_search_dirs(
+        [PathBuf::from("/usr/bin"), PathBuf::from("/bin")],
+        [
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/opt/homebrew/bin"),
+        ],
+    );
+    assert_eq!(
+        merged,
+        vec![
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+            PathBuf::from("/opt/homebrew/bin")
+        ]
+    );
+}
+
+#[test]
+fn which_finds_program_in_later_search_dir() {
+    let root = tempfile::tempdir().unwrap();
+    let empty = root.path().join("empty");
+    let extra = root.path().join("extra");
+    std::fs::create_dir_all(&empty).unwrap();
+    std::fs::create_dir_all(&extra).unwrap();
+    let bin = extra.join("claude");
+    std::fs::write(&bin, b"ok").unwrap();
+    let found = work_notes::which_in_dirs("claude", &[empty, extra]);
+    assert_eq!(found.as_deref(), Some(bin.as_path()));
+}
+
+#[test]
+fn extra_dirs_can_see_user_local_cli_when_path_is_stripped() {
+    let Some(home) = dirs::home_dir() else {
+        return;
+    };
+    let home_bin = home.join(".local/bin/claude");
+    if !home_bin.is_file() {
+        return;
+    }
+    let found = work_notes::which_in_dirs("claude", &work_notes::extra_bin_dirs());
+    assert_eq!(found.as_deref(), Some(home_bin.as_path()));
+}
+
+#[test]
 fn detect_marks_missing_cli_uninstalled() {
     let rows = work_notes::detect_with(
         |name| (name == "claude").then(|| PathBuf::from("/bin/claude")),

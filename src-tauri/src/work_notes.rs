@@ -36,7 +36,8 @@ use crate::domain::{
 #[cfg(test)]
 pub use engines::{
     claude_command, codex_command, codex_profile, cursor_agent_command, detect_with,
-    ensure_work_dir, grok_command, write_schemas, SchemaKind, ScriptedRunner,
+    ensure_work_dir, extra_bin_dirs, grok_command, merge_search_dirs, which_in_dirs, write_schemas,
+    SchemaKind, ScriptedRunner,
 };
 pub use engines::{detect_engines, EngineRunner, ProcessRunner};
 pub use job::WorkNotesJob;
