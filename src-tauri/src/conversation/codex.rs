@@ -7,6 +7,9 @@ use serde_json::Value;
 use super::toolbox::*;
 use super::{single_detail, ConversationIndexBatch, ConversationIndexIssue};
 
+const VSCODE_CONTEXT_PREFIX: &str = "# Context from my IDE setup:";
+const CODEX_REQUEST_MARKER: &str = "my request for codex";
+
 #[cfg(test)]
 #[path = "codex_test.rs"]
 mod tests;
@@ -231,8 +234,13 @@ pub(super) fn parse_content(
                     _ => {
                         flush_message_delta(&mut pending_delta, &mut event_messages, &mut events);
                         if let Some(message) = event_message(payload, &timestamp) {
-                            events.push(message_event(line, &message, payload.clone()));
-                            event_messages.push(message);
+                            project_codex_message(
+                                line,
+                                message,
+                                payload.clone(),
+                                &mut event_messages,
+                                &mut events,
+                            );
                         } else {
                             events.push(event_msg_semantic_event(
                                 line, &timestamp, event_kind, payload,
@@ -373,11 +381,120 @@ fn project_codex_response_payload(
     events: &mut Vec<ConversationEvent>,
 ) {
     if let Some(message) = response_message(payload, timestamp) {
-        events.push(message_event(line, &message, payload.clone()));
-        response_messages.push(message);
+        project_codex_message(line, message, payload.clone(), response_messages, events);
     } else if let Some(event) =
         response_semantic_event(line, timestamp, payload, include_deferred_content)
     {
         events.push(event);
     }
+}
+
+enum CodexUserInjection {
+    EnvironmentContext,
+    AgentsMd,
+    IdeContext { prompt: Option<String> },
+}
+
+fn project_codex_message(
+    line: usize,
+    message: ConversationMessage,
+    details: Value,
+    messages: &mut Vec<ConversationMessage>,
+    events: &mut Vec<ConversationEvent>,
+) {
+    if message.role == "user" {
+        if let Some(injection) = classify_codex_user_injection(&message.text) {
+            let name = match &injection {
+                CodexUserInjection::EnvironmentContext => "environment_context",
+                CodexUserInjection::AgentsMd => "agents_md",
+                CodexUserInjection::IdeContext { .. } => "ide_context",
+            };
+            let mut status_details = details.clone();
+            if let Value::Object(object) = &mut status_details {
+                object.remove("content");
+                object.remove("message");
+            }
+            events.push(semantic_event(
+                line,
+                EventKind::SystemStatus,
+                &message.occurred_at,
+                None,
+                Some(name.to_string()),
+                Some(message.text.clone()),
+                status_details,
+            ));
+            if let CodexUserInjection::IdeContext {
+                prompt: Some(prompt),
+            } = injection
+            {
+                let extracted = ConversationMessage {
+                    role: message.role,
+                    occurred_at: message.occurred_at,
+                    text: prompt,
+                };
+                events.push(message_event(line, &extracted, details));
+                messages.push(extracted);
+            }
+            return;
+        }
+    }
+    events.push(message_event(line, &message, details));
+    messages.push(message);
+}
+
+fn classify_codex_user_injection(text: &str) -> Option<CodexUserInjection> {
+    let trimmed = text.trim();
+    if trimmed.starts_with("<environment_context>") {
+        Some(CodexUserInjection::EnvironmentContext)
+    } else if trimmed.starts_with("# AGENTS.md") {
+        Some(CodexUserInjection::AgentsMd)
+    } else if trimmed.starts_with(VSCODE_CONTEXT_PREFIX) {
+        Some(CodexUserInjection::IdeContext {
+            prompt: extract_codex_prompt_from_ide_context(trimmed),
+        })
+    } else {
+        None
+    }
+}
+
+fn extract_codex_prompt_from_ide_context(text: &str) -> Option<String> {
+    let normalized = text.replace("\r\n", "\n");
+    let lines = normalized.lines().collect::<Vec<_>>();
+    let mut prompt = None;
+    for (index, line) in lines.iter().enumerate() {
+        let Some(inline_prompt) = codex_request_heading_payload(line) else {
+            continue;
+        };
+        if !inline_prompt.is_empty() {
+            prompt = Some(inline_prompt.to_string());
+            continue;
+        }
+        let following = lines[index + 1..].join("\n").trim().to_string();
+        prompt = (!following.is_empty()).then_some(following);
+    }
+    prompt
+}
+
+fn codex_request_heading_payload(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('#') {
+        return None;
+    }
+    let heading = trimmed.trim_start_matches('#').trim_start();
+    let lowered = heading.to_ascii_lowercase();
+    if !lowered.starts_with(CODEX_REQUEST_MARKER) {
+        return None;
+    }
+    let suffix = heading.get(CODEX_REQUEST_MARKER.len()..)?.trim_start();
+    let Some(separator) = suffix.chars().next() else {
+        return Some("");
+    };
+    if !matches!(separator, ':' | '：' | '-' | '—') {
+        return None;
+    }
+    Some(
+        suffix
+            .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ':' | '：' | '-' | '—'))
+            .trim(),
+    )
 }

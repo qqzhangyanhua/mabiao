@@ -36,6 +36,8 @@ pub(super) fn parse_from_values(
     let mut ended_at = String::new();
     let mut messages = Vec::new();
     let mut events = Vec::new();
+    let mut custom_title = String::new();
+    let mut first_prompt = String::new();
     let path_is_subagent = path
         .components()
         .any(|part| part.as_os_str() == "subagents");
@@ -70,15 +72,34 @@ pub(super) fn parse_from_values(
         }
         let content = message.get("content").unwrap_or(&Value::Null);
         if matches!(role.as_str(), "user" | "assistant") {
-            push_projected_message(
-                *index,
-                &timestamp,
-                &role,
-                content,
-                message.clone(),
-                &mut messages,
-                &mut events,
-            );
+            let text = content_text(content);
+            if !text.is_empty() {
+                if let Some(name) = claude_residue_status_name(value, &role, &text) {
+                    events.push(semantic_event(
+                        *index,
+                        EventKind::SystemStatus,
+                        &timestamp,
+                        None,
+                        Some(name.to_string()),
+                        Some(text),
+                        value.clone(),
+                    ));
+                } else {
+                    if role == "user" && first_prompt.is_empty() && !is_claude_slash_command(&text)
+                    {
+                        first_prompt = text;
+                    }
+                    push_projected_message(
+                        *index,
+                        &timestamp,
+                        &role,
+                        content,
+                        message.clone(),
+                        &mut messages,
+                        &mut events,
+                    );
+                }
+            }
         }
         if let Some(items) = content.as_array() {
             for item in items {
@@ -113,6 +134,10 @@ pub(super) fn parse_from_values(
             }
         }
         if !matches!(kind, "user" | "assistant") {
+            let named_title = claude_named_title(kind, value);
+            if let Some(title) = &named_title {
+                custom_title = title.clone();
+            }
             let event = if matches!(
                 kind,
                 "system"
@@ -126,6 +151,7 @@ pub(super) fn parse_from_values(
                     | "file-history-snapshot"
                     | "file-history-delta"
                     | "ai-title"
+                    | "custom-title"
                     | "frame-link"
             ) {
                 semantic_event(
@@ -138,7 +164,7 @@ pub(super) fn parse_from_values(
                     &timestamp,
                     None,
                     Some(kind.to_string()),
-                    optional_text(value, &["result", "content", "message"]),
+                    named_title.or_else(|| optional_text(value, &["result", "content", "message"])),
                     value.clone(),
                 )
             } else {
@@ -184,11 +210,21 @@ pub(super) fn parse_from_values(
             Value::Object(details),
         ));
     }
+    let title = if !custom_title.is_empty() {
+        truncate_title(&custom_title)
+    } else {
+        let peeled = truncate_title(&strip_prompt_wrappers(&first_prompt));
+        if peeled.is_empty() {
+            session_id.clone()
+        } else {
+            peeled
+        }
+    };
     finish_source_conversation(
         Source::Claude,
         path,
         session_id,
-        String::new(),
+        title,
         project,
         model,
         started_at,
@@ -197,4 +233,26 @@ pub(super) fn parse_from_values(
         events,
         is_top_level,
     )
+}
+
+fn claude_residue_status_name(value: &Value, role: &str, text: &str) -> Option<&'static str> {
+    if value.get("isMeta").and_then(Value::as_bool) == Some(true) {
+        return Some("meta");
+    }
+    if role == "user" && text.trim().starts_with("<local-command-caveat>") {
+        return Some("caveat");
+    }
+    None
+}
+
+fn is_claude_slash_command(text: &str) -> bool {
+    text.trim().starts_with("<command-name>")
+}
+
+fn claude_named_title(kind: &str, value: &Value) -> Option<String> {
+    match kind {
+        "custom-title" => optional_text(value, &["customTitle"]),
+        "ai-title" => optional_text(value, &["aiTitle"]),
+        _ => None,
+    }
 }

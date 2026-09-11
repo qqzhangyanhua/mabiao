@@ -100,7 +100,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Copilot,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 15;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
