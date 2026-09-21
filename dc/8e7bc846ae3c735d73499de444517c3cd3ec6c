@@ -1,0 +1,20 @@
+src/components/ActivityHeatmap.tsx
+  h_4132837b09b7e7 1-16,27,47-48,57-63,66-79,86-91,144,146-150
+src/lib/calendar.test.ts
+  h_4132837b09b7e7 12,236-268
+src/lib/calendar.ts
+  h_4132837b09b7e7 233-260
+src/styles/views/heatmap.css
+  h_4132837b09b7e7 1,113-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "dc8e7bc846ae3c735d73499de444517c3cd3ec6c",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
