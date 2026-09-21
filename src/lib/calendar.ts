@@ -230,6 +230,34 @@ export function tokenHeatmapLevel(value: number, cuts: number[]): number {
   return Math.min(Math.max(level, 1), 4);
 }
 
+export type HeatmapTooltipBox = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+/** 相对格子水平居中、优先开在上方；贴边时改对齐，避免视口裁切。 */
+export function placeHeatmapTooltip(
+  cell: HeatmapTooltipBox,
+  tip: { width: number; height: number },
+  viewport: { width: number; height: number },
+  pad = 8,
+  gap = 8,
+): { left: number; top: number } {
+  const width = Math.max(0, tip.width);
+  const height = Math.max(0, tip.height);
+  const viewW = Math.max(0, viewport.width);
+  const viewH = Math.max(0, viewport.height);
+  const cellCenter = (cell.left + cell.right) / 2;
+  const maxLeft = Math.max(pad, viewW - width - pad);
+  const left = Math.min(Math.max(pad, cellCenter - width / 2), maxLeft);
+  const above = cell.top - gap - height;
+  const top =
+    above >= pad ? above : Math.min(cell.bottom + gap, Math.max(pad, viewH - height - pad));
+  return { left, top };
+}
+
 /**
  * 把趋势 bucket（与后端 `strftime` / `substr` 口径一致）换成自定义区间用的起止日。
  * hour/day 落到当天；week 为该 ISO 周周一至周日；month 为该月 1 号至月末。

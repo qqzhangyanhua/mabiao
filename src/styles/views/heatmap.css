@@ -1,4 +1,4 @@
-.heatmap-panel {
+.panel.heatmap-panel {
   flex: 0 0 auto;
   min-height: 0;
   overflow: visible;
@@ -110,8 +110,8 @@ button.heat-cell {
 }
 
 .heatmap-tip {
-  position: absolute;
-  z-index: 3;
+  position: fixed;
+  z-index: 40;
   padding: 6px 8px;
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -238,4 +238,3 @@ button.heat-cell {
 .collapsible-detail .dash-bottom {
   flex: 1 0 auto;
 }
-

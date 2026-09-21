@@ -1,5 +1,19 @@
-import { memo, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
-import { heatmapGrid, heatmapMonthLabels, quantileCuts, tokenHeatmapLevel } from "../lib/calendar";
+import {
+  memo,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+} from "react";
+import {
+  heatmapGrid,
+  heatmapMonthLabels,
+  placeHeatmapTooltip,
+  quantileCuts,
+  tokenHeatmapLevel,
+} from "../lib/calendar";
 import { formatCompact, formatUsd } from "../lib/format";
 import type { SeriesPoint } from "../types";
 
@@ -10,8 +24,7 @@ type HoverTip = {
   date: string;
   tokens: number;
   cost: number | null;
-  x: number;
-  y: number;
+  cell: { left: number; top: number; right: number; bottom: number };
 };
 
 export const ActivityHeatmap = memo(function ActivityHeatmap({
@@ -31,6 +44,8 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
     [points],
   );
   const [hover, setHover] = useState<HoverTip | null>(null);
+  const [tipPos, setTipPos] = useState<{ left: number; top: number } | null>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
   const monthByWeek = useMemo(() => {
     const labels = new Map<number, string>();
     for (const month of months) {
@@ -39,20 +54,41 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
     return labels;
   }, [months]);
 
-  function showTip(event: MouseEvent<HTMLElement>, date: string) {
-    const host = event.currentTarget.closest(".heatmap");
-    if (!(host instanceof HTMLElement)) {
+  useLayoutEffect(() => {
+    if (!hover) {
+      setTipPos(null);
       return;
     }
-    const hostRect = host.getBoundingClientRect();
+    const el = tipRef.current;
+    if (!el) {
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    setTipPos(
+      placeHeatmapTooltip(
+        hover.cell,
+        { width: rect.width, height: rect.height },
+        {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+      ),
+    );
+  }, [hover]);
+
+  function showTip(event: MouseEvent<HTMLElement>, date: string) {
     const cellRect = event.currentTarget.getBoundingClientRect();
     const point = byDay.get(date);
     setHover({
       date,
       tokens: point?.total_tokens ?? 0,
       cost: point?.cost ?? null,
-      x: cellRect.left - hostRect.left + cellRect.width / 2,
-      y: cellRect.top - hostRect.top,
+      cell: {
+        left: cellRect.left,
+        top: cellRect.top,
+        right: cellRect.right,
+        bottom: cellRect.bottom,
+      },
     });
   }
 
@@ -105,13 +141,13 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
       </div>
       {hover ? (
         <div
+          ref={tipRef}
           className="heatmap-tip"
-          style={{
-            left: hover.x,
-            top: hover.y,
-            transform:
-              hover.y < 36 ? "translate(-50%, 14px)" : "translate(-50%, calc(-100% - 8px))",
-          }}
+          style={
+            tipPos
+              ? { left: tipPos.left, top: tipPos.top }
+              : { left: 0, top: 0, visibility: "hidden" }
+          }
         >
           <div>
             {hover.date} · {formatCompact(hover.tokens)} Token

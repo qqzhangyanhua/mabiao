@@ -9,6 +9,7 @@ import {
   monthTitle,
   pad2,
   parseDateValue,
+  placeHeatmapTooltip,
   quantileCuts,
   shiftMonth,
   toDateValue,
@@ -230,5 +231,38 @@ describe("tokenHeatmapLevel", () => {
   it("caps the level at 4 even with more than 4 distinct cuts", () => {
     const cuts = [10, 20, 30, 40, 50, 60];
     expect(tokenHeatmapLevel(1000, cuts)).toBe(4);
+  });
+});
+
+describe("placeHeatmapTooltip", () => {
+  const tip = { width: 180, height: 40 };
+  const viewport = { width: 1000, height: 800 };
+
+  it("centers above a middle cell", () => {
+    expect(
+      placeHeatmapTooltip({ left: 500, top: 200, right: 512, bottom: 212 }, tip, viewport),
+    ).toEqual({ left: 416, top: 152 });
+  });
+
+  it("shifts left so a right-edge cell stays inside the viewport", () => {
+    const placed = placeHeatmapTooltip(
+      { left: 980, top: 200, right: 992, bottom: 212 },
+      tip,
+      viewport,
+    );
+    expect(placed.left).toBe(812);
+    expect(placed.left + tip.width).toBeLessThanOrEqual(viewport.width - 8);
+  });
+
+  it("shifts right so a left-edge cell stays inside the viewport", () => {
+    expect(
+      placeHeatmapTooltip({ left: 4, top: 200, right: 16, bottom: 212 }, tip, viewport),
+    ).toEqual({ left: 8, top: 152 });
+  });
+
+  it("opens below when there is no room above", () => {
+    expect(
+      placeHeatmapTooltip({ left: 500, top: 20, right: 512, bottom: 32 }, tip, viewport),
+    ).toEqual({ left: 416, top: 40 });
   });
 });
