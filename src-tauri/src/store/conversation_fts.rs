@@ -2,6 +2,8 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 
+use super::FTS_REBUILD_VERSION;
+
 /// `detail=none` 只记「哪一行含这个三元组」，不记它出现在什么位置。位置表在这里是纯开销：
 /// 检索侧不用 `bm25()`/`snippet()`，排序键是手写的 0/1，片段由 Rust 从正文切。106 万事件、
 /// 400MB 正文的真实库实测倒排从 2732MB 降到 294MB，查询还快一倍。代价是 FTS5 不再接受短语
@@ -48,7 +50,8 @@ pub(crate) const FTS_MERGE_PAGES: i64 = 500;
 /// 全量合并的兜底门槛：自上次合并以来删掉的事件数达到上次行数的一半，且不少于这么多。
 const OPTIMIZE_MIN_DELETED: i64 = 100_000;
 
-const VACUUM_MIN_FREE_BYTES: i64 = 1024 * 1024 * 1024;
+/// 重灌倒排在真实库上腾出约 500MB、占整库两成多；门槛再高这些页就一直挂在 freelist 里。
+const VACUUM_MIN_FREE_BYTES: i64 = 256 * 1024 * 1024;
 
 fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
     conn.query_row(
@@ -203,10 +206,11 @@ pub(crate) fn conversation_fts_needs_optimize(conn: &Connection) -> Result<bool,
     })
 }
 
-/// 把倒排合并成一段，删除标记随之真正消失。百万行要几分钟，调用方必须在后台线程里拿写锁做。
-pub(crate) fn optimize_conversation_fts(conn: &Connection) -> Result<(), String> {
+/// 从事件表整份重灌倒排。不用 `optimize`：真实库上它合并完仍有 737MB，重灌只要 308MB，
+/// 而且重灌约 1 分钟、`optimize` 约 3 分钟。调用方必须在后台线程里拿写锁做。
+pub(crate) fn rebuild_conversation_fts(conn: &Connection) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('optimize')",
+        "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild')",
         [],
     )
     .map_err(|e| e.to_string())?;
@@ -227,9 +231,25 @@ pub(crate) fn optimize_conversation_fts(conn: &Connection) -> Result<(), String>
     .map_err(|e| e.to_string())
 }
 
+/// 维护方式从 `optimize` 换成整份重灌之前，老库已经记过基准行数，删除量要很久才到门槛。
+/// 清掉基准，让维护线程尽快重灌一次；`user_version` 记账，只做一次。
+pub(super) fn migrate_fts_maintenance_to_rebuild(conn: &Connection) -> Result<(), String> {
+    let version: i64 = conn
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(|e| e.to_string())?;
+    if version >= FTS_REBUILD_VERSION {
+        return Ok(());
+    }
+    conn.execute_batch(&format!(
+        "UPDATE conversation_fts_maintenance SET rows_at_optimize = NULL WHERE id = 1;
+         PRAGMA user_version = {FTS_REBUILD_VERSION};"
+    ))
+    .map_err(|e| e.to_string())
+}
+
 pub(crate) fn vacuum_is_due(page_size: i64, page_count: i64, freelist_count: i64) -> bool {
     freelist_count.saturating_mul(page_size) >= VACUUM_MIN_FREE_BYTES
-        && freelist_count.saturating_mul(10) >= page_count.saturating_mul(3)
+        && freelist_count.saturating_mul(10) >= page_count.saturating_mul(2)
 }
 
 /// `auto_vacuum` 是关的，合并腾出的页只进 freelist；攒够了才值得整库重写一次。

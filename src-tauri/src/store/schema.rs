@@ -1,7 +1,8 @@
 use rusqlite::Connection;
 
 use super::conversation_fts::{
-    ensure_conversation_events_fts, CONVERSATION_FTS_DEFINITION, CONVERSATION_FTS_TRIGGERS,
+    ensure_conversation_events_fts, migrate_fts_maintenance_to_rebuild,
+    CONVERSATION_FTS_DEFINITION, CONVERSATION_FTS_TRIGGERS,
 };
 use super::LOWERCASE_MODEL_VERSION;
 
@@ -372,7 +373,8 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     ensure_conversation_events_fts(conn)?;
     ensure_work_notes_tables(conn)?;
     ensure_conversation_context_metrics(conn)?;
-    migrate_lowercase_model(conn)
+    migrate_lowercase_model(conn)?;
+    migrate_fts_maintenance_to_rebuild(conn)
 }
 
 fn ensure_work_notes_tables(conn: &Connection) -> Result<(), String> {
