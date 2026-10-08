@@ -283,6 +283,7 @@ fn rebuild_jsonl_values(
             include_deferred_content,
             Some(session_id),
             true,
+            false,
         )?,
         Source::Pi => {
             super::pi::parse_from_values(path, values, include_deferred_content, Some(session_id))?

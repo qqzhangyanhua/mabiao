@@ -174,7 +174,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         source: Source::Claude,
         discover: discover_jsonl,
         index: index_claude,
-        index_suffix: None,
+        index_suffix: Some(claude::index_suffix),
         detail: detail_claude,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
@@ -360,6 +360,7 @@ pub(crate) use incremental::{
     plan_conversation_file_index, ConversationFileFingerprint, ConversationFileIndexPlan,
 };
 pub(crate) use refresh::refresh;
+pub use refresh::refresh_claude;
 pub use refresh::refresh_codex;
 
 /// 本机 bench 用：只跑 Codex 对话整文件 index，返回事件数。

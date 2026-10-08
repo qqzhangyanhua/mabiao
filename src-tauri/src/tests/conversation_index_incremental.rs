@@ -305,3 +305,188 @@ fn a_suffix_with_a_different_session_id_rebuilds_instead_of_appending() {
     );
     assert_conversation_index_matches_parse(&conn, home, "codex", "conv-other");
 }
+
+// ── Claude 增量索引 ─────────────────────────────────────────────────────────
+
+fn seed_claude_fixture(home: &std::path::Path) -> std::path::PathBuf {
+    let path = home.join(".claude/projects/-workspace/claude-incr.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, fixture("claude-conversation.jsonl")).unwrap();
+    path
+}
+
+#[test]
+fn claude_full_parse_sets_index_cursor() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = seed_claude_fixture(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+    let cursor: i64 = conn
+        .query_row(
+            "SELECT indexed_byte_offset FROM conversation_session_files
+             WHERE source = 'claude' AND source_file = ?1",
+            rusqlite::params![path.to_string_lossy()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    let file_size = std::fs::metadata(&path).unwrap().len() as i64;
+    assert_eq!(cursor, file_size, "全量解析后游标应指向文件末尾");
+}
+
+#[test]
+fn claude_appending_lines_adds_events_incrementally() {
+    use std::io::Write;
+
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = seed_claude_fixture(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+    let before = crate::conversation::indexed_events(&conn, "claude", "claude-parent-1").unwrap();
+    assert!(!before.is_empty(), "fixture 应有事件");
+    let before_count = before.len();
+
+    writeln!(
+        std::fs::OpenOptions::new().append(true).open(&path).unwrap(),
+        r#"{{"type":"assistant","sessionId":"claude-parent-1","timestamp":"2026-09-01T10:00:10Z","message":{{"role":"assistant","model":"claude-sonnet-test","content":[{{"type":"text","text":"follow-up reply"}}]}}}}"#
+    )
+    .unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+
+    let after = crate::conversation::indexed_events(&conn, "claude", "claude-parent-1").unwrap();
+    assert_eq!(after.len(), before_count + 1, "应只追加一条新事件");
+    assert_eq!(
+        after.last().and_then(|event| event.text.as_deref()),
+        Some("follow-up reply")
+    );
+    // 已有事件的序号不得被重排
+    assert_eq!(
+        after[..before_count]
+            .iter()
+            .map(|event| event.sequence)
+            .collect::<Vec<_>>(),
+        before
+            .iter()
+            .map(|event| event.sequence)
+            .collect::<Vec<_>>(),
+    );
+    assert_conversation_index_matches_parse(&conn, home, "claude", "claude-parent-1");
+}
+
+#[test]
+fn claude_repeated_appends_match_a_single_full_parse() {
+    use std::io::Write;
+
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let incremental = seed_claude_fixture(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+
+    for (stamp, text) in [
+        ("2026-09-01T10:00:10Z", "first-append"),
+        ("2026-09-01T10:00:20Z", "second-append"),
+        ("2026-09-01T10:00:30Z", "third-append"),
+    ] {
+        writeln!(
+            std::fs::OpenOptions::new()
+                .append(true)
+                .open(&incremental)
+                .unwrap(),
+            r#"{{"type":"assistant","sessionId":"claude-parent-1","timestamp":"{stamp}","message":{{"role":"assistant","model":"claude-sonnet-test","content":[{{"type":"text","text":"{text}"}}]}}}}"#
+        )
+        .unwrap();
+        crate::conversation::refresh_claude(&conn, home).unwrap();
+    }
+
+    // 一次性全量解析同份文件，事件应一致
+    let once = tempfile::tempdir().unwrap();
+    let once_home = once.path();
+    let once_path = seed_claude_fixture(once_home);
+    std::fs::write(&once_path, std::fs::read_to_string(&incremental).unwrap()).unwrap();
+    let once_conn = store::open_memory().unwrap();
+    crate::conversation::refresh_claude(&once_conn, once_home).unwrap();
+
+    let incremental_events =
+        crate::conversation::indexed_events(&conn, "claude", "claude-parent-1").unwrap();
+    let once_events =
+        crate::conversation::indexed_events(&once_conn, "claude", "claude-parent-1").unwrap();
+    let summary = |events: &[crate::domain::ConversationEvent]| {
+        events
+            .iter()
+            .map(|event| {
+                (
+                    event.sequence,
+                    event.source_sequence,
+                    event.kind,
+                    event.occurred_at.clone(),
+                    event.text.clone(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(summary(&incremental_events), summary(&once_events));
+    assert_conversation_index_matches_parse(&conn, home, "claude", "claude-parent-1");
+}
+
+#[test]
+fn claude_suffix_with_incomplete_tail_line_is_tolerated() {
+    use std::io::Write;
+
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = seed_claude_fixture(home);
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+
+    // 追加一行被截断的 JSON（写了一半的对象），模拟写入中途的状态
+    let truncated = r#"{"type":"assistant","sessionId":"claude-parent-1","timestamp":"2026-09-01T10:00:10Z","mes"#;
+    write!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap(),
+        "{truncated}"
+    )
+    .unwrap();
+    // 不应崩溃，也不会报错——不完整尾行被跳过
+    let issues = crate::conversation::refresh_claude(&conn, home).unwrap();
+    assert!(
+        issues
+            .iter()
+            .all(|issue| !issue.message.contains("JSON 无效")),
+        "不完整尾行不应报 JSON 错误：{issues:?}"
+    );
+    let events = crate::conversation::indexed_events(&conn, "claude", "claude-parent-1").unwrap();
+    assert!(
+        events
+            .iter()
+            .all(|event| event.text.as_deref() != Some("incomplete")),
+        "不完整尾行不应被索引"
+    );
+
+    // 用完整内容覆盖截断部分并补换行符
+    let complete = r#"{"type":"assistant","sessionId":"claude-parent-1","timestamp":"2026-09-01T10:00:10Z","message":{"role":"assistant","model":"claude-sonnet-test","content":[{"type":"text","text":"incomplete"}]}}"#;
+    // 先截断回原始大小，再写完整行
+    let original_len = std::fs::metadata(&path).unwrap().len() - truncated.len() as u64;
+    let original_content = std::fs::read(&path).unwrap()[..original_len as usize].to_vec();
+    std::fs::write(&path, original_content).unwrap();
+    writeln!(
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap(),
+        "{complete}"
+    )
+    .unwrap();
+    crate::conversation::refresh_claude(&conn, home).unwrap();
+    let events = crate::conversation::indexed_events(&conn, "claude", "claude-parent-1").unwrap();
+    assert!(
+        events
+            .iter()
+            .any(|event| event.text.as_deref() == Some("incomplete")),
+        "补全后应被索引"
+    );
+    assert_conversation_index_matches_parse(&conn, home, "claude", "claude-parent-1");
+}
