@@ -40,31 +40,8 @@ pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgre
     Ok(ConversationIndexProgressDto {
         indexed,
         total,
-        index_bytes: conversation_index_bytes(conn, indexed >= total || total == 0),
+        index_bytes: crate::store::stored_conversation_index_bytes(conn),
     })
-}
-
-fn conversation_index_bytes(conn: &Connection, complete: bool) -> u64 {
-    if let Ok(bytes) = conn.query_row(
-        "SELECT COALESCE(SUM(pgsize), 0) FROM dbstat
-         WHERE name GLOB 'conversation_events*'
-            OR name IN ('conversation_files', 'conversation_session_tools')",
-        [],
-        |row| row.get::<_, i64>(0),
-    ) {
-        return bytes.max(0) as u64;
-    }
-    if !complete {
-        return 0;
-    }
-    conn.query_row(
-        "SELECT COALESCE(SUM(LENGTH(COALESCE(text, '')) + LENGTH(COALESCE(name, ''))), 0)
-         FROM conversation_events",
-        [],
-        |row| row.get::<_, i64>(0),
-    )
-    .unwrap_or(0)
-    .max(0) as u64
 }
 
 pub fn backfill_event_index_step(conn: &Connection, home: &Path) -> Result<bool, String> {
@@ -140,7 +117,11 @@ fn reindex_session_events(
     let Some(source) = source else {
         return Err("该来源尚未支持对话详情".to_string());
     };
-    let session = load_session(conn, source.as_str(), session_id)?
+    // 包进一个事务：新代写入与旧代删除一起提交，不再逐语句产生 FTS 小段（ADR 0024）。
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    let session = load_session(&transaction, source.as_str(), session_id)?
         .ok_or_else(|| "未找到该对话记录".to_string())?;
     let paths = trusted_paths_for_session(home, source, &session)?;
     let adapter = conversation_adapter(source)?;
@@ -159,7 +140,7 @@ fn reindex_session_events(
                     cursor,
                 );
             }
-            write_session_file_events(conn, source, &parsed, &mut event_generations)?;
+            write_session_file_events(&transaction, source, &parsed, &mut event_generations)?;
             indexed_files.push(summarize_for_index(parsed));
         }
     }
@@ -175,10 +156,10 @@ fn reindex_session_events(
         .map_err(|error| format!("读取文件元数据失败：{error}"))?;
     let representative_revision = (adapter.revision)(Path::new(&merged_session.source_file))?;
     if let Some(&generation) = event_generations.get(session_id) {
-        event_index::finalize_session_events(conn, source, session_id, generation)?;
+        event_index::finalize_session_events(&transaction, source, session_id, generation)?;
     }
     upsert_session(
-        conn,
+        &transaction,
         &merged_session,
         is_top_level,
         &agent_metadata,
@@ -186,7 +167,14 @@ fn reindex_session_events(
         representative_metadata.len() as i64,
         &representative_revision,
     )?;
-    update_session_files(conn, source, session_id, &source_files, true)?;
-    persist_session_file_cursors(conn, source, session_id, &source_files, &file_cursors)?;
+    update_session_files(&transaction, source, session_id, &source_files, true)?;
+    persist_session_file_cursors(
+        &transaction,
+        source,
+        session_id,
+        &source_files,
+        &file_cursors,
+    )?;
+    transaction.commit().map_err(|error| error.to_string())?;
     Ok(())
 }

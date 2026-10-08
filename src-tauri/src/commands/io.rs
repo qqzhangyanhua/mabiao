@@ -71,6 +71,7 @@ pub async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
         *state.snapshot.lock().map_err(|e| e.to_string())? = snapshot;
         let _ = tray::refresh(&app);
         crate::spawn_event_index_backfill(&app);
+        crate::spawn_conversation_fts_maintenance(&app);
         Ok(true)
     })
     .await

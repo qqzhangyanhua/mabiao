@@ -113,11 +113,13 @@ fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
     }
     // 路径字典与工具汇总都是事件表的派生物，事件表不进备份，它们跟着一起走。
     // 上下文清单度量同样不进备份：条目名来自家目录路径，且快照正文绝不能被复制走。
+    // 倒排维护表也是派生缓存，恢复后按「无记录」处理（ADR 0024）。
     for table in [
         "conversation_events",
         "conversation_session_tools",
         "conversation_files",
         "conversation_context_metrics",
+        "conversation_fts_maintenance",
     ] {
         if table_exists(conn, table)? {
             conn.execute(&format!("DROP TABLE {table}"), [])
