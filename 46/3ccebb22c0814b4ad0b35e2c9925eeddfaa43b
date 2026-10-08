@@ -1,0 +1,40 @@
+src-tauri/src/store/conversation_fts.rs
+  s_c9620e1da2b7d5::t_22eefe06d0ae3c 53-54
+  s_c9620e1da2b7d5::t_bad7122fa2696e 5-6
+  s_c9620e1da2b7d5::t_cca286a089b378 252
+  s_c9620e1da2b7d5::t_b551b1fe0a6ed7 234-249
+  s_c9620e1da2b7d5::t_a0624446a5c811 209-211,213
+src-tauri/src/lib.rs
+  s_c9620e1da2b7d5::t_67a17973fcd3f0 332
+  s_c9620e1da2b7d5::t_19165220ebae18 358-359
+src-tauri/src/tests/conversation_fts_maintenance.rs
+  s_c9620e1da2b7d5::t_6f9e2c0fc772bd 182,194-228
+  s_c9620e1da2b7d5::t_7868456e9e403c 165,167
+  s_c9620e1da2b7d5::t_5d2596b990b263 144,150,152-153,155-156,158-159,161-162
+src-tauri/src/store.rs
+  s_c9620e1da2b7d5::t_d3c769b12d4ad3 21
+  s_c9620e1da2b7d5::t_79138264f7bc24 5-6
+src-tauri/src/store/schema.rs
+  s_c9620e1da2b7d5::t_d07b0a20c28215 376-377
+  s_c9620e1da2b7d5::t_448f873c285fe8 4-5
+docs/adr/0024-conversation-cache-maintenance.md
+  s_c9620e1da2b7d5::t_a4a256cf2c80a4 14-15
+  s_c9620e1da2b7d5::t_4988246cac9c94 41
+  s_c9620e1da2b7d5::t_99ca2bcbeace09 32-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "463ccebb22c0814b4ad0b35e2c9925eeddfaa43b",
+  "prompts": {},
+  "sessions": {
+    "s_c9620e1da2b7d5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9cbd2509-206b-4ec0-9a3b-3e784e4775a5",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
