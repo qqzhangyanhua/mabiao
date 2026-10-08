@@ -1,0 +1,63 @@
+src-tauri/src/store/conversation_fts.rs
+  s_62b6a1d6abc5cc::t_04dafa8d5fd744 1-290
+src-tauri/src/tests/conversation_fts_maintenance.rs
+  s_62b6a1d6abc5cc::t_fc941901b71165 11-17,290-294
+  s_62b6a1d6abc5cc::t_4b903220abb75d 1-4,7-10,18-20,25,27,30-34,36,38-41,43-93,95-97,99-109,111,113-115,117,119,121-123,125,127-128,130-134,136,138-157,159-160,162-173,175,177-289,295-296
+  s_62b6a1d6abc5cc::t_4ee38d91b4a7e6 5-6,21-24,26,28-29,35,37,42,94,98,110,112,116,118,120,124,126,129,135,137,158,161,174,176
+src-tauri/src/backup.rs
+  s_62b6a1d6abc5cc::t_95bc0c2a94ed49 116,122
+docs/adr/0024-conversation-cache-maintenance.md
+  s_62b6a1d6abc5cc::t_3f16906999125d 29
+  s_62b6a1d6abc5cc::t_b2ae9180eb81f6 1-28,30-31
+src-tauri/src/commands/io.rs
+  s_62b6a1d6abc5cc::t_e326e2083ebb4a 74
+src-tauri/src/store.rs
+  s_62b6a1d6abc5cc::t_e46cae285c1426 7
+  s_62b6a1d6abc5cc::t_fc941901b71165 16-20
+  s_62b6a1d6abc5cc::t_226abdb9e28690 27
+src-tauri/src/lib.rs
+  s_62b6a1d6abc5cc::t_5d4617d9c50bff 240,248-253,262
+  s_62b6a1d6abc5cc::t_8c37b8175477df 328-342,346-350,354-370
+  s_62b6a1d6abc5cc::t_ebea424a6e06cf 322-324
+  s_62b6a1d6abc5cc::t_da925abdae28b3 412
+  s_62b6a1d6abc5cc::t_fc941901b71165 343-345,351-353
+  s_62b6a1d6abc5cc::t_b812f8867b32dd 266-276
+  s_62b6a1d6abc5cc::t_e2b2ca512d2966 325-327
+src-tauri/src/tests/mod.rs
+  s_62b6a1d6abc5cc::t_5b80e93500c663 20
+docs/adr/0014-conversation-body-search.md
+  s_62b6a1d6abc5cc::t_a82042f42bcf12 25-27
+  s_62b6a1d6abc5cc::t_012251ee606f5f 24
+src-tauri/src/ingest.rs
+  s_62b6a1d6abc5cc::t_7ed93332342814 414,418-422
+  s_62b6a1d6abc5cc::t_787671bdee1194 292
+  s_62b6a1d6abc5cc::t_01aab68ac6366e 423-424
+src-tauri/src/commands/ingestion.rs
+  s_62b6a1d6abc5cc::t_dbbf3c89482692 22-23
+  s_62b6a1d6abc5cc::t_7e3fc1a417085d 57-58
+src-tauri/src/tray.rs
+  s_62b6a1d6abc5cc::t_fc73ae5e15ed79 198
+src-tauri/src/conversation/backfill.rs
+  s_62b6a1d6abc5cc::t_05adceaf78b373 120,124,143,159,162,170,178
+  s_62b6a1d6abc5cc::t_f607d7bbdacc0f 43
+  s_62b6a1d6abc5cc::t_fc941901b71165 121-123,171-177
+src-tauri/src/store/schema.rs
+  s_62b6a1d6abc5cc::t_1c073e7e35287c 1
+  s_62b6a1d6abc5cc::t_8f899ad4c1d975 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e1cae13df2ba42665fb9886c0125ac0bd8d52b5b",
+  "prompts": {},
+  "sessions": {
+    "s_62b6a1d6abc5cc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a50c1346-54bc-4682-9a87-cb5e265e4b40",
+        "model": "glm-5.2"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
