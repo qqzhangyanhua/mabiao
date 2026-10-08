@@ -1,0 +1,25 @@
+README.md
+  s_cce69ceb4dc965::t_11c6e524581bca 82
+.github/workflows/release.yml
+  s_cce69ceb4dc965::t_73fc7aa8f5ff7e 92
+README.en.md
+  s_cce69ceb4dc965::t_7578bfbd5509b4 82
+.github/workflows/ci.yml
+  s_cce69ceb4dc965::t_fa2c4c92798451 21-22,25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "eb4c28bc51d11fe1cb980f1d93b6dc1d66b1baad",
+  "prompts": {},
+  "sessions": {
+    "s_cce69ceb4dc965": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a11c23-152a-7711-9b46-f5078450cad6",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
