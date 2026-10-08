@@ -1,8 +1,11 @@
+use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use serde_json::Value;
 
 use super::toolbox::*;
+use super::ConversationIndexIssue;
 
 #[cfg(test)]
 #[path = "claude_test.rs"]
@@ -12,13 +15,135 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
-    parse_from_values(
+    let values = parse_jsonl_conversation_values(path)?;
+    let line = values.last().map(|(l, _)| *l as i64 + 1).unwrap_or(0);
+    let mut parsed = parse_from_values(path, values, include_deferred_content, None, false, false)?;
+    // 全量解析也设游标，这样首次索引后 indexed_byte_offset 就是文件大小，
+    // 下一次文件增长时 plan_conversation_file_index 才能走增量路径。
+    let byte_offset = fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
+    parsed.index_cursor = Some(FileIndexCursor { byte_offset, line });
+    Ok(parsed)
+}
+
+/// 后缀增量解析：只读字节偏移之后的新内容，只提取事件，不重新推导 title/started_at。
+/// 会话 ID 由调用方注入（ADR 0011 的代次语义 + ADR 0024 的增量写入）。
+pub(super) fn index_suffix(
+    path: &Path,
+    byte_offset: u64,
+    start_line: u32,
+    session_id: &str,
+) -> Result<ParsedConversation, ConversationIndexIssue> {
+    let content = read_file_suffix(path, byte_offset)?;
+    let parsed_values =
+        parse_suffix_values(&content, start_line as usize, true).map_err(|message| {
+            ConversationIndexIssue {
+                path: path.to_string_lossy().to_string(),
+                message,
+                event_type: None,
+                line: None,
+            }
+        })?;
+    let mut parsed = parse_from_values(
         path,
-        parse_jsonl_conversation_values(path)?,
-        include_deferred_content,
-        None,
+        parsed_values.values,
         false,
+        Some(session_id),
+        true, // line_direct: 跳过 session_started 事件（后缀里没有 started_at）
+        true, // suffix_mode: 跳过首条 ModelChange（后缀里第一个 model 是当前模型）
     )
+    .map_err(|message| ConversationIndexIssue {
+        path: path.to_string_lossy().to_string(),
+        message,
+        event_type: None,
+        line: None,
+    })?;
+    parsed.index_cursor = Some(FileIndexCursor {
+        byte_offset: byte_offset as i64 + parsed_values.consumed_bytes,
+        line: start_line as i64 + parsed_values.consumed_lines,
+    });
+    Ok(parsed)
+}
+
+fn read_file_suffix(path: &Path, byte_offset: u64) -> Result<String, ConversationIndexIssue> {
+    let mut file = fs::File::open(path).map_err(|error| ConversationIndexIssue {
+        path: path.to_string_lossy().to_string(),
+        message: format!("读取原始文件失败：{error}"),
+        event_type: None,
+        line: None,
+    })?;
+    file.seek(SeekFrom::Start(byte_offset))
+        .map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("读取原始文件失败：{error}"),
+            event_type: None,
+            line: None,
+        })?;
+    let mut content = String::new();
+    file.read_to_string(&mut content)
+        .map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("读取原始文件失败：{error}"),
+            event_type: None,
+            line: None,
+        })?;
+    Ok(content)
+}
+
+struct SuffixParseResult {
+    values: Vec<(usize, Value)>,
+    consumed_bytes: i64,
+    consumed_lines: i64,
+}
+
+/// 解析后缀 JSONL，容忍最后一行不完整（写了一半、没有 `\n`）。
+/// consumed 是完整行的字节数/行数，不完整尾行不计入，游标回退到最后一个 `\n`。
+fn parse_suffix_values(
+    content: &str,
+    start_line: usize,
+    tolerate_incomplete_tail: bool,
+) -> Result<SuffixParseResult, String> {
+    let lines: Vec<&str> = content.lines().collect();
+    let last_index = lines.len().saturating_sub(1);
+    let has_unterminated_tail = !content.ends_with('\n');
+    let mut values = Vec::new();
+    let mut skipped_incomplete = false;
+    for (index, raw) in lines.iter().enumerate() {
+        let line_num = start_line + index;
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(value) => values.push((line_num, value)),
+            Err(error) => {
+                if tolerate_incomplete_tail
+                    && has_unterminated_tail
+                    && index == last_index
+                    && error.classify() == serde_json::error::Category::Eof
+                {
+                    skipped_incomplete = true;
+                    break;
+                }
+                return Err(format!("第 {} 行 JSON 无效：{error}", line_num + 1));
+            }
+        }
+    }
+    let (consumed_bytes, consumed_lines) = if skipped_incomplete {
+        match content.rfind('\n') {
+            Some(pos) => (
+                (pos + 1) as i64,
+                content[..=pos].bytes().filter(|&b| b == b'\n').count() as i64,
+            ),
+            None => (0, 0),
+        }
+    } else {
+        (content.len() as i64, lines.len() as i64)
+    };
+    Ok(SuffixParseResult {
+        values,
+        consumed_bytes,
+        consumed_lines,
+    })
 }
 
 pub(super) fn parse_from_values(
@@ -27,6 +152,7 @@ pub(super) fn parse_from_values(
     include_deferred_content: bool,
     session_hint: Option<&str>,
     line_direct: bool,
+    suffix_mode: bool,
 ) -> Result<ParsedConversation, String> {
     let mut parent_session_id = String::new();
     let mut agent_id = String::new();
@@ -59,16 +185,21 @@ pub(super) fn parse_from_values(
         let role = first_text(message, &["role"]);
         let next_model = first_text(message, &["model"]);
         if !next_model.is_empty() && next_model != model {
+            // 后缀模式下第一个 model 是会话当前在用的模型，不是"变更"——不发射
+            // ModelChange 事件，只更新 model 字段（ADR 0011 代次语义）。
+            let is_suffix_initial_model = suffix_mode && model.is_empty();
             model = next_model.clone();
-            events.push(semantic_event(
-                *index,
-                EventKind::ModelChange,
-                &timestamp,
-                None,
-                Some(next_model),
-                None,
-                message.clone(),
-            ));
+            if !is_suffix_initial_model {
+                events.push(semantic_event(
+                    *index,
+                    EventKind::ModelChange,
+                    &timestamp,
+                    None,
+                    Some(next_model),
+                    None,
+                    message.clone(),
+                ));
+            }
         }
         let content = message.get("content").unwrap_or(&Value::Null);
         if matches!(role.as_str(), "user" | "assistant") {
@@ -175,7 +306,14 @@ pub(super) fn parse_from_values(
     }
 
     let is_top_level = !path_is_subagent && agent_id.is_empty();
-    let mut session_id = if is_top_level {
+    // 后缀模式（session_hint 非空）直接用注入的 session_id，不从数据推导——
+    // 后缀里第一行的 sessionId 和首条 prompt 都不代表整段会话。
+    let mut session_id = if session_hint.is_some() {
+        session_hint
+            .map(str::to_string)
+            .filter(|v| !v.is_empty())
+            .unwrap_or_default()
+    } else if is_top_level {
         parent_session_id.clone()
     } else if !agent_id.is_empty() {
         agent_id

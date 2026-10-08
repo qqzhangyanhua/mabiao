@@ -34,6 +34,14 @@ pub fn refresh_codex(
     refresh(conn, Source::Codex, &roots)
 }
 
+pub fn refresh_claude(
+    conn: &Connection,
+    home: &Path,
+) -> Result<Vec<ConversationIndexIssue>, String> {
+    let roots = ingest::source_scan_dirs(home, Source::Claude);
+    refresh(conn, Source::Claude, &roots)
+}
+
 pub(crate) fn refresh(
     conn: &Connection,
     source: Source,
