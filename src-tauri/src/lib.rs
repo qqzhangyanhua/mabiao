@@ -237,6 +237,7 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
     std::thread::spawn(move || {
         let home = ingest::default_home();
         let mut skipped = std::collections::BTreeSet::<(String, String)>::new();
+        let mut processed_any = false;
         loop {
             let state = app.state::<AppState>();
             let progressed = {
@@ -244,7 +245,12 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
                     return;
                 };
                 match conversation::backfill_event_index_step_skipping(&conn, &home, &skipped) {
-                    Ok(progressed) => progressed,
+                    Ok(progressed) => {
+                        if progressed {
+                            processed_any = true;
+                        }
+                        progressed
+                    }
                     Err((key, error)) => {
                         eprintln!("对话事件索引补建失败 {}/{}：{error}", key.0, key.1);
                         skipped.insert(key);
@@ -253,9 +259,20 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
                 }
             };
             if !progressed {
-                return;
+                break;
             }
             std::thread::sleep(STEP_DELAY);
+        }
+        // 补建结束：小步合并补建期间产生的小段，再触发全量整理兜底（ADR 0024）。
+        if processed_any {
+            if let Ok(conn) = app.state::<AppState>().lock_write() {
+                if let Err(error) = store::merge_conversation_fts_step(&conn) {
+                    eprintln!("对话正文索引补建后小步合并失败：{error}");
+                }
+                let bytes = store::measure_conversation_index_bytes(&conn);
+                let _ = store::store_conversation_index_bytes(&conn, bytes);
+            }
+            spawn_conversation_fts_maintenance(&app);
         }
     });
 }
@@ -302,6 +319,55 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
         if let Err(error) = store::vacuum(&conn) {
             eprintln!("对话派生缓存迁移后回收磁盘空间失败：{error}");
         }
+        // 迁移重灌了倒排，维护记录还是空的；交给维护线程设基准行数并实测占用。
+        drop(conn);
+        spawn_conversation_fts_maintenance(&app);
+    });
+}
+
+/// 对话派生缓存的持续维护（ADR 0024）。
+///
+/// 用 `AtomicBool` 防重入：摄取、重建缓存、补建结束、启动后迁移都可能触发它，但同一时刻
+/// 只跑一个。先在读锁下问 `conversation_fts_needs_optimize`——只读一行维护表，开销为零；
+/// 需要时才拿写锁做全量 `optimize` + 条件 `VACUUM` + 实测占用。
+fn spawn_conversation_fts_maintenance(app: &tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static RUNNING: AtomicBool = AtomicBool::new(false);
+    if RUNNING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        let needs = {
+            let Ok(conn) = state.lock_read() else {
+                return;
+            };
+            store::conversation_fts_needs_optimize(&conn).unwrap_or(false)
+        };
+        if !needs {
+            return;
+        }
+        let Ok(conn) = state.lock_write() else {
+            return;
+        };
+        // 再查一次：等锁期间可能已有别的路径做了。
+        if !store::conversation_fts_needs_optimize(&conn).unwrap_or(false) {
+            return;
+        }
+        if let Err(error) = store::optimize_conversation_fts(&conn) {
+            eprintln!("对话正文索引全量合并失败：{error}");
+            return;
+        }
+        if store::database_vacuum_is_due(&conn).unwrap_or(false) {
+            if let Err(error) = store::vacuum(&conn) {
+                eprintln!("对话派生缓存整理后回收磁盘空间失败：{error}");
+            }
+        }
+        let bytes = store::measure_conversation_index_bytes(&conn);
+        if let Err(error) = store::store_conversation_index_bytes(&conn, bytes) {
+            eprintln!("对话索引占用记录失败：{error}");
+        }
     });
 }
 
@@ -343,6 +409,7 @@ pub fn run() {
             spawn_rollup_backfill(app.handle());
             spawn_event_index_backfill(app.handle());
             spawn_conversation_cache_migration(app.handle());
+            spawn_conversation_fts_maintenance(app.handle());
             #[cfg(desktop)]
             {
                 use tauri_plugin_notification::NotificationExt;

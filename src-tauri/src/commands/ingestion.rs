@@ -19,6 +19,8 @@ pub async fn ingest(app: tauri::AppHandle) -> Result<IngestReport, String> {
             &state.budget_notify_path,
         );
         release_idle_memory(&state, &conn);
+        drop(conn);
+        crate::spawn_conversation_fts_maintenance(&app);
         Ok(report)
     })
     .await
@@ -52,6 +54,8 @@ pub async fn rebuild_cache(
         let conn = state.lock_write()?;
         let report = ingest::rebuild_cache(&conn, &ingest::default_home(), source)?;
         release_idle_memory(&state, &conn);
+        drop(conn);
+        crate::spawn_conversation_fts_maintenance(&app);
         Ok(report)
     })
     .await

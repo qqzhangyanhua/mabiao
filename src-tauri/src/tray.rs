@@ -195,6 +195,7 @@ pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
         );
         crate::release_idle_memory(&state, &conn);
     }
+    crate::spawn_conversation_fts_maintenance(app);
     let _ = sync_official_quota(app);
     refresh(app)
 }

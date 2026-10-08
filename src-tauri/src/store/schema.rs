@@ -1,5 +1,8 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::Connection;
 
+use super::conversation_fts::{
+    ensure_conversation_events_fts, CONVERSATION_FTS_DEFINITION, CONVERSATION_FTS_TRIGGERS,
+};
 use super::LOWERCASE_MODEL_VERSION;
 
 pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
@@ -610,121 +613,6 @@ pub(crate) fn migrate_conversation_events_layout(conn: &Connection) -> Result<()
             "ROLLBACK TO migrate_conversation_events_layout; RELEASE migrate_conversation_events_layout;",
         );
         return Err(error.to_string());
-    }
-    Ok(())
-}
-
-fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
-    conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
-        params![name],
-        |row| row.get(0),
-    )
-    .map_err(|e| e.to_string())
-}
-
-/// `detail=none` 只记「哪一行含这个三元组」，不记它出现在什么位置。位置表在这里是纯开销：
-/// 检索侧不用 `bm25()`/`snippet()`，排序键是手写的 0/1，片段由 Rust 从正文切。106 万事件、
-/// 400MB 正文的真实库实测倒排从 2732MB 降到 294MB，查询还快一倍。代价是 FTS5 不再接受短语
-/// 查询，调用方要自己把关键词切成三元组用 AND 连接、再回表用 LIKE 剔假阳性，
-/// 见 `conversation::catalog_search`。
-const CONVERSATION_FTS_DEFINITION: &str = r#"
-    text,
-    name,
-    content='conversation_events',
-    content_rowid='rowid',
-    tokenize='trigram',
-    detail='none',
-    columnsize=0
-"#;
-
-const CONVERSATION_FTS_TRIGGERS: &str = r#"
-CREATE TRIGGER IF NOT EXISTS conversation_events_ai AFTER INSERT ON conversation_events BEGIN
-    INSERT INTO conversation_events_fts(rowid, text, name)
-    VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
-END;
-CREATE TRIGGER IF NOT EXISTS conversation_events_ad AFTER DELETE ON conversation_events BEGIN
-    INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
-    VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
-END;
-CREATE TRIGGER IF NOT EXISTS conversation_events_au AFTER UPDATE ON conversation_events BEGIN
-    INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
-    VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
-    INSERT INTO conversation_events_fts(rowid, text, name)
-    VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
-END;
-"#;
-
-fn conversation_fts_sql(conn: &Connection) -> Result<Option<String>, String> {
-    conn.query_row(
-        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversation_events_fts'",
-        [],
-        |row| row.get(0),
-    )
-    .optional()
-    .map_err(|e| e.to_string())
-}
-
-/// 旧库建的是 FTS5 默认的 `detail=full`。判据就看建表语句里有没有写 `detail=`——
-/// 正文索引只有这一次形态变更，不值得为它再开一张版本表。
-pub(crate) fn conversation_fts_needs_migration(conn: &Connection) -> Result<bool, String> {
-    Ok(conversation_fts_sql(conn)?.is_some_and(|sql| !sql.contains("detail=")))
-}
-
-/// 换掉正文索引的形态。整份倒排要从头灌一遍，百万行量级要几十秒，所以调用方必须放到
-/// 后台线程（见 `lib.rs::spawn_conversation_fts_migration`）。迁移期间旧表继续服务查询：
-/// `catalog_search` 发的三元组 AND 查询在两种形态上召回一致。
-pub(crate) fn migrate_conversation_events_fts(conn: &Connection) -> Result<(), String> {
-    if !conversation_fts_needs_migration(conn)? {
-        return Ok(());
-    }
-    let migration = conn.execute_batch(&format!(
-        r#"
-        SAVEPOINT migrate_conversation_events_fts;
-        DROP TABLE conversation_events_fts;
-        CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
-        INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild');
-        RELEASE migrate_conversation_events_fts;
-        "#
-    ));
-    if let Err(error) = migration {
-        let _ = conn.execute_batch(
-            "ROLLBACK TO migrate_conversation_events_fts; RELEASE migrate_conversation_events_fts;",
-        );
-        return Err(error.to_string());
-    }
-    Ok(())
-}
-
-/// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再 rebuild。
-/// trigram 按子串匹配，对应原先目录 LIKE 的「关键字」预期；短于 3 个字符的查询只走标题。
-///
-/// 这里只负责「没有就建」。已存在的旧形态表不在这条路径上换——那要几十秒，不能挡启动。
-fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), String> {
-    let existed = table_exists(conn, "conversation_events_fts")?;
-    conn.execute_batch(&format!(
-        r#"
-        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
-        {CONVERSATION_FTS_TRIGGERS}
-        "#
-    ))
-    .map_err(|e| e.to_string())?;
-    if existed {
-        return Ok(());
-    }
-    let has_events: bool = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM conversation_events LIMIT 1)",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if has_events {
-        conn.execute(
-            "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild')",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

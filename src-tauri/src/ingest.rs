@@ -289,6 +289,7 @@ fn ingest_all_with_overrides_timed(
     let started = std::time::Instant::now();
     transaction.commit().map_err(|e| e.to_string())?;
     timings.commit_ms = started.elapsed().as_millis();
+    merge_conversation_fts_after_commit(conn);
     timings.total_ms = total_started.elapsed().as_millis();
     Ok((report, timings))
 }
@@ -410,7 +411,15 @@ pub fn rebuild_cache(
     // 重建缓存必然动了记录，不走 sync_rollup 的「没变就跳过」判断。
     store::rebuild_rollup(&transaction)?;
     transaction.commit().map_err(|e| e.to_string())?;
+    merge_conversation_fts_after_commit(conn);
     Ok(report)
+}
+
+/// 摄取已经提交，倒排合并失败只影响体积，不能让这轮摄取报错（ADR 0024）。
+fn merge_conversation_fts_after_commit(conn: &Connection) {
+    if let Err(error) = store::merge_conversation_fts_step(conn) {
+        eprintln!("对话正文索引小步合并失败：{error}");
+    }
 }
 
 fn refresh_conversation_catalog(

@@ -4,6 +4,7 @@ pub const ADAPTER_VERSION: i64 = 9;
 pub(crate) const LOWERCASE_MODEL_VERSION: i64 = 1;
 
 mod connect;
+pub(crate) mod conversation_fts;
 pub mod cursor_account;
 pub mod cursor_session;
 pub mod official_quota;
@@ -12,13 +13,17 @@ pub mod rollup;
 mod schema;
 
 pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum};
+pub(crate) use conversation_fts::{
+    conversation_fts_needs_migration, conversation_fts_needs_optimize, database_vacuum_is_due,
+    measure_conversation_index_bytes, merge_conversation_fts_step, migrate_conversation_events_fts,
+    optimize_conversation_fts, store_conversation_index_bytes, stored_conversation_index_bytes,
+};
 pub use cursor_account::*;
 pub use cursor_session::*;
 pub use official_quota::*;
 pub use records::*;
 pub use rollup::*;
 pub(crate) use schema::{
-    conversation_events_needs_layout_migration, conversation_fts_needs_migration,
-    conversation_session_tools_sql, migrate_conversation_events_fts,
+    conversation_events_needs_layout_migration, conversation_session_tools_sql,
     migrate_conversation_events_layout, CONVERSATION_EVENT_COLUMN_LIST,
 };
