@@ -1,0 +1,43 @@
+src-tauri/src/tests/conversation_index_incremental.rs
+  s_62b6a1d6abc5cc::t_7b53db8d22fe56 308-324,326,328-329,331-333,335-368,373-442,445,451-455,459-462,466-468,483-485,490-492
+  s_62b6a1d6abc5cc::t_52e4c9bba1d56c 325,327,330,334
+  s_62b6a1d6abc5cc::t_aa59e37ba00b00 369-372,446-449,456-458,463-465,475-482,486-488
+  s_62b6a1d6abc5cc::t_6267b3d840c357 443-444,450,469-474,489
+src-tauri/src/conversation/mod.rs
+  s_62b6a1d6abc5cc::t_535e983426c85e 177
+  s_62b6a1d6abc5cc::t_a57744c74e5b75 363
+src-tauri/src/conversation/claude.rs
+  s_62b6a1d6abc5cc::t_179899762d57b5 137
+  s_62b6a1d6abc5cc::t_a27c4c20cb2731 48,61-62
+  s_62b6a1d6abc5cc::t_c3e3cc293a6e92 142-146
+  s_62b6a1d6abc5cc::t_28659801e4038e 155
+  s_62b6a1d6abc5cc::t_f32e12c9b10e77 20
+  s_62b6a1d6abc5cc::t_aa59e37ba00b00 37-45,312-315
+  s_62b6a1d6abc5cc::t_b458bfd31d3118 188-190,192-202
+  s_62b6a1d6abc5cc::t_7014daa22b9a35 309-311,316
+  s_62b6a1d6abc5cc::t_ae2401a9e95e22 19,23-24
+  s_62b6a1d6abc5cc::t_4371c0727921f7 1-2,18,21-22,25-36,46,50,54-60,63-91,98,100-103,105-136,138-141
+  s_62b6a1d6abc5cc::t_543fa09bdc50c3 8
+  s_62b6a1d6abc5cc::t_9a391206e1bfc8 51-52
+  s_62b6a1d6abc5cc::t_2e69362f0a303c 92-97,99,104
+src-tauri/src/conversation/refresh.rs
+  s_62b6a1d6abc5cc::t_c13936dc03468d 37-44
+src-tauri/src/conversation/line_direct.rs
+  s_62b6a1d6abc5cc::t_019e5d058a10ae 286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "c65720b6ab5995cb74a5ea38f78d076b0886e235",
+  "prompts": {},
+  "sessions": {
+    "s_62b6a1d6abc5cc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a50c1346-54bc-4682-9a87-cb5e265e4b40",
+        "model": "glm-5.2"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
