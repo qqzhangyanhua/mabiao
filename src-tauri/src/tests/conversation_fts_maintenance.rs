@@ -141,30 +141,30 @@ fn needs_optimize_threshold() {
     assert!(store::conversation_fts_needs_optimize(&conn).unwrap());
 }
 
-/// `vacuum_is_due` 纯函数：空闲页 ≥ 1 GB 且 ≥ 30% 时返回 true。
+/// `vacuum_is_due` 纯函数：空闲页 ≥ 256 MB 且 ≥ 20% 时返回 true。
 #[test]
 fn vacuum_threshold_logic() {
     use crate::store::conversation_fts::vacuum_is_due;
 
     const PAGE: i64 = 4096;
-    const ONE_GB_PAGES: i64 = (1024 * 1024 * 1024) / PAGE;
+    const MIN_PAGES: i64 = (256 * 1024 * 1024) / PAGE;
 
-    // 空闲不够 1 GB → false
-    assert!(!vacuum_is_due(PAGE, ONE_GB_PAGES * 10, ONE_GB_PAGES - 1));
+    // 空闲不够 256 MB → false
+    assert!(!vacuum_is_due(PAGE, MIN_PAGES * 2, MIN_PAGES - 1));
 
-    // 空闲够 1 GB 但占比 < 30% → false
-    assert!(!vacuum_is_due(PAGE, ONE_GB_PAGES * 10, ONE_GB_PAGES));
+    // 空闲够 256 MB 但占比 < 20% → false
+    assert!(!vacuum_is_due(PAGE, MIN_PAGES * 10, MIN_PAGES));
 
-    // 空闲够 1 GB 且占比 > 30% → true
-    assert!(vacuum_is_due(PAGE, ONE_GB_PAGES * 3, ONE_GB_PAGES));
+    // 真实库重灌倒排后：2.2 GB 里腾出约 500 MB → true
+    assert!(vacuum_is_due(PAGE, MIN_PAGES * 9, MIN_PAGES * 2));
 
-    // 空闲够 1 GB 且占比刚好 30% → true
-    assert!(vacuum_is_due(PAGE, ONE_GB_PAGES * 10, ONE_GB_PAGES * 3));
+    // 空闲够 256 MB 且占比刚好 20% → true
+    assert!(vacuum_is_due(PAGE, MIN_PAGES * 10, MIN_PAGES * 2));
 }
 
-/// `optimize_conversation_fts` 执行后，删除计数清零并记下当前行数。
+/// `rebuild_conversation_fts` 执行后，删除计数清零、记下当前行数，正文仍能搜到。
 #[test]
-fn optimize_resets_counter() {
+fn rebuild_resets_counter() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
     write_codex_session(home, "rollout.jsonl", "conv-opt", "title", "body text");
@@ -179,7 +179,7 @@ fn optimize_resets_counter() {
     .unwrap();
     assert!(store::conversation_fts_needs_optimize(&conn).unwrap());
 
-    store::optimize_conversation_fts(&conn).unwrap();
+    store::rebuild_conversation_fts(&conn).unwrap();
 
     let (deleted, rows): (i64, Option<i64>) = conn
         .query_row(
@@ -191,6 +191,41 @@ fn optimize_resets_counter() {
     assert_eq!(deleted, 0);
     assert!(rows.is_some_and(|r| r > 0));
     assert!(!store::conversation_fts_needs_optimize(&conn).unwrap());
+    let hits: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_events_fts WHERE conversation_events_fts MATCH '\"ext\"'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(hits, 1, "重灌后正文 body text 仍应可搜");
+}
+
+/// 维护方式改成重灌之前就记过基准的老库，升级后要清掉基准、尽快重灌一次；只清这一次。
+#[test]
+fn legacy_maintenance_baseline_cleared_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("usage.sqlite");
+    let conn = store::open_db(db_path.to_str().unwrap()).unwrap();
+    conn.execute_batch(
+        "UPDATE conversation_fts_maintenance SET rows_at_optimize = 100 WHERE id = 1;
+         PRAGMA user_version = 1;",
+    )
+    .unwrap();
+    drop(conn);
+
+    let upgraded = store::open_db(db_path.to_str().unwrap()).unwrap();
+    assert!(store::conversation_fts_needs_optimize(&upgraded).unwrap());
+    upgraded
+        .execute(
+            "UPDATE conversation_fts_maintenance SET rows_at_optimize = 100 WHERE id = 1",
+            [],
+        )
+        .unwrap();
+    drop(upgraded);
+
+    let reopened = store::open_db(db_path.to_str().unwrap()).unwrap();
+    assert!(!store::conversation_fts_needs_optimize(&reopened).unwrap());
 }
 
 /// 备份不携带维护表。

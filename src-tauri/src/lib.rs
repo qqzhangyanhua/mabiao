@@ -329,7 +329,7 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
 ///
 /// 用 `AtomicBool` 防重入：摄取、重建缓存、补建结束、启动后迁移都可能触发它，但同一时刻
 /// 只跑一个。先在读锁下问 `conversation_fts_needs_optimize`——只读一行维护表，开销为零；
-/// 需要时才拿写锁做全量 `optimize` + 条件 `VACUUM` + 实测占用。
+/// 需要时才拿写锁做倒排整份重灌 + 条件 `VACUUM` + 实测占用。
 fn spawn_conversation_fts_maintenance(app: &tauri::AppHandle) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -355,8 +355,8 @@ fn spawn_conversation_fts_maintenance(app: &tauri::AppHandle) {
         if !store::conversation_fts_needs_optimize(&conn).unwrap_or(false) {
             return;
         }
-        if let Err(error) = store::optimize_conversation_fts(&conn) {
-            eprintln!("对话正文索引全量合并失败：{error}");
+        if let Err(error) = store::rebuild_conversation_fts(&conn) {
+            eprintln!("对话正文索引重灌失败：{error}");
             return;
         }
         if store::database_vacuum_is_due(&conn).unwrap_or(false) {
