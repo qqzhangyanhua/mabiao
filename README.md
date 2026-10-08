@@ -79,7 +79,7 @@ Windows 可能被 SmartScreen 拦截，选择「仍要运行」即可。托盘�
 
 前置：
 
-- Node.js 20+
+- Node.js 22.22+
 - [pnpm](https://pnpm.io/) 9（仓库钉在 `pnpm@9.15.0`，请勿用 npm / yarn）
 - [Rust](https://rustup.rs/) stable
 - Linux 还需 WebKitGTK 等系统库，见 [`docs/platforms.md`](docs/platforms.md)

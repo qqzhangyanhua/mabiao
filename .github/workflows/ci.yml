@@ -18,9 +18,11 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
+        # jsdom 30 依赖 undici 8，加载时调用 worker_threads.markAsUncloneable。
+        # Node 20 没有这个 API，hooks 的 forks worker 起不来，整次测试以 exit 1 结束。
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install dependencies

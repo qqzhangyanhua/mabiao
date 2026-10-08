@@ -79,7 +79,7 @@ Windows SmartScreen may block the installer; choose “Run anyway”. The menuba
 
 Prerequisites:
 
-- Node.js 20+
+- Node.js 22.22+
 - [pnpm](https://pnpm.io/) 9 (pinned to `pnpm@9.15.0`; do not use npm / yarn)
 - [Rust](https://rustup.rs/) stable
 - Linux also needs WebKitGTK and related system libs; see [`docs/platforms.md`](docs/platforms.md)
