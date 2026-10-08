@@ -1,0 +1,23 @@
+package.json
+  s_62b6a1d6abc5cc::t_6a3519b10a611b 4
+src-tauri/tauri.conf.json
+  s_62b6a1d6abc5cc::t_6a3519b10a611b 4
+src-tauri/Cargo.toml
+  s_62b6a1d6abc5cc::t_6a3519b10a611b 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "69f3875abf6aa5e2cac6dff2e8656b03d3dcba9a",
+  "prompts": {},
+  "sessions": {
+    "s_62b6a1d6abc5cc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a50c1346-54bc-4682-9a87-cb5e265e4b40",
+        "model": "glm-5.2"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
