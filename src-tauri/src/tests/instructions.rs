@@ -1,3 +1,5 @@
+use std::path::Path;
+
 fn instruction_source<'a>(
     dto: &'a crate::domain::GlobalInstructionDto,
     source: &str,
@@ -1488,4 +1490,87 @@ fn open_target_falls_back_to_parent_when_file_missing() {
 fn open_target_rejects_empty_path() {
     let error = crate::instructions::resolve_open_path("").unwrap_err();
     assert!(error.contains("没有可打开"));
+}
+
+#[test]
+fn open_allowlist_accepts_known_instruction_locations() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    for rel in [
+        ".claude/CLAUDE.md",
+        ".claude/rules",
+        ".claude/rules/routing.md",
+        ".codex/AGENTS.md",
+        ".codex/AGENTS.override.md",
+        ".codex/rules/default.rules",
+        ".gemini/GEMINI.md",
+        ".grok/AGENTS.md",
+        ".grok/rules/style.md",
+        ".pi/agent/AGENTS.md",
+        ".pi/agent/AGENTS.override.md",
+        ".config/opencode/AGENTS.md",
+        ".dsh/AGENTS.md",
+        ".qwen/QWEN.md",
+        ".factory/AGENTS.md",
+        ".copilot/copilot-instructions.md",
+        ".copilot/instructions/git.instructions.md",
+    ] {
+        assert!(
+            crate::instructions::is_allowed_to_open(home, &home.join(rel)),
+            "{rel} 应在可打开名单中"
+        );
+    }
+}
+
+#[test]
+fn open_allowlist_rejects_unrelated_and_traversing_paths() {
+    let home = tempfile::tempdir().unwrap();
+    let home = home.path();
+    for rel in [
+        ".ssh/id_rsa",
+        ".claude/settings.json",
+        ".claude/rules/../settings.json",
+        ".grok/config.toml",
+        ".grok/auth.json",
+        ".copilot/session-state/events.jsonl",
+        "Library/Application Support/Cursor/User/globalStorage/state.vscdb",
+    ] {
+        assert!(
+            !crate::instructions::is_allowed_to_open(home, &home.join(rel)),
+            "{rel} 不该能打开"
+        );
+    }
+    assert!(!crate::instructions::is_allowed_to_open(
+        home,
+        Path::new("/etc/passwd")
+    ));
+    assert!(!crate::instructions::is_allowed_to_open(
+        home,
+        Path::new("/tmp/evil.md")
+    ));
+}
+
+#[test]
+fn open_in_external_editor_rejects_paths_outside_allowlist() {
+    let home = tempfile::tempdir().unwrap();
+    let secret = home.path().join(".ssh/id_rsa");
+    std::fs::create_dir_all(secret.parent().unwrap()).unwrap();
+    std::fs::write(&secret, "not-a-key\n").unwrap();
+
+    let error = crate::instructions::open_in_external_editor(home.path(), secret.to_str().unwrap())
+        .unwrap_err();
+    assert!(error.contains("可打开的全局指令名单"), "{error}");
+}
+
+#[test]
+fn windows_start_rejects_quote_and_newline_in_path() {
+    assert!(crate::instructions::windows_start_path_is_safe(Path::new(
+        "/tmp/.claude/CLAUDE.md"
+    )));
+    assert!(!crate::instructions::windows_start_path_is_safe(Path::new(
+        "C:\\foo\" & calc.exe"
+    )));
+    assert!(!crate::instructions::windows_start_path_is_safe(Path::new(
+        "C:\\foo\ncalc.exe"
+    )));
 }

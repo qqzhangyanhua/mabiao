@@ -4,7 +4,9 @@ import {
   credentialHint,
   fetchInputsOf,
   implementedPresetLabels,
+  requiresSecretReentry,
   secretPlaceholder,
+  storedKeyReusable,
   submittedSecret,
   type CustomQuotaDraft,
 } from "./customQuotaDraft";
@@ -15,6 +17,7 @@ function draft(patch: Partial<CustomQuotaDraft> = {}): CustomQuotaDraft {
     name: "公司的中转",
     baseUrl: "https://relay.example.com",
     secret: "sk-relay-123456",
+    savedBaseUrl: "https://relay.example.com",
     ...patch,
   };
 }
@@ -87,6 +90,10 @@ describe("secretPlaceholder", () => {
     expect(secretPlaceholder("openai_compatible", true)).toBe("不填就沿用现在这把");
   });
 
+  it("换了主机后提示必须重填", () => {
+    expect(secretPlaceholder("openai_compatible", true, true)).toBe("更换地址后必须重填");
+  });
+
   it("OpenAI 兼容计费新建时仍提示 sk-", () => {
     expect(secretPlaceholder("openai_compatible", false)).toBe("sk-…");
   });
@@ -123,6 +130,50 @@ describe("implementedPresetLabels", () => {
         { label: "OpenRouter", supported: false },
       ]),
     ).toBe("「OpenAI 兼容计费」");
+  });
+});
+
+describe("storedKeyReusable", () => {
+  it("同主机换路径或 /v1 写法仍可沿用", () => {
+    expect(storedKeyReusable("https://relay.example.com", "https://relay.example.com/v1")).toBe(
+      true,
+    );
+    expect(storedKeyReusable("https://relay.example.com/v1/", "https://Relay.Example.COM")).toBe(
+      true,
+    );
+  });
+
+  it("换了主机或协议就不能沿用", () => {
+    expect(storedKeyReusable("https://relay.example.com", "https://evil.example.com")).toBe(false);
+    expect(storedKeyReusable("https://relay.example.com", "http://localhost:4000")).toBe(false);
+    expect(storedKeyReusable("http://localhost:4000", "http://127.0.0.1:4000")).toBe(false);
+    expect(storedKeyReusable(null, "https://relay.example.com")).toBe(false);
+  });
+});
+
+describe("requiresSecretReentry", () => {
+  it("新建不走这条：本来就要填密钥", () => {
+    expect(requiresSecretReentry(draft({ id: null, savedBaseUrl: null }))).toBe(false);
+  });
+
+  it("编辑时只有 origin 变了才要求重填", () => {
+    expect(requiresSecretReentry(draft({ id: "custom:a3f9c1" }))).toBe(false);
+    expect(
+      requiresSecretReentry(
+        draft({
+          id: "custom:a3f9c1",
+          baseUrl: "https://relay.example.com/v1",
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      requiresSecretReentry(
+        draft({
+          id: "custom:a3f9c1",
+          baseUrl: "https://new.example.com",
+        }),
+      ),
+    ).toBe(true);
   });
 });
 

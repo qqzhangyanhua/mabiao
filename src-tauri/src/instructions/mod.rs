@@ -105,9 +105,66 @@ pub fn resolve_open_path(abs_path: &str) -> Result<PathBuf, String> {
     }
 }
 
-pub fn open_in_external_editor(abs_path: &str) -> Result<(), String> {
+/// 只打开写入白名单或各 Source 已知的全局指令位置。webview 传来的任意路径一律拒绝。
+pub fn is_allowed_to_open(home: &Path, path: &Path) -> bool {
+    crate::user_files::is_allowed(home, path) || is_known_instruction_location(home, path)
+}
+
+fn is_known_instruction_location(home: &Path, path: &Path) -> bool {
+    let Ok(rel) = path.strip_prefix(home) else {
+        return false;
+    };
+    let parts: Vec<_> = rel.iter().filter_map(|p| p.to_str()).collect();
+    match parts.as_slice() {
+        [".claude", "CLAUDE.md"] => true,
+        [".claude", "rules"] => true,
+        [".claude", "rules", name] if crate::user_files::is_plain_name(name) => true,
+        [".codex", "AGENTS.md"] => true,
+        [".codex", "AGENTS.override.md"] => true,
+        [".codex", "rules", name] if crate::user_files::is_plain_name(name) => true,
+        [".gemini", "GEMINI.md"] => true,
+        [".grok", name] if grok::HOME_INSTRUCTION_NAMES.contains(name) => true,
+        [".grok", "rules"] => true,
+        [".grok", "rules", name]
+            if crate::user_files::is_plain_name(name) && name.ends_with(".md") =>
+        {
+            true
+        }
+        [".pi", "agent", "AGENTS.md"] => true,
+        [".pi", "agent", "AGENTS.override.md"] => true,
+        [".config", "opencode", "AGENTS.md"] => true,
+        [".dsh", "AGENTS.md"] => true,
+        [".qwen", "QWEN.md"] => true,
+        [".factory", "AGENTS.md"] => true,
+        [".copilot", "copilot-instructions.md"] => true,
+        [".copilot", "instructions", name]
+            if crate::user_files::is_plain_name(name) && name.ends_with(".instructions.md") =>
+        {
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Windows `cmd /C start` 会再解析一遍参数；路径里的引号或换行能拆出第二条命令。
+pub fn windows_start_path_is_safe(path: &Path) -> bool {
+    let display = path.display().to_string();
+    !display.contains('"')
+        && !display.contains('\n')
+        && !display.contains('\r')
+        && !display.contains('\0')
+}
+
+pub fn open_in_external_editor(home: &Path, abs_path: &str) -> Result<(), String> {
+    let requested = Path::new(abs_path);
+    if !is_allowed_to_open(home, requested) {
+        return Err("该路径不在可打开的全局指令名单中".into());
+    }
     let target = resolve_open_path(abs_path)?;
-    let status = open_command(&target)
+    if !windows_start_path_is_safe(&target) {
+        return Err("路径含有不安全字符".into());
+    }
+    let status = open_command(&target)?
         .status()
         .map_err(|e| format!("无法在外部打开：{e}"))?;
     if status.success() {
@@ -127,23 +184,36 @@ fn mark_editable(home: &Path, sources: &mut [crate::domain::GlobalInstructionSou
     }
 }
 
-fn open_command(target: &Path) -> Command {
+fn open_command(target: &Path) -> Result<Command, String> {
     #[cfg(target_os = "macos")]
     {
         let mut cmd = Command::new("open");
         cmd.arg(target);
-        cmd
+        Ok(cmd)
     }
     #[cfg(target_os = "linux")]
     {
         let mut cmd = Command::new("xdg-open");
         cmd.arg(target);
-        cmd
+        Ok(cmd)
     }
     #[cfg(target_os = "windows")]
     {
-        let mut cmd = Command::new("cmd");
-        cmd.args(["/C", "start", "", &target.display().to_string()]);
-        cmd
+        windows_start_command(target)
     }
+}
+
+#[cfg(target_os = "windows")]
+fn windows_start_command(target: &Path) -> Result<Command, String> {
+    use std::os::windows::process::CommandExt;
+    if !windows_start_path_is_safe(target) {
+        return Err("路径含有不安全字符".into());
+    }
+    let display = target.display().to_string();
+    let mut cmd = Command::new("cmd");
+    cmd.arg("/C");
+    // raw_arg 让空标题和带引号的路径原样进 cmd，文件名里的 `&`/`|` 不会变成第二条命令。
+    cmd.raw_arg("start \"\"");
+    cmd.raw_arg(format!("\"{display}\""));
+    Ok(cmd)
 }

@@ -119,8 +119,9 @@ pub fn preview_requests(
 /// 表单草稿要用哪把密钥。**不写磁盘**：测试连接不是保存，失败了也不该在磁盘上
 /// 留下半条记录。
 ///
-/// 填了就用填的，留空就回落到已存的那把：编辑时界面上只有掩码，用户重打不出来，
-/// 不回落的话「改完域名点一下测试」这个最常见的用法直接不成立。
+/// 填了就用填的。留空只在 **origin 没变** 时回落到已存的那把：编辑名称或同主机
+/// 换写法时界面上只有掩码，用户重打不出来。换了 host / origin 则必须重填，
+/// 已存密钥不得发往新地址。
 pub fn resolve_secret(
     paths: &CustomQuotaPaths,
     request: &TestCustomQuotaProvider,
@@ -128,7 +129,7 @@ pub fn resolve_secret(
     if let Some(typed) = typed_secret(&request.secret) {
         return Ok(typed.to_string());
     }
-    request
+    let stored = request
         .id
         .as_deref()
         .and_then(|id| {
@@ -140,7 +141,19 @@ pub fn resolve_secret(
         .filter(|secret| !secret.is_empty())
         // 空密钥不要拿去打网：对方回的 401 会被翻成「密钥无效」，
         // 而事实是这里压根没有密钥，两回事。
-        .ok_or_else(|| "请填写密钥".to_string())
+        .ok_or_else(|| "请填写密钥".to_string())?;
+    let saved_url = request.id.as_deref().and_then(|id| {
+        store::load_config(&paths.config)
+            .providers
+            .into_iter()
+            .find(|provider| provider.id == id)
+            .map(|provider| provider.base_url)
+    });
+    match saved_url {
+        Some(saved) if super::can_reuse_stored_secret(&saved, &request.base_url) => Ok(stored),
+        Some(_) => Err(super::HOST_CHANGED_SECRET.to_string()),
+        None => Err("请填写密钥".to_string()),
+    }
 }
 
 /// 用户这次**打进来的**密钥；留空（或只有空格）表示「沿用已存的那把」。
@@ -211,6 +224,9 @@ pub fn save(
                 .iter_mut()
                 .find(|provider| provider.id == id)
                 .ok_or_else(|| format!("这条自定义提供商已经不在了：{id}"))?;
+            if secret.is_none() && !super::can_reuse_stored_secret(&entry.base_url, &base_url) {
+                return Err(super::HOST_CHANGED_SECRET.to_string());
+            }
             // 标识不动——额度缓存、退避状态、告警去重记录全部跟着它走，
             // 改名不该让首页那行短暂变空、也不该重复告警。
             entry.name = name;

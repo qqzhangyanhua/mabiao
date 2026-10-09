@@ -22,6 +22,8 @@ export type CustomQuotaDraft = {
   preset: CustomQuotaPreset;
   baseUrl: string;
   secret: string;
+  /** 打开编辑时磁盘上的地址；新建为 null。用来判断换 host 后必须重填密钥。 */
+  savedBaseUrl: string | null;
 };
 
 export const BLANK_CUSTOM_QUOTA_DRAFT: CustomQuotaDraft = {
@@ -30,6 +32,7 @@ export const BLANK_CUSTOM_QUOTA_DRAFT: CustomQuotaDraft = {
   preset: "openai_compatible",
   baseUrl: "",
   secret: "",
+  savedBaseUrl: null,
 };
 
 /**
@@ -55,6 +58,36 @@ export function fetchInputsOf(draft: CustomQuotaDraft): string {
  */
 export function submittedSecret(typed: string): string | null {
   return typed.trim() === "" ? null : typed;
+}
+
+function originOf(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 已存密钥能不能跟着这份草稿走。只认 origin（协议 + 主机 + 端口），路径和 `/v1`
+ * 写法不算换地址。解析失败或换了主机都要重填，前端这层只是提示，以后端为准。
+ */
+export function storedKeyReusable(savedBaseUrl: string | null, draftBaseUrl: string): boolean {
+  if (savedBaseUrl == null) {
+    return false;
+  }
+  const saved = originOf(savedBaseUrl);
+  const draft = originOf(draftBaseUrl);
+  return saved != null && draft != null && saved === draft;
+}
+
+/** 编辑已存条目且 origin 变了：必须重填密钥，已存的那把不会发往新地址。 */
+export function requiresSecretReentry(draft: CustomQuotaDraft): boolean {
+  return draft.id != null && !storedKeyReusable(draft.savedBaseUrl, draft.baseUrl);
 }
 
 /**
@@ -89,8 +122,15 @@ export function implementedPresetLabels(
     .join("、");
 }
 
-/** 密钥框的占位符：编辑时一律「留空不改」；新建一律提示 `sk-…`。 */
-export function secretPlaceholder(_preset: CustomQuotaPreset, editing: boolean): string {
+/** 密钥框的占位符：编辑时一律「留空不改」；换了主机则必须重填；新建一律提示 `sk-…`。 */
+export function secretPlaceholder(
+  _preset: CustomQuotaPreset,
+  editing: boolean,
+  hostChanged = false,
+): string {
+  if (editing && hostChanged) {
+    return "更换地址后必须重填";
+  }
   if (editing) {
     return "不填就沿用现在这把";
   }

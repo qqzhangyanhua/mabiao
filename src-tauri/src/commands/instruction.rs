@@ -50,9 +50,12 @@ pub async fn write_global_instruction(
 
 #[tauri::command]
 pub async fn open_global_instruction(abs_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || instructions::open_in_external_editor(&abs_path))
-        .await
-        .map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = dirs::home_dir().ok_or_else(|| "无法确定用户主目录".to_string())?;
+        instructions::open_in_external_editor(&home, &abs_path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

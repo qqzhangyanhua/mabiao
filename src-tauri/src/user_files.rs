@@ -139,7 +139,7 @@ fn is_allowed_export(path: &Path) -> bool {
         )
 }
 
-fn is_plain_name(name: &str) -> bool {
+pub(crate) fn is_plain_name(name: &str) -> bool {
     !name.is_empty() && name != "." && name != ".." && !name.contains('/') && !name.contains('\\')
 }
 

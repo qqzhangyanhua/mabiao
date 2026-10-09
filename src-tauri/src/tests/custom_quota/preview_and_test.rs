@@ -131,8 +131,8 @@ fn testing_uses_the_unsaved_form_config_not_what_is_on_disk() {
     assert_eq!(on_disk[0].secret.as_deref(), Some("sk-stored-123456"));
 }
 
-/// 编辑已存的那条时密钥框是空的——界面上只有掩码，用户重打不出来。空着就沿用
-/// 已存的那把，否则「改完域名点一下测试」这个最常见的用法直接不成立。
+/// 编辑已存的那条时密钥框是空的——界面上只有掩码，用户重打不出来。
+/// origin 没变（含同主机换 `/v1` 写法）才沿用已存的那把。
 #[test]
 fn a_blank_secret_falls_back_to_the_stored_one_when_editing() {
     let dir = tempfile::tempdir().unwrap();
@@ -150,6 +150,51 @@ fn a_blank_secret_falls_back_to_the_stored_one_when_editing() {
         .unwrap();
         assert_eq!(resolved, "sk-stored-123456");
     }
+
+    assert_eq!(
+        panel::resolve_secret(
+            &paths,
+            &panel::TestCustomQuotaProvider {
+                id: Some("custom:a3f9c1".to_string()),
+                ..draft("https://relay.example.com/v1/", None)
+            },
+        )
+        .unwrap(),
+        "sk-stored-123456"
+    );
+}
+
+/// 换了 host / origin 之后，已存密钥不得跟着打到新地址。
+#[test]
+fn a_blank_secret_does_not_follow_a_host_change() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = stored(dir.path());
+
+    let error = panel::resolve_secret(
+        &paths,
+        &panel::TestCustomQuotaProvider {
+            id: Some("custom:a3f9c1".to_string()),
+            ..draft("https://evil.example.com", None)
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error, custom::HOST_CHANGED_SECRET);
+
+    // 用户当场重填了一把，才允许打新地址——这把是表单里的，不是磁盘上那把。
+    let typed = panel::resolve_secret(
+        &paths,
+        &panel::TestCustomQuotaProvider {
+            id: Some("custom:a3f9c1".to_string()),
+            secret: Some("sk-typed-just-now".to_string()),
+            ..draft("https://evil.example.com", None)
+        },
+    )
+    .unwrap();
+    assert_eq!(typed, "sk-typed-just-now");
+    assert_eq!(
+        store::load_providers(&paths)[0].secret.as_deref(),
+        Some("sk-stored-123456")
+    );
 }
 
 /// 新建时没有可回落的那把钥匙。说「请填写密钥」，不要拿一个空密钥去打网、
