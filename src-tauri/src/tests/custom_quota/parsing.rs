@@ -168,10 +168,64 @@ fn base_url_rejects_shapes_that_can_never_work() {
         ("   ", "请填写 base URL"),
         ("relay.example.com", "http:// 或 https://"),
         ("https://", "缺少域名"),
+        ("http://relay.example.com", "https://"),
+        ("http://evil.example.com/v1", "localhost"),
+        ("https://user:pass@relay.example.com", "用户名或密码"),
     ] {
         let error = custom::normalize_base_url(raw).unwrap_err();
         assert!(error.contains(hint), "{raw} 的报错读不懂：{error}");
     }
+}
+
+#[test]
+fn http_is_only_allowed_for_loopback() {
+    for raw in [
+        "http://localhost",
+        "http://localhost:4000/v1/",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8080",
+        "http://[::1]",
+        "http://[::1]:8787/v1",
+        "http://::1",
+    ] {
+        custom::normalize_base_url(raw).unwrap_or_else(|error| panic!("{raw} 应允许：{error}"));
+    }
+    assert_eq!(
+        custom::normalize_base_url("http://localhost:4000/v1/").unwrap(),
+        "http://localhost:4000"
+    );
+}
+
+#[test]
+fn origin_ignores_path_but_not_host_or_scheme() {
+    assert_eq!(
+        custom::origin_of("https://relay.example.com/v1/").unwrap(),
+        custom::origin_of("https://Relay.Example.COM").unwrap()
+    );
+    assert_eq!(
+        custom::origin_of("https://relay.example.com:443").unwrap(),
+        custom::origin_of("https://relay.example.com").unwrap()
+    );
+    assert!(custom::can_reuse_stored_secret(
+        "https://relay.example.com/v1",
+        "https://relay.example.com"
+    ));
+    assert!(!custom::can_reuse_stored_secret(
+        "https://relay.example.com",
+        "https://evil.example.com"
+    ));
+    assert!(!custom::can_reuse_stored_secret(
+        "https://relay.example.com",
+        "http://localhost:4000"
+    ));
+    assert!(custom::can_reuse_stored_secret(
+        "http://127.0.0.1:8080/v1",
+        "http://127.0.0.1:8080"
+    ));
+    assert!(!custom::can_reuse_stored_secret(
+        "http://localhost:4000",
+        "http://127.0.0.1:4000"
+    ));
 }
 
 /// 「暂未支持」要列出所有已实现档的显示名。名单的拼法单独钉死：空列表、

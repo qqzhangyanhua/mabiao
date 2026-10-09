@@ -4,6 +4,7 @@ import {
   credentialHint,
   fetchInputsOf,
   implementedPresetLabels,
+  requiresSecretReentry,
   secretPlaceholder,
   submittedSecret,
   type CustomQuotaDraft,
@@ -130,6 +131,7 @@ export function CustomQuotaProviderForm({
   const selected = presets.find((preset) => preset.value === draft.preset);
   const implementedLabels = implementedPresetLabels(presets);
   const editing = draft.id != null;
+  const hostChanged = requiresSecretReentry(draft);
   const hint = credentialHint(draft.preset);
   const preview = useRequestPreview(draft.preset, draft.baseUrl);
   const [testing, setTesting] = useState(false);
@@ -193,13 +195,18 @@ export function CustomQuotaProviderForm({
       />
       <RequestEcho preview={preview} />
       <Field
-        label={editing ? "密钥（留空则不改）" : "密钥"}
+        label={editing ? (hostChanged ? "密钥（更换地址后必填）" : "密钥（留空则不改）") : "密钥"}
         type="password"
         autoComplete="off"
-        placeholder={secretPlaceholder(draft.preset, editing)}
+        placeholder={secretPlaceholder(draft.preset, editing, hostChanged)}
         value={draft.secret}
         onChange={(event) => onChange({ ...draft, secret: event.target.value })}
       />
+      {hostChanged ? (
+        <p className="panel-note tone-warn">
+          更换了提供商地址，请重新填写密钥。已存的密钥不会发往新地址。
+        </p>
+      ) : null}
       {hint ? <p className="panel-note tone-warn">{hint}</p> : null}
       {selected && !selected.supported ? (
         <p className="panel-note tone-warn">
@@ -208,7 +215,8 @@ export function CustomQuotaProviderForm({
         </p>
       ) : (
         <p className="panel-note">
-          base URL 填根地址即可，带 <code>/v1</code> 或结尾斜杠都认。
+          base URL 填根地址即可，带 <code>/v1</code> 或结尾斜杠都认。远程地址必须是{" "}
+          <code>https://</code>；<code>http://</code> 只允许本机（localhost / 127.0.0.1 / ::1）。
         </p>
       )}
       <TestOutcomeNote outcome={current} />

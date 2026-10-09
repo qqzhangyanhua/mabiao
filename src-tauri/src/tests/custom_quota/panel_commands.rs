@@ -138,7 +138,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
         assert_eq!(dto.supported, preset.implemented());
     }
 
-    // 改名 + 换域名，密钥留空 = 不改。标识不动。
+    // 改名 + 同主机换写法，密钥留空 = 不改。标识不动。
     let id = created.id.clone();
     let renamed = panel::save(
         &paths,
@@ -146,7 +146,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
             id: Some(id.clone()),
             name: "老板的中转".to_string(),
             preset: CustomQuotaPreset::OpenAiCompatible,
-            base_url: "https://new.example.com".to_string(),
+            base_url: "https://relay.example.com".to_string(),
             enabled: None,
             secret: None,
         },
@@ -157,14 +157,33 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
     assert_eq!(renamed.panel.providers[0].name, "老板的中转");
     assert_eq!(
         renamed.panel.providers[0].base_url,
-        "https://new.example.com"
+        "https://relay.example.com"
     );
     assert_eq!(
         renamed.panel.providers[0].secret_mask.as_deref(),
         Some("••••••3456")
     );
 
-    // 轮换密钥。
+    // 换主机必须重填密钥，已存的那把不会跟过去。
+    let host_changed = panel::save(
+        &paths,
+        panel::SaveCustomQuotaProvider {
+            id: Some(id.clone()),
+            name: "老板的中转".to_string(),
+            preset: CustomQuotaPreset::OpenAiCompatible,
+            base_url: "https://new.example.com".to_string(),
+            enabled: None,
+            secret: None,
+        },
+    )
+    .unwrap_err();
+    assert_eq!(host_changed, custom::HOST_CHANGED_SECRET);
+    assert_eq!(
+        store::load_providers(&paths)[0].config.base_url,
+        "https://relay.example.com"
+    );
+
+    // 带上新密钥才能换过去。
     panel::save(
         &paths,
         panel::SaveCustomQuotaProvider {
@@ -178,6 +197,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
     )
     .unwrap();
     let loaded = store::load_providers(&paths);
+    assert_eq!(loaded[0].config.base_url, "https://new.example.com");
     assert_eq!(loaded[0].secret.as_deref(), Some("sk-rotated-999999"));
 
     let after = panel::delete(&paths, &id).unwrap();

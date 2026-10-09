@@ -26,8 +26,12 @@ pub use store::{CustomQuotaConfig, CustomQuotaCredentials, CustomQuotaProvider, 
 pub const ID_PREFIX: &str = "custom:";
 const TIMEOUT: Duration = Duration::from_secs(15);
 pub const MISSING_SECRET: &str = "未配置密钥，请在设置页重新填写";
+/// 换了 host / origin 之后不得沿用已存密钥，否则密钥会被打到新地址。
+pub const HOST_CHANGED_SECRET: &str = "更换了提供商地址，请重新填写密钥";
 /// 「暂未支持」错误的识别标记，`is_precheck_error` 靠它认。
 const UNSUPPORTED_MARK: &str = "暂未支持";
+const REMOTE_HTTP_DENIED: &str =
+    "非本机地址必须使用 https://，http:// 仅允许 localhost / 127.0.0.1 / ::1";
 
 pub fn is_custom_id(id: &str) -> bool {
     id.starts_with(ID_PREFIX)
@@ -155,7 +159,98 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
     if rest.is_empty() {
         return Err("base URL 只有协议头，缺少域名".to_string());
     }
+    let authority = rest.split('/').next().unwrap_or("");
+    let (host, _port) = parse_authority(authority)?;
+    if scheme == "http://" && !is_loopback_host(&host) {
+        return Err(REMOTE_HTTP_DENIED.to_string());
+    }
     Ok(format!("{scheme}{rest}"))
+}
+
+fn parse_authority(authority: &str) -> Result<(String, Option<u16>), String> {
+    if authority.is_empty() {
+        return Err("base URL 只有协议头，缺少域名".to_string());
+    }
+    if authority.contains('@') {
+        return Err("base URL 不能包含用户名或密码".to_string());
+    }
+    if let Some(rest) = authority.strip_prefix('[') {
+        let (host, after) = rest
+            .split_once(']')
+            .ok_or_else(|| "IPv6 地址缺少 ]".to_string())?;
+        if host.is_empty() {
+            return Err("IPv6 地址为空".to_string());
+        }
+        let port = match after {
+            "" => None,
+            s => match s.strip_prefix(':') {
+                Some(port) => Some(parse_port(port)?),
+                None => return Err("IPv6 地址格式不正确".to_string()),
+            },
+        };
+        return Ok((host.to_ascii_lowercase(), port));
+    }
+    let colon_count = authority.bytes().filter(|byte| *byte == b':').count();
+    if colon_count == 0 {
+        return Ok((authority.to_ascii_lowercase(), None));
+    }
+    if colon_count == 1 {
+        let Some((host, port)) = authority.split_once(':') else {
+            return Err("base URL 的端口号不正确".to_string());
+        };
+        if host.is_empty() {
+            return Err("base URL 只有协议头，缺少域名".to_string());
+        }
+        return Ok((host.to_ascii_lowercase(), Some(parse_port(port)?)));
+    }
+    Ok((authority.to_ascii_lowercase(), None))
+}
+
+fn parse_port(raw: &str) -> Result<u16, String> {
+    raw.parse()
+        .map_err(|_| "base URL 的端口号不正确".to_string())
+}
+
+fn is_loopback_host(host: &str) -> bool {
+    matches!(host, "localhost" | "127.0.0.1" | "::1")
+}
+
+fn default_port(scheme: &str) -> Option<u16> {
+    match scheme {
+        "https://" => Some(443),
+        "http://" => Some(80),
+        _ => None,
+    }
+}
+
+/// 去掉路径与默认端口后的 origin，用来判断「换地址」是不是换了主机。
+pub fn origin_of(raw: &str) -> Result<String, String> {
+    let normalized = normalize_base_url(raw)?;
+    let scheme = ["https://", "http://"]
+        .into_iter()
+        .find(|item| normalized.starts_with(item))
+        .ok_or_else(|| "base URL 需要以 http:// 或 https:// 开头".to_string())?;
+    let rest = &normalized[scheme.len()..];
+    let authority = rest.split('/').next().unwrap_or("");
+    let (host, port) = parse_authority(authority)?;
+    let port = port.filter(|value| default_port(scheme) != Some(*value));
+    let host = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host
+    };
+    match port {
+        Some(port) => Ok(format!("{scheme}{host}:{port}")),
+        None => Ok(format!("{scheme}{host}")),
+    }
+}
+
+/// 已存密钥只能打回同一个 origin。解析失败或换了主机都当作不能沿用。
+pub fn can_reuse_stored_secret(saved_base_url: &str, request_base_url: &str) -> bool {
+    match (origin_of(saved_base_url), origin_of(request_base_url)) {
+        (Ok(saved), Ok(request)) => saved == request,
+        _ => false,
+    }
 }
 
 /// 一个要打的地址，以及它拿不到时算不算致命。

@@ -54,6 +54,7 @@ function draftFrom(provider: CustomQuotaProviderDto): CustomQuotaDraft {
     preset: provider.preset,
     baseUrl: provider.base_url,
     secret: "",
+    savedBaseUrl: provider.base_url,
   };
 }
 
