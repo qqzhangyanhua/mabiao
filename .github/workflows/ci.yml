@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Release 流水线打包前复用同一套检查，避免两处命令漂移。
+  workflow_call:
 
 jobs:
   frontend:
@@ -27,6 +29,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # 只卡生产依赖的 high/critical。dev 依赖（vitest、eslint 传递包）
+      # 的 advisory 不阻断 CI。暂时无法升级的 CVE 写进
+      # package.json → pnpm.auditConfig.ignoreCves，并在旁边注明原因。
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
 
       - name: Lint
         run: pnpm run lint
@@ -71,3 +79,22 @@ jobs:
 
       - name: Test
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+  rust-audit:
+    name: Rust dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # 默认只把 vulnerability 当失败；unmaintained / unsound / yanked
+      # 保持 warning，避免 gtk / unic-* 一类上游告警把 CI 打成红。
+      # 若某条 advisory 暂时无法在不升 major 的前提下修复，把 ID 写进
+      # src-tauri/audit.toml 的 [advisories] ignore，并注明原因。
+      - name: cargo audit
+        working-directory: src-tauri
+        run: cargo audit

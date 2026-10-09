@@ -1,5 +1,6 @@
 # 跨平台打包并上传到 GitHub Releases（draft）。
 # 触发：推送 v* tag，或 Actions 页手动 Run workflow。
+# 打包前先复用 CI 工作流（lint / 前端测试 / build / cargo fmt+clippy+test / 依赖审计）。
 # 需要仓库 Settings → Actions → Workflow permissions 勾选 Read and write。
 
 name: Release
@@ -15,7 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    name: Pre-release checks
+    uses: ./.github/workflows/ci.yml
+
   create-release:
+    needs: test
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -45,7 +51,7 @@ jobs:
           echo "id=$ID" >> "$GITHUB_OUTPUT"
 
   publish-tauri:
-    needs: create-release
+    needs: [test, create-release]
     permissions:
       contents: write
     strategy:
