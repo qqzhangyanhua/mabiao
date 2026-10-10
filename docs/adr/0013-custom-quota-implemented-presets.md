@@ -45,5 +45,6 @@ NewAPI 那档提出需求的用户手上有真实站点，可做真机验证。L
 - `custom:` 前缀仍用于与内置账号永不冲突、以及界面上一眼分辨自定义与内置。它不再是托盘标题的跳过判据。
 - 再加一档能取数的预设，只需要动 `implemented()` 与两处分派；「暂未支持」文案从已实现集合推导。
 - 2026-10-10 再加三档 API-key 套餐：`kimi_code`（`{base}/v1/usages`，Bearer）、`minimax_coding`（`{origin}/v1/token_plan/remains`，Bearer）、`zhipu_coding`（`{origin}/api/monitor/usage/quota/limit`，裸密钥）。端点来自公开文档与 magpie `planquota.go`。凭证只读用户在设置页填写的密钥，不写回任何客户端文件。
-- 2026-10-10 再加 `command_code`（`{origin}/alpha/billing/credits`，Bearer）。端点来自 magpie `planquota.go` 与 Command Code Provider 文档。按量 key 没有 `windowLimits`，解析失败。凭证只读设置页密钥，不写回 `~/.commandcode`。StepFun 与火山方舟不在本档：前者只要浏览器登录 cookie，后者要 AK/SK 签名，都不符合现有单密钥预设。
+- 2026-10-10 再加 `command_code`（`{origin}/alpha/billing/credits`，Bearer）。端点来自 magpie `planquota.go` 与 Command Code Provider 文档。按量 key 没有 `windowLimits`，解析失败。凭证只读设置页密钥，不写回 `~/.commandcode`。
+- 2026-10-10 再加 `volcengine_ark`：`POST https://open.volcengineapi.com/?Action=GetCodingPlanUsage|GetAFPUsage&Version=2024-01-01`，火山引擎 HMAC-SHA256（官方签名文档 + magpie / volc-sdk-golang 向量）。用户填的 base URL 只用来认套餐路径与地域，真正请求永远打控制面 https。凭证是账号 AccessKey ID + Secret Access Key，不是推理 key；`access_key_ids` 与 `secrets` 同文件、0600、不进备份。旧单密钥 JSON 缺该字段仍能读。StepFun 仍不在本档：额度只要浏览器登录 cookie。
 

@@ -212,8 +212,19 @@ pub async fn test_custom_quota_provider(
     tauri::async_runtime::spawn_blocking(move || {
         let paths = app.state::<AppState>().custom_quota_paths.clone();
         let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
-        let snapshot =
-            official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
+        let access_key_id = if request.preset.needs_access_key_id() {
+            Some(official_quota::custom::panel::resolve_access_key_id(
+                &paths, &request,
+            )?)
+        } else {
+            None
+        };
+        let snapshot = official_quota::custom::fetch_quota(
+            request.preset,
+            &request.base_url,
+            Some(&secret),
+            access_key_id.as_deref(),
+        )?;
         Ok(official_quota::custom::panel::CustomQuotaTestDto {
             windows: snapshot.windows,
             captured_at: snapshot.captured_at,

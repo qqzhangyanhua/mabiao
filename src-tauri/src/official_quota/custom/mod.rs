@@ -14,6 +14,7 @@ pub mod minimax_coding;
 pub mod openai_compatible;
 pub mod panel;
 pub mod store;
+pub mod volcengine_ark;
 pub mod zhipu_coding;
 
 use std::time::Duration;
@@ -42,8 +43,8 @@ pub fn is_custom_id(id: &str) -> bool {
 }
 
 /// 预设类型。本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」、
-/// 「LiteLLM Proxy」，以及四档 API-key 套餐（Kimi Code / MiniMax Coding Plan /
-/// GLM · Z.ai Coding Plan / Command Code）；其余走 `unsupported`。
+/// 「LiteLLM Proxy」，四档 API-key 套餐，以及火山方舟（AccessKey ID +
+/// Secret Access Key）；其余走 `unsupported`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CustomQuotaPreset {
     #[serde(rename = "openai_compatible")]
@@ -68,10 +69,12 @@ pub enum CustomQuotaPreset {
     ZhipuCoding,
     #[serde(rename = "command_code")]
     CommandCode,
+    #[serde(rename = "volcengine_ark")]
+    VolcengineArk,
 }
 
 impl CustomQuotaPreset {
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::OpenAiCompatible,
         Self::NewApi,
         Self::OpenRouter,
@@ -83,6 +86,7 @@ impl CustomQuotaPreset {
         Self::MiniMaxCoding,
         Self::ZhipuCoding,
         Self::CommandCode,
+        Self::VolcengineArk,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -98,6 +102,7 @@ impl CustomQuotaPreset {
             Self::MiniMaxCoding => "minimax_coding",
             Self::ZhipuCoding => "zhipu_coding",
             Self::CommandCode => "command_code",
+            Self::VolcengineArk => "volcengine_ark",
         }
     }
 
@@ -114,6 +119,7 @@ impl CustomQuotaPreset {
             Self::MiniMaxCoding => "MiniMax Coding Plan",
             Self::ZhipuCoding => "GLM / Z.ai Coding Plan",
             Self::CommandCode => "Command Code",
+            Self::VolcengineArk => "火山方舟",
         }
     }
 
@@ -131,7 +137,13 @@ impl CustomQuotaPreset {
                 | Self::MiniMaxCoding
                 | Self::ZhipuCoding
                 | Self::CommandCode
+                | Self::VolcengineArk
         )
+    }
+
+    /// 火山方舟要账号 AccessKey ID + Secret，其余预设只要一把密钥。
+    pub fn needs_access_key_id(self) -> bool {
+        matches!(self, Self::VolcengineArk)
     }
 
     /// 智谱 / Z.ai 的额度接口要裸密钥，其余预设走 Bearer。
@@ -333,6 +345,7 @@ pub fn request_urls(
         CustomQuotaPreset::MiniMaxCoding => Ok(minimax_coding::urls(&base)),
         CustomQuotaPreset::ZhipuCoding => Ok(zhipu_coding::urls(&base)),
         CustomQuotaPreset::CommandCode => Ok(command_code::urls(&base)),
+        CustomQuotaPreset::VolcengineArk => volcengine_ark::urls(&base),
         other => Err(unsupported(other)),
     }
 }
@@ -354,19 +367,23 @@ pub fn parse_quota(
         CustomQuotaPreset::MiniMaxCoding => minimax_coding::parse(bodies),
         CustomQuotaPreset::ZhipuCoding => zhipu_coding::parse(bodies),
         CustomQuotaPreset::CommandCode => command_code::parse(bodies),
+        CustomQuotaPreset::VolcengineArk => volcengine_ark::parse(bodies),
         other => Err(unsupported(other)),
     }
 }
 
-/// 取数只需要三样：预设类型、地址、密钥。标识、名称、开关都不参与——
-/// 因此设置页「测试连接」能拿一份还没保存、还没有标识的草稿直接打，
-/// 不必先捏一条假的提供商出来。
+/// 取数认预设类型、地址、密钥；火山方舟再加一把 AccessKey ID。
+/// 标识、名称、开关都不参与——设置页「测试连接」能拿还没保存的草稿直接打。
 pub fn fetch_quota(
     preset: CustomQuotaPreset,
     base_url: &str,
     secret: Option<&str>,
+    access_key_id: Option<&str>,
 ) -> super::ProviderFetch {
-    let secret = ready(preset, secret)?;
+    let secret = ready(preset, secret, access_key_id)?;
+    if preset == CustomQuotaPreset::VolcengineArk {
+        return volcengine_ark::fetch(base_url, access_key_id, Some(secret));
+    }
     let requests = request_urls(preset, base_url, Utc::now().date_naive())?;
     // 可选接口拿不到就当没有这个口径：只实现了用量接口的中转站仍然显示金额。
     // 必需的那条失败才让整次取数失败，错误照旧是人话。
@@ -388,6 +405,7 @@ pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
         provider.config.preset,
         &provider.config.base_url,
         provider.secret.as_deref(),
+        provider.access_key_id.as_deref(),
     )
 }
 
@@ -396,23 +414,42 @@ pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
 /// 单独拎出来是给退避看的——退避存在的理由是「别把对方打挂」，而这两种
 /// 压根没碰到对方。记进退避的话，恢复备份后刚填完密钥、或刚存下一个未实现的
 /// 预设，再点刷新只会看到「刚取数失败，N 分钟后自动重试」，把真正的原因盖掉。
-fn ready(preset: CustomQuotaPreset, secret: Option<&str>) -> Result<&str, String> {
+fn ready<'a>(
+    preset: CustomQuotaPreset,
+    secret: Option<&'a str>,
+    access_key_id: Option<&str>,
+) -> Result<&'a str, String> {
     let secret = secret.ok_or_else(|| MISSING_SECRET.to_string())?;
     if !preset.implemented() {
         return Err(unsupported(preset));
+    }
+    if preset.needs_access_key_id()
+        && access_key_id
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .is_none()
+    {
+        return Err(volcengine_ark::MISSING_ACCESS_KEY.to_string());
     }
     Ok(secret)
 }
 
 /// `ready` 的判定结果，只要那句话。取数入口自己走 `ready`，因此两边不会各判一次。
 pub fn precheck(provider: &ResolvedProvider) -> Option<String> {
-    ready(provider.config.preset, provider.secret.as_deref()).err()
+    ready(
+        provider.config.preset,
+        provider.secret.as_deref(),
+        provider.access_key_id.as_deref(),
+    )
+    .err()
 }
 
 /// 这条错误是不是「压根没打网」。`backoff::is_rate_limited` 也是按标记认的，
 /// 沿用同一套办法：错误目前就是纯字符串。
 pub fn is_precheck_error(error: &str) -> bool {
-    error == MISSING_SECRET || error.contains(UNSUPPORTED_MARK)
+    error == MISSING_SECRET
+        || error == volcengine_ark::MISSING_ACCESS_KEY
+        || error.contains(UNSUPPORTED_MARK)
 }
 
 /// 错误一律翻成人话：用户要判断的是「去充值 / 换密钥 / 等网络」，

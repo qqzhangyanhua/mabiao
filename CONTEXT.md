@@ -45,7 +45,7 @@ _Avoid_: parser、解析器、插件；不要省略「对话记录」只叫适�
 _Avoid_: 把它叫成本机计费窗、消耗记录，或与本机 5 小时/7 天估计混成同一根进度条；不要并进报告的 token 总数
 
 **自定义提供商 (Custom Quota Provider)**：
-用户在设置页自行登记的、按内置预设类型取数的账号级额度来源（第三方 API 中转站、聚合服务）。属于「官方额度」维度，与消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量、代码量互不相干，不进本机 token KPI。标识随机生成、带 `custom:` 前缀，与内置账号永不冲突；名称是纯展示标签，改名不改标识，额度缓存与告警去重记录跟着标识走。配置与密钥分两份文件存，密钥不进备份。每条有启用开关：关掉就不取数、不占首页与托盘、不参与额度告警，名称 / 类型 / 地址 / 密钥都留着；自定义提供商不进首页「配置显示」。取数只走内置预设类型的解析器，只打计费/余额接口。已实现档：OpenAI 兼容计费、其别名 NewAPI / OneAPI、LiteLLM Proxy、Kimi Code、MiniMax Coding Plan、GLM / Z.ai Coding Plan、Command Code。托盘「最紧一档」按窗口有无重置时间分流，不按 `custom:` 前缀一刀切。见 `docs/adr/0012-custom-quota-providers.md`、`docs/adr/0013-custom-quota-implemented-presets.md`。
+用户在设置页自行登记的、按内置预设类型取数的账号级额度来源（第三方 API 中转站、聚合服务）。属于「官方额度」维度，与消耗记录、本机 5 小时/7 天估计窗、Cursor 账号用量、代码量互不相干，不进本机 token KPI。标识随机生成、带 `custom:` 前缀，与内置账号永不冲突；名称是纯展示标签，改名不改标识，额度缓存与告警去重记录跟着标识走。配置与密钥分两份文件存，密钥不进备份。每条有启用开关：关掉就不取数、不占首页与托盘、不参与额度告警，名称 / 类型 / 地址 / 密钥都留着；自定义提供商不进首页「配置显示」。取数只走内置预设类型的解析器，只打计费/余额接口。已实现档：OpenAI 兼容计费、其别名 NewAPI / OneAPI、LiteLLM Proxy、Kimi Code、MiniMax Coding Plan、GLM / Z.ai Coding Plan、Command Code、火山方舟（AccessKey ID + Secret Access Key）。托盘「最紧一档」按窗口有无重置时间分流，不按 `custom:` 前缀一刀切。见 `docs/adr/0012-custom-quota-providers.md`、`docs/adr/0013-custom-quota-implemented-presets.md`。
 _Avoid_: 中转站、渠道、来源 (Source)（后者特指有本地会话数据的 AI 工具）
 
 **LiteLLM Proxy**：
