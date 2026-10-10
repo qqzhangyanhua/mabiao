@@ -79,10 +79,12 @@ describe("credentialHint", () => {
     expect(credentialHint("moonshot")).toBeNull();
   });
 
-  it("三档套餐预设交代钥匙种类和默认地址", () => {
+  it("四档套餐预设交代钥匙种类和默认地址", () => {
     expect(credentialHint("kimi_code")).toContain("Kimi Code");
     expect(credentialHint("minimax_coding")).toContain("MiniMax");
     expect(credentialHint("zhipu_coding")).toContain("不加 Bearer");
+    expect(credentialHint("command_code")).toContain("Command Code");
+    expect(credentialHint("command_code")).toContain("https://api.commandcode.ai");
   });
 });
 

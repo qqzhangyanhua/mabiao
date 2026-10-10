@@ -7,6 +7,7 @@
 //! 边界见 `docs/adr/0012-custom-quota-providers.md`：只允许内置预设类型、
 //! 只打计费 / 余额接口、不进消耗记录、不进本机 token KPI、凭证不进备份。
 
+pub mod command_code;
 pub mod kimi_code;
 pub mod litellm_proxy;
 pub mod minimax_coding;
@@ -41,8 +42,8 @@ pub fn is_custom_id(id: &str) -> bool {
 }
 
 /// 预设类型。本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」、
-/// 「LiteLLM Proxy」，以及三档 API-key 套餐（Kimi Code / MiniMax Coding Plan /
-/// GLM · Z.ai Coding Plan）；其余走 `unsupported`。
+/// 「LiteLLM Proxy」，以及四档 API-key 套餐（Kimi Code / MiniMax Coding Plan /
+/// GLM · Z.ai Coding Plan / Command Code）；其余走 `unsupported`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CustomQuotaPreset {
     #[serde(rename = "openai_compatible")]
@@ -65,10 +66,12 @@ pub enum CustomQuotaPreset {
     MiniMaxCoding,
     #[serde(rename = "zhipu_coding")]
     ZhipuCoding,
+    #[serde(rename = "command_code")]
+    CommandCode,
 }
 
 impl CustomQuotaPreset {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::OpenAiCompatible,
         Self::NewApi,
         Self::OpenRouter,
@@ -79,6 +82,7 @@ impl CustomQuotaPreset {
         Self::KimiCode,
         Self::MiniMaxCoding,
         Self::ZhipuCoding,
+        Self::CommandCode,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -93,6 +97,7 @@ impl CustomQuotaPreset {
             Self::KimiCode => "kimi_code",
             Self::MiniMaxCoding => "minimax_coding",
             Self::ZhipuCoding => "zhipu_coding",
+            Self::CommandCode => "command_code",
         }
     }
 
@@ -108,6 +113,7 @@ impl CustomQuotaPreset {
             Self::KimiCode => "Kimi Code",
             Self::MiniMaxCoding => "MiniMax Coding Plan",
             Self::ZhipuCoding => "GLM / Z.ai Coding Plan",
+            Self::CommandCode => "Command Code",
         }
     }
 
@@ -124,6 +130,7 @@ impl CustomQuotaPreset {
                 | Self::KimiCode
                 | Self::MiniMaxCoding
                 | Self::ZhipuCoding
+                | Self::CommandCode
         )
     }
 
@@ -325,6 +332,7 @@ pub fn request_urls(
         CustomQuotaPreset::KimiCode => Ok(kimi_code::urls(&base)),
         CustomQuotaPreset::MiniMaxCoding => Ok(minimax_coding::urls(&base)),
         CustomQuotaPreset::ZhipuCoding => Ok(zhipu_coding::urls(&base)),
+        CustomQuotaPreset::CommandCode => Ok(command_code::urls(&base)),
         other => Err(unsupported(other)),
     }
 }
@@ -345,6 +353,7 @@ pub fn parse_quota(
         CustomQuotaPreset::KimiCode => kimi_code::parse(bodies),
         CustomQuotaPreset::MiniMaxCoding => minimax_coding::parse(bodies),
         CustomQuotaPreset::ZhipuCoding => zhipu_coding::parse(bodies),
+        CustomQuotaPreset::CommandCode => command_code::parse(bodies),
         other => Err(unsupported(other)),
     }
 }

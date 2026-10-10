@@ -16,7 +16,8 @@ export type CustomQuotaPreset =
   | "litellm_proxy"
   | "kimi_code"
   | "minimax_coding"
-  | "zhipu_coding";
+  | "zhipu_coding"
+  | "command_code";
 
 /** 表单草稿。`id` 为 null 表示新建；密钥留空 = 沿用已存的那把。 */
 export type CustomQuotaDraft = {
@@ -115,6 +116,9 @@ export function credentialHint(preset: CustomQuotaPreset): string | null {
   }
   if (preset === "zhipu_coding") {
     return "填 GLM / Z.ai Coding Plan 的 API key。Authorization 头直接放密钥，不加 Bearer。地址用 https://open.bigmodel.cn 或 https://api.z.ai。";
+  }
+  if (preset === "command_code") {
+    return "填 Command Code 套餐的 API key。地址用 https://api.commandcode.ai。";
   }
   return null;
 }

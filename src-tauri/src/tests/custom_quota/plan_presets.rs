@@ -67,8 +67,14 @@ fn zhipu_authorization_is_bare_key() {
         custom::authorization_value(CustomQuotaPreset::MiniMaxCoding, "sk-cp-1"),
         "Bearer sk-cp-1"
     );
+    assert_eq!(
+        custom::authorization_value(CustomQuotaPreset::CommandCode, "cc-key"),
+        "Bearer cc-key"
+    );
     assert!(CustomQuotaPreset::ZhipuCoding.implemented());
+    assert!(CustomQuotaPreset::CommandCode.implemented());
     assert!(!CustomQuotaPreset::ZhipuCoding.bearer_authorization());
+    assert!(CustomQuotaPreset::CommandCode.bearer_authorization());
 }
 
 #[test]
@@ -148,6 +154,11 @@ fn plan_presets_reject_empty_or_failed_bodies() {
         &[r#"{"success":false,"msg":"no plan"}"#]
     )
     .is_err());
+    assert!(custom::parse_quota(
+        CustomQuotaPreset::CommandCode,
+        &[r#"{"credits":{"monthlyCredits":70},"windowLimits":null}"#]
+    )
+    .is_err());
 }
 
 #[test]
@@ -156,8 +167,62 @@ fn plan_presets_never_accept_remote_http() {
         CustomQuotaPreset::KimiCode,
         CustomQuotaPreset::MiniMaxCoding,
         CustomQuotaPreset::ZhipuCoding,
+        CustomQuotaPreset::CommandCode,
     ] {
         let error = custom::request_urls(preset, "http://evil.example.com", today()).unwrap_err();
         assert!(error.contains("https://"), "{preset:?}: {error}");
     }
+}
+
+#[test]
+fn command_code_urls_use_origin_absolute_credits() {
+    let root = custom::request_urls(
+        CustomQuotaPreset::CommandCode,
+        "https://api.commandcode.ai",
+        today(),
+    )
+    .unwrap();
+    assert_eq!(
+        root[0].url,
+        "https://api.commandcode.ai/alpha/billing/credits"
+    );
+    assert!(root[0].required);
+
+    let provider = custom::request_urls(
+        CustomQuotaPreset::CommandCode,
+        "https://api.commandcode.ai/provider/v1",
+        today(),
+    )
+    .unwrap();
+    assert_eq!(
+        provider[0].url,
+        "https://api.commandcode.ai/alpha/billing/credits"
+    );
+}
+
+#[test]
+fn command_code_reads_five_hour_and_weekly_windows() {
+    // magpie planquota_test.go cmdCreditsReply：resetAt 是毫秒。
+    let body = r#"{
+        "credits":{"planId":"individual-goat-monthly","monthlyCredits":41.2,"purchasedCredits":5,"freeCredits":0},
+        "windowLimits":{"limited":true,
+          "fiveHour":{"used":3,"cap":10,"resetAt":1790000000000},
+          "weekly":{"used":"12","cap":"40","resetAt":1790400000000}}
+    }"#;
+    let windows = custom::parse_quota(CustomQuotaPreset::CommandCode, &[body]).unwrap();
+    assert_eq!(windows.len(), 2);
+    assert_eq!(windows[0].kind, "hours_5");
+    assert_eq!(windows[0].label, "5 小时");
+    assert!((windows[0].used_percent.unwrap() - 30.0).abs() < 1e-9);
+    assert_eq!(windows[0].used_amount, Some(3.0));
+    assert_eq!(windows[0].limit_amount, Some(10.0));
+    assert_eq!(
+        windows[0].resets_at.as_deref(),
+        Some("2026-09-21T14:13:20+00:00")
+    );
+    assert_eq!(windows[1].kind, "days_7");
+    assert_eq!(windows[1].label, "7 天");
+    assert!((windows[1].used_percent.unwrap() - 30.0).abs() < 1e-9);
+    assert_eq!(windows[1].used_amount, Some(12.0));
+    assert_eq!(windows[1].limit_amount, Some(40.0));
 }
