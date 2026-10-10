@@ -1,0 +1,27 @@
+src-tauri/src/adapters/workbuddy.rs
+  s_728e79483709f7::t_099ee5816ae42f 13-14,16-22
+src-tauri/src/tests/ingest.rs
+  s_728e79483709f7::t_98ac3a1f041389 1150-1153
+docs/adr/0005-configurable-source-paths.md
+  s_728e79483709f7::t_fd2c8b7b7d0117 32
+CONTEXT.md
+  s_728e79483709f7::t_58dab7af33a8dd 110
+src-tauri/src/tests/workbuddy_conversation.rs
+  s_728e79483709f7::t_8558908c5f663b 83-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0e52aeb96e8b3a7244af45d87d4fb4fb77e40fb1",
+  "prompts": {},
+  "sessions": {
+    "s_728e79483709f7": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "3232fd3b-60c5-4d04-8389-4c2334e9758f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
