@@ -246,7 +246,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: false,
         soft_parse_failure: false,
-        coverage: "会话累计 Token（无模型名）",
+        coverage: "会话累计 Token",
         display_dirs: None,
         detected: None,
     },

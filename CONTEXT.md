@@ -100,7 +100,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | Hermes | sqlite `~/.hermes/state.db` 与 `~/.hermes/profiles/*/state.db`（`HERMES_HOME` 若在 `profiles/<name>` 则回到根） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
 | Antigravity | 每会话一个 SQLite、裸 protobuf BLOB；CLI `~/.gemini/antigravity-cli` + IDE `~/.gemini/antigravity-ide`（各进 `conversations/`；`AGY_DATA_DIR` 可整体覆盖） | ✅（轮级六元组：input / output / cache 读写 / thinking） | ❌（无原生费用，靠价目快照兜底） |
 | qwen | `~/.qwen/tmp/*/logs.json` | ❌（本地无 Token） | ❌ |
-| Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量 | ✅（会话累计、无模型名） | ❌ |
+| Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量；`custom:` 走 `~/.factory/settings.json`；子代理并入 `callingSessionId` | ✅（会话累计） | ❌ |
 | Cursor | sqlite（代码量）+ 账号级 token（联网）+ 会话 transcript（行为统计） | ⚠️ 账号级（默选手动，可独立自动刷新） | ❌ |
 | cursor-agent | 会话与 IDE 共用 `~/.cursor/chats` + `agent-transcripts`；token 仅无头 stdout（需包装落盘到 `~/.cursor-agent-usage`） | ⚠️（仅包装） | ❌ |
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
