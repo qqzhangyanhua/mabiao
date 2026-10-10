@@ -22,8 +22,8 @@
 改 `query.rs` 的费用或时段 SQL。
 
 1. 同步改 `aggregate.rs`。Cursor 账号用量叠加走 crate 根 `cursor_overlay`，不进 `aggregate`。
-2. 费用优先级：`native_cost` > 用户价目 > LiteLLM 快照 > unpriced。
-3. `cargo test parity`（`sql_queries_match_in_memory_aggregates`）绿。
+2. 费用优先级：`native_cost` > 用户价目 > LiteLLM 快照 > unpriced。规则本体在 `crates/pricing/`（价目匹配、`price_usage`），`cost.rs` 只做批量折叠与未定价诊断；改优先级先改那个 crate，再核对 `query.rs` 的 SQL 与 `aggregate.rs` 仍一致。`domain` 里的 `PriceEntry` / `PriceTable` / `PriceOrigin` / `CostSource` / `DerivedCost` 是该 crate 的 re-export，不在 `domain` 另定义。
+3. `cargo test --manifest-path crates/pricing/Cargo.toml` 与 `cargo test parity`（`sql_queries_match_in_memory_aggregates`）绿。
 
 ## DTO
 
@@ -115,7 +115,7 @@
 2. 改了字段语义或删了字段就递增 `PROTOCOL_VERSION`；只加带 `#[serde(default)]` 的可选字段不用。
 3. 消耗记录指纹 `usage_fingerprint` 有钉死的期望值测试。改算法等于让历史指纹全部失配，必须同时递增 `FINGERPRINT_TAG`。
 4. 服务端入口先调 `PushSessionRequest::validate`：版本检查，且只有 `injected` 层可带原文。
-5. 它不在 workspace 里，`src-tauri` 的命令不覆盖它，用上文三条 `--manifest-path crates/push-protocol/Cargo.toml` 命令。
+5. 它不在 workspace 里，`src-tauri` 的命令不覆盖它，用 `AGENTS.md` 里 `--manifest-path crates/<crate>/Cargo.toml` 那三条。
 
 完成：三条命令绿，且 `cargo test --manifest-path src-tauri/Cargo.toml` 仍绿。
 

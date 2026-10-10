@@ -14,12 +14,12 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-改 `crates/push-protocol/` 时另跑（它不在 workspace 里，上面的命令不覆盖它）：
+改 `crates/push-protocol/` 或 `crates/pricing/` 时另跑（它们不在 workspace 里，上面的命令不覆盖；把 `<crate>` 换成目录名）：
 
 ```bash
-cargo fmt --manifest-path crates/push-protocol/Cargo.toml -- --check
-cargo clippy --manifest-path crates/push-protocol/Cargo.toml --all-targets -- -D warnings
-cargo test --manifest-path crates/push-protocol/Cargo.toml
+cargo fmt --manifest-path crates/<crate>/Cargo.toml -- --check
+cargo clippy --manifest-path crates/<crate>/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path crates/<crate>/Cargo.toml
 ```
 
 包管理只用 pnpm。以上全部通过才算改完。迭代时按层收窄 Rust 测试：

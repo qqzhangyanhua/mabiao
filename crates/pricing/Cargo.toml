@@ -1,0 +1,9 @@
+[package]
+name = "pricing"
+version = "0.1.0"
+description = "码表计价规则：价目匹配与费用优先级，桌面端与远程服务共用"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
