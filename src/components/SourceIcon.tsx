@@ -56,7 +56,8 @@ const marks: Record<SourceIconId, SourceMark> = {
     body: <path fillRule="evenodd" clipRule="evenodd" d="M22 24H2V0h20zM17 4.8H7v14.4h10z" />,
   },
   factory: {
-    viewBox: "80 80 350 350",
+    // Glyph sits inside the 80–430 canvas. Crop to the ink so it fills the slot.
+    viewBox: "93 96 319 312",
     body: (
       <path
         fillRule="evenodd"
@@ -98,43 +99,43 @@ const marks: Record<SourceIconId, SourceMark> = {
     ),
   },
   hermes: {
-    viewBox: "0 0 24 24",
+    viewBox: "6.5 1 11 22",
     body: (
       <path d="M11 1h2v22h-2zM8.2 3.4 12 1.6l3.8 1.8-3.8 1.5zM6.5 7.2c2.8 1.6 8.2 1.6 11 0-.4 1.4-.9 2.5-1.8 3.4.9.9 1.4 2 1.8 3.4-2.8-1.6-8.2-1.6-11 0 .4-1.4.9-2.5 1.8-3.4-.9-.9-1.4-2-1.8-3.4z" />
     ),
   },
   qoder: {
-    viewBox: "0 0 24 24",
+    viewBox: "3 3 18.15 18.3",
     body: (
       <path d="M12 3a9 9 0 1 0 5.54 16.1l2.18 2.18 1.41-1.41-2.18-2.18A9 9 0 0 0 12 3zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14zm3.2 9.4-1.4 1.4L16.2 18H18v-1.8z" />
     ),
   },
   cline: {
-    viewBox: "0 0 24 24",
+    viewBox: "2 4 18 15",
     body: (
       <path d="M8 4h8l-2 3H9.5A4.5 4.5 0 0 0 5 11.5 4.5 4.5 0 0 0 9.5 16H14l2 3H9.5A7.5 7.5 0 0 1 2 11.5 7.5 7.5 0 0 1 9.5 4H8zm6 5 6 3.5L14 16V5z" />
     ),
   },
   workbuddy: {
-    viewBox: "0 0 24 24",
+    viewBox: "4 6 16 12",
     body: (
       <path d="M4 6h16v3H4zm0 5h7v7H4zm9 0h7v7h-7z" />
     ),
   },
   zcode: {
-    viewBox: "0 0 24 24",
+    viewBox: "5 5 14 14",
     body: (
       <path d="M5 5h14v3.2L10.6 15H19v4H5v-3.2L13.4 9H5z" />
     ),
   },
   alma: {
-    viewBox: "0 0 24 24",
+    viewBox: "4 3 16 17",
     body: (
       <path d="M12 3 4 20h3.2l1.5-3.4h6.6L16.8 20H20L12 3zm-2.2 10.4L12 8.1l2.2 5.3H9.8z" />
     ),
   },
   unknown: {
-    viewBox: "0 0 24 24",
+    viewBox: "4.5 3.1 15 17.8",
     body: (
       <>
         <path d="M12 3.2 4.6 7.4 12 11.6l7.4-4.2L12 3.2Z" />
