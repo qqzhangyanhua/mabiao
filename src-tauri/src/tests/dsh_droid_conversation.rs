@@ -66,6 +66,46 @@ fn seed_dsh_conversation(home: &Path) -> PathBuf {
 }
 
 #[test]
+fn dsh_v4_copy_replaces_cached_legacy_records_without_double_counting() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let legacy = seed_dsh_conversation(home);
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    assert_eq!(
+        dsh_record_files(&conn),
+        vec![legacy.to_string_lossy().to_string()]
+    );
+
+    let v4 = legacy.with_file_name("session.v4.jsonl.zstd");
+    std::fs::copy(&legacy, &v4).unwrap();
+    let report = ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+
+    assert_eq!(report.files_failed, 0, "unexpected report: {report:?}");
+    assert_eq!(
+        dsh_record_files(&conn),
+        vec![v4.to_string_lossy().to_string()]
+    );
+    let archived: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM usage_records WHERE source = 'dsh' AND archived_at IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(archived, 0);
+}
+
+fn dsh_record_files(conn: &rusqlite::Connection) -> Vec<String> {
+    conn.prepare("SELECT source_file FROM usage_records WHERE source = 'dsh' ORDER BY 1")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
+}
+
+#[test]
 fn dsh_compressed_session_feeds_semantic_detail_and_preserves_last_good_index() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

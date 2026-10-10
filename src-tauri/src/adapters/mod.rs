@@ -194,7 +194,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         path_env: "DSH_HOME",
         scan_dirs: dsh::scan_dirs,
         discover: dsh::discover,
-        sidecar_fingerprint: empty_sidecar,
+        sidecar_fingerprint: dsh::sidecar_fingerprint,
         parse: dsh::parse,
         prepare_dir: None,
         prepare_file: None,

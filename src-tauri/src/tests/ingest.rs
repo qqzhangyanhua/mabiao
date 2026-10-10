@@ -1147,7 +1147,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
     );
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::WorkBuddy),
-        vec![home.join(".workbuddy/projects")],
+        vec![
+            home.join(".workbuddy/projects"),
+            home.join(".workbuddy-ai/projects"),
+        ],
     );
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Zcode),

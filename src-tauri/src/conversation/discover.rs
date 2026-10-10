@@ -27,9 +27,15 @@ pub(crate) fn discover_jsonl(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
 pub(crate) fn discover_dsh(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(discover_extension(roots, "zstd")?
         .into_iter()
-        .filter(|path| {
-            path.file_name().and_then(|name| name.to_str()) == Some("session.jsonl.zstd")
-        })
+        .filter(
+            |path| match path.file_name().and_then(|name| name.to_str()) {
+                Some(crate::adapters::dsh::V4_SESSION_FILE) => true,
+                Some(crate::adapters::dsh::LEGACY_SESSION_FILE) => {
+                    !crate::adapters::dsh::has_v4_sibling(path)
+                }
+                _ => false,
+            },
+        )
         .collect())
 }
 

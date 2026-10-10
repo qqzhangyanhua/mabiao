@@ -8,11 +8,38 @@ pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> 
     ingest::resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions")
 }
 
+pub(crate) const LEGACY_SESSION_FILE: &str = "session.jsonl.zstd";
+pub(crate) const V4_SESSION_FILE: &str = "session.v4.jsonl.zstd";
+
+/// dsh 升级到 v4 后会话改写为 `session.v4.jsonl.zstd`，旧版 `session.jsonl.zstd` 留在原目录不再更新。
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    discover_suffix(roots, "session.jsonl.zstd")
+    let mut paths = discover_suffix(roots, LEGACY_SESSION_FILE)?;
+    paths.extend(discover_suffix(roots, V4_SESSION_FILE)?);
+    paths.sort();
+    Ok(paths)
+}
+
+/// v4 文件是同一会话迁移后的完整副本。旧文件的记录已按 ADR 0004 留在库里（归档仍计数），
+/// 若两份都解析就会重复计数；旧文件保持“被发现”（不触发归档），但解析为空，由 v4 接手。
+pub(crate) fn has_v4_sibling(path: &Path) -> bool {
+    path.file_name().and_then(|name| name.to_str()) == Some(LEGACY_SESSION_FILE)
+        && path.with_file_name(V4_SESSION_FILE).is_file()
+}
+
+/// 旧文件旁边出现 v4 副本会改变它的解析结果（由原记录变为空）。把这一点放进缓存键，
+/// 只有这几份旧文件会重新解析，不必递增全局 `ADAPTER_VERSION` 让所有来源整库重建。
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    if has_v4_sibling(path) {
+        "v4-sibling".to_string()
+    } else {
+        String::new()
+    }
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    if has_v4_sibling(path) {
+        return Ok(Vec::new());
+    }
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     parse_dsh_zstd(&bytes, path.to_string_lossy().as_ref())
 }

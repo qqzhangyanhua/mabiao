@@ -526,6 +526,33 @@ fn dsh_adapter_reads_compressed_session_as_usage_records() {
 }
 
 #[test]
+fn dsh_adapter_discovers_v4_and_hands_shared_session_over_to_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("sessions");
+    let compressed = zstd::encode_all(fixture("dsh.jsonl").as_bytes(), 0).unwrap();
+    let both = root.join("--proj-a--/session-both");
+    let legacy_only = root.join("--proj-a--/session-legacy");
+    let v4_only = root.join("--proj-b--/session-v4");
+    for dir in [&both, &legacy_only, &v4_only] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    std::fs::write(both.join("session.jsonl.zstd"), &compressed).unwrap();
+    std::fs::write(both.join("session.v4.jsonl.zstd"), &compressed).unwrap();
+    std::fs::write(legacy_only.join("session.jsonl.zstd"), &compressed).unwrap();
+    std::fs::write(v4_only.join("session.v4.jsonl.zstd"), &compressed).unwrap();
+
+    let found = dsh::discover(std::slice::from_ref(&root)).unwrap();
+    assert_eq!(found.len(), 4);
+    assert!(found.contains(&v4_only.join("session.v4.jsonl.zstd")));
+
+    let parsed = |path: std::path::PathBuf| dsh::parse(&path, &root).unwrap().len();
+    assert_eq!(parsed(both.join("session.jsonl.zstd")), 0);
+    assert_eq!(parsed(both.join("session.v4.jsonl.zstd")), 2);
+    assert_eq!(parsed(legacy_only.join("session.jsonl.zstd")), 2);
+    assert_eq!(parsed(v4_only.join("session.v4.jsonl.zstd")), 2);
+}
+
+#[test]
 fn gemini_adapter_maps_chat_tokens() {
     let records = gemini::parse_gemini_session(
         &fixture("gemini-session.json"),

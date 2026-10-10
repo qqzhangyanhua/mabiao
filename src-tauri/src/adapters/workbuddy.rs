@@ -10,15 +10,16 @@ use crate::adapters::{
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
-/// WorkBuddy 桌面端会话：`$WORKBUDDY_CONFIG_DIR`，否则 `~/.workbuddy`，再扫 `projects/`。
+/// WorkBuddy 会话：`$WORKBUDDY_CONFIG_DIR`，否则 `~/.workbuddy` 和 `~/.workbuddy-ai`，各扫 `projects/`。
+/// 桌面端 `WorkBuddy AI.app` 把会话写在 `~/.workbuddy-ai`，而 `~/.workbuddy` 里只有日志。
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(
-        overrides,
-        home,
-        "WORKBUDDY_CONFIG_DIR",
-        ".workbuddy",
-        "projects",
-    )
+    overrides
+        .get("WORKBUDDY_CONFIG_DIR")
+        .cloned()
+        .unwrap_or_else(|| vec![home.join(".workbuddy"), home.join(".workbuddy-ai")])
+        .into_iter()
+        .map(|root| root.join("projects"))
+        .collect()
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {

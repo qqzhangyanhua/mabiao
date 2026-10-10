@@ -29,7 +29,7 @@
 | Qoder | `QODER_CONFIG_DIR` | `~/.qoder`（扫 `projects/`） |
 | Qoder CN | `QODERCN_CONFIG_DIR` | `~/.qoder-cn`（扫 `projects/`） |
 | Cline | `CLINE_SESSION_DATA_DIR` | `~/.cline/data/sessions`（扫 `*.messages.json`） |
-| WorkBuddy | `WORKBUDDY_CONFIG_DIR` | `~/.workbuddy`（扫 `projects/`） |
+| WorkBuddy | `WORKBUDDY_CONFIG_DIR` | `~/.workbuddy` **和** `~/.workbuddy-ai`（都扫 `projects/`；桌面端 `WorkBuddy AI.app` 写在后者） |
 | ZCode | `ZCODE_HOME` | `~/.zcode`（扫 `cli/db/db.sqlite`） |
 | Alma | `ALMA_HOME` | Electron `userData`/`alma`：Linux `~/.config/alma`、macOS `~/Library/Application Support/alma`、Windows `%APPDATA%/alma`（扫 `chat_threads.db`；不是 `~/.local/share/alma`） |
 
