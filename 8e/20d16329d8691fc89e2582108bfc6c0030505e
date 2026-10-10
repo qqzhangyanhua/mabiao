@@ -1,0 +1,56 @@
+src-tauri/src/commands/push.rs
+  s_0e03f8bc67f83b::t_f5c23d5dac13d3 1-3,6,80-141,143-144
+  s_0e03f8bc67f83b::t_a87e517b6a1959 142
+src-tauri/src/push/history.rs
+  s_0e03f8bc67f83b::t_c04eea109e9997 27-29
+src-tauri/src/tests/mod.rs
+  s_0e03f8bc67f83b::t_af7017ea41156f 55
+src-tauri/src/tests/push_auto.rs
+  s_0e03f8bc67f83b::t_c610d1ccba77b9 1-5,7-53,55-76,81-133,141-163,165-204,206-244,246,254-261,267-284,286-302,329-335,337-350,355-362,364-384,386-401,403-413
+  s_0e03f8bc67f83b::t_f5c23d5dac13d3 6,77-80,134-140,247-253,262-266,351-354
+  s_0e03f8bc67f83b::t_14272eb13f7ffc 54,205,245,285,336,363,385,402
+  s_0e03f8bc67f83b::t_a87e517b6a1959 164,303-328
+src-tauri/src/push/mod.rs
+  s_0e03f8bc67f83b::t_c04eea109e9997 9,251-260,316,384,397
+src-tauri/src/lib.rs
+  s_0e03f8bc67f83b::t_f5c23d5dac13d3 430,506-507
+src/lib/pushRange.ts
+  s_0e03f8bc67f83b::t_641fc1dd7beb8d 2,97-107
+  s_0e03f8bc67f83b::t_86a614099af801 87
+  s_0e03f8bc67f83b::t_7ff761e604aebc 108
+src/components/Settings.tsx
+  s_0e03f8bc67f83b::t_86a614099af801 25,202
+src/lib/pushRange.test.ts
+  s_0e03f8bc67f83b::t_58c31392266cbe 2,4,9,109-145
+  s_0e03f8bc67f83b::t_ccf1af0bc65405 146
+src-tauri/src/tests/push.rs
+  s_0e03f8bc67f83b::t_14272eb13f7ffc 833-836
+  s_0e03f8bc67f83b::t_af7017ea41156f 33,58,798,800-804,808,837,852,864,875
+  s_0e03f8bc67f83b::t_686ec3aba5d420 702
+src/types.ts
+  s_0e03f8bc67f83b::t_86a614099af801 1279-1293
+docs/agent-layers.md
+  s_0e03f8bc67f83b::t_70e1ec96f3e855 154-165
+src/components/AutoPushPanel.tsx
+  s_0e03f8bc67f83b::t_86a614099af801 1-7,11-26,33-34,36-96
+  s_0e03f8bc67f83b::t_a87e517b6a1959 8-10,27-32,35
+src-tauri/src/push/auto.rs
+  s_0e03f8bc67f83b::t_a87e517b6a1959 164-166,171,186-190
+  s_0e03f8bc67f83b::t_7a0d46e752a4bc 1-163,167-170,172-185,191-243
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8e20d16329d8691fc89e2582108bfc6c0030505e",
+  "prompts": {},
+  "sessions": {
+    "s_0e03f8bc67f83b": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "8284359f-824a-471d-8546-a6369109da4c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
