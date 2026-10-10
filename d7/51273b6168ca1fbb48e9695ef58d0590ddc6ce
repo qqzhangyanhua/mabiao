@@ -1,0 +1,46 @@
+crates/push-protocol/src/device.rs
+  s_a324b8e9200eb3::t_374af2b74929b7 1-8
+crates/push-protocol/Cargo.toml
+  s_a324b8e9200eb3::t_98256b1d93b531 1-11
+crates/push-protocol/src/auth.rs
+  s_a324b8e9200eb3::t_fcb0035cdb3b32 1-82
+crates/push-protocol/src/error.rs
+  s_a324b8e9200eb3::t_65738b61b98580 1-20
+crates/push-protocol/tests/round_trip.rs
+  s_a324b8e9200eb3::t_c7a9e390dc7ddb 1-134,139-240
+  s_a324b8e9200eb3::t_1613b065ecf3cf 135-138
+src-tauri/Cargo.toml
+  s_a324b8e9200eb3::t_8b1595fe21ef1e 52
+.github/workflows/ci.yml
+  s_a324b8e9200eb3::t_1090778ffc64de 83-107
+crates/push-protocol/src/version.rs
+  s_a324b8e9200eb3::t_be4a4387e02143 1-57
+crates/push-protocol/src/lib.rs
+  s_a324b8e9200eb3::t_cb4644e1253fc0 1-24
+crates/push-protocol/src/usage.rs
+  s_a324b8e9200eb3::t_1613b065ecf3cf 110-123,133-139
+  s_a324b8e9200eb3::t_604fc93b515d36 1-109,124-132,140-141,143-240
+  s_a324b8e9200eb3::t_6b808e9fd875c9 142
+crates/push-protocol/src/session.rs
+  s_a324b8e9200eb3::t_78d963ca6c5420 1-285
+crates/push-protocol/Cargo.lock
+  s_a324b8e9200eb3::t_2a792f6a56fc6f 1-190
+src-tauri/Cargo.lock
+  s_a324b8e9200eb3::t_08772077db7b78 2259,2996-3004
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d751273b6168ca1fbb48e9695ef58d0590ddc6ce",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
