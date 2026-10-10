@@ -1,0 +1,11 @@
+[package]
+name = "push-protocol"
+version = "0.1.0"
+description = "码表推送的线上传输格式，桌面端与远程服务共同依赖"
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
