@@ -1,0 +1,46 @@
+crates/pricing/src/lookup.rs
+  s_a324b8e9200eb3::t_eec1a96ebe8c71 1-91,93-135,137-355
+  s_a324b8e9200eb3::t_6b0f7a19593b98 92,136
+.github/workflows/ci.yml
+  s_a324b8e9200eb3::t_e5b0ae5ac544aa 83-84,86-89,101,104,107,110
+crates/pricing/Cargo.toml
+  s_a324b8e9200eb3::t_f733c8eb5441eb 1-9
+crates/pricing/src/types.rs
+  s_a324b8e9200eb3::t_f733c8eb5441eb 1-94
+crates/pricing/src/lib.rs
+  s_a324b8e9200eb3::t_6b0f7a19593b98 1-19
+src-tauri/Cargo.toml
+  s_a324b8e9200eb3::t_53e5d05c47c674 53
+AGENTS.md
+  s_a324b8e9200eb3::t_e5b0ae5ac544aa 17,20-22
+crates/pricing/src/apply.rs
+  s_a324b8e9200eb3::t_eec1a96ebe8c71 1-2,4-102,148-154,172,260
+  s_a324b8e9200eb3::t_a051d14d64b078 3
+  s_a324b8e9200eb3::t_6b0f7a19593b98 103-147,155-171,173-259
+src-tauri/src/domain/price.rs
+  s_a324b8e9200eb3::t_f733c8eb5441eb 3
+src-tauri/src/cost.rs
+  s_a324b8e9200eb3::t_53e5d05c47c674 1-6,10,72,91,101,178,203
+docs/agent-layers.md
+  s_a324b8e9200eb3::t_e5b0ae5ac544aa 25-26,118
+crates/pricing/Cargo.lock
+  s_a324b8e9200eb3::t_a0f5f21d328166 1-75
+src-tauri/Cargo.lock
+  s_a324b8e9200eb3::t_d00fecf964e66c 2259,2936-2942
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "49783696e73332b74651a3ca5aa1cb89b56e83c6",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
