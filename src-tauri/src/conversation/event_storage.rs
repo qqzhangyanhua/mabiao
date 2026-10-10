@@ -14,6 +14,7 @@ use rusqlite::{params, Connection};
 use crate::domain::{ConversationEvent, ConversationEventKind as EventKind, Source};
 use crate::store::STORAGE_STALE_ADAPTER_VERSION;
 
+use super::codex::is_codex_zst;
 use super::line_direct::rebuild_events_from_raw;
 use super::toolbox::{event_id_for, FileIndexCursor};
 use super::CONVERSATION_ADAPTER_VERSION;
@@ -76,9 +77,11 @@ pub(super) fn text_hash(text: &str) -> i64 {
     hash as i64
 }
 
+/// 压缩文件的字节偏移指不到明文行，正文只能留在库里。
 fn references_text(source: Source, event: &ConversationEvent) -> bool {
     TEXT_REFERENCE_SOURCES.contains(&source)
         && TEXT_REFERENCE_KINDS.contains(&event.kind)
+        && !is_codex_zst(Path::new(&event.source_file))
         && event.text.as_deref().is_some_and(|text| !text.is_empty())
 }
 
