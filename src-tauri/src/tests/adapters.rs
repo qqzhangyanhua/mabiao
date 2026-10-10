@@ -91,6 +91,77 @@ fn claude_adapter_uses_structured_agent_id_for_child_usage() {
 }
 
 #[test]
+fn claude_scan_dirs_keeps_code_roots_when_desktop_is_absent() {
+    let home = std::path::Path::new("/home/example");
+    assert_eq!(
+        claude::scan_dirs(&ingest::PathOverrides::new(), home),
+        vec![
+            home.join(".claude/projects"),
+            home.join(".config/claude/projects"),
+        ]
+    );
+}
+
+#[test]
+fn claude_scan_dirs_appends_existing_desktop_cowork_projects() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let projects = home
+        .join(".config/Claude/local-agent-mode-sessions/acct/org/local_cowork/.claude/projects");
+    std::fs::create_dir_all(&projects).unwrap();
+    std::fs::create_dir_all(
+        home.join(
+            ".config/Claude/local-agent-mode-sessions/skills-plugin/org/acct/.claude/projects",
+        ),
+    )
+    .unwrap();
+    std::fs::create_dir_all(
+        home.join(".config/Claude/local-agent-mode-sessions/acct/org/not_local/.claude/projects"),
+    )
+    .unwrap();
+
+    let dirs = claude::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(dirs.contains(&home.join(".claude/projects")));
+    assert!(dirs.contains(&home.join(".config/claude/projects")));
+    assert!(dirs.contains(&projects));
+    assert_eq!(
+        dirs.iter().filter(|dir| dir.ends_with("projects")).count(),
+        3
+    );
+}
+
+#[test]
+fn claude_config_dir_replaces_code_roots_but_keeps_desktop() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let desktop = home.join(
+        "Library/Application Support/Claude/local-agent-mode-sessions/a/o/local_abc/.claude/projects",
+    );
+    std::fs::create_dir_all(&desktop).unwrap();
+    let custom = home.join("custom-claude");
+    let overrides = ingest::PathOverrides::from([("CLAUDE_CONFIG_DIR", vec![custom.clone()])]);
+    let dirs = claude::scan_dirs(&overrides, home);
+    assert_eq!(dirs[0], custom.join("projects"));
+    assert!(dirs.contains(&desktop));
+    assert!(!dirs.iter().any(|dir| dir == &home.join(".claude/projects")));
+    assert!(!dirs
+        .iter()
+        .any(|dir| dir == &home.join(".config/claude/projects")));
+}
+
+#[test]
+fn claude_scan_dirs_discovers_msix_package_cowork() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let projects = home.join(
+        "AppData/Local/Packages/Claude_publisher/LocalCache/Roaming/Claude/local-agent-mode-sessions/acct/org/local_msix/.claude/projects",
+    );
+    std::fs::create_dir_all(&projects).unwrap();
+    let dirs = claude::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(dirs.contains(&projects), "{dirs:?}");
+}
+
+#[test]
 fn claude_adapter_dedups_message_id_and_skips_zero_usage() {
     let records = claude::parse_claude_jsonl(
         &fixture_lines(&fixture("claude-dedup.jsonl")),

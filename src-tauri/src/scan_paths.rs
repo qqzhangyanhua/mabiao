@@ -233,6 +233,9 @@ fn strip_leaf(scan: &Path, leaf: &str) -> String {
 fn row_note(source: Source) -> String {
     match source {
         Source::CursorAgent => "只覆盖 token 包装目录，会话仍扫 ~/.cursor。".to_string(),
+        Source::Claude => {
+            "CLAUDE_CONFIG_DIR 只替换 Claude Code 根；已存在的 Desktop / Cowork 嵌套 projects 仍会追加。".to_string()
+        }
         _ => String::new(),
     }
 }

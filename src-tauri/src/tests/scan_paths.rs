@@ -129,6 +129,14 @@ fn panel_reports_ui_layer_and_effective_scan_dirs() {
         .unwrap();
     assert_eq!(cursor_agent.active, "default");
     assert!(cursor_agent.note.contains("token 包装"));
+
+    let claude = panel
+        .rows
+        .iter()
+        .find(|row| row.source == "claude")
+        .unwrap();
+    assert!(claude.note.contains("Desktop / Cowork"));
+    assert_eq!(claude.join_leaf, "projects");
 }
 
 #[test]

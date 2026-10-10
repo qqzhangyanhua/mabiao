@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::adapters::project::decode_dashed_dir;
@@ -10,16 +11,114 @@ use crate::domain::{Source, UsageRecord};
 use crate::ingest::PathOverrides;
 
 /// Claude Code 在部分安装方式下把会话写到 XDG 目录（`~/.config/claude`）而不是
-/// `~/.claude`；默认两个都扫，显式设置 `CLAUDE_CONFIG_DIR` 后只扫用户指定的目录。
+/// `~/.claude`；默认两个都扫，显式设置 `CLAUDE_CONFIG_DIR` 后只扫用户指定的 Code 根。
+///
+/// Claude Desktop / Cowork 另把会话写进桌面数据目录下的嵌套
+/// `local-agent-mode-sessions/*/*/local_*/.claude/projects`。这些目录只在磁盘上
+/// 真实存在时追加，不替换 Code 根；`CLAUDE_CONFIG_DIR` 也不关掉 Desktop 发现。
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
     let roots = overrides
         .get("CLAUDE_CONFIG_DIR")
         .cloned()
         .unwrap_or_else(|| vec![home.join(".claude"), home.join(".config/claude")]);
-    roots
+    let mut dirs: Vec<PathBuf> = roots
         .into_iter()
         .map(|root| root.join("projects"))
+        .collect();
+    for extra in desktop_project_dirs(home) {
+        if !dirs.contains(&extra) {
+            dirs.push(extra);
+        }
+    }
+    dirs
+}
+
+/// 各平台 Claude Desktop 数据根下、已经存在的 Cowork / Desktop 会话 `projects`。
+pub(crate) fn desktop_project_dirs(home: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut seen = HashSet::new();
+    for root in desktop_data_roots(home) {
+        collect_nested_claude_projects(&root, &mut found, &mut seen);
+    }
+    found
+}
+
+fn desktop_data_roots(home: &Path) -> Vec<PathBuf> {
+    let mut roots = vec![
+        home.join("Library/Application Support/Claude"),
+        home.join("Library/Application Support/Claude-3p"),
+        home.join(".config/Claude"),
+        home.join(".config/Claude-3p"),
+        home.join("AppData/Roaming/Claude"),
+        home.join("AppData/Local/Claude"),
+        home.join("AppData/Local/Claude-3p"),
+    ];
+    let packages = home.join("AppData/Local/Packages");
+    if is_real_dir(&packages) {
+        if let Ok(entries) = fs::read_dir(&packages) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let Some(name) = name.to_str() else {
+                    continue;
+                };
+                if !name.starts_with("Claude_") {
+                    continue;
+                }
+                let cache = entry.path().join("LocalCache");
+                roots.push(cache.join("Roaming/Claude"));
+                roots.push(cache.join("Local/Claude"));
+                roots.push(cache.join("Local/Claude-3p"));
+            }
+        }
+    }
+    roots
+}
+
+fn collect_nested_claude_projects(
+    root: &Path,
+    found: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    let sessions = root.join("local-agent-mode-sessions");
+    if !is_real_dir(&sessions) {
+        return;
+    }
+    for account in real_child_dirs(&sessions) {
+        if account.file_name().and_then(|name| name.to_str()) == Some("skills-plugin") {
+            continue;
+        }
+        for org in real_child_dirs(&account) {
+            for local in real_child_dirs(&org) {
+                let Some(name) = local.file_name().and_then(|name| name.to_str()) else {
+                    continue;
+                };
+                if !name.starts_with("local_") {
+                    continue;
+                }
+                let projects = local.join(".claude/projects");
+                if is_real_dir(&projects) && seen.insert(projects.clone()) {
+                    found.push(projects);
+                }
+            }
+        }
+    }
+}
+
+fn real_child_dirs(root: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| is_real_dir(path))
         .collect()
+}
+
+fn is_real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|meta| meta.file_type().is_dir())
+        .unwrap_or(false)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {

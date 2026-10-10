@@ -1059,6 +1059,37 @@ fn cursor_agent_conversation_index_uses_projects_dir_not_usage_override() {
 }
 
 #[test]
+fn claude_ingest_reads_desktop_cowork_nested_projects() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let session = home.join(
+        ".config/Claude/local-agent-mode-sessions/acct/org/local_cowork/.claude/projects/-workspace-app/session.jsonl",
+    );
+    std::fs::create_dir_all(session.parent().unwrap()).unwrap();
+    std::fs::write(&session, fixture("claude.jsonl")).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let report =
+        ingest::ingest_all_with_overrides(&conn, home, &ingest::PathOverrides::new()).unwrap();
+    let claude = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Claude.as_str())
+        .expect("claude ingest report");
+    assert!(claude.detected, "{claude:?}");
+    assert_eq!(claude.files_seen, 1);
+    assert_eq!(claude.files_parsed, 1);
+    assert_eq!(claude.records_written, 2);
+
+    let records = store::load_all(&conn).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().all(|record| record.source == Source::Claude));
+    assert!(records
+        .iter()
+        .all(|record| record.source_file.contains("local_cowork")));
+}
+
+#[test]
 fn source_scan_dirs_default_to_home_relative_paths() {
     let home = std::path::Path::new("/home/example");
     let overrides = ingest::PathOverrides::new();
