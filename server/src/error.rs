@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use push_protocol::{ApiError, ApiErrorCode, UnsupportedVersion};
+use push_protocol::{ApiError, ApiErrorCode, PushRequestError, UnsupportedVersion};
 
 /// 所有非 2xx 响应都是 `push_protocol::ApiError` 的 JSON 体。
 #[derive(Debug)]
@@ -91,6 +91,15 @@ impl From<UnsupportedVersion> for AppError {
             ApiErrorCode::UnsupportedProtocolVersion,
             error.to_string(),
         )
+    }
+}
+
+impl From<PushRequestError> for AppError {
+    fn from(error: PushRequestError) -> Self {
+        match error {
+            PushRequestError::UnsupportedVersion(version) => version.into(),
+            PushRequestError::Manifest(violation) => Self::invalid(violation.to_string()),
+        }
     }
 }
 

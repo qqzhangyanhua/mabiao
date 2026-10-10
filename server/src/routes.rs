@@ -1,16 +1,23 @@
+use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use push_protocol::{check_protocol_version, LoginRequest, LoginResponse, RemoteRole};
 
-use crate::api::{AccountView, CreateMemberRequest, DeviceView};
+use crate::api::{AccountView, CoverageView, CreateMemberRequest, DeviceView};
 use crate::auth::{AdminAccount, AuthedAccount};
 use crate::error::{ApiJson, AppError};
-use crate::{accounts, devices, password, tokens, AppState};
+use crate::{accounts, coverage, devices, password, push, tokens, AppState};
 
 /// 注意：这里没有注册 / 自助开户的路由，账号只能由管理员接口或服务端命令行创建。
 pub fn router(state: AppState) -> Router {
+    // 推送体可能很大；只在推送路由上放宽，其它接口保持 axum 默认上限。
+    let push_routes = Router::new()
+        .route("/api/v1/push/session", post(push::push_session))
+        .route("/api/v1/push/usage", post(push::push_usage))
+        .layer(DefaultBodyLimit::max(push::PUSH_BODY_LIMIT_BYTES));
+
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/login", post(login))
@@ -24,6 +31,9 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/accounts/{id}/deactivate",
             post(admin_deactivate_account),
         )
+        .route("/api/v1/sessions/{id}", delete(push::delete_session))
+        .route("/api/v1/admin/coverage", get(admin_coverage))
+        .merge(push_routes)
         .with_state(state)
 }
 
@@ -123,4 +133,12 @@ async fn admin_deactivate_account(
         .await?
         .ok_or_else(|| AppError::not_found("账号不存在"))?;
     Ok(Json(row.into()))
+}
+
+async fn admin_coverage(
+    State(state): State<AppState>,
+    _admin: AdminAccount,
+) -> Result<Json<Vec<CoverageView>>, AppError> {
+    let rows = coverage::list(&state.pool).await?;
+    Ok(Json(rows.into_iter().map(Into::into).collect()))
 }

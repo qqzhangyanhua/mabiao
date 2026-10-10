@@ -1,10 +1,11 @@
 //! 管理接口与账号接口的响应形状。只有服务端与它自带的网页用，不进 `push-protocol`。
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use push_protocol::RemoteRole;
 use serde::{Deserialize, Serialize};
 
 use crate::accounts::AccountRow;
+use crate::coverage::MemberCoverage;
 use crate::devices::DeviceRow;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +54,30 @@ impl From<DeviceRow> for DeviceView {
             device_name: row.device_name,
             first_seen_at: row.first_seen_at,
             last_seen_at: row.last_seen_at,
+        }
+    }
+}
+
+/// 管理员看的成员推送覆盖情况。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoverageView {
+    pub account_id: i64,
+    pub account: String,
+    pub active: bool,
+    pub device_count: i64,
+    pub last_push_at: Option<DateTime<Utc>>,
+    pub covered_through: Option<NaiveDate>,
+}
+
+impl From<MemberCoverage> for CoverageView {
+    fn from(row: MemberCoverage) -> Self {
+        Self {
+            account_id: row.account_id,
+            account: row.account,
+            active: row.active,
+            device_count: row.device_count,
+            last_push_at: row.last_push_at,
+            covered_through: row.covered_through,
         }
     }
 }

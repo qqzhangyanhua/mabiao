@@ -139,10 +139,23 @@
 1. **没有注册接口。** 账号只能由命令行 `mabiao-server create-admin` 或管理员接口创建；管理员接口只建成员。账号只停用不删除，停用时立即吊销该账号全部 token。
 2. 密码用 argon2id 哈希；token 是 256 位随机数，库里只存 SHA-256，有效期 30 天。登录对「账号不存在 / 密码错 / 已停用」返回同一个错误。
 3. 数据隔离只有一个判定：`AuthedAccount::can_access`。每个按账号归属的数据接口先过它；管理员专属 handler 用 `AdminAccount` 参数。新增接口必须配「成员访问别人数据被拒」的测试。
-4. 凡是 body 带 `protocol_version` 的请求（目前是登录，以后是推送）先过 `push_protocol::check_protocol_version`，新增这类接口要补不兼容版本的测试；错误体一律是 `push_protocol::ApiError`。
+4. 凡是 body 带 `protocol_version` 的请求（登录、两个推送接口）先过 `push_protocol::check_protocol_version`，新增这类接口要补不兼容版本的测试；错误体一律是 `push_protocol::ApiError`。
 5. SQL 用运行时的 `sqlx::query`，不用 `query!` 宏，免得编译要连库。迁移在 `server/migrations/`，已有迁移文件不改，改 schema 只加新文件。
 6. 测试连真 PostgreSQL（`DATABASE_URL`），`#[sqlx::test]` 每个测试一个临时库，连接用户要能建库。
 7. 命令在 `AGENTS.md`；CI 的 `server` 作业同时 `docker build -f server/Dockerfile .`。
+
+### 推送接收
+
+接口：`POST /api/v1/push/session`、`POST /api/v1/push/usage`、`DELETE /api/v1/sessions/{id}`、`GET /api/v1/admin/coverage`。
+
+1. 账号永远取自 token，body 里没有账号字段。会话键是 (账号, 设备, 来源, session_id)，同一个 `session_id` 在不同设备、成员、来源下是不同的行。
+2. 会话整场覆盖：同键再推就替换整条（变长、变短都一样），events 存 JSONB，不做增量合并。
+3. 消耗记录按 `usage_fingerprint` 去重（账号 + 设备 + 指纹唯一，`ON CONFLICT DO NOTHING`）。费用快照与定价来源按客户端发来的原样存，服务端不重算。一批里有一条非法就整批拒绝。
+4. 项目：优先按规范化 git remote 归并（去凭据、协议、端口、大小写、`.git`，凭据不入库），没有 remote 用目录名兜底，都没有则不挂项目。同一路径原先只有目录兜底、后来拿到 git remote 时，`projects::point_path_at` 把历史会话与用量一并改挂；已归到 git 项目的路径不降级，路径换了 remote 也只影响之后的推送，旧历史留在旧项目。原始路径保留在 `project_paths`。
+5. 「最后推送时间」「已覆盖到哪天」由 `coverage.rs` 实时从数据算，不单独存，删除后自动跟着变。
+6. 删除：成员删自己的，管理员删任意的（走 `can_access`）；只删会话，不动消耗记录和项目。服务端不自动删任何东西；桌面端本机删除不得触发远端删除。
+7. 推送路由单独放宽 body 上限（`PUSH_BODY_LIMIT_BYTES`），消耗记录单批 ≤ `MAX_USAGE_RECORDS_PER_REQUEST`。
+8. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test push`。
 
 完成：fmt、clippy、`cargo test --manifest-path server/Cargo.toml` 三条绿。
 
