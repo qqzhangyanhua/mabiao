@@ -7,6 +7,7 @@ use crate::domain::{
 };
 
 mod agent_graph;
+mod alma;
 pub(crate) mod attachments;
 mod backfill;
 mod catalog;
@@ -111,6 +112,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Cline,
     Source::WorkBuddy,
     Source::Zcode,
+    Source::Alma,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
@@ -346,6 +348,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: zcode::detail,
         revision: zcode::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Alma,
+        discover: alma::discover,
+        index: alma::index,
+        index_suffix: None,
+        detail: alma::detail,
+        revision: alma::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },
