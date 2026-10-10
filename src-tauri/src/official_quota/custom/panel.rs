@@ -19,6 +19,9 @@ pub struct CustomQuotaProviderDto {
     pub enabled: bool,
     /// 已配置密钥时是掩码串；没配（多半是恢复备份后）为 null，界面据此给待办提示。
     pub secret_mask: Option<String>,
+    /// 火山方舟的 AccessKey ID 掩码；单密钥预设为 null。
+    #[serde(default)]
+    pub access_key_id_mask: Option<String>,
 }
 
 /// 预设类型选项。从枚举生成而不是前端写死，避免两边各列一份、补齐时漏改一处。
@@ -61,6 +64,9 @@ pub struct SaveCustomQuotaProvider {
     /// 而界面本来就只有掩码、也重打不出来。
     #[serde(default)]
     pub secret: Option<String>,
+    /// 留空 = 沿用已存的 AccessKey ID。只火山方舟用。
+    #[serde(default)]
+    pub access_key_id: Option<String>,
 }
 
 /// base URL 输入框下方那行回显：**取数时真正会请求的**那几条地址。
@@ -86,6 +92,8 @@ pub struct TestCustomQuotaProvider {
     pub base_url: String,
     #[serde(default)]
     pub secret: Option<String>,
+    #[serde(default)]
+    pub access_key_id: Option<String>,
 }
 
 /// 测试成功的结果：直接把解析出的额度窗口交回去，界面复用首页那套渲染。
@@ -156,6 +164,39 @@ pub fn resolve_secret(
     }
 }
 
+/// 火山方舟第二把钥匙。规则与 `resolve_secret` 相同：填了用填的，留空且 origin 没变才沿用。
+pub fn resolve_access_key_id(
+    paths: &CustomQuotaPaths,
+    request: &TestCustomQuotaProvider,
+) -> Result<String, String> {
+    if let Some(typed) = typed_secret(&request.access_key_id) {
+        return Ok(typed.to_string());
+    }
+    let stored = request
+        .id
+        .as_deref()
+        .and_then(|id| {
+            store::load_credentials(&paths.credentials)
+                .access_key_ids
+                .remove(id)
+        })
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "请填写 AccessKey ID".to_string())?;
+    let saved_url = request.id.as_deref().and_then(|id| {
+        store::load_config(&paths.config)
+            .providers
+            .into_iter()
+            .find(|provider| provider.id == id)
+            .map(|provider| provider.base_url)
+    });
+    match saved_url {
+        Some(saved) if super::can_reuse_stored_secret(&saved, &request.base_url) => Ok(stored),
+        Some(_) => Err(super::HOST_CHANGED_SECRET.to_string()),
+        None => Err("请填写 AccessKey ID".to_string()),
+    }
+}
+
 /// 用户这次**打进来的**密钥；留空（或只有空格）表示「沿用已存的那把」。
 fn typed_secret(secret: &Option<String>) -> Option<&str> {
     secret
@@ -186,6 +227,7 @@ pub fn list(paths: &CustomQuotaPaths) -> CustomQuotaPanelDto {
                 base_url: provider.config.base_url,
                 enabled: provider.config.enabled,
                 secret_mask: store::mask_secret(provider.secret.as_deref()),
+                access_key_id_mask: store::mask_secret(provider.access_key_id.as_deref()),
             })
             .collect(),
         presets: presets(),
@@ -211,6 +253,7 @@ pub fn save(
 
     let mut config = store::load_config(&paths.config);
     let secret = typed_secret(&request.secret);
+    let access_key_id = typed_secret(&request.access_key_id);
 
     let id = match request
         .id
@@ -239,6 +282,9 @@ pub fn save(
             if secret.is_none() {
                 return Err("请填写密钥".to_string());
             }
+            if request.preset.needs_access_key_id() && access_key_id.is_none() {
+                return Err("请填写 AccessKey ID".to_string());
+            }
             let taken: Vec<String> = config
                 .providers
                 .iter()
@@ -260,9 +306,23 @@ pub fn save(
     // 没有任何配置引用得到的密钥；这个顺序下最坏也只是「配置在、密钥没存上」，
     // 界面会提示重新填一次，是个能自己走出来的状态。
     store::save_config(&paths.config, &config)?;
+    let mut credentials = store::load_credentials(&paths.credentials);
+    let mut creds_changed = false;
     if let Some(secret) = secret {
-        let mut credentials = store::load_credentials(&paths.credentials);
         credentials.secrets.insert(id.clone(), secret.to_string());
+        creds_changed = true;
+    }
+    if let Some(access_key_id) = access_key_id {
+        credentials
+            .access_key_ids
+            .insert(id.clone(), access_key_id.to_string());
+        creds_changed = true;
+    } else if !request.preset.needs_access_key_id()
+        && credentials.access_key_ids.remove(&id).is_some()
+    {
+        creds_changed = true;
+    }
+    if creds_changed {
         store::save_credentials(&paths.credentials, &credentials)?;
     }
     Ok(SavedCustomQuotaDto {
@@ -285,7 +345,9 @@ pub fn delete(paths: &CustomQuotaPaths, id: &str) -> Result<CustomQuotaPanelDto,
     store::save_config(&paths.config, &config)?;
 
     let mut credentials = store::load_credentials(&paths.credentials);
-    if credentials.secrets.remove(id).is_some() {
+    let removed_secret = credentials.secrets.remove(id).is_some();
+    let removed_ak = credentials.access_key_ids.remove(id).is_some();
+    if removed_secret || removed_ak {
         store::save_credentials(&paths.credentials, &credentials)?;
     }
     Ok(list(paths))

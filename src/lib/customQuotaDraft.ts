@@ -17,7 +17,8 @@ export type CustomQuotaPreset =
   | "kimi_code"
   | "minimax_coding"
   | "zhipu_coding"
-  | "command_code";
+  | "command_code"
+  | "volcengine_ark";
 
 /** 表单草稿。`id` 为 null 表示新建；密钥留空 = 沿用已存的那把。 */
 export type CustomQuotaDraft = {
@@ -26,6 +27,8 @@ export type CustomQuotaDraft = {
   preset: CustomQuotaPreset;
   baseUrl: string;
   secret: string;
+  /** 火山方舟的 AccessKey ID；其它预设空着。留空 = 沿用已存的那把。 */
+  accessKeyId: string;
   /** 打开编辑时磁盘上的地址；新建为 null。用来判断换 host 后必须重填密钥。 */
   savedBaseUrl: string | null;
 };
@@ -36,6 +39,7 @@ export const BLANK_CUSTOM_QUOTA_DRAFT: CustomQuotaDraft = {
   preset: "openai_compatible",
   baseUrl: "",
   secret: "",
+  accessKeyId: "",
   savedBaseUrl: null,
 };
 
@@ -51,7 +55,17 @@ export const BLANK_CUSTOM_QUOTA_DRAFT: CustomQuotaDraft = {
  * 看着结果消失。密钥剃成空串正好与「留空 = 沿用已存的那把」重合，两者本就同义。
  */
 export function fetchInputsOf(draft: CustomQuotaDraft): string {
-  return JSON.stringify([draft.preset, draft.baseUrl.trim(), draft.secret.trim()]);
+  return JSON.stringify([
+    draft.preset,
+    draft.baseUrl.trim(),
+    draft.secret.trim(),
+    draft.accessKeyId.trim(),
+  ]);
+}
+
+/** 火山方舟要两把钥匙；其余预设只要一把。 */
+export function needsAccessKeyId(preset: CustomQuotaPreset): boolean {
+  return preset === "volcengine_ark";
 }
 
 /**
@@ -120,6 +134,9 @@ export function credentialHint(preset: CustomQuotaPreset): string | null {
   if (preset === "command_code") {
     return "填 Command Code 套餐的 API key。地址用 https://api.commandcode.ai。";
   }
+  if (preset === "volcengine_ark") {
+    return "填账号的 AccessKey ID 和 Secret Access Key，不是推理用的 API Key。地址用套餐接入点，例如 https://ark.cn-beijing.volces.com/api/coding（Coding Plan）或 …/api/plan（Agent Plan）。";
+  }
   return null;
 }
 
@@ -151,4 +168,14 @@ export function secretPlaceholder(
     return "不填就沿用现在这把";
   }
   return "sk-…";
+}
+
+export function accessKeyPlaceholder(editing: boolean, hostChanged = false): string {
+  if (editing && hostChanged) {
+    return "更换地址后必须重填";
+  }
+  if (editing) {
+    return "不填就沿用现在这把";
+  }
+  return "AKLT…";
 }

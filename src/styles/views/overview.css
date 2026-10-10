@@ -9,7 +9,7 @@
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
   align-items: stretch;
 }
@@ -275,5 +275,44 @@ button.kpi {
 
 .dash-mid > * {
   min-height: 0;
+}
+
+.overview-presence-panel {
+  padding: 12px 14px 14px;
+}
+
+.overview-presence-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.overview-presence-group h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.overview-presence-group ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.overview-presence-group li {
+  display: grid;
+  gap: 4px;
+}
+
+.overview-presence-paths {
+  display: grid;
+  gap: 2px;
+}
+
+.overview-presence-paths code {
+  font-size: 11px;
+  word-break: break-all;
 }
 

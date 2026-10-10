@@ -213,6 +213,7 @@ fn saving_a_litellm_proxy_provider_joins_official_quota() {
             base_url: BASE.to_string(),
             enabled: None,
             secret: Some("sk-virt-123456".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -250,6 +251,7 @@ fn saving_a_litellm_proxy_provider_joins_official_quota() {
         &[custom::ResolvedProvider {
             config: litellm_provider(&id, "自建网关"),
             secret: Some("sk-virt-123456".to_string()),
+            access_key_id: None,
         }],
         now,
     );
@@ -275,6 +277,7 @@ fn a_disabled_litellm_proxy_keeps_config_and_takes_no_row() {
             base_url: BASE.to_string(),
             enabled: Some(false),
             secret: Some("sk-virt-123456".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -302,6 +305,7 @@ fn a_litellm_proxy_with_a_secret_is_tried_instead_of_blocked_as_unsupported() {
     let resolved = custom::ResolvedProvider {
         config: litellm_provider("custom:a3f9c1", "自建网关"),
         secret: Some("sk-virt".to_string()),
+        access_key_id: None,
     };
     assert_eq!(
         custom::precheck(&resolved),
@@ -316,6 +320,7 @@ fn missing_secret_is_a_todo_for_litellm_proxy() {
     let resolved = custom::ResolvedProvider {
         config: litellm_provider("custom:a3f9c1", "自建网关"),
         secret: None,
+        access_key_id: None,
     };
     assert_eq!(
         custom::fetch(&resolved).unwrap_err(),
@@ -365,6 +370,7 @@ fn litellm_proxy_percent_windows_alert_like_other_custom_providers() {
         &[custom::ResolvedProvider {
             config: litellm_provider("custom:a3f9c1", "自建网关"),
             secret: Some("sk-virt".to_string()),
+            access_key_id: None,
         }],
         now,
     );
@@ -384,6 +390,7 @@ fn litellm_proxy_percent_windows_alert_like_other_custom_providers() {
         &[custom::ResolvedProvider {
             config: litellm_provider("custom:a3f9c1", "自建网关"),
             secret: Some("sk-virt".to_string()),
+            access_key_id: None,
         }],
         now,
     );

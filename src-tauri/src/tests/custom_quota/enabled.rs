@@ -44,6 +44,7 @@ fn disabling_keeps_name_preset_url_and_secret() {
             base_url: "https://relay.example.com/v1".to_string(),
             enabled: None,
             secret: Some("sk-relay-abcdef123456".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -58,6 +59,7 @@ fn disabling_keeps_name_preset_url_and_secret() {
             base_url: "https://relay.example.com/v1".to_string(),
             enabled: Some(false),
             secret: None,
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -83,6 +85,7 @@ fn disabling_keeps_name_preset_url_and_secret() {
             base_url: "https://relay.example.com/v1".to_string(),
             enabled: Some(true),
             secret: None,
+            access_key_id: None,
         },
     )
     .unwrap();

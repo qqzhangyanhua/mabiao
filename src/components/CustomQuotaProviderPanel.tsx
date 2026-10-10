@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import {
   BLANK_CUSTOM_QUOTA_DRAFT,
+  needsAccessKeyId,
   submittedSecret,
   type CustomQuotaDraft,
   type CustomQuotaPreset,
@@ -25,6 +26,7 @@ type CustomQuotaProviderDto = {
   enabled: boolean;
   /** 掩码串；没配密钥（多半是恢复备份后）为 null。永远拿不到明文。 */
   secret_mask: string | null;
+  access_key_id_mask: string | null;
 };
 
 type CustomQuotaPanelDto = {
@@ -40,6 +42,7 @@ type SaveCustomQuotaProvider = {
   base_url: string;
   enabled: boolean | null;
   secret: string | null;
+  access_key_id: string | null;
 };
 
 type SavedCustomQuotaDto = {
@@ -54,6 +57,7 @@ function draftFrom(provider: CustomQuotaProviderDto): CustomQuotaDraft {
     preset: provider.preset,
     baseUrl: provider.base_url,
     secret: "",
+    accessKeyId: "",
     savedBaseUrl: provider.base_url,
   };
 }
@@ -113,6 +117,9 @@ export function CustomQuotaProviderPanel({
       // 表单不带开关：null 表示「别动现在的状态」。启停走列表上那颗开关。
       enabled: null,
       secret: submittedSecret(current.secret),
+      access_key_id: needsAccessKeyId(current.preset)
+        ? submittedSecret(current.accessKeyId)
+        : null,
     };
     let savedId: string | null = null;
     void run(
@@ -142,6 +149,7 @@ export function CustomQuotaProviderPanel({
       base_url: provider.base_url,
       enabled,
       secret: null,
+      access_key_id: null,
     };
     void run(
       async () => {
@@ -194,7 +202,18 @@ export function CustomQuotaProviderPanel({
               <strong>{provider.name}</strong>
               <span className="muted">{presetLabel(panel.presets, provider.preset)}</span>
               <code>{provider.base_url}</code>
-              <span className="muted">{provider.secret_mask ?? "未配置密钥，请重新填写"}</span>
+              <span className="muted">
+                {needsAccessKeyId(provider.preset)
+                  ? [
+                      provider.access_key_id_mask
+                        ? `AccessKey ID ${provider.access_key_id_mask}`
+                        : "未配置 AccessKey ID",
+                      provider.secret_mask
+                        ? `Secret ${provider.secret_mask}`
+                        : "未配置 Secret Access Key",
+                    ].join(" · ")
+                  : (provider.secret_mask ?? "未配置密钥，请重新填写")}
+              </span>
               <div className="row-actions">
                 {pendingDeleteId === provider.id ? (
                   <>

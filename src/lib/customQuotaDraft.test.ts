@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   BLANK_CUSTOM_QUOTA_DRAFT,
+  accessKeyPlaceholder,
   credentialHint,
   fetchInputsOf,
+  needsAccessKeyId,
   implementedPresetLabels,
   requiresSecretReentry,
   secretPlaceholder,
@@ -17,6 +19,7 @@ function draft(patch: Partial<CustomQuotaDraft> = {}): CustomQuotaDraft {
     name: "公司的中转",
     baseUrl: "https://relay.example.com",
     secret: "sk-relay-123456",
+    accessKeyId: "",
     savedBaseUrl: "https://relay.example.com",
     ...patch,
   };
@@ -35,6 +38,7 @@ describe("fetchInputsOf", () => {
       { baseUrl: "https://new.example.com" },
       { preset: "deepseek" as const },
       { secret: "sk-rotated-999999" },
+      { accessKeyId: "AKLTrotated" },
     ]) {
       expect(fetchInputsOf(draft(patch))).not.toBe(fetchInputsOf(draft()));
     }
@@ -85,6 +89,16 @@ describe("credentialHint", () => {
     expect(credentialHint("zhipu_coding")).toContain("不加 Bearer");
     expect(credentialHint("command_code")).toContain("Command Code");
     expect(credentialHint("command_code")).toContain("https://api.commandcode.ai");
+    expect(credentialHint("volcengine_ark")).toContain("AccessKey ID");
+    expect(credentialHint("volcengine_ark")).toContain("不是推理");
+  });
+});
+
+describe("needsAccessKeyId", () => {
+  it("只有火山方舟要第二把钥匙", () => {
+    expect(needsAccessKeyId("volcengine_ark")).toBe(true);
+    expect(needsAccessKeyId("openai_compatible")).toBe(false);
+    expect(needsAccessKeyId("command_code")).toBe(false);
   });
 });
 
@@ -108,6 +122,14 @@ describe("secretPlaceholder", () => {
 
   it("LiteLLM Proxy 新建时同样提示 sk-", () => {
     expect(secretPlaceholder("litellm_proxy", false)).toBe("sk-…");
+  });
+});
+
+describe("accessKeyPlaceholder", () => {
+  it("新建提示 AKLT，编辑留空不改，换主机必须重填", () => {
+    expect(accessKeyPlaceholder(false)).toBe("AKLT…");
+    expect(accessKeyPlaceholder(true)).toBe("不填就沿用现在这把");
+    expect(accessKeyPlaceholder(true, true)).toBe("更换地址后必须重填");
   });
 });
 

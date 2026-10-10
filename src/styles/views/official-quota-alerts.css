@@ -1,0 +1,41 @@
+.official-quota-alert-fields {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.official-quota-alert-field {
+  display: grid;
+  gap: 6px;
+}
+
+.official-quota-alert-field span {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.official-quota-alert-field input {
+  min-height: 34px;
+  max-width: 280px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--field-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.official-quota-alert-field input:focus {
+  outline: none;
+  border-color: var(--purple);
+}
+
+.official-quota-alert-field em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}

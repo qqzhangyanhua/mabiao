@@ -2,10 +2,11 @@ use crate::official_quota;
 use tauri::Manager;
 
 use crate::domain::{
-    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto,
-    OfficialQuotaRow,
+    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHistoryDto,
+    OfficialQuotaHookDto, OfficialQuotaRow,
 };
 use crate::official_quota::QuotaTarget;
+use crate::store;
 use crate::AppState;
 
 fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
@@ -150,6 +151,20 @@ pub fn apply_official_quota_hook() -> Result<OfficialQuotaHookDto, String> {
 }
 
 #[tauri::command]
+pub fn get_official_quota_history(
+    state: tauri::State<AppState>,
+    provider: Option<String>,
+) -> Result<OfficialQuotaHistoryDto, String> {
+    let conn = state.lock_read()?;
+    store::load_official_quota_history(&conn, provider.as_deref())
+}
+
+#[tauri::command]
+pub fn get_official_quota_config(state: tauri::State<AppState>) -> OfficialQuotaConfig {
+    official_quota::load_config(&state.official_quota_path)
+}
+
+#[tauri::command]
 pub fn save_official_quota_config(
     state: tauri::State<AppState>,
     config: OfficialQuotaConfig,
@@ -212,8 +227,19 @@ pub async fn test_custom_quota_provider(
     tauri::async_runtime::spawn_blocking(move || {
         let paths = app.state::<AppState>().custom_quota_paths.clone();
         let secret = official_quota::custom::panel::resolve_secret(&paths, &request)?;
-        let snapshot =
-            official_quota::custom::fetch_quota(request.preset, &request.base_url, Some(&secret))?;
+        let access_key_id = if request.preset.needs_access_key_id() {
+            Some(official_quota::custom::panel::resolve_access_key_id(
+                &paths, &request,
+            )?)
+        } else {
+            None
+        };
+        let snapshot = official_quota::custom::fetch_quota(
+            request.preset,
+            &request.base_url,
+            Some(&secret),
+            access_key_id.as_deref(),
+        )?;
         Ok(official_quota::custom::panel::CustomQuotaTestDto {
             windows: snapshot.windows,
             captured_at: snapshot.captured_at,

@@ -14,6 +14,7 @@ fn draft(base_url: &str, secret: Option<&str>) -> panel::TestCustomQuotaProvider
         preset: CustomQuotaPreset::OpenAiCompatible,
         base_url: base_url.to_string(),
         secret: secret.map(str::to_string),
+        access_key_id: None,
     }
 }
 
@@ -232,6 +233,7 @@ fn testing_a_shape_that_can_never_work_fails_before_touching_the_network() {
         CustomQuotaPreset::OpenAiCompatible,
         "relay.example.com",
         Some("sk-relay"),
+        None,
     );
     assert!(malformed.unwrap_err().contains("http:// 或 https://"));
 
@@ -239,6 +241,7 @@ fn testing_a_shape_that_can_never_work_fails_before_touching_the_network() {
         CustomQuotaPreset::Moonshot,
         "https://relay.example.com",
         Some("sk-relay"),
+        None,
     )
     .unwrap_err();
     assert!(error.contains("暂未支持"), "{error}");
@@ -250,6 +253,7 @@ fn testing_a_shape_that_can_never_work_fails_before_touching_the_network() {
         &custom::fetch_quota(
             CustomQuotaPreset::OpenAiCompatible,
             "https://relay.example.com",
+            None,
             None,
         )
         .unwrap_err()

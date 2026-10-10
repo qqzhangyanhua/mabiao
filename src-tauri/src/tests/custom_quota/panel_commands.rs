@@ -13,6 +13,7 @@ fn single_refresh_resolves_builtin_first_then_falls_back_to_custom() {
     let resolved = vec![custom::ResolvedProvider {
         config: provider("custom:a3f9c1", "公司的中转"),
         secret: Some("sk-relay".to_string()),
+        access_key_id: None,
     }];
     // 内置那 9 个照旧走枚举。
     match quota::resolve_target("claude", &resolved).unwrap() {
@@ -40,6 +41,7 @@ fn disabled_custom_providers_refuse_a_manual_refresh_by_name() {
     let resolved = vec![custom::ResolvedProvider {
         config,
         secret: Some("sk-relay".to_string()),
+        access_key_id: None,
     }];
     let error = quota::resolve_target("custom:a3f9c1", &resolved).unwrap_err();
     // 说清楚是「停用了」而不是「不认识」——后者会让人以为配置丢了。
@@ -72,6 +74,7 @@ fn saving_without_the_enabled_flag_leaves_the_switch_alone() {
             base_url: "https://relay.example.com".to_string(),
             enabled: None,
             secret: Some("sk-relay".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -91,6 +94,7 @@ fn saving_without_the_enabled_flag_leaves_the_switch_alone() {
             base_url: "https://relay.example.com".to_string(),
             enabled: Some(true),
             secret: None,
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -111,6 +115,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
             base_url: "https://relay.example.com/v1".to_string(),
             enabled: None,
             secret: Some("sk-relay-abcdef123456".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -149,6 +154,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
             base_url: "https://relay.example.com".to_string(),
             enabled: None,
             secret: None,
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -174,6 +180,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
             base_url: "https://new.example.com".to_string(),
             enabled: None,
             secret: None,
+            access_key_id: None,
         },
     )
     .unwrap_err();
@@ -193,6 +200,7 @@ fn panel_saves_edits_and_deletes_without_ever_echoing_the_secret() {
             base_url: "https://new.example.com".to_string(),
             enabled: None,
             secret: Some("sk-rotated-999999".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -222,6 +230,7 @@ fn panel_blocks_only_the_things_the_user_can_fix_by_typing() {
         base_url: "https://relay.example.com".to_string(),
         enabled: None,
         secret: Some("sk-relay".to_string()),
+        access_key_id: None,
     };
 
     let blank_name = panel::SaveCustomQuotaProvider {
@@ -265,12 +274,14 @@ fn failures_that_never_touched_the_network_do_not_trigger_a_cooldown() {
     let missing_secret = custom::ResolvedProvider {
         config: provider("custom:a3f9c1", "公司的中转"),
         secret: None,
+        access_key_id: None,
     };
     let mut unsupported_preset = provider("custom:b7e204", "另一个中转");
     unsupported_preset.preset = CustomQuotaPreset::DeepSeek;
     let unsupported_preset = custom::ResolvedProvider {
         config: unsupported_preset,
         secret: Some("sk-relay".to_string()),
+        access_key_id: None,
     };
 
     for target in [&missing_secret, &unsupported_preset] {

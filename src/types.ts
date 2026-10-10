@@ -136,6 +136,12 @@ export type OfficialQuotaConfig = {
   alerts_enabled: boolean;
   /** 主窗口「配置显示」里关掉的官方额度账号，托盘额度面板复用同一份配置。 */
   hidden_providers: string[];
+  /** 百分比告警档位。缺省 80、100。 */
+  alert_thresholds: number[];
+  /** 重置前多少小时内提醒「还剩很多」。0 表示关闭。默认 12。 */
+  reset_reminder_hours: number;
+  /** 「还剩很多」：已用百分比低于此值才提醒。默认 50。 */
+  reset_reminder_max_used_percent: number;
 };
 
 export type OfficialQuotaDto = {
@@ -146,6 +152,22 @@ export type OfficialQuotaDto = {
   undetected: string[];
   /** 与 OfficialQuotaConfig.hidden_providers 一致，供本地状态对齐用。 */
   hidden_providers: string[];
+};
+
+export type OfficialQuotaHistoryPoint = {
+  provider: string;
+  window_kind: string;
+  window_label: string;
+  captured_at: string;
+  used_percent: number | null;
+  used_amount: number | null;
+  limit_amount: number | null;
+  currency: string | null;
+};
+
+export type OfficialQuotaHistoryDto = {
+  points: OfficialQuotaHistoryPoint[];
+  retention_days: number;
 };
 
 export type OfficialQuotaHookDto = {

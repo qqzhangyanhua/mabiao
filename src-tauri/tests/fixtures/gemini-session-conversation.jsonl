@@ -1,0 +1,5 @@
+{"sessionId":"sess-g-jsonl"}
+{"id":"u1","timestamp":"2026-03-07T07:27:00.000Z","type":"user","content":"Inspect the jsonl session"}
+{"id":"a1","timestamp":"2026-03-07T07:27:34.399Z","type":"gemini","model":"gemini-flash","content":"Looking at the session now.","tokens":{"input":100,"output":10,"cached":0,"thoughts":5,"total":115}}
+{"id":"a2","timestamp":"2026-03-07T07:28:00.000Z","type":"gemini","model":"gemini-flash","content":"This later turn is rewound.","tokens":{"input":40,"output":4,"cached":0,"thoughts":0,"total":44}}
+{"$rewindTo":"a1"}

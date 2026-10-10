@@ -246,3 +246,51 @@ fn path_strings(paths: &[PathBuf]) -> Vec<String> {
         .map(|path| path.to_string_lossy().into_owned())
         .collect()
 }
+
+/// 默认扫描目录是否存在。只读探测，不读设置页覆盖、不写任何文件。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourcePresenceRoot {
+    pub path: String,
+    pub exists: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourcePresenceRow {
+    pub source: String,
+    pub application: String,
+    pub roots: Vec<SourcePresenceRoot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourcePresenceDto {
+    /// 本机 sqlite 里是否已有任何消耗记录（含归档）。有数据时总览不展示上手空态。
+    pub has_usage_records: bool,
+    pub rows: Vec<SourcePresenceRow>,
+}
+
+/// 用空覆盖表走各 Adapter 的默认 `scan_dirs`，再问目录在不在。
+pub fn detect_default_presence(home: &Path, has_usage_records: bool) -> SourcePresenceDto {
+    let empty = PathOverrides::new();
+    SourcePresenceDto {
+        has_usage_records,
+        rows: Source::ALL
+            .iter()
+            .copied()
+            .map(|source| {
+                let adapter = usage_adapter(source);
+                let dirs = adapter.display_or_scan_dirs(&empty, home);
+                SourcePresenceRow {
+                    source: source.as_str().to_string(),
+                    application: source.application_name().to_string(),
+                    roots: dirs
+                        .into_iter()
+                        .map(|path| SourcePresenceRoot {
+                            exists: path.exists(),
+                            path: path.to_string_lossy().into_owned(),
+                        })
+                        .collect(),
+                }
+            })
+            .collect(),
+    }
+}

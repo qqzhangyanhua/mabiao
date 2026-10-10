@@ -22,7 +22,7 @@ use crate::domain::{
 pub(super) fn source_maps_line_to_events(source: Source) -> bool {
     matches!(
         source,
-        Source::Codex | Source::Claude | Source::Pi | Source::Omp
+        Source::Codex | Source::Claude | Source::Qoder | Source::QoderCn | Source::Pi | Source::Omp
     )
 }
 
@@ -64,14 +64,16 @@ pub(super) fn rebuild_events_from_raw(
             raw,
             include_deferred_content,
         ),
-        Source::Claude | Source::Pi | Source::Omp => rebuild_jsonl_values(
-            source,
-            path,
-            session_id,
-            source_sequence,
-            raw,
-            include_deferred_content,
-        ),
+        Source::Claude | Source::Qoder | Source::QoderCn | Source::Pi | Source::Omp => {
+            rebuild_jsonl_values(
+                source,
+                path,
+                session_id,
+                source_sequence,
+                raw,
+                include_deferred_content,
+            )
+        }
         _ => Err("该来源的事件映射不是按行无上下文的".to_string()),
     }
 }
@@ -307,13 +309,14 @@ fn rebuild_jsonl_values(
         .map_err(|error| format!("第 {} 行 JSON 无效：{error}", source_sequence + 1))?;
     let values = vec![(source_sequence as usize, value)];
     let parsed = match source {
-        Source::Claude => super::claude::parse_from_values(
+        Source::Claude | Source::Qoder | Source::QoderCn => super::claude::parse_from_values(
             path,
             values,
             include_deferred_content,
             Some(session_id),
             true,
             false,
+            source,
         )?,
         Source::Pi => {
             super::pi::parse_from_values(path, values, include_deferred_content, Some(session_id))?

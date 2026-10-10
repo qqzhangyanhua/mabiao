@@ -47,14 +47,37 @@ pub(crate) fn discover_droid(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
 }
 
 pub(crate) fn discover_gemini(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(discover_extension(roots, "json")?
-        .into_iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("session-"))
-        })
-        .collect())
+    let mut paths = Vec::new();
+    for extension in ["json", "jsonl"] {
+        paths.extend(
+            discover_extension(roots, extension)?
+                .into_iter()
+                .filter(|path| {
+                    path.file_name()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| name.starts_with("session-"))
+                }),
+        );
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+pub(crate) fn discover_codex(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut paths = discover_jsonl(roots)?;
+    paths.extend(
+        discover_extension(roots, "zst")?
+            .into_iter()
+            .filter(|path| {
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.ends_with(".jsonl.zst"))
+            }),
+    );
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
 }
 
 pub(crate) fn discover_opencode(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {

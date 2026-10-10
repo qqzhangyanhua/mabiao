@@ -266,6 +266,81 @@ fn gemini_event_index_matches_full_parse() {
 }
 
 #[test]
+fn qoder_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".qoder/projects/-work-qoder/qoder-session-1.jsonl",
+        "qoder-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Qoder);
+    assert_conversation_index_matches_parse(&conn, home, "qoder", "qoder-session-1");
+}
+
+#[test]
+fn qoder_cn_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".qoder-cn/projects/-work-qoder-cn/qoder-cn-session-1.jsonl",
+        "qoder-cn-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::QoderCn);
+    assert_conversation_index_matches_parse(&conn, home, "qoder_cn", "qoder-cn-session-1");
+}
+
+#[test]
+fn cline_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".cline/data/sessions/sess-cline-1/sess-cline-1.messages.json",
+        "cline.messages.json",
+    );
+    write_home_fixture(
+        home,
+        ".cline/data/sessions/sess-cline-1/sess-cline-1.json",
+        "cline.manifest.json",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Cline);
+    assert_conversation_index_matches_parse(&conn, home, "cline", "sess-cline-1");
+}
+
+#[test]
+fn workbuddy_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".workbuddy/projects/-work-wb/sess-wb-1.jsonl",
+        "workbuddy.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::WorkBuddy);
+    assert_conversation_index_matches_parse(&conn, home, "workbuddy", "sess-wb-1");
+}
+
+#[test]
+fn gemini_jsonl_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".gemini/tmp/gemini-project/chats/session-sess-g-jsonl.jsonl",
+        "gemini-session-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Gemini);
+    assert_conversation_index_matches_parse(&conn, home, "gemini", "sess-g-jsonl");
+}
+
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

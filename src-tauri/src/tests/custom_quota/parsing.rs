@@ -252,8 +252,12 @@ fn unimplemented_presets_say_so_instead_of_panicking() {
 
     for preset in CustomQuotaPreset::ALL {
         if preset.implemented() {
+            let sample = match preset {
+                CustomQuotaPreset::VolcengineArk => "https://ark.cn-beijing.volces.com/api/coding",
+                _ => "https://relay.example.com",
+            };
             assert!(
-                custom::request_urls(preset, "https://relay.example.com", today()).is_ok(),
+                custom::request_urls(preset, sample, today()).is_ok(),
                 "{preset:?} 已实现，应该能构造请求地址"
             );
             continue;

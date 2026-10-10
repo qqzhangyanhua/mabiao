@@ -114,6 +114,7 @@ fn a_legacy_newapi_secret_is_tried_instead_of_blocked_as_unsupported() {
     let resolved = custom::ResolvedProvider {
         config: newapi_provider("custom:b7e204", "自建 NewAPI"),
         secret: Some("system-access-token".to_string()),
+        access_key_id: None,
     };
     assert_eq!(
         custom::precheck(&resolved),
@@ -139,6 +140,7 @@ fn saving_a_newapi_provider_joins_official_quota_with_parsed_windows() {
             base_url: BASE.to_string(),
             enabled: None,
             secret: Some("sk-relay-123456".to_string()),
+            access_key_id: None,
         },
     )
     .unwrap();
@@ -169,6 +171,7 @@ fn saving_a_newapi_provider_joins_official_quota_with_parsed_windows() {
         &[custom::ResolvedProvider {
             config: newapi_provider(&id, "自建 NewAPI"),
             secret: Some("sk-relay-123456".to_string()),
+            access_key_id: None,
         }],
         now,
     );

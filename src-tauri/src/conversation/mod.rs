@@ -7,11 +7,13 @@ use crate::domain::{
 };
 
 mod agent_graph;
+mod alma;
 pub(crate) mod attachments;
 mod backfill;
 mod catalog;
 mod catalog_search;
 mod claude;
+mod cline;
 mod codex;
 mod context_cache;
 mod context_content;
@@ -41,6 +43,7 @@ mod omp;
 mod opencode;
 mod persist;
 mod pi;
+mod qoder;
 mod qwen;
 mod read;
 mod refresh;
@@ -48,6 +51,8 @@ mod scan_roots;
 mod session_store;
 mod toolbox;
 pub(crate) mod trusted_path;
+mod workbuddy;
+mod zcode;
 
 use merge::merge_parsed_conversations;
 use toolbox::{FileIndexCursor, ParsedConversation};
@@ -63,9 +68,9 @@ pub use context_content::load_context_item_content;
 pub(crate) use context_manifest::assemble;
 pub(crate) use discover::{
     detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
-    discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,
-    discover_opencode, index_claude, index_gemini, index_omp, index_pi, regular_source_revision,
-    single_detail,
+    discover_codex, discover_droid, discover_dsh, discover_extension, discover_gemini,
+    discover_jsonl, discover_opencode, index_claude, index_gemini, index_omp, index_pi,
+    regular_source_revision, single_detail,
 };
 pub(crate) use event_index::indexed_event_count;
 pub use event_storage::adopt_text_references;
@@ -104,9 +109,15 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Opencode,
     Source::Qwen,
     Source::Copilot,
+    Source::Qoder,
+    Source::QoderCn,
+    Source::Cline,
+    Source::WorkBuddy,
+    Source::Zcode,
+    Source::Alma,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 18;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -164,7 +175,7 @@ pub(crate) struct ConversationAdapter {
 pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
     ConversationAdapter {
         source: Source::Codex,
-        discover: discover_jsonl,
+        discover: discover_codex,
         index: codex::index,
         index_suffix: Some(codex::index_suffix),
         detail: codex::detail,
@@ -290,6 +301,66 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: copilot::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Qoder,
+        discover: discover_jsonl,
+        index: qoder::index,
+        index_suffix: Some(qoder::index_suffix),
+        detail: qoder::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::QoderCn,
+        discover: discover_jsonl,
+        index: qoder::index_cn,
+        index_suffix: Some(qoder::index_suffix_cn),
+        detail: qoder::detail_cn,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Cline,
+        discover: cline::discover,
+        index: cline::index,
+        index_suffix: None,
+        detail: cline::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::WorkBuddy,
+        discover: discover_jsonl,
+        index: workbuddy::index,
+        index_suffix: None,
+        detail: workbuddy::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Zcode,
+        discover: zcode::discover,
+        index: zcode::index,
+        index_suffix: None,
+        detail: zcode::detail,
+        revision: zcode::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Alma,
+        discover: alma::discover,
+        index: alma::index,
+        index_suffix: None,
+        detail: alma::detail,
+        revision: alma::source_revision,
+        raw_extension: None,
         reuse_unchanged_index: true,
     },
 ];

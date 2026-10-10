@@ -145,7 +145,7 @@ pub fn resolve_target(
 pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<FetchTarget> {
     custom
         .iter()
-        .filter(|provider| provider.config.enabled && provider.secret.is_some())
+        .filter(|provider| provider.config.enabled && provider.has_credentials())
         .cloned()
         .map(|provider| FetchTarget::Custom(Box::new(provider)))
         .collect()

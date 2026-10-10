@@ -44,9 +44,13 @@ pub struct CustomQuotaConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CustomQuotaCredentials {
-    /// 标识 → 密钥。
+    /// 标识 → 密钥（单密钥预设的那一把，或火山方舟的 Secret Access Key）。
     #[serde(default)]
     pub secrets: BTreeMap<String, String>,
+    /// 标识 → AccessKey ID。只给双密钥预设用。旧文件没有这个字段，当成空 map。
+    /// 没有双密钥条目时整段省略，已存的单密钥文件形状不变。
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub access_key_ids: BTreeMap<String, String>,
 }
 
 /// 配置与凭证合起来的一条：取数需要两边都有。
@@ -55,6 +59,8 @@ pub struct ResolvedProvider {
     pub config: CustomQuotaProvider,
     /// 凭证文件里没有这条时为 `None`（多半是恢复备份后密钥没跟过来）。
     pub secret: Option<String>,
+    /// 火山方舟等双密钥预设的 AccessKey ID；单密钥预设恒为 `None`。
+    pub access_key_id: Option<String>,
 }
 
 /// 两份文件的路径。它们从 `AppState` 一路传到这里，永远成对出现，
@@ -114,7 +120,16 @@ pub fn load_providers(paths: &CustomQuotaPaths) -> Vec<ResolvedProvider> {
                 .get(&config.id)
                 .map(|value| value.trim().to_string())
                 .filter(|value| !value.is_empty());
-            ResolvedProvider { config, secret }
+            let access_key_id = credentials
+                .access_key_ids
+                .get(&config.id)
+                .map(|value| value.trim().to_string())
+                .filter(|value| !value.is_empty());
+            ResolvedProvider {
+                config,
+                secret,
+                access_key_id,
+            }
         })
         .collect()
 }
@@ -190,4 +205,21 @@ pub fn mask_secret(secret: Option<&str>) -> Option<String> {
         last.into_iter().collect()
     };
     Some(format!("••••••{tail}"))
+}
+
+impl ResolvedProvider {
+    /// 启用后值不值得打网：单密钥只要 secret；火山方舟还要 AccessKey ID。
+    pub fn has_credentials(&self) -> bool {
+        self.missing_credential_todo().is_none()
+    }
+
+    pub fn missing_credential_todo(&self) -> Option<&'static str> {
+        if self.secret.is_none() {
+            return Some(super::MISSING_SECRET);
+        }
+        if self.config.preset.needs_access_key_id() && self.access_key_id.is_none() {
+            return Some(super::volcengine_ark::MISSING_ACCESS_KEY);
+        }
+        None
+    }
 }

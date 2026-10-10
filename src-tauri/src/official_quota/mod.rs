@@ -59,9 +59,18 @@ pub fn save_config(path: &Path, config: &OfficialQuotaConfig) -> Result<(), Stri
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    let mut sanitized = config.clone();
+    sanitized.alert_thresholds =
+        crate::domain::normalize_alert_thresholds(&config.alert_thresholds);
+    if sanitized.reset_reminder_hours > 168 {
+        sanitized.reset_reminder_hours = 168;
+    }
+    if sanitized.reset_reminder_max_used_percent > 100 {
+        sanitized.reset_reminder_max_used_percent = 100;
+    }
     fs::write(
         path,
-        serde_json::to_string_pretty(config).map_err(|e| e.to_string())?,
+        serde_json::to_string_pretty(&sanitized).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
 }
@@ -155,19 +164,20 @@ fn load_custom_row(
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     let mut row = load_row_by_id(conn, &provider.config.id, &provider.config.name, now);
-    attach_missing_secret_todo(&mut row, provider.secret.is_none());
+    attach_missing_secret_todo(&mut row, provider.missing_credential_todo());
     row
 }
 
 /// 缺密钥是待办，不是取数失败。sqlite 里可能残留一句同样的 error（上一轮
 /// 刷新写进去的），这里把它挪到 `todo`，避免首页画成红字。
-fn attach_missing_secret_todo(row: &mut OfficialQuotaRow, secret_missing: bool) {
-    let leftover_todo = row.error.as_deref() == Some(custom::MISSING_SECRET);
+fn attach_missing_secret_todo(row: &mut OfficialQuotaRow, missing: Option<&str>) {
+    let leftover_todo = row.error.as_deref() == Some(custom::MISSING_SECRET)
+        || row.error.as_deref() == Some(custom::volcengine_ark::MISSING_ACCESS_KEY);
     if leftover_todo {
         row.error = None;
     }
-    if secret_missing {
-        row.todo = Some(custom::MISSING_SECRET.to_string());
+    if let Some(todo) = missing {
+        row.todo = Some(todo.to_string());
     }
 }
 

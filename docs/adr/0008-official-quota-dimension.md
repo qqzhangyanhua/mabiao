@@ -52,5 +52,7 @@ Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消�
 - Cursor 限额接口与账号用量一样是非公开的，结构变更时降级为可读中文错误。Cursor 一档订阅里并行有总量 / Auto / API / 按需，必须拆成多个官方额度窗口，不能只画 `totalPercentUsed`。
 - Codex 依赖本机 CLI；进程不在或超时不影响 Claude / Cursor / Grok。
 - Grok 依赖本机 `grok login` 写入的会话凭证；文件缺失、过期或仅有 API key 时该行 `unavailable`，不影响另外三路。Grok 限额接口与消耗记录摄取分开，结构变更时保留上次正确缓存。
-- 80% / 100% 告警按 `provider + window_kind + resets_at` 去重，`stale` 不弹，与月度预算分开开关。
+- 告警档位写入 `OfficialQuotaConfig.alert_thresholds`，缺省仍是 80 / 100；旧配置文件缺字段时按默认回落，不必迁移。去重键仍是 `provider + window_kind + resets_at`，`stale` 不弹，与月度预算分开开关。
+- 「重置前仍有余量」提醒：距 `resets_at` 不足 `reset_reminder_hours`（默认 12，`0` 关闭）且已用低于 `reset_reminder_max_used_percent`（默认 50）时，每个重置周期只弹一次。5 小时 / `session*` 窗重置太勤，不发这条。开关显示或开关告警必须先读再整份写回，避免冲掉自定义档位。
 - 预计撞线只由连续两次官方快照的百分比（或金额）差计算，文案写成估计；禁止把本机 5 小时燃烧叠进官方进度条。尚未凑齐两拍、或间隔不足一分钟时不显示。
+- 连续官方快照另写入 `official_quota_history`（默认保留 45 天），只给官方额度面板画趋势。禁止与本机 5 小时 / 7 天估计窗混图。旧库用当前 + 上一拍快照回填。

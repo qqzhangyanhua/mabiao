@@ -1,4 +1,5 @@
-import { memo, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { memo, useEffect, useMemo, useState } from "react";
 import { heatmapGrid } from "../lib/calendar";
 import { chartPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
@@ -15,11 +16,15 @@ import { Icon } from "../icons";
 import { Button } from "./ui/Button";
 import { ReportDialog } from "./ReportDialog";
 import { EmptyState } from "./EmptyState";
+import { OverviewSourcePresence } from "./OverviewSourcePresence";
+import type { SourcePresenceDto } from "../lib/sourcePresence";
 import { OverviewKpiSection, OverviewStatusBar } from "./OverviewKpiSection";
 import { OverviewLayoutBar } from "./OverviewLayoutBar";
 import { OverviewPanels } from "./OverviewPanels";
 import {
   cacheHitRate,
+  overviewCacheHitRate,
+  formatCacheHitRate,
   deltaPct,
   formatClock,
   formatCompact,
@@ -104,6 +109,7 @@ export const Overview = memo(function Overview({
   onOfficialQuota,
   onQuotaError,
   onOpenUnpricedDiagnosis,
+  onOpenScanPaths,
 }: {
   overview: OverviewDto | null;
   billingWindows: BillingWindowsDto | null;
@@ -136,6 +142,7 @@ export const Overview = memo(function Overview({
   onOfficialQuota: (value: OfficialQuotaDto) => void;
   onQuotaError: (error: unknown) => void;
   onOpenUnpricedDiagnosis?: () => void;
+  onOpenScanPaths?: () => void;
 }) {
   const data = overview ?? emptyOverview;
   const palette = chartPalette(theme);
@@ -190,8 +197,25 @@ export const Overview = memo(function Overview({
   const tokenDelta = formatDelta(deltaPct(data.total_tokens, previous?.total_tokens ?? null));
   const costDelta =
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
+  const cacheHitRateValue = overviewCacheHitRate(
+    data.cache_read_tokens,
+    data.cache_creation_tokens,
+    data.input_tokens,
+  );
   const cacheHitRateLabel = formatPercent(cacheHitRate(data.cache_read_tokens, data.input_tokens));
+  const cacheHitKpiValue = formatCacheHitRate(cacheHitRateValue);
+  const cacheHitHint =
+    cacheHitRateValue == null
+      ? "当前筛选范围内没有缓存读或缓存写，无法计算。口径：cache_read / (input + cache_read)，与来源统计相同。"
+      : "cache_read / (input + cache_read)。没有缓存口径的来源不参与，不会把命中率拉成 0%。";
   const [reportOpen, setReportOpen] = useState(false);
+  const [presence, setPresence] = useState<SourcePresenceDto | null>(null);
+
+  useEffect(() => {
+    void invoke<SourcePresenceDto>("detect_source_presence")
+      .then(setPresence)
+      .catch(() => undefined);
+  }, []);
 
   if (!overview) {
     return (
@@ -229,6 +253,9 @@ export const Overview = memo(function Overview({
         </div>
       </div>
       {reportOpen ? <ReportDialog onClose={() => setReportOpen(false)} /> : null}
+      {presence && !presence.has_usage_records && onOpenScanPaths ? (
+        <OverviewSourcePresence data={presence} onOpenScanPaths={onOpenScanPaths} />
+      ) : null}
       {!hasVisibleModule ? (
         <EmptyState
           icon="overview"
@@ -252,6 +279,8 @@ export const Overview = memo(function Overview({
           dailyDelta={formatDelta(
             deltaPct(dailyAvg, previous ? previous.total_tokens / Math.max(days, 1) : null),
           )}
+          cacheHitValue={cacheHitKpiValue}
+          cacheHitHint={cacheHitHint}
           spark={spark}
           costSpark={trend.map((point) => point.cost ?? 0)}
           live={live}
