@@ -86,6 +86,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::CursorAgent), "");
     assert_eq!(scan_paths::join_leaf(Source::Agy), "conversations");
     assert_eq!(scan_paths::join_leaf(Source::Qoder), "projects");
+    assert_eq!(scan_paths::join_leaf(Source::QoderCn), "projects");
 }
 
 #[test]

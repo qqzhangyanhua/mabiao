@@ -9,7 +9,7 @@
 _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记录）
 
 **来源 (Source)**：
-一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 16 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
+一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 17 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
@@ -105,6 +105,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | cursor-agent | 会话与 IDE 共用 `~/.cursor/chats` + `agent-transcripts`；token 仅无头 stdout（需包装落盘到 `~/.cursor-agent-usage`） | ⚠️（仅包装） | ❌ |
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | Qoder | jsonl `~/.qoder/projects`（Claude Code 形态，`QODER_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
+| Qoder CN | jsonl `~/.qoder-cn/projects`（Claude Code 形态，`QODERCN_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
 
 表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Antigravity** 行的 Source slug 是 **`agy`**，界面 application 名是 **Antigravity**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。

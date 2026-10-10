@@ -19,6 +19,7 @@ const KNOWN_SOURCES = [
   "hermes",
   "agy",
   "qoder",
+  "qoder_cn",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -38,6 +39,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("factory")).toBe("factory");
     expect(resolveSourceIconId("hermes")).toBe("hermes");
     expect(resolveSourceIconId("qoder")).toBe("qoder");
+    expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {
@@ -48,6 +50,11 @@ describe("resolveSourceIconId", () => {
   it("uses the Droid face for factory and official quota droid ids", () => {
     expect(resolveSourceIconId("factory")).toBe("factory");
     expect(resolveSourceIconId("droid")).toBe("factory");
+  });
+
+  it("uses one Qoder face for Qoder and Qoder CN", () => {
+    expect(resolveSourceIconId("qoder")).toBe("qoder");
+    expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
   });
 
   it("uses the Gemini face for Antigravity official quota and agy usage", () => {

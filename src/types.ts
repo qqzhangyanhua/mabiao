@@ -969,7 +969,8 @@ export type UsageSource =
   | "copilot"
   | "hermes"
   | "agy"
-  | "qoder";
+  | "qoder"
+  | "qoder_cn";
 
 export type SourceIngestReport = {
   source: UsageSource;

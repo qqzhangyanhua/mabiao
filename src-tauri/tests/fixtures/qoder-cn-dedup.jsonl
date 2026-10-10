@@ -1,0 +1,4 @@
+{"type":"user","sessionId":"44444444-dddd-4eee-8fff-000000000004","timestamp":"2026-09-27T12:00:00.000Z","cwd":"/work/qoder-cn"}
+{"type":"assistant","sessionId":"44444444-dddd-4eee-8fff-000000000004","timestamp":"2026-09-27T12:00:08.000Z","message":{"model":"glm-5","id":"msg-cn-dup","usage":{"input_tokens":6,"output_tokens":12,"cache_read_input_tokens":80,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"44444444-dddd-4eee-8fff-000000000004","timestamp":"2026-09-27T12:00:09.000Z","message":{"model":"glm-5","id":"msg-cn-dup","stop_reason":"end_turn","usage":{"input_tokens":6,"output_tokens":20,"cache_read_input_tokens":80,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"44444444-dddd-4eee-8fff-000000000004","timestamp":"2026-09-27T12:00:10.000Z","message":{"model":"glm-5","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}

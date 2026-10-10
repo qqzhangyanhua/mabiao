@@ -142,6 +142,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("devin")).toBe("Devin");
     expect(sourceLabel("hermes")).toBe("Hermes");
     expect(sourceLabel("qoder")).toBe("Qoder");
+    expect(sourceLabel("qoder_cn")).toBe("Qoder CN");
   });
 
   it("always offers Cursor in the source filter list", () => {
