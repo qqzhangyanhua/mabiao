@@ -2,6 +2,7 @@
 
 mod adapters;
 mod aggregate_boundary;
+mod alma_conversation;
 mod antigravity_quota;
 mod backup;
 mod billing;
