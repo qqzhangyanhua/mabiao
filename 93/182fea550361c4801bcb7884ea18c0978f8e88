@@ -1,0 +1,199 @@
+docs/adr/0026-push-to-remote-server.md
+  s_2ac0eb3c2695cb::t_a6b4e52623a3b8 1-76
+src-tauri/src/push/redact.rs
+  s_f1a49e230d14a9::t_10cba09b8482b2 17,44
+  s_f1a49e230d14a9::t_cc1f70a423761a 72-74
+  s_f1a49e230d14a9::t_0230d301f2972d 69,75
+  s_f1a49e230d14a9::t_abcad8e7477c8d 1-16,18-40,43,45-68,70-71,76-95
+  s_f1a49e230d14a9::t_b7883814bb11a7 41-42
+src-tauri/src/test_support/mod.rs
+  s_f1a49e230d14a9::t_f91989ed6ab39f 7
+server/src/push.rs
+  s_57d84768e9bc50::t_342417b6d7d3a2 17
+  s_57d84768e9bc50::t_4dbd8df1000dc1 121-122
+  s_57d84768e9bc50::t_85cb39fb68bfb0 144
+src/styles.css
+  s_f1a49e230d14a9::t_1b789d736cea40 22
+server/src/usage_query.rs
+  s_57d84768e9bc50::t_6022f9740c71ed 1-103
+src-tauri/Cargo.toml
+  s_f1a49e230d14a9::t_0c6a96f8287253 53
+src-tauri/src/push/payload.rs
+  s_f1a49e230d14a9::t_10cba09b8482b2 16,128-129
+  s_f1a49e230d14a9::t_86c4a63a8e6b5b 1-15,17-127,130-270
+docs/agent-layers.md
+  s_57d84768e9bc50::t_8e84fe501f7df9 181-193
+  s_f1a49e230d14a9::t_53822c57c4fa3f 130,142-154
+  s_57d84768e9bc50::t_d50ac9c97724de 174
+server/Dockerfile.dockerignore
+  s_57d84768e9bc50::t_f6e073f86f38c1 1,5
+src/lib/pushRange.test.ts
+  s_f1a49e230d14a9::t_57ee5697cab67a 1-106
+AGENTS.md
+  s_f1a49e230d14a9::t_53822c57c4fa3f 48
+server/Cargo.toml
+  s_57d84768e9bc50::t_fc20d63a5a729e 21
+src/types.ts
+  s_f1a49e230d14a9::t_a3150a4c4f52ec 1212-1279
+src-tauri/src/push/mod.rs
+  s_f1a49e230d14a9::t_10cba09b8482b2 151-152,309-314,325,356
+  s_f1a49e230d14a9::t_cc1f70a423761a 287-289,369-373
+  s_f1a49e230d14a9::t_8b5366cac6a805 153,158
+  s_f1a49e230d14a9::t_eadbf373bd86de 1-150,154-157,159-286,290-308,315-324,326-355,357-368,374-386
+src/hooks/useUsageData.ts
+  s_f1a49e230d14a9::t_a8a892d23eba31 30-34,271-275,394
+src/lib/settingsTabs.ts
+  s_f1a49e230d14a9::t_a8a892d23eba31 4,7
+server/migrations/0003_team_prices.sql
+  s_57d84768e9bc50::t_8bbc7f822f648f 1-29
+src-tauri/src/conversation/context_content.rs
+  s_f1a49e230d14a9::t_bbdc5d938d5af1 3
+  s_f1a49e230d14a9::t_626e216ff1120d 40-53
+server/src/lib.rs
+  s_57d84768e9bc50::t_c1ac3c69606ff3 3
+  s_57d84768e9bc50::t_703332a76bd697 17,20
+src/styles/views/conversation-push.css
+  s_f1a49e230d14a9::t_1b789d736cea40 8-110
+  s_f1a49e230d14a9::t_b14fead4912b0a 1-7
+server/src/error.rs
+  s_57d84768e9bc50::t_d9d7f4e3e882fb 123-133
+server/src/api.rs
+  s_57d84768e9bc50::t_037a7a36dad38d 4,10-11
+  s_57d84768e9bc50::t_367a1d38782d27 63-223
+src-tauri/src/conversation/mod.rs
+  s_f1a49e230d14a9::t_cc1f70a423761a 82-83
+  s_f1a49e230d14a9::t_0ad696f99f8b74 46
+crates/pricing/src/lib.rs
+  s_f1a49e230d14a9::t_414270fe5629ad 15-16
+src-tauri/src/commands/push.rs
+  s_f1a49e230d14a9::t_c59669e0ecf967 1-22,24-47,49-76
+  s_f1a49e230d14a9::t_8b5366cac6a805 23,48
+src-tauri/src/test_support/http_stub.rs
+  s_f1a49e230d14a9::t_703bb1e7dd38f6 1-104
+src-tauri/src/tests/push.rs
+  s_f1a49e230d14a9::t_e4a9f8d8f44994 1-15,17-103,131-145,147-215,219-239,245-246,249-252,258-291,303-344,348-361,366-384,386-410,419-424,429-430,475-477,482-551,556-562,571-598,602-614,669-678,680-681,688-702,712-740,748-798,800-812,814-871,879-904,914-959,963-975,983-1063,1070-1114,1120-1139,1141-1143,1150-1164,1170-1172,1179-1181
+  s_f1a49e230d14a9::t_d04ac09b66dc4f 679,1140,1165-1169
+  s_f1a49e230d14a9::t_cc1f70a423761a 104-130,146,216-218,240-244,247-248,253-257,292-302,362-365,411-418,425-428,478-481,552-555,563-570,599-601,615-617,682-687,703-711,741-747,799,813,872-878,905-913,960-962,976-982,1064-1069,1115-1119,1144-1149,1173-1178
+  s_f1a49e230d14a9::t_10cba09b8482b2 16,345-347,385,618-668
+  s_f1a49e230d14a9::t_dd8d8876a373ff 431-474
+src-tauri/src/tests/remote_server.rs
+  s_f1a49e230d14a9::t_f91989ed6ab39f 8,15
+server/src/main.rs
+  s_57d84768e9bc50::t_f1174f4e727bb5 90-94
+CONTEXT.md
+  s_2ac0eb3c2695cb::t_ea59b7e9e3cb52 40
+  s_2ac0eb3c2695cb::t_b5492b5e36ad44 37
+  s_2ac0eb3c2695cb::t_c83d6fb1d503c2 39,41-43,45-46,51,53
+  s_2ac0eb3c2695cb::t_042625364aea95 44
+  s_57d84768e9bc50::t_6502e40ee09bac 47-50
+  s_2ac0eb3c2695cb::t_1ddfd0a178dc0e 52
+  s_2ac0eb3c2695cb::t_456dba1faa668c 38
+server/src/routes.rs
+  s_57d84768e9bc50::t_974d95efa93f31 42-49
+  s_57d84768e9bc50::t_7470f2c969b238 182
+  s_57d84768e9bc50::t_4e4cfc461fd17a 159-181,183-270
+  s_57d84768e9bc50::t_18bfe0014a577a 4,8-11,13-16
+server/src/team_pricing.rs
+  s_57d84768e9bc50::t_967175254d95b9 237-238
+  s_57d84768e9bc50::t_838d605cf666ce 161-164,168,173
+  s_57d84768e9bc50::t_86ebef7225a15b 17,19
+  s_57d84768e9bc50::t_410be6eb885a53 129-130,134-138
+  s_57d84768e9bc50::t_a9022f30cdb02b 147-150
+  s_57d84768e9bc50::t_59bd057ec79d3b 466-476,479-480,488-502
+  s_57d84768e9bc50::t_fa9337d31f9583 1-16,18,20-128,131-133,139-146,151-160,165-167,169-172,174-236,239-465,477-478,481-487,503-504
+server/Dockerfile
+  s_57d84768e9bc50::t_e758eef7ba8a93 1,6
+server/src/usage.rs
+  s_57d84768e9bc50::t_7689f224997cec 30-32,38,41,43-60,66-67,69
+  s_57d84768e9bc50::t_ec775d8727cba3 90-93
+  s_57d84768e9bc50::t_152fa836e02130 2,7,9
+src-tauri/src/remote_server/mod.rs
+  s_f1a49e230d14a9::t_d80099e80cfaeb 11
+  s_f1a49e230d14a9::t_309d17dc439ace 173-228
+src/components/Conversations.tsx
+  s_f1a49e230d14a9::t_a8a892d23eba31 28,37,44,86,312,328-334
+server/tests/pricing.rs
+  s_57d84768e9bc50::t_ebc07be3e4af5e 17-19
+  s_57d84768e9bc50::t_8903fea1daae56 1-16,20-138,142-160,162-194,201-212,219-221,223-237,244-281,288-304,311-325,332-370,377-439,448-464,473-498,507-541,547-555,564-573,586-635,642-647
+  s_57d84768e9bc50::t_eae540d3482367 216
+  s_57d84768e9bc50::t_9b45009b33ec4f 222
+  s_57d84768e9bc50::t_4e4cfc461fd17a 139-141,161,195-200,213-215,217-218,238-243,282-287,305-310,326-331,371-376,440-447,465-472,499-506,542-546,556-563,574-585,636-641
+src-tauri/src/conversation/grok_inject.rs
+  s_f1a49e230d14a9::t_5faab2e4f4970f 108-123,125-129
+src-tauri/src/push/history.rs
+  s_f1a49e230d14a9::t_9e1a3548179073 1-54
+src-tauri/src/push/git_remote.rs
+  s_f1a49e230d14a9::t_e0857849029067 16-30
+  s_f1a49e230d14a9::t_0935b690bbea75 109-128
+  s_f1a49e230d14a9::t_6a3b1f95fd1b2c 1-15,31-108,129-137
+src-tauri/src/tests/mod.rs
+  s_f1a49e230d14a9::t_d04ac09b66dc4f 54
+src/lib/pushRange.ts
+  s_f1a49e230d14a9::t_68ea07fc16dc95 1-95
+src-tauri/src/conversation/cursor_inject.rs
+  s_f1a49e230d14a9::t_6aff81b02b025f 8
+  s_f1a49e230d14a9::t_bd7f1bde058957 191-203,205-207,209-222,224
+src/components/ConversationPushDialog.tsx
+  s_f1a49e230d14a9::t_2f362fbc1ec70c 70-74,86-89,121,123-124,127,129-134,373,375
+  s_f1a49e230d14a9::t_a8a892d23eba31 81,384
+  s_f1a49e230d14a9::t_92877c7ce886f0 1-69,75-80,82-85,90-120,122,125-126,128,135-372,374,376-383,385-424
+crates/pricing/src/apply.rs
+  s_f1a49e230d14a9::t_eda5f9a1c9c013 3
+  s_f1a49e230d14a9::t_a133faaa8e5a30 271-290
+  s_f1a49e230d14a9::t_dc789b855545db 131,134-158,161
+  s_f1a49e230d14a9::t_47a98280f9bcb9 270
+src-tauri/src/conversation/push_source.rs
+  s_f1a49e230d14a9::t_cc1f70a423761a 118-119,122-125
+  s_f1a49e230d14a9::t_3293fdca942935 1-117,120-121,126-192
+src-tauri/src/push/usage.rs
+  s_f1a49e230d14a9::t_a76851db7a9083 1-77
+src-tauri/src/remote_server/client.rs
+  s_f1a49e230d14a9::t_0966c007574047 14-15
+  s_f1a49e230d14a9::t_2687b530435056 43-79
+  s_f1a49e230d14a9::t_6a8a4fdedff777 8-11
+src/App.tsx
+  s_f1a49e230d14a9::t_a8a892d23eba31 235
+src/components/ConversationCatalog.tsx
+  s_f1a49e230d14a9::t_3d0f2216da0422 105,109-118
+  s_f1a49e230d14a9::t_a8a892d23eba31 14,39,58,106-108
+server/Cargo.lock
+  s_57d84768e9bc50::t_33ab0a056ac775 1039,1288-1294
+src-tauri/Cargo.lock
+  s_f1a49e230d14a9::t_ccee5f41487031 2261
+src-tauri/src/commands/mod.rs
+  s_f1a49e230d14a9::t_bf40a343b18814 6,18
+src-tauri/src/lib.rs
+  s_f1a49e230d14a9::t_914d5233cf0e44 26,502-504
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "93182fea550361c4801bcb7884ea18c0978f8e88",
+  "prompts": {},
+  "sessions": {
+    "s_2ac0eb3c2695cb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ebbe04f7-35f0-4a10-a725-2325d0f88ca7",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_57d84768e9bc50": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "53e3d40c-6391-4122-baee-2970d8d52dbb",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_f1a49e230d14a9": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a4f2d1ee-43f5-480e-ac0c-63cc884d23ef",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
