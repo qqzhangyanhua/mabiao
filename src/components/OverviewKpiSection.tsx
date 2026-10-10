@@ -17,6 +17,8 @@ export function OverviewKpiSection({
   onCostClick,
   dailyValue,
   dailyDelta,
+  cacheHitValue,
+  cacheHitHint,
   spark,
   costSpark,
   live,
@@ -33,6 +35,8 @@ export function OverviewKpiSection({
   onCostClick: (() => void) | undefined;
   dailyValue: string;
   dailyDelta: Delta;
+  cacheHitValue: string;
+  cacheHitHint: string;
   spark: number[];
   costSpark: number[];
   live: boolean;
@@ -76,6 +80,14 @@ export function OverviewKpiSection({
         spark={spark}
         live={live}
         radar
+      />
+      <KpiCard
+        icon="tokens"
+        tone="cyan"
+        label="缓存命中率"
+        value={cacheHitValue}
+        hint={cacheHitHint}
+        title={cacheHitHint}
       />
     </section>
   );

@@ -209,6 +209,22 @@ export function cacheHitRate(cacheReadTokens: number, inputTokens: number): numb
   return cacheReadTokens / denominator;
 }
 
+/**
+ * 总览缓存命中率，与 Rust `domain::cache_hit_rate` 同口径：
+ * `cache_read / (input + cache_read)`。
+ * 读、写都是 0 时视为该筛选范围内没有缓存口径，返回 null（界面「无法计算」，不是 0%）。
+ */
+export function overviewCacheHitRate(
+  cacheReadTokens: number,
+  cacheCreationTokens: number,
+  inputTokens: number,
+): number | null {
+  if (cacheReadTokens <= 0 && cacheCreationTokens <= 0) {
+    return null;
+  }
+  return cacheHitRate(cacheReadTokens, inputTokens);
+}
+
 export function formatPercent(value: number | null): string {
   if (value == null || Number.isNaN(value)) {
     return "—";
