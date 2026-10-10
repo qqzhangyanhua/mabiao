@@ -1,0 +1,19 @@
+server/tests/push.rs
+  s_2ac0eb3c2695cb::t_a7fc1219be9ef3 543
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8d891f27f678a403996d2f0206bebee7c807e1e8",
+  "prompts": {},
+  "sessions": {
+    "s_2ac0eb3c2695cb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ebbe04f7-35f0-4a10-a725-2325d0f88ca7",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
