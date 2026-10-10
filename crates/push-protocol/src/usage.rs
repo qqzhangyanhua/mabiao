@@ -18,9 +18,9 @@ pub struct UsageTokens {
 pub enum PricingSource {
     /// 来源自带 `native_cost`。
     Native,
-    /// 价目表按 model 精确匹配。
+    /// 价目条目带 provider，且 model+provider 都对上。与 `pricing::PricingBasis::Exact` 同义。
     Exact,
-    /// model 兜底或 LiteLLM 快照。
+    /// provider 为空的条目：按 model 兜底，含 LiteLLM 快照。与 `pricing::PricingBasis::Fallback` 同义。
     Fallback,
     Unpriced,
 }
