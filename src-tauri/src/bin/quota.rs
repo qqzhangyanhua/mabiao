@@ -9,7 +9,7 @@
 //! 读的是应用同一个 sqlite（WAL，只读连接不阻塞正在写的应用）。应用没跑过、
 //! 库还不存在时输出空结果而不是报错——脚本不该因为「还没用过」而挂掉。
 
-use mabiao_lib::domain::{OfficialQuotaConfig, OfficialQuotaDto};
+use mabiao_lib::domain::OfficialQuotaDto;
 use mabiao_lib::{official_quota, paths, store};
 
 fn main() {
@@ -66,10 +66,7 @@ fn run(refresh: bool) -> Result<String, String> {
         official_quota::load_config(&paths::app_data_dir().join(official_quota::CONFIG_NAME));
     render(&official_quota::load_dto(
         &conn,
-        &OfficialQuotaConfig {
-            alerts_enabled: config.alerts_enabled,
-            hidden_providers: config.hidden_providers,
-        },
+        &config,
         &custom,
         chrono::Utc::now(),
     ))

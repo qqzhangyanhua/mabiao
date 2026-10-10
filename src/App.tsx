@@ -10,6 +10,7 @@ import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
 import { parseWorktimeDay } from "./hooks/viewCache";
 import { clearDimensionFilters, withModelFilter, withProviderFilter } from "./lib/filterChips";
+import { persistOfficialQuotaConfig } from "./lib/officialQuotaConfig";
 import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
 import {
   LazyApplicationAnalytics,
@@ -51,8 +52,9 @@ export default function App() {
     if (unchanged) {
       return;
     }
-    void invoke("save_official_quota_config", {
-      config: { alerts_enabled: quota.alerts_enabled, hidden_providers: hidden },
+    void persistOfficialQuotaConfig({
+      alerts_enabled: quota.alerts_enabled,
+      hidden_providers: hidden,
     })
       .then(() => {
         data.setOfficialQuota((prev) => (prev ? { ...prev, hidden_providers: hidden } : prev));

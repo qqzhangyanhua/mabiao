@@ -59,9 +59,18 @@ pub fn save_config(path: &Path, config: &OfficialQuotaConfig) -> Result<(), Stri
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
+    let mut sanitized = config.clone();
+    sanitized.alert_thresholds =
+        crate::domain::normalize_alert_thresholds(&config.alert_thresholds);
+    if sanitized.reset_reminder_hours > 168 {
+        sanitized.reset_reminder_hours = 168;
+    }
+    if sanitized.reset_reminder_max_used_percent > 100 {
+        sanitized.reset_reminder_max_used_percent = 100;
+    }
     fs::write(
         path,
-        serde_json::to_string_pretty(config).map_err(|e| e.to_string())?,
+        serde_json::to_string_pretty(&sanitized).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())
 }

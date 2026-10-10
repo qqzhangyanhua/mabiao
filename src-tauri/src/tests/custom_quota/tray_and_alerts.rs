@@ -93,6 +93,7 @@ fn tray_keeps_enabled_custom_providers_when_every_builtin_account_is_hidden() {
         &OfficialQuotaConfig {
             alerts_enabled: true,
             hidden_providers: hidden.clone(),
+            ..Default::default()
         },
         &[resolved("custom:a3f9c1", "公司的中转")],
         now,

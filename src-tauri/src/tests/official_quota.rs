@@ -357,6 +357,7 @@ fn load_dto_mirrors_hidden_providers_from_config_without_filtering_rows() {
     let config = crate::domain::OfficialQuotaConfig {
         alerts_enabled: true,
         hidden_providers: vec!["claude".to_string()],
+        ..Default::default()
     };
     let dto = official_quota::load_dto(&conn, &config, &[], chrono::Utc::now());
     // 设置页/主窗口的官方额度请求都走 load_dto，隐藏账号的状态仍要能看到。

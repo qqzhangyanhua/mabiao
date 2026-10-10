@@ -160,6 +160,11 @@ pub fn get_official_quota_history(
 }
 
 #[tauri::command]
+pub fn get_official_quota_config(state: tauri::State<AppState>) -> OfficialQuotaConfig {
+    official_quota::load_config(&state.official_quota_path)
+}
+
+#[tauri::command]
 pub fn save_official_quota_config(
     state: tauri::State<AppState>,
     config: OfficialQuotaConfig,
