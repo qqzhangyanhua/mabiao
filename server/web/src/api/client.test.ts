@@ -93,4 +93,37 @@ describe("createApi", () => {
     const api = createApi({ getToken: () => "t", onUnauthorized: vi.fn(), fetchFn });
     await expect(api.me()).rejects.toMatchObject({ status: 0, code: "network" });
   });
+
+  it("reads a session detail and deletes it without choking on the empty 204 body", async () => {
+    const detail = setup(() => jsonResponse(200, { session: { id: 7 } }));
+    await detail.api.sessionDetail(7);
+    expect(detail.fetchFn.mock.calls[0]![0]).toBe("/api/v1/sessions/7");
+
+    const removal = setup(() => new Response(null, { status: 204 }));
+    await expect(removal.api.deleteSession(7)).resolves.toBeUndefined();
+    expect(removal.fetchFn.mock.calls[0]![1]?.method).toBe("DELETE");
+  });
+
+  it("filters the session list by project and by the work-notes mark", async () => {
+    const { api, fetchFn } = setup(() => jsonResponse(200, { sessions: [], total: 0 }));
+    await api.sessions({ projectId: 4 }, 50, 0, false);
+    expect(fetchFn.mock.calls[0]![0]).toBe(
+      "/api/v1/sessions?project_id=4&limit=50&offset=0&generated_by_work_notes=false",
+    );
+  });
+
+  it("calls the project endpoints", async () => {
+    const { api, fetchFn } = setup(() => jsonResponse(200, {}));
+    await api.project(4, { accountId: 2 }, 480);
+    await api.adminProjects();
+    await api.renameProject(4, "新名字");
+    await api.mergeProject(4, 9);
+    const calls = fetchFn.mock.calls.map(([url, init]) => [url, init?.method, init?.body]);
+    expect(calls).toEqual([
+      ["/api/v1/projects/4?account_id=2&tz_offset_minutes=480", "GET", undefined],
+      ["/api/v1/admin/projects", "GET", undefined],
+      ["/api/v1/admin/projects/4", "PUT", JSON.stringify({ name: "新名字" })],
+      ["/api/v1/admin/projects/4/merge", "POST", JSON.stringify({ into_project_id: 9 })],
+    ]);
+  });
 });

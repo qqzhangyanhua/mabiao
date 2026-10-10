@@ -13,13 +13,17 @@ use crate::api::{
     SessionListQuery, SessionListResponse, SetTeamPriceRequest, SetTeamPriceResponse,
     SnapshotMetaView, SummaryQuery, SummaryResponse, UsageQuery, UsageResponse,
 };
+use crate::api_detail::{
+    AdminProjectView, MergeProjectRequest, MergeProjectResponse, ProjectDetailResponse,
+    ProjectView, RenameProjectRequest, SessionDetailView,
+};
 use crate::auth::{AdminAccount, AuthedAccount};
 use crate::error::{ApiJson, ApiQuery, AppError};
-use crate::sessions::{self, parse_timestamp};
+use crate::sessions::{self, parse_timestamp, SessionFilter};
 use crate::summary;
 use crate::team_pricing::{self, Scope};
 use crate::usage_query::{self, Filter};
-use crate::{accounts, coverage, devices, password, push, tokens, AppState};
+use crate::{accounts, coverage, devices, password, project_admin, push, tokens, AppState};
 
 /// 注意：这里没有注册 / 自助开户的路由，账号只能由管理员接口或服务端命令行创建。
 pub fn router(state: AppState) -> Router {
@@ -42,7 +46,17 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/admin/accounts/{id}/deactivate",
             post(admin_deactivate_account),
         )
-        .route("/api/v1/sessions/{id}", delete(push::delete_session))
+        .route(
+            "/api/v1/sessions/{id}",
+            get(session_detail).delete(push::delete_session),
+        )
+        .route("/api/v1/projects/{id}", get(project_detail))
+        .route("/api/v1/admin/projects", get(admin_projects))
+        .route("/api/v1/admin/projects/{id}", put(admin_rename_project))
+        .route(
+            "/api/v1/admin/projects/{id}/merge",
+            post(admin_merge_project),
+        )
         .route("/api/v1/admin/coverage", get(admin_coverage))
         .route("/api/v1/admin/pricing", get(admin_pricing))
         .route("/api/v1/admin/pricing/prices", put(admin_set_price))
@@ -247,11 +261,13 @@ fn parse_bound(
 
 fn build_filter(
     account_id: Option<i64>,
+    project_id: Option<i64>,
     from: Option<&str>,
     to: Option<&str>,
 ) -> Result<Filter, AppError> {
     Ok(Filter {
         account_id,
+        project_id,
         from: parse_bound("from", from)?,
         to: parse_bound("to", to)?,
     })
@@ -290,13 +306,26 @@ async fn usage_list(
 ) -> Result<Json<UsageResponse>, AppError> {
     let account_id = scope_account(&caller, query.account_id)?;
     let (limit, offset) = parse_paging(query.limit, query.offset)?;
-    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
+    let filter = build_filter(
+        account_id,
+        query.project_id,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )?;
     let rows = usage_query::list(&state.pool, &filter, limit, offset).await?;
     let totals = usage_query::totals(&state.pool, &filter).await?;
     Ok(Json(UsageResponse {
         records: rows.into_iter().map(Into::into).collect(),
         totals: totals.into(),
     }))
+}
+
+fn parse_tz_offset(requested: Option<i32>) -> Result<i32, AppError> {
+    let tz_offset = requested.unwrap_or(0);
+    if !(summary::MIN_TZ_OFFSET_MINUTES..=summary::MAX_TZ_OFFSET_MINUTES).contains(&tz_offset) {
+        return Err(AppError::invalid("tz_offset_minutes 要在 -720 到 840 之间"));
+    }
+    Ok(tz_offset)
 }
 
 /// 网页的团队总览与成员页：按天、人、来源、模型、项目拆分，范围规则同 `usage_list`。
@@ -306,11 +335,13 @@ async fn usage_summary(
     ApiQuery(query): ApiQuery<SummaryQuery>,
 ) -> Result<Json<SummaryResponse>, AppError> {
     let account_id = scope_account(&caller, query.account_id)?;
-    let tz_offset = query.tz_offset_minutes.unwrap_or(0);
-    if !(summary::MIN_TZ_OFFSET_MINUTES..=summary::MAX_TZ_OFFSET_MINUTES).contains(&tz_offset) {
-        return Err(AppError::invalid("tz_offset_minutes 要在 -720 到 840 之间"));
-    }
-    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
+    let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
+    let filter = build_filter(
+        account_id,
+        query.project_id,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )?;
     let result = summary::build(&state.pool, &filter, tz_offset).await?;
     Ok(Json(result.into()))
 }
@@ -323,11 +354,116 @@ async fn session_list(
 ) -> Result<Json<SessionListResponse>, AppError> {
     let account_id = scope_account(&caller, query.account_id)?;
     let (limit, offset) = parse_paging(query.limit, query.offset)?;
-    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
+    let filter = build_filter(
+        account_id,
+        query.project_id,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )?;
+    let filter = SessionFilter {
+        scope: filter,
+        generated_by_work_notes: query.generated_by_work_notes,
+    };
     let rows = sessions::list(&state.pool, &filter, limit, offset).await?;
     let total = sessions::count(&state.pool, &filter).await?;
     Ok(Json(SessionListResponse {
         sessions: rows.into_iter().map(Into::into).collect(),
         total,
+    }))
+}
+
+/// 单场会话全文（正文、工具调用、上下文清单、本场消耗）。
+/// 与删除同一条判定：成员只能看自己的，管理员看任意；别人的会话得 403。
+async fn session_detail(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    Path(id): Path<i64>,
+) -> Result<Json<SessionDetailView>, AppError> {
+    let owner = sessions::owner_of(&state.pool, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("会话不存在"))?;
+    if !caller.can_access(owner) {
+        return Err(AppError::forbidden("只能查看自己推送的会话"));
+    }
+    let row = sessions::detail(&state.pool, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("会话不存在"))?;
+    let usage = summary::for_session(
+        &state.pool,
+        row.item.account_id,
+        row.device_pk,
+        &row.item.source,
+        &row.item.session_id,
+    )
+    .await?;
+    Ok(Json(SessionDetailView::new(row, usage)))
+}
+
+/// 项目页：谁在这个项目上花了多少。项目是团队共享的，用量仍按 `scope_account` 收窄，
+/// 成员只看到自己的那部分，指定别人的 `account_id` 得 403。
+async fn project_detail(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    Path(id): Path<i64>,
+    ApiQuery(query): ApiQuery<SummaryQuery>,
+) -> Result<Json<ProjectDetailResponse>, AppError> {
+    let account_id = scope_account(&caller, query.account_id)?;
+    let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
+    let project = project_admin::get(&state.pool, id)
+        .await?
+        .ok_or_else(|| AppError::not_found("项目不存在"))?;
+    if project.merged_into.is_some() {
+        return Err(AppError::not_found("项目已被合并到别的项目"));
+    }
+    // 项目名与 remote 是团队共享的，但成员只该看到自己做过的项目。
+    if !caller.is_admin() && !project_admin::has_data_of(&state.pool, id, caller.id).await? {
+        return Err(AppError::not_found("项目不存在"));
+    }
+    let filter = build_filter(
+        account_id,
+        Some(id),
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )?;
+    let result = summary::build(&state.pool, &filter, tz_offset).await?;
+    Ok(Json(ProjectDetailResponse {
+        project: ProjectView::from(project),
+        summary: result.into(),
+    }))
+}
+
+async fn admin_projects(
+    State(state): State<AppState>,
+    _admin: AdminAccount,
+) -> Result<Json<Vec<AdminProjectView>>, AppError> {
+    let rows = project_admin::list_live(&state.pool).await?;
+    Ok(Json(rows.into_iter().map(Into::into).collect()))
+}
+
+async fn admin_rename_project(
+    State(state): State<AppState>,
+    _admin: AdminAccount,
+    Path(id): Path<i64>,
+    ApiJson(request): ApiJson<RenameProjectRequest>,
+) -> Result<Json<ProjectView>, AppError> {
+    let name = project_admin::normalize_name(&request.name)?;
+    let row = project_admin::rename(&state.pool, id, &name).await?;
+    Ok(Json(row.into()))
+}
+
+/// 把 `{id}` 并进 `into_project_id`：历史会话、消耗记录改挂目标，之后的推送也归到目标。
+async fn admin_merge_project(
+    State(state): State<AppState>,
+    _admin: AdminAccount,
+    Path(id): Path<i64>,
+    ApiJson(request): ApiJson<MergeProjectRequest>,
+) -> Result<Json<MergeProjectResponse>, AppError> {
+    let mut tx = state.pool.begin().await?;
+    let outcome = project_admin::merge(&mut tx, id, request.into_project_id).await?;
+    tx.commit().await?;
+    Ok(Json(MergeProjectResponse {
+        project: outcome.target.into(),
+        sessions_moved: outcome.sessions_moved,
+        usage_records_moved: outcome.usage_records_moved,
     }))
 }

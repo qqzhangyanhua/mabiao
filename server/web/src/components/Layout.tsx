@@ -18,6 +18,11 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
     );
   }
   items.push({
+    label: "项目",
+    route: { page: "projects" },
+    active: route.page === "projects" || route.page === "project",
+  });
+  items.push({
     label: "我的数据",
     route: { page: "member", accountId: profile.id },
     active: route.page === "member" && route.accountId === profile.id,

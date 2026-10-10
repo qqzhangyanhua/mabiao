@@ -8,8 +8,14 @@ describe("parseRoute", () => {
     expect(parseRoute("#/member/12")).toEqual({ page: "member", accountId: 12 });
   });
 
+  it("parses the project and session pages", () => {
+    expect(parseRoute("#/projects")).toEqual({ page: "projects" });
+    expect(parseRoute("#/project/4")).toEqual({ page: "project", projectId: 4 });
+    expect(parseRoute("#/session/31/")).toEqual({ page: "session", sessionId: 31 });
+  });
+
   it("returns null for anything else", () => {
-    for (const hash of ["", "#", "#/", "#/member/abc", "#/member/", "#/member/1/2", "#/nope"]) {
+    for (const hash of ["", "#", "#/", "#/member/abc", "#/member/", "#/member/1/2", "#/nope", "#/project/x", "#/session/", "#/session/1/2"]) {
       expect(parseRoute(hash), hash).toBeNull();
     }
   });
@@ -19,6 +25,9 @@ describe("parseRoute", () => {
       { page: "overview" },
       { page: "members" },
       { page: "member", accountId: 7 },
+      { page: "projects" },
+      { page: "project", projectId: 8 },
+      { page: "session", sessionId: 9 },
     ] as const) {
       expect(parseRoute(routeHash(route))).toEqual(route);
     }
@@ -42,5 +51,15 @@ describe("allowedRoute", () => {
     expect(allowedRoute({ page: "members" }, "member", 5)).toEqual(own);
     expect(allowedRoute({ page: "member", accountId: 6 }, "member", 5)).toEqual(own);
     expect(allowedRoute(null, "member", 5)).toEqual(own);
+  });
+
+  it("lets members open project and session pages (the server scopes the data)", () => {
+    for (const route of [
+      { page: "projects" },
+      { page: "project", projectId: 3 },
+      { page: "session", sessionId: 3 },
+    ] as const) {
+      expect(allowedRoute(route, "member", 5)).toEqual(route);
+    }
   });
 });

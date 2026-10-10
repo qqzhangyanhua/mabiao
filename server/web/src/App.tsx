@@ -6,6 +6,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { MemberPage } from "./pages/MemberPage";
 import { MembersPage } from "./pages/MembersPage";
 import { OverviewPage } from "./pages/OverviewPage";
+import { ProjectPage } from "./pages/ProjectPage";
+import { ProjectsPage } from "./pages/ProjectsPage";
+import { SessionPage } from "./pages/SessionPage";
 
 function Routed() {
   const { profile } = useAuth();
@@ -18,6 +21,9 @@ function Routed() {
       {route.page === "members" && <MembersPage />}
       {/* 换成员时要重置区间、分页等页面状态。 */}
       {route.page === "member" && <MemberPage key={route.accountId} accountId={route.accountId} />}
+      {route.page === "projects" && <ProjectsPage />}
+      {route.page === "project" && <ProjectPage key={route.projectId} projectId={route.projectId} />}
+      {route.page === "session" && <SessionPage key={route.sessionId} sessionId={route.sessionId} />}
     </Layout>
   );
 }

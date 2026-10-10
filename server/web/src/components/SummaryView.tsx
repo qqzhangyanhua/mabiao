@@ -23,10 +23,18 @@ interface Props {
   showAccounts: boolean;
   /** 管理员可以从成员榜点进成员页。 */
   linkAccounts: boolean;
+  /** 单个项目页里「按项目」只有一行，没必要。默认显示。 */
+  showProjects?: boolean;
 }
 
 /** 团队总览与成员页共用：合计卡片、按天趋势，以及按成员 / 来源 / 模型 / 项目的拆分。 */
-export function SummaryView({ summary, mode, showAccounts, linkAccounts }: Props) {
+export function SummaryView({
+  summary,
+  mode,
+  showAccounts,
+  linkAccounts,
+  showProjects = true,
+}: Props) {
   const { totals } = summary;
   const cost = mode === "unified" ? totals.unified_cost_total : totals.cost_snapshot_total;
   const unpriced = mode === "unified" ? totals.unified_unpriced_count : 0;
@@ -69,7 +77,16 @@ export function SummaryView({ summary, mode, showAccounts, linkAccounts }: Props
         )}
         <BreakdownTable title="按来源" rows={summary.by_source} mode={mode} />
         <BreakdownTable title="按模型" rows={summary.by_model} mode={mode} />
-        <BreakdownTable title="按项目" rows={summary.by_project} mode={mode} />
+        {showProjects && (
+          <BreakdownTable
+            title="按项目"
+            rows={summary.by_project}
+            mode={mode}
+            linkOf={(row) =>
+              row.id === null ? undefined : routeHash({ page: "project", projectId: row.id })
+            }
+          />
+        )}
       </div>
     </div>
   );

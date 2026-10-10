@@ -4,12 +4,14 @@
 
 pub mod accounts;
 pub mod api;
+pub mod api_detail;
 pub mod auth;
 pub mod coverage;
 pub mod db;
 pub mod devices;
 pub mod error;
 pub mod password;
+pub mod project_admin;
 pub mod projects;
 pub mod push;
 pub mod routes;

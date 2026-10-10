@@ -132,6 +132,7 @@ pub struct RecomputeResponse {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct UsageQuery {
     pub account_id: Option<i64>,
+    pub project_id: Option<i64>,
     pub from: Option<String>,
     pub to: Option<String>,
     pub limit: Option<i64>,
@@ -251,6 +252,7 @@ impl From<MemberCoverage> for CoverageView {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SummaryQuery {
     pub account_id: Option<i64>,
+    pub project_id: Option<i64>,
     pub from: Option<String>,
     pub to: Option<String>,
     /// 按天切日界用的 UTC 偏移（分钟，东为正）。默认 0，即 UTC。
@@ -320,6 +322,9 @@ impl From<Summary> for SummaryResponse {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct SessionListQuery {
     pub account_id: Option<i64>,
+    pub project_id: Option<i64>,
+    /// 按「码表生成」标记过滤：`true` 只看它们，`false` 排除它们，不传不过滤。
+    pub generated_by_work_notes: Option<bool>,
     pub from: Option<String>,
     pub to: Option<String>,
     pub limit: Option<i64>,

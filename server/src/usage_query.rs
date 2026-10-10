@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 use crate::error::AppError;
+use crate::summary::BreakdownRow;
 
 pub const DEFAULT_LIMIT: i64 = 100;
 pub const MAX_LIMIT: i64 = 1000;
@@ -16,6 +17,8 @@ pub struct Filter {
     pub from: Option<DateTime<Utc>>,
     /// 不含。
     pub to: Option<DateTime<Utc>>,
+    /// 只看这个项目。项目是团队共享的实体，成员仍只看到自己的那部分用量（账号过滤照常生效）。
+    pub project_id: Option<i64>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -53,6 +56,18 @@ pub struct Totals {
     pub unified_unpriced_count: i64,
 }
 
+impl Totals {
+    /// 把若干分组的合计再加起来（分组之间不重叠）。
+    pub fn sum_of(rows: &[BreakdownRow]) -> Self {
+        Self {
+            record_count: rows.iter().map(|r| r.record_count).sum(),
+            total_tokens: rows.iter().map(|r| r.total_tokens).sum(),
+            cost_snapshot_total: rows.iter().map(|r| r.cost_snapshot).sum(),
+            unified_cost_total: rows.iter().map(|r| r.unified_cost).sum(),
+            unified_unpriced_count: rows.iter().map(|r| r.unpriced_count).sum(),
+        }
+    }
+}
 pub async fn list(
     pool: &PgPool,
     filter: &Filter,
@@ -69,12 +84,14 @@ pub async fn list(
          WHERE ($1::bigint IS NULL OR u.account_id = $1)
            AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
            AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
+           AND ($4::bigint IS NULL OR u.project_id = $4)
          ORDER BY u.occurred_at DESC, u.id DESC
-         LIMIT $4 OFFSET $5",
+         LIMIT $5 OFFSET $6",
     )
     .bind(filter.account_id)
     .bind(filter.from)
     .bind(filter.to)
+    .bind(filter.project_id)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -93,11 +110,13 @@ pub async fn totals(pool: &PgPool, filter: &Filter) -> Result<Totals, AppError> 
          FROM usage_records u
          WHERE ($1::bigint IS NULL OR u.account_id = $1)
            AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-           AND ($3::timestamptz IS NULL OR u.occurred_at < $3)",
+           AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
+           AND ($4::bigint IS NULL OR u.project_id = $4)",
     )
     .bind(filter.account_id)
     .bind(filter.from)
     .bind(filter.to)
+    .bind(filter.project_id)
     .fetch_one(pool)
     .await?)
 }

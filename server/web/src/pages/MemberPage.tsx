@@ -1,6 +1,11 @@
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import {
+  generatedParam,
+  GeneratedFilterSelect,
+  type GeneratedFilter,
+} from "../components/GeneratedFilter";
 import { RangeBar, useViewState } from "../components/RangeBar";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
@@ -16,6 +21,7 @@ export function MemberPage({ accountId }: { accountId: number }) {
   const view = useViewState();
   const { bounds, offset } = view;
   const [page, setPage] = useState(0);
+  const [generated, setGenerated] = useState<GeneratedFilter>("all");
 
   const loadName = useCallback(
     async () =>
@@ -38,9 +44,14 @@ export function MemberPage({ accountId }: { accountId: number }) {
   const loadSessions = useCallback(
     () =>
       bounds
-        ? api.sessions({ ...bounds, accountId }, PAGE_SIZE, page * PAGE_SIZE)
+        ? api.sessions(
+            { ...bounds, accountId },
+            PAGE_SIZE,
+            page * PAGE_SIZE,
+            generatedParam(generated),
+          )
         : Promise.reject(new Error("日期范围不正确")),
-    [api, bounds, accountId, page],
+    [api, bounds, accountId, page, generated],
   );
   const sessions = useAsync(loadSessions);
 
@@ -110,9 +121,18 @@ export function MemberPage({ accountId }: { accountId: number }) {
 
       {bounds && (
         <section className="rounded border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-medium text-slate-700">
-            会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}
-          </h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-medium text-slate-700">
+              会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}
+            </h2>
+            <GeneratedFilterSelect
+              value={generated}
+              onChange={(value) => {
+                setPage(0);
+                setGenerated(value);
+              }}
+            />
+          </div>
           {sessions.error ? (
             <ErrorNote error={sessions.error} onRetry={sessions.reload} />
           ) : sessions.loading || !sessions.data ? (

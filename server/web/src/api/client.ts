@@ -1,8 +1,13 @@
 import type {
   AccountView,
+  AdminProject,
   ApiErrorBody,
   CoverageView,
   LoginResponse,
+  MergeProjectResponse,
+  Project,
+  ProjectDetail,
+  SessionDetail,
   SessionListResponse,
   SummaryResponse,
 } from "./types";
@@ -23,13 +28,16 @@ export class ApiError extends Error {
 
 export interface ScopeParams {
   accountId?: number;
+  projectId?: number;
   /** RFC 3339，含。 */
   from?: string;
   /** RFC 3339，不含。 */
   to?: string;
 }
 
-export function toQueryString(params: Record<string, string | number | undefined>): string {
+export function toQueryString(
+  params: Record<string, string | number | boolean | undefined>,
+): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined) search.set(key, String(value));
@@ -46,7 +54,19 @@ export interface Api {
   deactivate(accountId: number): Promise<AccountView>;
   coverage(): Promise<CoverageView[]>;
   summary(scope: ScopeParams, tzOffsetMinutes: number): Promise<SummaryResponse>;
-  sessions(scope: ScopeParams, limit: number, offset: number): Promise<SessionListResponse>;
+  /** `generatedByWorkNotes`：`true` 只看「码表生成」的，`false` 排除它们，不传不过滤。 */
+  sessions(
+    scope: ScopeParams,
+    limit: number,
+    offset: number,
+    generatedByWorkNotes?: boolean,
+  ): Promise<SessionListResponse>;
+  sessionDetail(id: number): Promise<SessionDetail>;
+  deleteSession(id: number): Promise<void>;
+  project(id: number, scope: ScopeParams, tzOffsetMinutes: number): Promise<ProjectDetail>;
+  adminProjects(): Promise<AdminProject[]>;
+  renameProject(id: number, name: string): Promise<Project>;
+  mergeProject(id: number, intoProjectId: number): Promise<MergeProjectResponse>;
 }
 
 export interface ApiOptions {
@@ -98,11 +118,14 @@ export function createApi(options: ApiOptions): Api {
       if (response.status === 401 && authenticated) options.onUnauthorized();
       throw error;
     }
+    // 删除成功是 204，没有响应体。
+    if (response.status === 204) return undefined as T;
     return (await response.json()) as T;
   }
 
   const scopeQuery = (scope: ScopeParams) => ({
     account_id: scope.accountId,
+    project_id: scope.projectId,
     from: scope.from,
     to: scope.to,
   });
@@ -126,7 +149,26 @@ export function createApi(options: ApiOptions): Api {
         "GET",
         `/api/v1/usage/summary${toQueryString({ ...scopeQuery(scope), tz_offset_minutes: tzOffsetMinutes })}`,
       ),
-    sessions: (scope, limit, offset) =>
-      request("GET", `/api/v1/sessions${toQueryString({ ...scopeQuery(scope), limit, offset })}`),
+    sessions: (scope, limit, offset, generatedByWorkNotes) =>
+      request(
+        "GET",
+        `/api/v1/sessions${toQueryString({
+          ...scopeQuery(scope),
+          limit,
+          offset,
+          generated_by_work_notes: generatedByWorkNotes,
+        })}`,
+      ),
+    sessionDetail: (id) => request("GET", `/api/v1/sessions/${id}`),
+    deleteSession: (id) => request("DELETE", `/api/v1/sessions/${id}`),
+    project: (id, scope, tzOffsetMinutes) =>
+      request(
+        "GET",
+        `/api/v1/projects/${id}${toQueryString({ ...scopeQuery(scope), tz_offset_minutes: tzOffsetMinutes })}`,
+      ),
+    adminProjects: () => request("GET", "/api/v1/admin/projects"),
+    renameProject: (id, name) => request("PUT", `/api/v1/admin/projects/${id}`, { name }),
+    mergeProject: (id, intoProjectId) =>
+      request("POST", `/api/v1/admin/projects/${id}/merge`, { into_project_id: intoProjectId }),
   };
 }

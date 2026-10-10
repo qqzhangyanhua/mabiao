@@ -203,16 +203,28 @@
 4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。
 5. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`。
 
+### 会话详情、项目页与项目合并（`sessions::detail`、`project_admin.rs`）
+
+接口：`GET /api/v1/sessions/{id}`、`GET /api/v1/projects/{id}`、`GET /api/v1/admin/projects`、`PUT /api/v1/admin/projects/{id}`、`POST /api/v1/admin/projects/{id}/merge`；`GET /api/v1/sessions` 另收 `project_id`、`generated_by_work_notes`，`/usage`、`/usage/summary` 另收 `project_id`。
+
+1. 会话详情与删除同一条判定：先 `owner_of` 再 `can_access`，别人的会话 403，响应里不带正文。详情带事件、上下文清单（原样，证据层级与 `from_cache` / `has_injected_snapshot` 不改写）和本场消耗；本场消耗按（账号, 设备, 来源, session_id）对 `usage_records`，不混入别的成员同名 `session_id`。
+2. 项目页是团队共享实体，但用量走 `scope_account`：成员只看到自己在项目上的那部分，指定别人的 `account_id` 得 403，管理员看全体。成员只能打开自己有会话或消耗记录的项目（`project_admin::has_data_of`），否则 404，免得靠遍历 id 看到别人的仓库名与 remote。已被合并的项目也返回 404。新增按项目的接口要补成员越权测试。
+3. 合并不删项目行：被合并项目带 `projects.merged_into` 留着，`merged_into` 始终直指最终目标（再次合并时把原来指向被合并项目的别名一并改指新目标）。会话、消耗记录、`project_paths` 在同一事务里改挂目标。`projects::settle` 沿 `merged_into` 解析并对项目行加共享锁，合并对两行按 id 序加排他锁，所以在途推送先提交、之后的推送一定归到目标；归并键没变，同一个 remote 或同名目录再推送不会长出重复项目。
+4. 改名只改 `name`，`find_or_create` 冲突时不碰它，再推送不会改回自动名字。已合并的项目不能改名（409）。合并要求双方都未被合并过（409）、不能合并进自己（400）、都存在（404）。三个管理员接口都用 `AdminAccount`。
+5. 「码表生成」过滤是 `generated_by_work_notes`（`true` 只看、`false` 排除、不传不过滤），在 `SessionFilter` 里与范围条件一起生效，总数 `total` 也按它算。
+6. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test detail`。
+
 ### 管理网页（`server/web/`）
 
 React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnpm-lock.yaml`，不在根 pnpm 里，根 `pnpm lint` 忽略它）。TypeScript strict、禁止 `any`，单文件 ≤ 400 行由 eslint `max-lines` 卡。
 
 1. 响应类型在 `src/api/types.ts`，与 `server/src/api.rs` 一一对应；改了服务端响应就同步改它。
 2. 登录后 token 只放 `sessionStorage`。401 一律退回登录页；登录请求自己的 401 不算。
-3. hash 路由（`#/overview`、`#/members`、`#/member/:id`），所以服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面，真正的拦截仍在服务端。
+3. hash 路由（`#/overview`、`#/members`、`#/member/:id`、`#/projects`、`#/project/:id`、`#/session/:id`），所以服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面（项目页与会话页成员也能进，数据范围由服务端判定），真正的拦截仍在服务端。
 4. 费用口径（统一价 / 客户端快照）只改展示，不重新请求。导出 CSV 两种费用都带；`lib/csv.ts` 会给以 `= + - @` 开头的文本加 `'`，防公式注入。
-5. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。
-6. 在 `server/web/` 下跑：`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm test`、`pnpm build`。
+5. 会话详情的上下文清单按证据层级分组（`lib/context.ts::tierOf`）：只有 `injected` 层且清单不是来自缓存、有注入快照、条目带原文才写「已注入（原文）」；磁盘可能生效、来自缓存无原文、按磁盘重建都各用自己的说法，不得写成已注入。改说法要同步 `context.test.ts`。项目改名与合并只在项目页对管理员显示，成员不请求 `/admin/` 接口。
+6. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。
+7. 在 `server/web/` 下跑：`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm test`、`pnpm build`。
 
 完成：服务端三条命令绿，且网页四条命令绿。
 

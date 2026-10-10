@@ -1,5 +1,6 @@
 import type { SessionListItem } from "../api/types";
 import { formatDateTime } from "../lib/format";
+import { routeHash } from "../lib/route";
 
 export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
   if (sessions.length === 0) {
@@ -23,7 +24,12 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
           {sessions.map((s) => (
             <tr key={s.id} className="border-b border-slate-100 last:border-0">
               <td className="max-w-72 truncate py-1.5 pr-2" title={s.title}>
-                {s.title || "（无标题）"}
+                <a
+                  href={routeHash({ page: "session", sessionId: s.id })}
+                  className="text-blue-700 hover:underline"
+                >
+                  {s.title || "（无标题）"}
+                </a>
                 {s.generated_by_work_notes && (
                   <span className="ml-2 rounded bg-slate-100 px-1 text-xs text-slate-500">
                     码表生成

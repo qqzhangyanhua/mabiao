@@ -75,6 +75,25 @@ pub fn project_key(project_path: &str, git_remote: Option<&str>) -> Option<Proje
     })
 }
 
+/// 沿 `merged_into` 走到仍然有效的项目，并对沿途的项目行加共享锁直到事务结束。
+///
+/// 管理员合并时（`project_admin::merge`）对两行加排他锁：在途推送先提交、合并才动手；
+/// 合并之后的推送在这里一定读到新的 `merged_into`，不会把数据写进已被合并的项目。
+async fn settle(conn: &mut PgConnection, mut id: i64) -> Result<i64, AppError> {
+    // 合并保证 merged_into 直指最终目标，正常只走一步；循环是防御，防止并发合并目标时漏跟。
+    loop {
+        let merged_into: Option<i64> =
+            sqlx::query_scalar("SELECT merged_into FROM projects WHERE id = $1 FOR SHARE")
+                .bind(id)
+                .fetch_one(&mut *conn)
+                .await?;
+        match merged_into {
+            None => return Ok(id),
+            Some(target) => id = target,
+        }
+    }
+}
+
 async fn find_or_create(conn: &mut PgConnection, key: &ProjectKey) -> Result<i64, AppError> {
     // 冲突时做一次空更新只为拿到 id；不能覆盖管理员以后改过的名字。
     let row = sqlx::query(
@@ -87,7 +106,8 @@ async fn find_or_create(conn: &mut PgConnection, key: &ProjectKey) -> Result<i64
     .bind(&key.git_remote)
     .fetch_one(&mut *conn)
     .await?;
-    Ok(row.get("id"))
+    // 归并键可能属于一个已被管理员合并掉的项目：仍归到合并目标。
+    settle(conn, row.get("id")).await
 }
 
 /// 把该设备上的某个路径指向项目。路径原来只有目录兜底项目时，把挂在该路径下的会话与消耗记录一并改指过去：
@@ -167,8 +187,8 @@ pub async fn resolve(
     .bind(project_path)
     .fetch_optional(&mut *conn)
     .await?;
-    if existing.is_some() {
-        return Ok(existing);
+    if let Some(id) = existing {
+        return Ok(Some(settle(conn, id).await?));
     }
     let id = find_or_create(conn, &key).await?;
     point_path_at(conn, device_pk, project_path, id).await?;

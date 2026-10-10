@@ -43,7 +43,8 @@ pub struct Summary {
 
 const FILTER: &str = "($1::bigint IS NULL OR u.account_id = $1)
     AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-    AND ($3::timestamptz IS NULL OR u.occurred_at < $3)";
+    AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
+    AND ($4::bigint IS NULL OR u.project_id = $4)";
 
 const METRICS: &str = "count(*)::bigint AS record_count,
     COALESCE(sum(u.total_tokens), 0)::bigint AS total_tokens,
@@ -64,6 +65,7 @@ async fn dimension(
         .bind(filter.account_id)
         .bind(filter.from)
         .bind(filter.to)
+        .bind(filter.project_id)
         .fetch_all(pool)
         .await?)
 }
@@ -74,9 +76,9 @@ async fn by_day(
     tz_offset_minutes: i32,
 ) -> Result<Vec<BreakdownRow>, AppError> {
     let sql = format!(
-        "SELECT to_char((u.occurred_at AT TIME ZONE 'UTC') + $4::int * interval '1 minute',
+        "SELECT to_char((u.occurred_at AT TIME ZONE 'UTC') + $5::int * interval '1 minute',
                         'YYYY-MM-DD') AS key,
-                to_char((u.occurred_at AT TIME ZONE 'UTC') + $4::int * interval '1 minute',
+                to_char((u.occurred_at AT TIME ZONE 'UTC') + $5::int * interval '1 minute',
                         'YYYY-MM-DD') AS label,
                 NULL::bigint AS id, {METRICS}
          FROM usage_records u WHERE {FILTER}
@@ -86,6 +88,7 @@ async fn by_day(
         .bind(filter.account_id)
         .bind(filter.from)
         .bind(filter.to)
+        .bind(filter.project_id)
         .bind(tz_offset_minutes)
         .fetch_all(pool)
         .await?)
@@ -145,4 +148,29 @@ pub async fn build(
         by_model,
         by_project,
     })
+}
+
+/// 一场会话自己的消耗：按模型拆开，合计由调用方求和。
+///
+/// 消耗记录与会话靠（账号, 设备, 来源, session_id）对上，与推送时的去重维度一致。
+pub async fn for_session(
+    pool: &PgPool,
+    account_id: i64,
+    device_pk: i64,
+    source: &str,
+    session_id: &str,
+) -> Result<Vec<BreakdownRow>, AppError> {
+    let sql = format!(
+        "SELECT u.model AS key, u.model AS label, NULL::bigint AS id, {METRICS}
+         FROM usage_records u
+         WHERE u.account_id = $1 AND u.device_pk = $2 AND u.source = $3 AND u.session_id = $4
+         GROUP BY u.model {RANKED} LIMIT {MAX_BREAKDOWN_ROWS}"
+    );
+    Ok(sqlx::query_as(&sql)
+        .bind(account_id)
+        .bind(device_pk)
+        .bind(source)
+        .bind(session_id)
+        .fetch_all(pool)
+        .await?)
 }
