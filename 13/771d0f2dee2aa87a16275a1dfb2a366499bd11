@@ -1,0 +1,34 @@
+server/src/password.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 35-64,71,73-74
+docs/agent-layers.md
+  s_a324b8e9200eb3::t_e2259e96dc5212 142
+server/tests/api.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 7,532-551,553-565,567
+  s_a324b8e9200eb3::t_cc630d29a7dff3 552
+  s_a324b8e9200eb3::t_38277ab4c7226e 566
+server/src/main.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 69-81,90
+server/src/accounts.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 8-9,42-54,62,64,131-144
+  s_a324b8e9200eb3::t_52f8d2dd2479ea 145
+crates/push-protocol/src/version.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 28
+server/src/routes.rs
+  s_a324b8e9200eb3::t_e2259e96dc5212 46,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "13771d0f2dee2aa87a16275a1dfb2a366499bd11",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
