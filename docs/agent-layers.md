@@ -139,7 +139,7 @@
 1. **没有注册接口。** 账号只能由命令行 `mabiao-server create-admin` 或管理员接口创建；管理员接口只建成员。账号只停用不删除，停用时立即吊销该账号全部 token。
 2. 密码用 argon2id 哈希；token 是 256 位随机数，库里只存 SHA-256，有效期 30 天。登录对「账号不存在 / 密码错 / 已停用」返回同一个错误。
 3. 数据隔离只有一个判定：`AuthedAccount::can_access`。每个按账号归属的数据接口先过它；管理员专属 handler 用 `AdminAccount` 参数。新增接口必须配「成员访问别人数据被拒」的测试。
-4. 每个请求先过 `push_protocol::check_protocol_version`；错误体一律是 `push_protocol::ApiError`。
+4. 凡是 body 带 `protocol_version` 的请求（目前是登录，以后是推送）先过 `push_protocol::check_protocol_version`，新增这类接口要补不兼容版本的测试；错误体一律是 `push_protocol::ApiError`。
 5. SQL 用运行时的 `sqlx::query`，不用 `query!` 宏，免得编译要连库。迁移在 `server/migrations/`，已有迁移文件不改，改 schema 只加新文件。
 6. 测试连真 PostgreSQL（`DATABASE_URL`），`#[sqlx::test]` 每个测试一个临时库，连接用户要能建库。
 7. 命令在 `AGENTS.md`；CI 的 `server` 作业同时 `docker build -f server/Dockerfile .`。

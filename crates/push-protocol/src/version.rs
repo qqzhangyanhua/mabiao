@@ -25,7 +25,7 @@ impl std::fmt::Display for UnsupportedVersion {
 
 impl std::error::Error for UnsupportedVersion {}
 
-/// 服务端对每个请求的 `protocol_version` 调用。比服务端新的版本也拒绝：
+/// 服务端对每个带 `protocol_version` 的请求（登录、推送）调用。比服务端新的版本也拒绝：
 /// 服务端不认识的字段会被静默丢掉，不如让用户先升级服务端。
 pub fn check_protocol_version(client: u32) -> Result<(), UnsupportedVersion> {
     if (MIN_SUPPORTED_PROTOCOL_VERSION..=PROTOCOL_VERSION).contains(&client) {

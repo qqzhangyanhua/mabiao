@@ -5,6 +5,8 @@ use sqlx::PgPool;
 use crate::error::AppError;
 use crate::password;
 
+pub const MAX_ACCOUNT_CHARS: usize = 64;
+
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct AccountRow {
     pub id: i64,
@@ -37,6 +39,19 @@ pub fn parse_role(value: &str) -> RemoteRole {
     }
 }
 
+/// 账号名只许字母、数字与 `._@-`，登录与唯一性都不分大小写。
+pub fn validate_account_name(account: &str) -> Result<(), AppError> {
+    let valid_chars = account
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '@' | '-'));
+    if account.is_empty() || account.len() > MAX_ACCOUNT_CHARS || !valid_chars {
+        return Err(AppError::invalid(format!(
+            "账号名为 1 到 {MAX_ACCOUNT_CHARS} 个字符，只能含字母、数字与 . _ @ -"
+        )));
+    }
+    Ok(())
+}
+
 /// HTTP 管理接口与命令行共用的建号入口：校验、哈希、落库。
 pub async fn create(
     pool: &PgPool,
@@ -44,12 +59,9 @@ pub async fn create(
     password: &str,
     role: RemoteRole,
 ) -> Result<AccountRow, AppError> {
-    password::validate_account_name(account)?;
+    validate_account_name(account)?;
     password::validate_password(password)?;
-    let owned = password.to_owned();
-    let password_hash = tokio::task::spawn_blocking(move || password::hash(&owned))
-        .await
-        .map_err(AppError::internal)??;
+    let password_hash = password::hash_async(password).await?;
 
     let inserted = sqlx::query_as::<_, AccountRow>(
         "INSERT INTO remote_accounts (account, password_hash, role)
@@ -115,4 +127,19 @@ pub async fn deactivate(pool: &PgPool, id: i64) -> Result<Option<AccountRow>, Ap
     }
     tx.commit().await?;
     Ok(row)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn account_names_are_restricted() {
+        for ok in ["alice", "Bob.Smith", "a_b-c@d", "x"] {
+            assert!(validate_account_name(ok).is_ok(), "{ok}");
+        }
+        for bad in ["", "a b", "张三", "a/b", &"a".repeat(MAX_ACCOUNT_CHARS + 1)] {
+            assert!(validate_account_name(bad).is_err(), "{bad}");
+        }
+    }
 }

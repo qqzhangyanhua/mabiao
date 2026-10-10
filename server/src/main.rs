@@ -66,6 +66,19 @@ async fn shutdown_signal() {
     }
 }
 
+/// 过期 token 不影响鉴权（查询里带了 `expires_at > now()`），只是占行，定期清掉即可。
+async fn purge_expired_tokens_hourly(pool: sqlx::PgPool) {
+    let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+    loop {
+        interval.tick().await;
+        match mabiao_server::tokens::purge_expired(&pool).await {
+            Ok(removed) if removed > 0 => tracing::info!(removed, "已清理过期 token"),
+            Ok(_) => {}
+            Err(error) => tracing::warn!(%error, "清理过期 token 失败"),
+        }
+    }
+}
+
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let database_url = cli
         .database_url
@@ -74,6 +87,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     db::migrate(&pool).await?;
     match cli.command {
         Command::Serve { bind } => {
+            tokio::spawn(purge_expired_tokens_hourly(pool.clone()));
             let listener = tokio::net::TcpListener::bind(&bind).await?;
             tracing::info!(%bind, "mabiao-server 已启动");
             axum::serve(listener, router(AppState { pool }))

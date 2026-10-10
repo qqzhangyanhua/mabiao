@@ -8,7 +8,6 @@ use crate::error::AppError;
 pub const MIN_PASSWORD_CHARS: usize = 8;
 /// 给 argon2 的输入设上限，免得有人拿超长密码打 CPU。
 pub const MAX_PASSWORD_CHARS: usize = 256;
-pub const MAX_ACCOUNT_CHARS: usize = 64;
 
 pub fn validate_password(password: &str) -> Result<(), AppError> {
     let chars = password.chars().count();
@@ -25,24 +24,41 @@ pub fn validate_password(password: &str) -> Result<(), AppError> {
     Ok(())
 }
 
-/// 账号名只许字母、数字与 `._@-`，登录与唯一性都不分大小写。
-pub fn validate_account_name(account: &str) -> Result<(), AppError> {
-    let valid_chars = account
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '@' | '-'));
-    if account.is_empty() || account.len() > MAX_ACCOUNT_CHARS || !valid_chars {
-        return Err(AppError::invalid(format!(
-            "账号名为 1 到 {MAX_ACCOUNT_CHARS} 个字符，只能含字母、数字与 . _ @ -"
-        )));
-    }
-    Ok(())
-}
-
 /// 输出 PHC 字符串（`$argon2id$...`），盐与参数都在里面。CPU 密集，异步调用方走 `spawn_blocking`。
 pub fn hash(password: &str) -> Result<String, AppError> {
     Argon2::default()
         .hash_password(password.as_bytes())
         .map(|hash| hash.to_string())
+        .map_err(AppError::internal)
+}
+
+/// 异步入口：argon2 吃 CPU，放到阻塞线程池，别卡住 tokio 工作线程。
+pub async fn hash_async(password: &str) -> Result<String, AppError> {
+    let owned = password.to_owned();
+    tokio::task::spawn_blocking(move || hash(&owned))
+        .await
+        .map_err(AppError::internal)?
+}
+
+/// 密码超长直接判不匹配，不进 argon2：登录接口不需要登录就能打到这里。
+pub async fn verify_async(password: &str, stored_hash: &str) -> Result<bool, AppError> {
+    if password.chars().count() > MAX_PASSWORD_CHARS {
+        return Ok(false);
+    }
+    let (owned, stored) = (password.to_owned(), stored_hash.to_owned());
+    tokio::task::spawn_blocking(move || verify(&owned, &stored))
+        .await
+        .map_err(AppError::internal)
+}
+
+/// 账号不存在时也做一次等价的 argon2 校验，让响应时间不暴露账号是否存在。
+pub async fn verify_against_dummy_async(password: &str) -> Result<(), AppError> {
+    if password.chars().count() > MAX_PASSWORD_CHARS {
+        return Ok(());
+    }
+    let owned = password.to_owned();
+    tokio::task::spawn_blocking(move || verify_against_dummy(&owned))
+        .await
         .map_err(AppError::internal)
 }
 
@@ -52,10 +68,10 @@ pub fn verify(password: &str, stored_hash: &str) -> bool {
         .is_ok()
 }
 
-/// 账号不存在时也做一次等价的 argon2 校验，让响应时间不暴露账号是否存在。
-pub fn verify_against_dummy(password: &str) {
+fn verify_against_dummy(password: &str) {
     static DUMMY: OnceLock<String> = OnceLock::new();
-    let dummy = DUMMY.get_or_init(|| hash("dummy-password-for-timing").unwrap_or_default());
+    // 默认参数下哈希只会因系统随机数失败；宁可让这次请求报 500，也不能退化成空哈希而泄露计时。
+    let dummy = DUMMY.get_or_init(|| hash("dummy-password-for-timing").expect("生成对照哈希"));
     let _ = verify(password, dummy);
 }
 
@@ -87,15 +103,5 @@ mod tests {
         assert!(validate_password(&"a".repeat(MAX_PASSWORD_CHARS)).is_ok());
         assert!(validate_password(&"a".repeat(MAX_PASSWORD_CHARS + 1)).is_err());
         assert!(validate_password("密码密码密码密码").is_ok());
-    }
-
-    #[test]
-    fn account_names_are_restricted() {
-        for ok in ["alice", "Bob.Smith", "a_b-c@d", "x"] {
-            assert!(validate_account_name(ok).is_ok(), "{ok}");
-        }
-        for bad in ["", "a b", "张三", "a/b", &"a".repeat(MAX_ACCOUNT_CHARS + 1)] {
-            assert!(validate_account_name(bad).is_err(), "{bad}");
-        }
     }
 }

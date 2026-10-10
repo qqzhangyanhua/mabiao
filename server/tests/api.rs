@@ -4,7 +4,7 @@ use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::Router;
 use http_body_util::BodyExt;
-use mabiao_server::{accounts, devices, router, AppState};
+use mabiao_server::{accounts, devices, router, tokens, AppState};
 use push_protocol::{ApiErrorCode, DeviceInfo, RemoteRole, PROTOCOL_VERSION};
 use serde_json::{json, Value};
 use sqlx::PgPool;
@@ -527,5 +527,41 @@ async fn cli_style_admin_creation_rejects_duplicates(pool: PgPool) {
 #[sqlx::test]
 async fn healthz_checks_the_database(pool: PgPool) {
     let (status, _) = call(&app(&pool), Method::GET, "/healthz", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn oversized_password_is_refused_without_reaching_argon2(pool: PgPool) {
+    seed_member(&pool, "kate").await;
+    let huge = "a".repeat(1_000_000);
+    let started = std::time::Instant::now();
+    let (status, body) = login(&app(&pool), "kate", &huge).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(error_code(&body), ApiErrorCode::InvalidCredentials);
+    assert!(started.elapsed() < std::time::Duration::from_millis(500));
+}
+
+#[sqlx::test]
+async fn purge_removes_only_expired_tokens(pool: PgPool) {
+    seed_member(&pool, "leo").await;
+    let app = app(&pool);
+    let live = token_of(&app, "leo").await;
+    let _expired = token_of(&app, "leo").await;
+    sqlx::query(
+        "UPDATE login_tokens SET expires_at = now() - interval '1 day'
+         WHERE id = (SELECT max(id) FROM login_tokens)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(tokens::purge_expired(&pool).await.unwrap(), 1);
+
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM login_tokens")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 1);
+    let (status, _) = call(&app, Method::GET, "/api/v1/me", Some(&live), None).await;
     assert_eq!(status, StatusCode::OK);
 }

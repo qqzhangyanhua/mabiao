@@ -42,18 +42,10 @@ async fn login(
         .await?
         .filter(|row| row.active);
 
-    let supplied = request.password;
     let verified = match &found {
-        Some(row) => {
-            let stored = row.password_hash.clone();
-            tokio::task::spawn_blocking(move || password::verify(&supplied, &stored))
-                .await
-                .map_err(AppError::internal)?
-        }
+        Some(row) => password::verify_async(&request.password, &row.password_hash).await?,
         None => {
-            tokio::task::spawn_blocking(move || password::verify_against_dummy(&supplied))
-                .await
-                .map_err(AppError::internal)?;
+            password::verify_against_dummy_async(&request.password).await?;
             false
         }
     };
@@ -62,7 +54,6 @@ async fn login(
         _ => return Err(AppError::invalid_credentials()),
     };
 
-    tokens::purge_expired(&state.pool).await?;
     let (token, expires_at) = tokens::issue(&state.pool, row.id).await?;
     Ok(Json(LoginResponse {
         token,
