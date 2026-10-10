@@ -1,0 +1,26 @@
+src-tauri/src/tests/conversation_formats.rs
+  s_9fef32260aa9ff::t_531e230ffd4442 94-101
+src-tauri/src/conversation/codex.rs
+  s_9fef32260aa9ff::t_1e944cdcdcf9b7 75
+src-tauri/src/conversation/event_storage.rs
+  s_9fef32260aa9ff::t_fa6af2ff19a1d5 17
+  s_9fef32260aa9ff::t_3837ae80ca76f0 80,84
+docs/adr/0025-conversation-text-by-reference.md
+  s_9fef32260aa9ff::t_a2b65e27a13c2b 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "679184333dee49d080393e781947b8179d72103c",
+  "prompts": {},
+  "sessions": {
+    "s_9fef32260aa9ff": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d8999d17-0d9e-43fc-b50d-bd4878f93697",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
