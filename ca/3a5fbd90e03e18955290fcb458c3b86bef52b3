@@ -1,0 +1,174 @@
+server/web/src/lib/csv.test.ts
+  s_3b05cdee017732::t_068ba55841a550 16
+  s_3b05cdee017732::t_098e36cbefc3c3 1-15,17-27
+  s_3b05cdee017732::t_a3ebc92b0211d4 28-32
+server/web/src/lib/format.test.ts
+  s_3b05cdee017732::t_098e36cbefc3c3 1-35
+server/web/src/App.test.tsx
+  s_3b05cdee017732::t_b8f5e149f25636 24,27-28,36-44,151,153,161
+  s_3b05cdee017732::t_aa4211e174357d 59,62,80,100,109,119,130,138,150,160
+  s_3b05cdee017732::t_ebd58d4e2afdcc 1-23,25-26,29-35,45-58,60-61,63-79,81-99,101-108,110-118,120-129,131-137,139-149,152,154-159,162-171
+  s_3b05cdee017732::t_f620c4aec91850 172-187
+server/web/src/components/Layout.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-56
+  s_3b05cdee017732::t_b37d3e3570b316 57-62
+server/web/src/lib/format.ts
+  s_3b05cdee017732::t_098e36cbefc3c3 1-21
+server/web/src/lib/coverage.ts
+  s_3b05cdee017732::t_7f22bbfbbbae21 1-20
+  s_3b05cdee017732::t_36c5faa9ec827a 21-23
+server/web/tsconfig.json
+  s_3b05cdee017732::t_cd486674413f5f 1-22
+server/web/src/api/types.ts
+  s_3b05cdee017732::t_098e36cbefc3c3 1-87
+server/web/vite.config.ts
+  s_3b05cdee017732::t_e5edf0197b70f1 5,10
+  s_3b05cdee017732::t_cd486674413f5f 1-4,6-9,11-13
+server/web/.gitignore
+  s_3b05cdee017732::t_cd486674413f5f 1-2
+server/web/src/api/client.ts
+  s_3b05cdee017732::t_7f0af24a82b9fa 1-127
+  s_3b05cdee017732::t_e59bd5d0be2eec 128-132
+server/web/src/App.tsx
+  s_3b05cdee017732::t_464261efe312f7 1-27
+server/web/src/components/BreakdownTable.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-85
+  s_3b05cdee017732::t_a8e21d516e25d7 86-97
+server/Cargo.toml
+  s_3b05cdee017732::t_30cda205e6ca55 29
+server/web/src/components/SummaryView.tsx
+  s_3b05cdee017732::t_d0e326be8d9ee8 1-76
+server/src/sessions.rs
+  s_3b05cdee017732::t_dc2bf3a40001fd 7
+  s_3b05cdee017732::t_312f6ffe6e5af4 95-98,114,132
+  s_3b05cdee017732::t_52fc5478688a83 71-94,99-113,115-131,133-141
+server/web/src/lib/range.test.ts
+  s_3b05cdee017732::t_068ba55841a550 1-44
+  s_3b05cdee017732::t_97126dfae1caa8 45-47
+server/web/src/lib/range.ts
+  s_3b05cdee017732::t_068ba55841a550 1-61
+server/web/src/session.ts
+  s_3b05cdee017732::t_7f22bbfbbbae21 1-47
+server/web/src/pages/MemberPage.tsx
+  s_3b05cdee017732::t_464261efe312f7 1-141
+  s_3b05cdee017732::t_e6078314571caa 142-152
+server/src/summary.rs
+  s_3b05cdee017732::t_1095b5129fd92d 1-61,63-106,108-115,117-124,126-135,137-148
+  s_3b05cdee017732::t_2a2e95c7a0f59b 62,107,116,125,136
+server/web/src/lib/export.test.ts
+  s_3b05cdee017732::t_068ba55841a550 1-63
+  s_3b05cdee017732::t_c11cce1da12dd0 64-76
+server/web/src/components/TrendChart.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-43
+  s_3b05cdee017732::t_e43965603e2fe9 44-45
+server/web/src/main.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-12
+server/web/src/vite-env.d.ts
+  s_3b05cdee017732::t_e5edf0197b70f1 1
+server/web/src/lib/route.test.ts
+  s_3b05cdee017732::t_068ba55841a550 1-46
+AGENTS.md
+  s_3b05cdee017732::t_e3645d81146d85 35-44
+server/tests/web.rs
+  s_3b05cdee017732::t_8b1ade30e58dbf 1-100
+server/web/eslint.config.js
+  s_3b05cdee017732::t_cd486674413f5f 1-34
+eslint.config.js
+  s_3b05cdee017732::t_b85937ccb0df58 9-10
+server/tests/summary.rs
+  s_3b05cdee017732::t_a08f2ddeff9425 259,264-265,270-273,350-362,364
+  s_3b05cdee017732::t_f3209681323364 363,365
+  s_3b05cdee017732::t_559e3ca091f51e 393-399,441-446,448-453
+  s_3b05cdee017732::t_40e8f654bf38a5 1-258,260-263,266-269,274-349,366-392,400-440,447,454-486
+server/web/src/auth.tsx
+  s_3b05cdee017732::t_7f22bbfbbbae21 1-86
+server/web/src/components/SessionTable.tsx
+  s_3b05cdee017732::t_464261efe312f7 1-47
+  s_3b05cdee017732::t_befab56b596af3 48-49
+server/web/src/index.css
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-7
+  s_3b05cdee017732::t_4e5ef98128fb26 8-12
+server/src/routes.rs
+  s_3b05cdee017732::t_559e3ca091f51e 13-14,18-19,55-56,258,262-272,279,283-292,301-312,314-325,327-331,333
+  s_3b05cdee017732::t_f6e244f5636c06 61-68
+  s_3b05cdee017732::t_312f6ffe6e5af4 1-2,9,248-257,293,313,326
+  s_3b05cdee017732::t_7157a20e16354d 259,332
+server/web/src/lib/export.ts
+  s_3b05cdee017732::t_068ba55841a550 1-67
+  s_3b05cdee017732::t_3338985e845f34 68-73
+server/web/src/lib/csv.ts
+  s_3b05cdee017732::t_098e36cbefc3c3 1-26
+server/web/src/pages/MembersPage.tsx
+  s_3b05cdee017732::t_464261efe312f7 1-177
+  s_3b05cdee017732::t_52dd0c14d591de 178-199
+server/web/src/lib/cost.ts
+  s_3b05cdee017732::t_068ba55841a550 1-13
+  s_3b05cdee017732::t_bd78205233f194 14-16
+server/web/src/lib/route.ts
+  s_3b05cdee017732::t_068ba55841a550 1-40
+server/src/lib.rs
+  s_3b05cdee017732::t_559e3ca091f51e 3,17
+  s_3b05cdee017732::t_f585f288ddfceb 30
+server/web/package.json
+  s_3b05cdee017732::t_29daa013f814a8 1-24,26-31,33,36-37
+  s_3b05cdee017732::t_fb504219f04965 25,32,34-35
+server/web/index.html
+  s_3b05cdee017732::t_cd486674413f5f 1-12
+docs/agent-layers.md
+  s_3b05cdee017732::t_e3645d81146d85 196-218
+server/web/tsconfig.node.json
+  s_3b05cdee017732::t_cd486674413f5f 1-13
+server/web/src/pages/LoginPage.tsx
+  s_3b05cdee017732::t_d0e326be8d9ee8 1-64
+  s_3b05cdee017732::t_63362078b41581 65-69
+server/web/src/components/Feedback.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-20
+  s_3b05cdee017732::t_6f5fcb55595d6a 21-23
+server/web/src/hooks.ts
+  s_3b05cdee017732::t_7f22bbfbbbae21 1-58
+server/web/src/lib/coverage.test.ts
+  s_3b05cdee017732::t_7f22bbfbbbae21 1-20
+server/src/api.rs
+  s_3b05cdee017732::t_559e3ca091f51e 10-11,249-378
+server/web/src/pages/OverviewPage.tsx
+  s_3b05cdee017732::t_d0e326be8d9ee8 1-46
+server/web/src/components/RangeBar.tsx
+  s_3b05cdee017732::t_fc9550b0ff69c0 1-38,41-95
+  s_3b05cdee017732::t_d0e326be8d9ee8 39-40
+server/web/src/api/client.test.ts
+  s_3b05cdee017732::t_e5edf0197b70f1 11,78
+  s_3b05cdee017732::t_7f0af24a82b9fa 1-10,12-77,79-81
+  s_3b05cdee017732::t_2b3ad1762e4f45 82-96
+server/web/vitest.config.ts
+  s_3b05cdee017732::t_cd486674413f5f 1-8
+.github/workflows/ci.yml
+  s_3b05cdee017732::t_1e3a2aa8b315f6 157-190
+deploy/README.md
+  s_3b05cdee017732::t_df9c4a978acae3 22-29
+server/Cargo.lock
+  s_3b05cdee017732::t_5d7146220d85ac 749-754,1054,1096-1105,1990-2002,2019-2043,2124-2129
+server/Dockerfile
+  s_3b05cdee017732::t_22b5ae7f8980ff 3-11,26-27
+server/Dockerfile.dockerignore
+  s_3b05cdee017732::t_b68ba6708c372c 7-8
+server/src/main.rs
+  s_3b05cdee017732::t_a107d23209843a 4,23-25,92,101-112
+server/web/pnpm-lock.yaml
+  s_3b05cdee017732::t_20a7e2e090d037 1-3095
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "ca3a5fbd90e03e18955290fcb458c3b86bef52b3",
+  "prompts": {},
+  "sessions": {
+    "s_3b05cdee017732": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "39f93dc3-05d5-46a5-939c-c9c594e9cbde",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
