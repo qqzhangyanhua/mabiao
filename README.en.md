@@ -30,7 +30,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | grok | ✅ | ✅ | |
 | Hermes | ✅ | ✅ | Native `actual_cost_usd` |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |
-| Factory / droid | ✅ | ❌ | Session totals, no model name |
+| Factory / droid | ✅ | ❌ | Session totals; model from settings; subagents merge into parent |
 | Cursor | ⚠️ | ❌ | Code volume + account usage (reads the local client's login state) |
 | cursor-agent | ⚠️ | ❌ | Tokens only after a wrapper writes them to disk |
 | qwen / amp | ❌ | ❌ | No local tokens (amp usage is cloud-only) |

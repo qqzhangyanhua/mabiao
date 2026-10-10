@@ -30,7 +30,7 @@
 | grok | ✅ | ✅ | |
 | Hermes | ✅ | ✅ | 自带 `actual_cost_usd` |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh 需解压；copilot 仅会话结束时累计 |
-| Factory / droid | ✅ | ❌ | 会话累计，无模型名 |
+| Factory / droid | ✅ | ❌ | 会话累计；模型名来自 settings，子代理并入父会话 |
 | Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（读本机客户端登录态） |
 | cursor-agent | ⚠️ | ❌ | Token 仅在包装落盘后可读 |
 | qwen / amp | ❌ | ❌ | 本机无 Token（amp 用量在云端） |

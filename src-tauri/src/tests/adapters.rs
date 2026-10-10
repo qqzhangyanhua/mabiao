@@ -647,7 +647,7 @@ fn factory_adapter_maps_session_token_usage() {
     assert_eq!(records.len(), 1);
     assert_eq!(records[0].source, Source::Factory);
     assert_eq!(records[0].provider, "anthropic");
-    assert_eq!(records[0].model, "");
+    assert_eq!(records[0].model, "claude-sonnet-4");
     assert_eq!(records[0].project, "/Users/zhangyanhua/AI/cli");
     assert_eq!(
         records[0].session_id,
@@ -2170,4 +2170,57 @@ fn codex_skips_zst_when_plain_jsonl_exists() {
 
     let found = crate::adapters::codex::discover(&[sessions]).unwrap();
     assert_eq!(found, vec![plain]);
+}
+
+#[test]
+fn factory_empty_model_falls_back_to_droid() {
+    let records = factory::parse_factory_settings(
+        r#"{"tokenUsage":{"inputTokens":1,"outputTokens":2,"cacheReadTokens":0,"cacheCreationTokens":0,"thinkingTokens":0}}"#,
+        "/tmp/.factory/sessions/sess.settings.json",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "droid");
+    assert_eq!(records[0].session_id, "sess");
+}
+
+#[test]
+fn factory_strips_custom_slot_without_settings_lookup() {
+    let records = factory::parse_factory_settings(
+        r#"{"model":"custom:Kimi-K2-[Groq]-0","tokenUsage":{"inputTokens":1,"outputTokens":2,"cacheReadTokens":0,"cacheCreationTokens":0,"thinkingTokens":0}}"#,
+        "/tmp/.factory/sessions/sess.settings.json",
+    );
+    assert_eq!(records[0].model, "Kimi-K2");
+}
+
+#[test]
+fn factory_resolves_custom_model_and_merges_subagent() {
+    let dir = tempfile::tempdir().unwrap();
+    let factory_home = dir.path().join(".factory");
+    let sessions = factory_home.join("sessions/-workspace-project");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(
+        factory_home.join("settings.json"),
+        r#"{"customModels":[{"id":"custom:Kimi-K2-[Groq]-0","model":"moonshotai/Kimi-K2"}]}"#,
+    )
+    .unwrap();
+    let settings = sessions.join("child.settings.json");
+    std::fs::write(
+        &settings,
+        r#"{"model":"custom:Kimi-K2-[Groq]-0","providerLock":"custom","tokenUsage":{"inputTokens":4,"outputTokens":8,"cacheReadTokens":1,"cacheCreationTokens":2,"thinkingTokens":0}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        sessions.join("child.jsonl"),
+        r#"{"type":"session_start","id":"child","callingSessionId":"parent-id"}
+"#,
+    )
+    .unwrap();
+
+    let records = factory::parse(&settings, &sessions).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "moonshotai/Kimi-K2");
+    assert_eq!(records[0].session_id, "parent-id");
+    assert_eq!(records[0].input_tokens, 4);
+    assert_eq!(records[0].output_tokens, 8);
+    assert_eq!(records[0].project, "/workspace/project");
 }
