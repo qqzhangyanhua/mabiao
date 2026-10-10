@@ -260,6 +260,12 @@ pub fn check_and_notify_with_config<R: tauri::Runtime>(
     if !config.alerts_enabled {
         return Ok(());
     }
+    // 读-判-写这份状态文件必须串行：读快照不再拿数据库写锁，几路并发进来会各自
+    // 读到同一份旧状态，同一条提醒弹好几次。
+    static NOTIFY_STATE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _serial = NOTIFY_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let state = load_notify_state(notify_state_path);
     let (next, alerts) = prepare_notifications_with(state, dto, config, Utc::now());
     if alerts.is_empty() {

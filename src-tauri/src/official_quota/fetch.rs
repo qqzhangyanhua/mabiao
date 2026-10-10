@@ -76,9 +76,8 @@ impl QuotaTarget for custom::ResolvedProvider {
     }
 }
 
-/// 只有标识、没有展示名时走这条——写缓存只需要标识。目前的用户是测试：
-/// 它们按标识直接铺一行额度缓存，不必先造一个完整的取数目标。
-#[cfg(test)]
+/// 只有标识、没有展示名时走这条——写缓存只需要标识。整体刷新逐家落库时用它，
+/// 测试也靠它按标识直接铺一行额度缓存，不必先造一个完整的取数目标。
 impl QuotaTarget for String {
     fn quota_id(&self) -> &str {
         self
@@ -220,6 +219,18 @@ pub fn fetch_target(target: &FetchTarget) -> ProviderFetch {
 /// 网络一差就能拖到分钟级——而这整段跑在一个阻塞线程里，托盘定时刷新也走这条路。
 /// 并发之后总耗时变成取最大值。
 pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarget, ProviderFetch)> {
+    fetch_all_targets_with(custom, |_, _| {})
+}
+
+/// 同 [`fetch_all_targets`]，但每家一取完就在它自己的取数线程里回调一次，
+/// 调用方可以先落库、先推给界面，不必等最慢的那家。回调可能并发进入。
+pub fn fetch_all_targets_with<F>(
+    custom: &[custom::ResolvedProvider],
+    on_result: F,
+) -> Vec<(FetchTarget, ProviderFetch)>
+where
+    F: Fn(&FetchTarget, &ProviderFetch) + Sync,
+{
     let now = Utc::now();
     let path = backoff::state_path();
     let mut state = backoff::load_state(&path);
@@ -231,7 +242,11 @@ pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarge
     targets.extend(custom_targets_for_fetch(custom));
     let targets = exclude_cooling(targets, &state, now);
 
-    let results = fetch_in_parallel(targets, fetch_target);
+    let results = fetch_in_parallel(targets, |target| {
+        let result = fetch_target(target);
+        on_result(target, &result);
+        result
+    });
     record_backoff(
         &mut state,
         results

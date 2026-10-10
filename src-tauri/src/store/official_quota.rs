@@ -1,9 +1,6 @@
-use chrono::{Duration, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::domain::{OfficialQuotaHistoryDto, OfficialQuotaHistoryPoint, OfficialQuotaWindow};
-
-pub const OFFICIAL_QUOTA_HISTORY_RETENTION_DAYS: i64 = 45;
+use crate::domain::OfficialQuotaWindow;
 
 pub fn upsert_official_quota(
     conn: &Connection,
@@ -40,16 +37,6 @@ pub fn upsert_official_quota(
         ],
     )
     .map_err(|e| e.to_string())?;
-    if let Some(row) = existing.as_ref() {
-        if !row.captured_at.is_empty() && row.captured_at != captured_at {
-            append_official_quota_history(conn, provider, &row.windows, &row.captured_at)?;
-        }
-        if let Some(prev_at) = row.prev_captured_at.as_deref() {
-            append_official_quota_history(conn, provider, &row.prev_windows, prev_at)?;
-        }
-    }
-    append_official_quota_history(conn, provider, windows, captured_at)?;
-    prune_official_quota_history(conn)?;
     Ok(())
 }
 
@@ -204,130 +191,4 @@ fn parse_optional_windows_json(json: Option<&str>) -> Result<Vec<OfficialQuotaWi
         None | Some("") => Ok(Vec::new()),
         Some(text) => parse_windows_json(text),
     }
-}
-
-pub fn append_official_quota_history(
-    conn: &Connection,
-    provider: &str,
-    windows: &[OfficialQuotaWindow],
-    captured_at: &str,
-) -> Result<(), String> {
-    if captured_at.is_empty() || windows.is_empty() {
-        return Ok(());
-    }
-    for window in snapshot_windows(windows) {
-        conn.execute(
-            "INSERT OR IGNORE INTO official_quota_history(
-                provider, window_kind, captured_at, window_label,
-                used_percent, used_amount, limit_amount, currency
-             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            params![
-                provider,
-                window.kind,
-                captured_at,
-                window.label,
-                window.used_percent,
-                window.used_amount,
-                window.limit_amount,
-                window.currency,
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
-
-pub fn seed_official_quota_history(conn: &Connection) -> Result<(), String> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT provider, windows_json, captured_at, prev_windows_json, prev_captured_at
-             FROM official_quota",
-        )
-        .map_err(|e| e.to_string())?;
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, Option<String>>(4)?,
-            ))
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| e.to_string())?;
-    for (provider, windows_json, captured_at, prev_windows_json, prev_captured_at) in rows {
-        append_official_quota_history(
-            conn,
-            &provider,
-            &parse_windows_json(&windows_json)?,
-            &captured_at,
-        )?;
-        if let Some(prev_at) = prev_captured_at.filter(|value| !value.is_empty()) {
-            append_official_quota_history(
-                conn,
-                &provider,
-                &parse_optional_windows_json(prev_windows_json.as_deref())?,
-                &prev_at,
-            )?;
-        }
-    }
-    prune_official_quota_history(conn)
-}
-
-pub fn prune_official_quota_history(conn: &Connection) -> Result<(), String> {
-    let cutoff = (Utc::now() - Duration::days(OFFICIAL_QUOTA_HISTORY_RETENTION_DAYS)).to_rfc3339();
-    conn.execute(
-        "DELETE FROM official_quota_history WHERE captured_at < ?1",
-        params![cutoff],
-    )
-    .map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-pub fn load_official_quota_history(
-    conn: &Connection,
-    provider: Option<&str>,
-) -> Result<OfficialQuotaHistoryDto, String> {
-    let sql = if provider.is_some() {
-        "SELECT provider, window_kind, window_label, captured_at,
-                used_percent, used_amount, limit_amount, currency
-         FROM official_quota_history
-         WHERE provider = ?1
-         ORDER BY captured_at ASC, window_kind ASC"
-    } else {
-        "SELECT provider, window_kind, window_label, captured_at,
-                used_percent, used_amount, limit_amount, currency
-         FROM official_quota_history
-         ORDER BY provider ASC, captured_at ASC, window_kind ASC"
-    };
-    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
-    let map_row = |row: &rusqlite::Row| -> rusqlite::Result<OfficialQuotaHistoryPoint> {
-        Ok(OfficialQuotaHistoryPoint {
-            provider: row.get(0)?,
-            window_kind: row.get(1)?,
-            window_label: row.get(2)?,
-            captured_at: row.get(3)?,
-            used_percent: row.get(4)?,
-            used_amount: row.get(5)?,
-            limit_amount: row.get(6)?,
-            currency: row.get(7)?,
-        })
-    };
-    let points = if let Some(id) = provider {
-        stmt.query_map(params![id], map_row)
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?
-    } else {
-        stmt.query_map([], map_row)
-            .map_err(|e| e.to_string())?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())?
-    };
-    Ok(OfficialQuotaHistoryDto {
-        points,
-        retention_days: OFFICIAL_QUOTA_HISTORY_RETENTION_DAYS,
-    })
 }

@@ -240,22 +240,3 @@ pub struct OfficialQuotaHookDto {
     pub conflict: bool,
     pub conflict_command: Option<String>,
 }
-
-/// 官方额度连续快照上的一个点。只服务官方额度历史图，不与本机 5 小时 / 7 天估计窗混条。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OfficialQuotaHistoryPoint {
-    pub provider: String,
-    pub window_kind: String,
-    pub window_label: String,
-    pub captured_at: String,
-    pub used_percent: Option<f64>,
-    pub used_amount: Option<f64>,
-    pub limit_amount: Option<f64>,
-    pub currency: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct OfficialQuotaHistoryDto {
-    pub points: Vec<OfficialQuotaHistoryPoint>,
-    pub retention_days: i64,
-}

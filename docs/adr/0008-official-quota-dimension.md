@@ -55,4 +55,4 @@ Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消�
 - 告警档位写入 `OfficialQuotaConfig.alert_thresholds`，缺省仍是 80 / 100；旧配置文件缺字段时按默认回落，不必迁移。去重键仍是 `provider + window_kind + resets_at`，`stale` 不弹，与月度预算分开开关。
 - 「重置前仍有余量」提醒：距 `resets_at` 不足 `reset_reminder_hours`（默认 12，`0` 关闭）且已用低于 `reset_reminder_max_used_percent`（默认 50）时，每个重置周期只弹一次。5 小时 / `session*` 窗重置太勤，不发这条。开关显示或开关告警必须先读再整份写回，避免冲掉自定义档位。
 - 预计撞线只由连续两次官方快照的百分比（或金额）差计算，文案写成估计；禁止把本机 5 小时燃烧叠进官方进度条。尚未凑齐两拍、或间隔不足一分钟时不显示。
-- 连续官方快照另写入 `official_quota_history`（默认保留 45 天），只给官方额度面板画趋势。禁止与本机 5 小时 / 7 天估计窗混图。旧库用当前 + 上一拍快照回填。
+- 官方额度面板不画连续快照历史。`official_quota` 只留当前快照和上一拍（预计撞线），不另存历史表。

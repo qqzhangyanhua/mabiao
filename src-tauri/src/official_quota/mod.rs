@@ -34,9 +34,10 @@ use crate::store;
 // 取数调度住在 `fetch` 里，但调用方一直是按 `official_quota::…` 引用的，
 // 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
 pub use fetch::{
-    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_in_parallel,
-    fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled, parse_provider,
-    resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget, ThrottledFetch,
+    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_all_targets_with,
+    fetch_in_parallel, fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled,
+    parse_provider, resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget,
+    ThrottledFetch,
 };
 
 pub const STALE_AFTER_MINUTES: i64 = 10;

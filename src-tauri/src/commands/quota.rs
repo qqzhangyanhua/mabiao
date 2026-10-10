@@ -1,20 +1,28 @@
+use std::collections::HashSet;
+use std::sync::{Mutex, PoisonError};
+
 use crate::official_quota;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::domain::{
-    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHistoryDto,
-    OfficialQuotaHookDto, OfficialQuotaRow,
+    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto,
+    OfficialQuotaRow,
 };
 use crate::official_quota::QuotaTarget;
-use crate::store;
 use crate::AppState;
 
+/// 整体刷新期间每落库一家就推一次全量快照，界面逐行更新，不等最慢的那家。
+const EVENT_UPDATED: &str = "official-quota-updated";
+
+/// 只读缓存，走读连接：摄取会长时间占着写锁，首页额度不该跟着排队。
 fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
     let state = app.state::<AppState>();
-    let conn = state.lock_write()?;
     let config = official_quota::load_config(&state.official_quota_path);
     let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
+    let dto = {
+        let conn = state.lock_read()?;
+        official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now())
+    };
     official_quota::notify::check_and_notify_with_config(
         app,
         &dto,
@@ -27,9 +35,8 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
 #[tauri::command]
 pub async fn get_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        {
-            let state = app.state::<AppState>();
-            let conn = state.lock_write()?;
+        // 写锁被摄取占着就跳过：捕获文件同步晚一轮无妨，紧接着的整体刷新还会再做。
+        if let Some(conn) = app.state::<AppState>().try_lock_write() {
             let _ = official_quota::sync_claude_capture(&conn);
         }
         official_quota_snapshot(&app)
@@ -41,8 +48,40 @@ pub async fn get_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDt
 #[tauri::command]
 pub async fn refresh_official_quota(app: tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let results = official_quota::fetch_all_targets(&load_custom_providers(&app));
-        persist_official_quota_fetches(&app, results)
+        // 回调会在各家取数线程里并发进入；串起来保证推出去的快照只会越来越新。
+        let publishing = Mutex::new(());
+        let persisted = Mutex::new(HashSet::<String>::new());
+        let results = official_quota::fetch_all_targets_with(
+            &load_custom_providers(&app),
+            |target, result| {
+                let _serial = publishing.lock().unwrap_or_else(PoisonError::into_inner);
+                let id = target.quota_id().to_string();
+                if let Ok(dto) =
+                    persist_official_quota_fetches(&app, [(id.clone(), result.clone())])
+                {
+                    let _ = app.emit(EVENT_UPDATED, &dto);
+                    persisted
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .insert(id);
+                }
+            },
+        );
+        let persisted = persisted
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner);
+        // 取数线程 panic 或回调里落库失败的那几家没写进去，这里补一次。
+        let leftover: Vec<_> = results
+            .into_iter()
+            .filter(|(target, _)| !persisted.contains(target.quota_id()))
+            .collect();
+        {
+            let state = app.state::<AppState>();
+            let conn = state.lock_write()?;
+            let _ = official_quota::sync_claude_capture(&conn);
+            official_quota::apply_fetch_results(&conn, leftover)?;
+        }
+        official_quota_snapshot(&app)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -148,15 +187,6 @@ pub fn apply_official_quota_hook() -> Result<OfficialQuotaHookDto, String> {
         &official_quota::hook::default_settings_path(),
         &official_quota::hook::hook_command(),
     )
-}
-
-#[tauri::command]
-pub fn get_official_quota_history(
-    state: tauri::State<AppState>,
-    provider: Option<String>,
-) -> Result<OfficialQuotaHistoryDto, String> {
-    let conn = state.lock_read()?;
-    store::load_official_quota_history(&conn, provider.as_deref())
 }
 
 #[tauri::command]

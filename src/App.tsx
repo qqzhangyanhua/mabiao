@@ -5,6 +5,7 @@ import { LoadingOverlay } from "./components/LoadingOverlay";
 import { Sidebar } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { useOfficialQuotaUpdates } from "./hooks/useOfficialQuotaUpdates";
 import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
@@ -34,6 +35,7 @@ export default function App() {
   const { layout: overviewLayout, setLayout: setOverviewLayout } = useOverviewLayout();
   const { view } = data;
   const detectedSources = data.diagnostics.filter((row) => row.detected).map((row) => row.source);
+  useOfficialQuotaUpdates(data.setOfficialQuota);
 
   // 托盘额度面板没有自己的显示配置，复用这份「配置显示」——一处关掉两边同步隐藏。
   // 托盘运行在 Rust 进程里，够不到 localStorage，所以每次这份配置变化都顺手

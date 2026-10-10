@@ -145,6 +145,11 @@ impl AppState {
         self.conn.lock().map_err(|e| e.to_string())
     }
 
+    /// 写锁此刻被占（多半是摄取）就返回 `None`，给那些可以晚一轮再做的顺手写入用。
+    pub(crate) fn try_lock_write(&self) -> Option<MutexGuard<'_, Connection>> {
+        self.conn.try_lock().ok()
+    }
+
     pub(crate) fn lock_read(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.read_pool.get()
     }
@@ -474,7 +479,6 @@ pub fn run() {
             commands::refresh_official_quota_provider_force,
             commands::get_official_quota_hook,
             commands::apply_official_quota_hook,
-            commands::get_official_quota_history,
             commands::get_official_quota_config,
             commands::save_official_quota_config,
             commands::list_custom_quota_providers,

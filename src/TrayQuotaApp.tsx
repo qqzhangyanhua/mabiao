@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "./components/EmptyState";
 import { OfficialQuotaList } from "./components/OfficialQuotaPanel";
 import { Button } from "./components/ui/Button";
+import { useOfficialQuotaUpdates } from "./hooks/useOfficialQuotaUpdates";
 import { useTheme } from "./hooks/useTheme";
 import { Icon } from "./icons";
 import { officialQuotaEmptyCopy } from "./lib/officialQuotaDisplay";
@@ -27,6 +28,7 @@ export default function TrayQuotaApp() {
   const [open, setOpen] = useState(() => readSectionOpen(TRAY_QUOTA_SECTION_ID, true));
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
   const panelRef = useRef<HTMLElement>(null);
+  useOfficialQuotaUpdates(setQuota);
 
   // 面板空间小，不方便像主窗口那样先弹一句「还要等 N 分钟」再让用户决定要不要硬刷——
   // 点了就是要现在就试一次，所以这里走跳过退避冷却的强制刷新。
