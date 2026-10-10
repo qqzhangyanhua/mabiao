@@ -107,6 +107,18 @@
 6. 引擎清单只列 `which` 探测到的。探测只走设置页手动按钮（`which` + `--version`），启动时不 spawn。加引擎只改 `work_notes::engines` 的 profile 表，不改编排。
 7. 会落盘的引擎必须可识别：能钉 session id 就钉死，否则靠专用工作目录。识别后只从后续纪要输入剔除、在对话记录打「码表生成」标记；不从 token KPI 扣除，不删改用户会话文件。判定规则与落痕表都在 `work_notes/identity.rs`，对话记录只经 `work_notes::decorate_sessions` 取结果，不自己拼规则。
 
+## 推送协议
+
+`crates/push-protocol/`：推送的线上传输格式，桌面端与远程服务共用。它是传输格式，不是平行数据模型（ADR 0026、0017）。
+
+1. 只依赖 serde / sha2，不依赖 `mabiao`；桌面端把 `domain` 转换成它的类型，不反过来。
+2. 改了字段语义或删了字段就递增 `PROTOCOL_VERSION`；只加带 `#[serde(default)]` 的可选字段不用。
+3. 消耗记录指纹 `usage_fingerprint` 有钉死的期望值测试。改算法等于让历史指纹全部失配，必须同时递增 `FINGERPRINT_TAG`。
+4. 服务端入口先调 `PushSessionRequest::validate`：版本检查，且只有 `injected` 层可带原文。
+5. 它不在 workspace 里，`src-tauri` 的命令不覆盖它，用上文三条 `--manifest-path crates/push-protocol/Cargo.toml` 命令。
+
+完成：三条命令绿，且 `cargo test --manifest-path src-tauri/Cargo.toml` 仍绿。
+
 ## 样式
 
 1. 按 `src/styles/` 分层、按域拆文件。入口 `src/styles.css` 只含 `@import`。

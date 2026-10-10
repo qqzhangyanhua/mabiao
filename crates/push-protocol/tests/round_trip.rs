@@ -63,6 +63,7 @@ fn manifest() -> ContextManifestPayload {
                 content: None,
             },
         ],
+        has_injected_snapshot: false,
         from_cache: false,
         volume_is_estimate: true,
     }

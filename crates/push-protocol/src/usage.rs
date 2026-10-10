@@ -53,6 +53,7 @@ fn put_str(hasher: &mut Sha256, value: &str) {
 /// 消耗记录本机只有自增 id，没有稳定主键，客户端按内容算指纹给服务端去重。
 ///
 /// 字符串字段带长度前缀、数字定宽，不同字段拼接不会撞出同一字节流。
+/// `tokens.total` 必须是桌面端 `UsageRecord::with_total` 之后的值，否则两端会算出不同指纹。
 /// 同一源文件同一时刻 model 与各口径 token 全相同的两条会得到同一指纹，服务端会当重复丢掉。
 pub fn usage_fingerprint(
     source: &str,

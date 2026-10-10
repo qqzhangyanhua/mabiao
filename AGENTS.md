@@ -14,6 +14,14 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
+改 `crates/push-protocol/` 时另跑（它不在 workspace 里，上面的命令不覆盖它）：
+
+```bash
+cargo fmt --manifest-path crates/push-protocol/Cargo.toml -- --check
+cargo clippy --manifest-path crates/push-protocol/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path crates/push-protocol/Cargo.toml
+```
+
 包管理只用 pnpm。以上全部通过才算改完。迭代时按层收窄 Rust 测试：
 
 | 层 | 命令 |
@@ -38,7 +46,7 @@ Rust 测试在 `src-tauri/src/tests/`，辅助在 `src-tauri/src/test_support/`�
 
 ## 层清单
 
-改 **Adapter**、**聚合**、**DTO**、**摄取**、**扫描路径**、**Cursor 账号**、**Cursor 会话**、**官方额度**、**对话记录**、**全局指令**、**用户文件**、**报告**、**工作纪要**、**样式**、**Rust 模块边界** 时，读 [`docs/agent-layers.md`](docs/agent-layers.md)，做完该层每一项，再跑对应测试。动手前读该层点名的 ADR。
+改 **Adapter**、**聚合**、**DTO**、**摄取**、**扫描路径**、**Cursor 账号**、**Cursor 会话**、**官方额度**、**对话记录**、**全局指令**、**用户文件**、**报告**、**工作纪要**、**推送协议**、**样式**、**Rust 模块边界** 时，读 [`docs/agent-layers.md`](docs/agent-layers.md)，做完该层每一项，再跑对应测试。动手前读该层点名的 ADR。
 
 写用户拥有的文件只走 ADR 0010（mtime 校验、写前备份、原子 rename、白名单）。其它路径只读。
 
