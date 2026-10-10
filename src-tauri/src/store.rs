@@ -16,9 +16,10 @@ mod schema;
 
 pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum};
 pub(crate) use conversation_fts::{
-    conversation_fts_needs_migration, conversation_fts_needs_optimize, database_vacuum_is_due,
+    compact_conversation_fts, conversation_fts_is_contentless, conversation_fts_needs_migration,
+    conversation_fts_needs_optimize, database_vacuum_is_due, insert_conversation_fts,
     measure_conversation_index_bytes, merge_conversation_fts_step, migrate_conversation_events_fts,
-    rebuild_conversation_fts, store_conversation_index_bytes, stored_conversation_index_bytes,
+    store_conversation_index_bytes, stored_conversation_index_bytes, STORAGE_STALE_ADAPTER_VERSION,
 };
 pub use cursor_account::*;
 pub use cursor_session::*;

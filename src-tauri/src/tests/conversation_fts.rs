@@ -171,9 +171,48 @@ fn catalog_search_skips_unindexed_bodies_and_marks_title_only() {
 }
 
 /// 三元组 AND 的召回是子串语义的超集：正文里 `aut` 和 `uth` 各自出现、但不相邻，
-/// 也会被 FTS 召回。回表 LIKE 复核就是为了把这类命中挡掉。
+/// 也会被 FTS 召回。库内正文回表 LIKE 复核把这类命中挡掉。
 #[test]
-fn catalog_search_body_hit_requires_real_substring_not_scattered_trigrams() {
+fn catalog_search_body_hit_requires_real_substring_in_stored_text() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_codex_session(
+        home,
+        "rollout-scattered.jsonl",
+        "conv-scattered",
+        "plain title one",
+        "aut zzz uth apart",
+    );
+    write_codex_session(
+        home,
+        "rollout-real.jsonl",
+        "conv-real",
+        "plain title two",
+        "we changed auth in login",
+    );
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    conn.execute_batch(
+        r#"
+        UPDATE conversation_events SET text = 'aut zzz uth apart'
+        WHERE session_id = 'conv-scattered' AND text_hash IS NOT NULL;
+        UPDATE conversation_events SET text = 'we changed auth in login'
+        WHERE session_id = 'conv-real' AND text_hash IS NOT NULL;
+        UPDATE conversation_events SET text_hash = NULL, line_offset = NULL
+        WHERE text_hash IS NOT NULL;
+        "#,
+    )
+    .unwrap();
+
+    let page = search(&conn, "auth");
+    assert_eq!(page.total, 1);
+    assert_eq!(page.rows[0].session_id, "conv-real");
+    assert_eq!(page.rows[0].match_field, Some(ConversationMatchField::Body));
+}
+
+/// 外置正文不回表复核，会话级可能多计假阳性（ADR 0025）；片段回源文件复核，只给真命中。
+#[test]
+fn catalog_search_snippet_requires_real_substring_in_referenced_text() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
     write_codex_session(
@@ -194,9 +233,24 @@ fn catalog_search_body_hit_requires_real_substring_not_scattered_trigrams() {
     crate::conversation::refresh_codex(&conn, home).unwrap();
 
     let page = search(&conn, "auth");
-    assert_eq!(page.total, 1);
-    assert_eq!(page.rows[0].session_id, "conv-real");
-    assert_eq!(page.rows[0].match_field, Some(ConversationMatchField::Body));
+    let real = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "conv-real")
+        .expect("真命中会话必须在结果里");
+    assert_eq!(real.match_field, Some(ConversationMatchField::Body));
+    assert!(real
+        .match_snippet
+        .as_deref()
+        .is_some_and(|snippet| snippet.contains("auth")));
+    if let Some(scattered) = page
+        .rows
+        .iter()
+        .find(|row| row.session_id == "conv-scattered")
+    {
+        assert_eq!(scattered.match_snippet, None, "假阳性会话不得给片段");
+        assert_eq!(scattered.match_event_id, None);
+    }
 }
 
 #[test]
@@ -234,6 +288,7 @@ fn migrating_legacy_fts_keeps_body_search_results() {
     let conn = store::open_memory().unwrap();
     conn.execute_batch(
         r#"
+        DROP TRIGGER conversation_events_ad;
         DROP TABLE conversation_events_fts;
         CREATE VIRTUAL TABLE conversation_events_fts USING fts5(
             text,
@@ -242,6 +297,14 @@ fn migrating_legacy_fts_keeps_body_search_results() {
             content_rowid='rowid',
             tokenize='trigram'
         );
+        CREATE TRIGGER conversation_events_ai AFTER INSERT ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(rowid, text, name)
+            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+        END;
+        CREATE TRIGGER conversation_events_ad AFTER DELETE ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+        END;
         "#,
     )
     .unwrap();
@@ -293,6 +356,11 @@ fn opening_existing_cache_rebuilds_missing_fts() {
     drop(conn);
 
     let reopened = store::open_db(db_path.to_str().unwrap()).unwrap();
+    // 外置正文灌不回重建的倒排，会话被标成待补建，补建回源文件重写后才搜得到正文。
+    assert_eq!(
+        crate::conversation::backfill_event_index(&reopened, &home).unwrap(),
+        1
+    );
     let page = search(&reopened, "rebuildable body phrase");
     assert_eq!(page.total, 1);
     assert_eq!(page.rows[0].match_field, Some(ConversationMatchField::Body));

@@ -9,20 +9,65 @@ use super::FTS_REBUILD_VERSION;
 /// 400MB 正文的真实库实测倒排从 2732MB 降到 294MB，查询还快一倍。代价是 FTS5 不再接受短语
 /// 查询，调用方要自己把关键词切成三元组用 AND 连接、再回表用 LIKE 剔假阳性，
 /// 见 `conversation::catalog_search`。
+///
+/// 不存原文（`content=''`）：正文外置的事件行库里没有 `text`（ADR 0025），倒排无从回表取，
+/// 只能由写入方显式插入。`contentless_delete` 与 `columnsize=0` 互斥，列长度表只好照存。
 pub(super) const CONVERSATION_FTS_DEFINITION: &str = r#"
     text,
     name,
-    content='conversation_events',
-    content_rowid='rowid',
+    content='',
+    contentless_delete=1,
     tokenize='trigram',
-    detail='none',
-    columnsize=0
+    detail='none'
 "#;
 
-/// 更新触发器只看 `text` / `name`：换代时 `finalize_session_events` 逐行重排 `sequence`，
-/// 不收窄的话每条事件都要在倒排里白删白插一次。删除计数供 `conversation_fts_needs_optimize`
-/// 判断该不该整份合并——外置 content 的删除只是追加删除标记，不合并就一直占着空间。
+/// 只有删除触发器：插入由写入方显式做，`text` / `name` 写入后不再改。删除计数供
+/// `conversation_fts_needs_optimize` 判断该不该整份合并。
 pub(super) const CONVERSATION_FTS_TRIGGERS: &str = r#"
+CREATE TRIGGER IF NOT EXISTS conversation_events_ad AFTER DELETE ON conversation_events BEGIN
+    DELETE FROM conversation_events_fts WHERE rowid = old.rowid;
+    UPDATE conversation_fts_maintenance
+    SET deleted_since_optimize = deleted_since_optimize + 1;
+END;
+"#;
+
+/// 从库内正文灌倒排。外置行没有正文，只能灌进工具名；换形态时库里还没有外置行，
+/// 倒排意外缺失时外置行所在会话另行标成待补建。
+pub(super) const CONVERSATION_FTS_POPULATE: &str = r#"
+INSERT INTO conversation_events_fts(rowid, text, name)
+SELECT rowid, COALESCE(text, ''), COALESCE(name, '') FROM conversation_events;
+"#;
+
+/// 会话索引仍可读，但要由补建按当前存储表示重写一遍。不能用 0：0 是「重建缓存」的强制重解析。
+pub(crate) const STORAGE_STALE_ADAPTER_VERSION: i64 = -1;
+
+/// 外置行的正文只在源文件里，倒排重建灌不进去；让补建回源文件把这些会话重写一遍。
+fn mark_referenced_sessions_stale(conn: &Connection) -> Result<(), String> {
+    let has_text_hash = conn
+        .prepare("SELECT 1 FROM pragma_table_info('conversation_events') WHERE name = 'text_hash'")
+        .and_then(|mut statement| statement.exists([]))
+        .map_err(|e| e.to_string())?;
+    if !has_text_hash {
+        return Ok(());
+    }
+    conn.execute(
+        r#"
+        UPDATE conversation_sessions
+        SET adapter_version = ?1
+        WHERE (source, session_id) IN (
+            SELECT DISTINCT source, session_id
+            FROM conversation_events
+            WHERE text_hash IS NOT NULL
+        )
+        "#,
+        params![STORAGE_STALE_ADAPTER_VERSION],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// 换形态之前的外置 content 倒排靠触发器回表维护，后台迁移完成前老库仍按它写。
+const LEGACY_CONVERSATION_FTS_TRIGGERS: &str = r#"
 CREATE TRIGGER IF NOT EXISTS conversation_events_ai AFTER INSERT ON conversation_events BEGIN
     INSERT INTO conversation_events_fts(rowid, text, name)
     VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
@@ -53,15 +98,6 @@ const OPTIMIZE_MIN_DELETED: i64 = 100_000;
 /// 重灌倒排在真实库上腾出约 500MB、占整库两成多；门槛再高这些页就一直挂在 freelist 里。
 const VACUUM_MIN_FREE_BYTES: i64 = 256 * 1024 * 1024;
 
-fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
-    conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
-        params![name],
-        |row| row.get(0),
-    )
-    .map_err(|e| e.to_string())
-}
-
 fn conversation_fts_sql(conn: &Connection) -> Result<Option<String>, String> {
     sqlite_master_sql(conn, "table", "conversation_events_fts")
 }
@@ -76,15 +112,38 @@ fn sqlite_master_sql(conn: &Connection, kind: &str, name: &str) -> Result<Option
     .map_err(|e| e.to_string())
 }
 
-/// 旧库建的是 FTS5 默认的 `detail=full`。判据就看建表语句里有没有写 `detail=`——
-/// 正文索引只有这一次形态变更，不值得为它再开一张版本表。
-pub(crate) fn conversation_fts_needs_migration(conn: &Connection) -> Result<bool, String> {
-    Ok(conversation_fts_sql(conn)?.is_some_and(|sql| !sql.contains("detail=")))
+fn is_contentless(sql: &str) -> bool {
+    sql.contains("content=''")
 }
 
-/// 换掉正文索引的形态。整份倒排要从头灌一遍，百万行量级要几十秒，所以调用方必须放到
-/// 后台线程（见 `lib.rs::spawn_conversation_cache_migration`）。迁移期间旧表继续服务查询：
-/// `catalog_search` 发的三元组 AND 查询在两种形态上召回一致。
+/// 旧库建的是回表取正文的外置 content 倒排（更早的还是 `detail=full`）。判据就看建表语句
+/// 里有没有 `content=''`。
+pub(crate) fn conversation_fts_needs_migration(conn: &Connection) -> Result<bool, String> {
+    Ok(conversation_fts_sql(conn)?.is_some_and(|sql| !is_contentless(&sql)))
+}
+
+/// 写入方据此决定要不要自己插倒排、能不能外置正文：老形态还靠触发器回表取正文。
+pub(crate) fn conversation_fts_is_contentless(conn: &Connection) -> Result<bool, String> {
+    Ok(conversation_fts_sql(conn)?.is_some_and(|sql| is_contentless(&sql)))
+}
+
+pub(crate) fn insert_conversation_fts(
+    conn: &Connection,
+    rowid: i64,
+    text: &str,
+    name: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO conversation_events_fts(rowid, text, name) VALUES (?1, ?2, ?3)",
+        params![rowid, text, name],
+    )
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// 换成不存原文的倒排，从库内正文整份灌一遍。百万行量级要几十秒，调用方必须放到后台线程
+/// （见 `lib.rs::spawn_conversation_cache_migration`）。刚灌出来的倒排没有删除残留，
+/// 维护基准直接记成当前行数。
 pub(crate) fn migrate_conversation_events_fts(conn: &Connection) -> Result<(), String> {
     if !conversation_fts_needs_migration(conn)? {
         return Ok(());
@@ -92,9 +151,17 @@ pub(crate) fn migrate_conversation_events_fts(conn: &Connection) -> Result<(), S
     let migration = conn.execute_batch(&format!(
         r#"
         SAVEPOINT migrate_conversation_events_fts;
+        DROP TRIGGER IF EXISTS conversation_events_ai;
+        DROP TRIGGER IF EXISTS conversation_events_ad;
+        DROP TRIGGER IF EXISTS conversation_events_au;
         DROP TABLE conversation_events_fts;
         CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
-        INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild');
+        {CONVERSATION_FTS_TRIGGERS}
+        {CONVERSATION_FTS_POPULATE}
+        UPDATE conversation_fts_maintenance
+        SET deleted_since_optimize = 0,
+            rows_at_optimize = (SELECT COUNT(*) FROM conversation_events)
+        WHERE id = 1;
         RELEASE migrate_conversation_events_fts;
         "#
     ));
@@ -124,24 +191,39 @@ fn ensure_maintenance_table(conn: &Connection) -> Result<(), String> {
     .map_err(|e| e.to_string())
 }
 
-/// 老库的触发器是改任何列都重写倒排、也不计删除数的版本。`CREATE TRIGGER IF NOT EXISTS`
+/// 老形态库的触发器是改任何列都重写倒排、也不计删除数的版本。`CREATE TRIGGER IF NOT EXISTS`
 /// 对同名触发器是空操作，只能先删再建。
-fn triggers_are_current(conn: &Connection) -> Result<bool, String> {
+fn legacy_triggers_are_current(conn: &Connection) -> Result<bool, String> {
     let update = sqlite_master_sql(conn, "trigger", "conversation_events_au")?;
     let delete = sqlite_master_sql(conn, "trigger", "conversation_events_ad")?;
     Ok(update.is_some_and(|sql| sql.contains("UPDATE OF"))
         && delete.is_some_and(|sql| sql.contains("conversation_fts_maintenance")))
 }
 
-/// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再 rebuild。
+/// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再灌。
 /// trigram 按子串匹配，对应原先目录 LIKE 的「关键字」预期；短于 3 个字符的查询只走标题。
 ///
-/// 这里只负责「没有就建」和换触发器。已存在的旧形态表不在这条路径上换——那要几十秒，
-/// 不能挡启动。
+/// 这里只负责「没有就建」和维护触发器。已存在的老形态表不在这条路径上换——那要几十秒，
+/// 不能挡启动；换之前继续按老形态的触发器写。
 pub(super) fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), String> {
     ensure_maintenance_table(conn)?;
-    let existed = table_exists(conn, "conversation_events_fts")?;
-    if existed && !triggers_are_current(conn)? {
+    let Some(sql) = conversation_fts_sql(conn)? else {
+        conn.execute_batch(&format!(
+            r#"
+            CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
+            {CONVERSATION_FTS_TRIGGERS}
+            {CONVERSATION_FTS_POPULATE}
+            "#
+        ))
+        .map_err(|e| e.to_string())?;
+        return mark_referenced_sessions_stale(conn);
+    };
+    if is_contentless(&sql) {
+        return conn
+            .execute_batch(CONVERSATION_FTS_TRIGGERS)
+            .map_err(|e| e.to_string());
+    }
+    if !legacy_triggers_are_current(conn)? {
         conn.execute_batch(
             r#"
             DROP TRIGGER IF EXISTS conversation_events_ad;
@@ -150,31 +232,8 @@ pub(super) fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), St
         )
         .map_err(|e| e.to_string())?;
     }
-    conn.execute_batch(&format!(
-        r#"
-        CREATE VIRTUAL TABLE IF NOT EXISTS conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
-        {CONVERSATION_FTS_TRIGGERS}
-        "#
-    ))
-    .map_err(|e| e.to_string())?;
-    if existed {
-        return Ok(());
-    }
-    let has_events: bool = conn
-        .query_row(
-            "SELECT EXISTS(SELECT 1 FROM conversation_events LIMIT 1)",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
-    if has_events {
-        conn.execute(
-            "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild')",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    conn.execute_batch(LEGACY_CONVERSATION_FTS_TRIGGERS)
+        .map_err(|e| e.to_string())
 }
 
 /// 有上限的增量合并，耗时与库大小无关，可以挂在每轮摄取之后。
@@ -206,12 +265,18 @@ pub(crate) fn conversation_fts_needs_optimize(conn: &Connection) -> Result<bool,
     })
 }
 
-/// 从事件表整份重灌倒排。不用 `optimize`：真实库上它合并完仍有 737MB，重灌只要 308MB，
-/// 而且重灌约 1 分钟、`optimize` 约 3 分钟。调用方必须在后台线程里拿写锁做。
-pub(crate) fn rebuild_conversation_fts(conn: &Connection) -> Result<(), String> {
+/// 全量整理倒排。老形态从事件表整份重灌：真实库上 `optimize` 合并完仍有 737MB，重灌只要
+/// 308MB。不存原文的倒排无从重灌（ADR 0025），只能 `optimize`。调用方必须在后台线程里拿
+/// 写锁做。
+pub(crate) fn compact_conversation_fts(conn: &Connection) -> Result<(), String> {
+    let command = if conversation_fts_is_contentless(conn)? {
+        "optimize"
+    } else {
+        "rebuild"
+    };
     conn.execute(
-        "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild')",
-        [],
+        "INSERT INTO conversation_events_fts(conversation_events_fts) VALUES(?1)",
+        params![command],
     )
     .map_err(|e| e.to_string())?;
     let rows: i64 = conn

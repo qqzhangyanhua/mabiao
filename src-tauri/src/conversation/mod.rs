@@ -28,6 +28,7 @@ mod droid;
 mod dsh;
 mod event_index;
 mod event_page;
+mod event_storage;
 mod event_tables;
 mod export;
 mod gemini;
@@ -72,6 +73,7 @@ pub(crate) use discover::{
     regular_source_revision, single_detail,
 };
 pub(crate) use event_index::indexed_event_count;
+pub use event_storage::adopt_text_references;
 pub use line_direct::{
     load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
     rebuild_events_from_line,

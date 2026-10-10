@@ -25,6 +25,8 @@ pub(crate) struct PendingIncremental {
     pub(crate) path: PathBuf,
     pub(crate) session_id: String,
     pub(crate) parsed: ParsedConversation,
+    /// 后缀解析的起点。
+    pub(crate) origin: FileIndexCursor,
     pub(crate) mtime_ns: i64,
     pub(crate) size: i64,
     pub(crate) source_revision: String,
@@ -110,11 +112,13 @@ pub(crate) fn apply_incremental_in_tx(
         path,
         session_id,
         parsed,
+        origin,
         mtime_ns,
         size,
         source_revision,
     } = pending;
-    let max_sequence = event_index::append_live_events(conn, source, &session_id, &parsed.events)?;
+    let max_sequence =
+        event_index::append_live_events(conn, source, &session_id, &parsed.events, origin)?;
     let cursor = parsed.index_cursor.unwrap_or(FileIndexCursor {
         byte_offset: size,
         line: 0,

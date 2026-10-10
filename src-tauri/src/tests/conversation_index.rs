@@ -11,13 +11,41 @@ fn seed_codex_fixture(
     path
 }
 
-fn strip_details(
-    mut events: Vec<crate::domain::ConversationEvent>,
-) -> Vec<crate::domain::ConversationEvent> {
-    for event in &mut events {
-        event.details = serde_json::Value::Null;
-    }
-    events
+/// rowid、库内 event_id、序号、种类、正文指纹、代号。
+type StoredRow = (i64, String, Option<i64>, String, Option<i64>, i64);
+
+/// 只看库里的行：外置正文的源文件被改坏后读不回正文，但上一代索引本身必须原样保留。
+fn stored_generation(
+    conn: &rusqlite::Connection,
+    source: &str,
+    session_id: &str,
+) -> Vec<StoredRow> {
+    let mut statement = conn
+        .prepare(
+            "SELECT e.rowid, e.event_id, e.sequence, e.kind, e.text_hash, e.index_generation
+             FROM conversation_events AS e
+             JOIN conversation_sessions AS s
+               ON s.source = e.source
+              AND s.session_id = e.session_id
+              AND s.event_index_generation = e.index_generation
+             WHERE e.source = ?1 AND e.session_id = ?2
+             ORDER BY e.rowid",
+        )
+        .unwrap();
+    statement
+        .query_map(rusqlite::params![source, session_id], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+            ))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap()
 }
 
 fn assert_index_matches_parse(
@@ -72,16 +100,19 @@ fn codex_event_index_keeps_the_previous_generation_when_a_source_file_fails() {
     let conn = store::open_memory().unwrap();
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
-    let before = crate::conversation::indexed_events(&conn, "codex", "split-1").unwrap();
-    assert!(!before.is_empty());
+    assert!(
+        !crate::conversation::indexed_events(&conn, "codex", "split-1")
+            .unwrap()
+            .is_empty()
+    );
+    let before = stored_generation(&conn, "codex", "split-1");
 
     std::fs::write(&second, "{not-json\n").unwrap();
     crate::conversation::refresh_codex(&conn, home).unwrap();
 
-    let after = crate::conversation::indexed_events(&conn, "codex", "split-1").unwrap();
     assert_eq!(
-        strip_details(after),
-        strip_details(before),
+        stored_generation(&conn, "codex", "split-1"),
+        before,
         "解析失败不得用残缺结果覆盖上一代索引"
     );
 }
@@ -158,10 +189,14 @@ fn codex_event_index_still_publishes_a_successful_session_when_another_fails() {
     let conn = store::open_memory().unwrap();
 
     crate::conversation::refresh_codex(&conn, home).unwrap();
-    let split_before = crate::conversation::indexed_events(&conn, "codex", "split-1").unwrap();
+    assert!(
+        !crate::conversation::indexed_events(&conn, "codex", "split-1")
+            .unwrap()
+            .is_empty()
+    );
+    let split_before = stored_generation(&conn, "codex", "split-1");
     let semantic_before =
         crate::conversation::indexed_events(&conn, "codex", "semantic-1").unwrap();
-    assert!(!split_before.is_empty());
     assert!(!semantic_before.is_empty());
 
     std::fs::write(&failing, "{not-json\n").unwrap();
@@ -175,7 +210,7 @@ fn codex_event_index_still_publishes_a_successful_session_when_another_fails() {
     crate::conversation::refresh_codex(&conn, home).unwrap();
 
     assert_eq!(
-        crate::conversation::indexed_events(&conn, "codex", "split-1").unwrap(),
+        stored_generation(&conn, "codex", "split-1"),
         split_before,
         "失败会话必须保留上一代"
     );

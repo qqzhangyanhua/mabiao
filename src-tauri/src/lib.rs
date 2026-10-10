@@ -284,6 +284,8 @@ fn spawn_event_index_backfill(app: &tauri::AppHandle) {
 /// - 正文倒排原先是 FTS5 默认的 `detail=full`，位置表占了整个缓存里最大的一块，而检索侧
 ///   从不读位置：片段是 Rust 自己从正文切的，排序键也是手写的。换成 `detail=none` 之后，
 ///   真实库的倒排从 2.7GB 降到 0.3GB。
+/// - 倒排换成不存原文的形态，已有行的 `event_id` 改存推导形态，Codex / pi / omp 的会话交给
+///   补建重写，重写时正文外置（ADR 0025）。
 ///
 /// 两件事合计要几分钟（1.1GB 表整份复制 + 倒排重灌），放 `setup` 里同步做会让启动像卡死，
 /// 所以和预聚合补建一样挪到后台线程、与摄取靠写锁互斥。期间不需要任何「未就绪」状态：
@@ -305,12 +307,8 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
         let Ok(conn) = state.lock_write() else {
             return;
         };
-        if let Err(error) = store::migrate_conversation_events_layout(&conn) {
-            eprintln!("对话事件表形态迁移失败：{error}");
-            return;
-        }
-        if let Err(error) = store::migrate_conversation_events_fts(&conn) {
-            eprintln!("对话正文索引迁移失败：{error}");
+        if let Err(error) = migrate_conversation_cache(&conn) {
+            eprintln!("对话派生缓存形态迁移失败：{error}");
             return;
         }
         // 换表只是把旧结构的几 GB 页挂进 freelist，文件本身不会变小。新形态的稳态体积只有
@@ -319,10 +317,22 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
         if let Err(error) = store::vacuum(&conn) {
             eprintln!("对话派生缓存迁移后回收磁盘空间失败：{error}");
         }
-        // 迁移重灌了倒排，维护记录还是空的；交给维护线程设基准行数并实测占用。
         drop(conn);
+        // 迁移把一批会话标成了待补建，启动时那轮补建可能已经跑完退出了。
+        spawn_event_index_backfill(&app);
         spawn_conversation_fts_maintenance(&app);
     });
+}
+
+/// 换倒排形态与改写已有行（ADR 0025）放进同一个事务：中途失败时老形态原样留着，下次启动再来。
+fn migrate_conversation_cache(conn: &rusqlite::Connection) -> Result<(), String> {
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| error.to_string())?;
+    store::migrate_conversation_events_layout(&transaction)?;
+    store::migrate_conversation_events_fts(&transaction)?;
+    conversation::adopt_text_references(&transaction)?;
+    transaction.commit().map_err(|error| error.to_string())
 }
 
 /// 对话派生缓存的持续维护（ADR 0024）。
@@ -355,8 +365,8 @@ fn spawn_conversation_fts_maintenance(app: &tauri::AppHandle) {
         if !store::conversation_fts_needs_optimize(&conn).unwrap_or(false) {
             return;
         }
-        if let Err(error) = store::rebuild_conversation_fts(&conn) {
-            eprintln!("对话正文索引重灌失败：{error}");
+        if let Err(error) = store::compact_conversation_fts(&conn) {
+            eprintln!("对话正文索引整理失败：{error}");
             return;
         }
         if store::database_vacuum_is_due(&conn).unwrap_or(false) {

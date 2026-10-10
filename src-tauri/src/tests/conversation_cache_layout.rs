@@ -51,7 +51,39 @@ fn body_search(conn: &rusqlite::Connection, term: &str) -> u32 {
 
 /// 把库改回旧形态：事件表带 `source_file`、宽索引还在、倒排回到 `detail=full`。
 /// 这是升级路径的起点，迁移 SQL 必须能从这里走到新形态。
+/// 老库每行都存完整 `event_id` 与正文（ADR 0025 之前），降级前把外置部分填回库里。
+fn inline_stored_representation(conn: &rusqlite::Connection) {
+    let sessions = conn
+        .prepare("SELECT DISTINCT source, session_id FROM conversation_events")
+        .unwrap()
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    for (source, session_id) in sessions {
+        let events = crate::conversation::indexed_events(conn, &source, &session_id).unwrap();
+        for event in events {
+            conn.execute(
+                "UPDATE conversation_events
+                 SET event_id = ?1, text = ?2, line_offset = NULL, text_hash = NULL
+                 WHERE source = ?3 AND session_id = ?4 AND sequence = ?5",
+                rusqlite::params![
+                    event.event_id,
+                    event.text,
+                    source,
+                    session_id,
+                    event.sequence
+                ],
+            )
+            .unwrap();
+        }
+    }
+}
+
 fn downgrade_to_legacy_layout(conn: &rusqlite::Connection) {
+    inline_stored_representation(conn);
     conn.execute_batch(
         r#"
         DROP TABLE conversation_events_fts;

@@ -2,7 +2,7 @@ use rusqlite::Connection;
 
 use super::conversation_fts::{
     ensure_conversation_events_fts, migrate_fts_maintenance_to_rebuild,
-    CONVERSATION_FTS_DEFINITION, CONVERSATION_FTS_TRIGGERS,
+    CONVERSATION_FTS_DEFINITION, CONVERSATION_FTS_POPULATE, CONVERSATION_FTS_TRIGGERS,
 };
 use super::LOWERCASE_MODEL_VERSION;
 
@@ -514,10 +514,18 @@ const CONVERSATION_EVENTS_COLUMNS: &str = r#"
     content_status TEXT NOT NULL,
     identity_hash TEXT NOT NULL,
     identity_occurrence INTEGER NOT NULL,
-    index_generation INTEGER NOT NULL
+    index_generation INTEGER NOT NULL,
+    line_offset INTEGER,
+    text_hash INTEGER
 "#;
 
 pub(crate) const CONVERSATION_EVENT_COLUMN_LIST: &str = "source, session_id, event_id, sequence, \
+    file_id, source_sequence, kind, actor, name, occurred_at, occurred_at_sort, text, \
+    attachments_json, capability_status, content_status, identity_hash, identity_occurrence, \
+    index_generation, line_offset, text_hash";
+
+/// 形态迁移从老表复制过来的列；`line_offset` / `text_hash` 是之后才有的，老行一律为空。
+const CONVERSATION_EVENT_LEGACY_COLUMN_LIST: &str = "source, session_id, event_id, sequence, \
     file_id, source_sequence, kind, actor, name, occurred_at, occurred_at_sort, text, \
     attachments_json, capability_status, content_status, identity_hash, identity_occurrence, \
     index_generation";
@@ -552,7 +560,12 @@ fn ensure_conversation_event_tables(conn: &Connection) -> Result<(), String> {
         ) WITHOUT ROWID;
         "#
     ))
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    if conversation_events_needs_layout_migration(conn)? {
+        return Ok(());
+    }
+    ensure_column(conn, "conversation_events", "line_offset", "INTEGER")?;
+    ensure_column(conn, "conversation_events", "text_hash", "INTEGER")
 }
 
 /// 工具汇总表的唯一定义：迁移、整份重建、增量追加都走这段 SQL，语义不会各写一份然后漂掉。
@@ -590,7 +603,7 @@ pub(crate) fn conversation_events_needs_layout_migration(
 /// 把事件表换成 file_id 形态，顺带把工具汇总表灌起来。1.1GB 表要整份复制、倒排要重灌，
 /// 百万行量级要几分钟，所以和正文索引迁移一样由后台线程调用。
 ///
-/// 倒排是外置 content 的，`rowid` 在复制过程中全部重排，必须在同一个事务里连带重建，
+/// 倒排按 `rowid` 指向事件行，`rowid` 在复制过程中全部重排，必须在同一个事务里连带重建，
 /// 否则中途的查询会读到对不上号的行。
 pub(crate) fn migrate_conversation_events_layout(conn: &Connection) -> Result<(), String> {
     if !conversation_events_needs_layout_migration(conn)? {
@@ -607,7 +620,7 @@ pub(crate) fn migrate_conversation_events_layout(conn: &Connection) -> Result<()
         INSERT OR IGNORE INTO conversation_files(path)
             SELECT DISTINCT source_file FROM conversation_events;
         CREATE TABLE conversation_events_v2 ({CONVERSATION_EVENTS_COLUMNS});
-        INSERT INTO conversation_events_v2({CONVERSATION_EVENT_COLUMN_LIST})
+        INSERT INTO conversation_events_v2({CONVERSATION_EVENT_LEGACY_COLUMN_LIST})
         SELECT e.source, e.session_id, e.event_id, e.sequence, f.file_id, e.source_sequence,
                e.kind, e.actor, e.name, e.occurred_at, e.occurred_at_sort, e.text,
                e.attachments_json, e.capability_status, e.content_status, e.identity_hash,
@@ -623,11 +636,12 @@ pub(crate) fn migrate_conversation_events_layout(conn: &Connection) -> Result<()
         {tools};
         CREATE VIRTUAL TABLE conversation_events_fts USING fts5({CONVERSATION_FTS_DEFINITION});
         {triggers}
-        INSERT INTO conversation_events_fts(conversation_events_fts) VALUES('rebuild');
+        {populate}
         RELEASE migrate_conversation_events_layout;
         "#,
         tools = conversation_session_tools_sql("1 = 1"),
         triggers = CONVERSATION_FTS_TRIGGERS,
+        populate = CONVERSATION_FTS_POPULATE,
     ));
     if let Err(error) = migration {
         let _ = conn.execute_batch(

@@ -140,6 +140,10 @@ pub(crate) fn refresh(
                             path: path.clone(),
                             session_id: row.session_id.clone(),
                             parsed: *parsed,
+                            origin: FileIndexCursor {
+                                byte_offset: row.indexed_byte_offset,
+                                line: row.indexed_line,
+                            },
                             mtime_ns,
                             size,
                             source_revision: source_revision.clone(),
