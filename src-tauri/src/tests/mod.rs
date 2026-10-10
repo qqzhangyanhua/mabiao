@@ -66,3 +66,4 @@ mod tray_popup;
 mod work_notes;
 mod work_timeline;
 mod workbuddy_conversation;
+mod zcode_conversation;

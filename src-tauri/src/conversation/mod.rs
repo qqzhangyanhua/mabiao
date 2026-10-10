@@ -50,6 +50,7 @@ mod session_store;
 mod toolbox;
 pub(crate) mod trusted_path;
 mod workbuddy;
+mod zcode;
 
 use merge::merge_parsed_conversations;
 use toolbox::{FileIndexCursor, ParsedConversation};
@@ -109,6 +110,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::QoderCn,
     Source::Cline,
     Source::WorkBuddy,
+    Source::Zcode,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
@@ -335,6 +337,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: workbuddy::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Zcode,
+        discover: zcode::discover,
+        index: zcode::index,
+        index_suffix: None,
+        detail: zcode::detail,
+        revision: zcode::source_revision,
+        raw_extension: None,
         reuse_unchanged_index: true,
     },
 ];
