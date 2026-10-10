@@ -236,3 +236,31 @@ fn backup_round_trips_scan_path_overrides() {
         &vec![custom.to_string_lossy().into_owned()]
     );
 }
+
+#[test]
+fn detect_default_presence_marks_existing_default_dirs_read_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let present = home.join(".codex").join("sessions");
+    std::fs::create_dir_all(&present).unwrap();
+    let dto = scan_paths::detect_default_presence(home, false);
+    assert!(!dto.has_usage_records);
+    let codex = dto
+        .rows
+        .iter()
+        .find(|row| row.source == "codex")
+        .expect("codex row");
+    assert!(
+        codex
+            .roots
+            .iter()
+            .any(|root| root.exists && root.path.contains("sessions")),
+        "{codex:?}"
+    );
+    let missing = dto
+        .rows
+        .iter()
+        .find(|row| row.source == "pi")
+        .expect("pi row");
+    assert!(missing.roots.iter().all(|root| !root.exists), "{missing:?}");
+}

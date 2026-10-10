@@ -27,7 +27,7 @@ import {
   worktimeHashForDay,
   type ViewScope,
 } from "./viewCache";
-import { SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
+import { hashForTab, SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
@@ -264,6 +264,11 @@ export function useUsageData() {
     replaceLocationHash(SETTINGS_UNPRICED_ANCHOR);
   }, []);
 
+  const openScanPathSettings = useCallback(() => {
+    setView("settings");
+    replaceLocationHash(hashForTab("sources"));
+  }, []);
+
   const clearConversationFocus = useCallback(() => {
     setConversationFocus(null);
   }, []);
@@ -379,6 +384,7 @@ export function useUsageData() {
     openConversations,
     openWorktime,
     openUnpricedDiagnosis,
+    openScanPathSettings,
     clearConversationFocus,
     runIngest: runIngestWithCacheClear,
     runRebuild: runRebuildWithCacheClear,

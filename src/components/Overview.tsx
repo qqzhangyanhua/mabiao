@@ -1,4 +1,5 @@
-import { memo, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { memo, useEffect, useMemo, useState } from "react";
 import { heatmapGrid } from "../lib/calendar";
 import { chartPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
@@ -15,6 +16,8 @@ import { Icon } from "../icons";
 import { Button } from "./ui/Button";
 import { ReportDialog } from "./ReportDialog";
 import { EmptyState } from "./EmptyState";
+import { OverviewSourcePresence } from "./OverviewSourcePresence";
+import type { SourcePresenceDto } from "../lib/sourcePresence";
 import { OverviewKpiSection, OverviewStatusBar } from "./OverviewKpiSection";
 import { OverviewLayoutBar } from "./OverviewLayoutBar";
 import { OverviewPanels } from "./OverviewPanels";
@@ -104,6 +107,7 @@ export const Overview = memo(function Overview({
   onOfficialQuota,
   onQuotaError,
   onOpenUnpricedDiagnosis,
+  onOpenScanPaths,
 }: {
   overview: OverviewDto | null;
   billingWindows: BillingWindowsDto | null;
@@ -136,6 +140,7 @@ export const Overview = memo(function Overview({
   onOfficialQuota: (value: OfficialQuotaDto) => void;
   onQuotaError: (error: unknown) => void;
   onOpenUnpricedDiagnosis?: () => void;
+  onOpenScanPaths?: () => void;
 }) {
   const data = overview ?? emptyOverview;
   const palette = chartPalette(theme);
@@ -192,6 +197,13 @@ export const Overview = memo(function Overview({
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
   const cacheHitRateLabel = formatPercent(cacheHitRate(data.cache_read_tokens, data.input_tokens));
   const [reportOpen, setReportOpen] = useState(false);
+  const [presence, setPresence] = useState<SourcePresenceDto | null>(null);
+
+  useEffect(() => {
+    void invoke<SourcePresenceDto>("detect_source_presence")
+      .then(setPresence)
+      .catch(() => undefined);
+  }, []);
 
   if (!overview) {
     return (
@@ -229,6 +241,9 @@ export const Overview = memo(function Overview({
         </div>
       </div>
       {reportOpen ? <ReportDialog onClose={() => setReportOpen(false)} /> : null}
+      {presence && !presence.has_usage_records && onOpenScanPaths ? (
+        <OverviewSourcePresence data={presence} onOpenScanPaths={onOpenScanPaths} />
+      ) : null}
       {!hasVisibleModule ? (
         <EmptyState
           icon="overview"

@@ -53,6 +53,24 @@ pub fn get_scan_path_config() -> scan_paths::ScanPathPanelDto {
     scan_paths::panel(&scan_paths::config_path(), &ingest::default_home())
 }
 
+/// 总览空态：默认扫描目录在不在、本机有没有消耗记录。只读，不写文件。
+#[tauri::command]
+pub fn detect_source_presence(
+    state: tauri::State<AppState>,
+) -> Result<scan_paths::SourcePresenceDto, String> {
+    let has_usage_records = {
+        let conn = state.lock_read()?;
+        conn.query_row("SELECT EXISTS(SELECT 1 FROM usage_records)", [], |row| {
+            row.get(0)
+        })
+        .map_err(|e| e.to_string())?
+    };
+    Ok(scan_paths::detect_default_presence(
+        &ingest::default_home(),
+        has_usage_records,
+    ))
+}
+
 #[tauri::command]
 pub fn save_scan_path_config(
     overrides: BTreeMap<String, Vec<String>>,
