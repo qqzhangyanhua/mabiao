@@ -1,9 +1,13 @@
-use rusqlite::{params, params_from_iter, Connection, OptionalExtension};
+use std::path::Path;
+
+use rusqlite::{params, params_from_iter, Connection};
 
 use crate::domain::{
-    ConversationMatchField, ConversationPage, ConversationQuery, ConversationSessionRow, PriceTable,
+    ConversationMatchField, ConversationPage, ConversationQuery, ConversationSessionRow,
+    PriceTable, Source,
 };
 
+use super::event_storage::{referenced_text, restore_event_id, ReferencedLine, TextRef};
 use super::hydrate;
 use super::session_store::row_from_sql;
 use super::{CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
@@ -12,6 +16,8 @@ const TITLE_LIKE_FIELDS: usize = 7;
 const SNIPPET_RADIUS: usize = 48;
 const FTS_MIN_CHARS: usize = 3;
 const MAX_TRIGRAM_TERMS: usize = 16;
+/// 每个会话最多回源文件复核这么多条三元组候选；再往后仍找不到真命中就不给片段。
+const MAX_REFERENCED_CANDIDATES: usize = 32;
 
 pub(super) fn sessions_page_with_search(
     conn: &Connection,
@@ -80,7 +86,8 @@ fn ranked_with_sql(predicate: &str, include_body: bool) -> String {
              AND s.session_id = e.session_id
              AND e.index_generation = s.event_index_generation
             WHERE conversation_events_fts MATCH ?
-              AND (e.text LIKE ? ESCAPE '\' OR e.name LIKE ? ESCAPE '\')
+              AND (e.text_hash IS NOT NULL
+                   OR e.text LIKE ? ESCAPE '\' OR e.name LIKE ? ESCAPE '\')
             GROUP BY e.source, e.session_id
         )
         "#
@@ -215,6 +222,8 @@ fn hydrate_body_matches(
     Ok(())
 }
 
+/// 外置正文的候选只有三元组召回、没回表复核过，要回源文件读出来按 `LIKE` 同口径
+/// （ASCII 大小写不敏感的子串）复核。按序号顺次找，找到第一条真命中为止。
 fn first_body_hit(
     conn: &Connection,
     source: &str,
@@ -224,37 +233,94 @@ fn first_body_hit(
     search: &str,
 ) -> Result<Option<(String, u32, String)>, String> {
     let mut statement = conn
-        .prepare(
+        .prepare(&format!(
             r#"
-            SELECT e.event_id, e.sequence, e.text, e.name
+            SELECT e.event_id, f.path, e.source_sequence, e.sequence, e.text, e.name,
+                   e.line_offset, e.text_hash
             FROM conversation_events_fts
             JOIN conversation_events AS e ON e.rowid = conversation_events_fts.rowid
+            JOIN conversation_files AS f ON f.file_id = e.file_id
             JOIN conversation_sessions AS s
               ON s.source = e.source
              AND s.session_id = e.session_id
              AND e.index_generation = s.event_index_generation
             WHERE e.source = ?1 AND e.session_id = ?2
               AND conversation_events_fts MATCH ?3
-              AND (e.text LIKE ?4 ESCAPE '\' OR e.name LIKE ?4 ESCAPE '\')
+              AND (e.text_hash IS NOT NULL
+                   OR e.text LIKE ?4 ESCAPE '\' OR e.name LIKE ?4 ESCAPE '\')
             ORDER BY e.sequence ASC
-            LIMIT 1
-            "#,
-        )
+            LIMIT {MAX_REFERENCED_CANDIDATES}
+            "#
+        ))
         .map_err(|error| error.to_string())?;
-    statement
-        .query_row(params![source, session_id, match_query, pattern], |row| {
-            let event_id: String = row.get(0)?;
-            let sequence: u32 = row.get(1)?;
-            let text: Option<String> = row.get(2)?;
-            let name: Option<String> = row.get(3)?;
-            Ok((
-                event_id,
-                sequence,
-                snippet_for(search, text.as_deref(), name.as_deref()),
-            ))
+    let candidates = statement
+        .query_map(params![source, session_id, match_query, pattern], |row| {
+            Ok(BodyCandidate {
+                stored_event_id: row.get(0)?,
+                source_file: row.get(1)?,
+                source_sequence: row.get(2)?,
+                sequence: row.get(3)?,
+                text: row.get(4)?,
+                name: row.get(5)?,
+                text_ref: match (row.get(6)?, row.get(7)?) {
+                    (Some(line_offset), Some(text_hash)) => Some(TextRef {
+                        line_offset,
+                        text_hash,
+                    }),
+                    _ => None,
+                },
+            })
         })
-        .optional()
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let parsed_source = Source::parse(source);
+    for candidate in candidates {
+        let event_id = restore_event_id(
+            candidate.stored_event_id,
+            &candidate.source_file,
+            candidate.source_sequence,
+        );
+        let text = match (candidate.text_ref, parsed_source) {
+            (None, _) => candidate.text,
+            (Some(text_ref), Some(parsed_source)) => referenced_text(
+                &ReferencedLine {
+                    source: parsed_source,
+                    session_id,
+                    path: Path::new(&candidate.source_file),
+                    event_id: &event_id,
+                    source_sequence: candidate.source_sequence,
+                },
+                text_ref,
+            ),
+            (Some(_), None) => None,
+        };
+        let verified = text
+            .as_deref()
+            .is_some_and(|text| contains_ignore_ascii_case(text, search))
+            || candidate
+                .name
+                .as_deref()
+                .is_some_and(|name| contains_ignore_ascii_case(name, search));
+        if verified {
+            return Ok(Some((
+                event_id,
+                candidate.sequence,
+                snippet_for(search, text.as_deref(), candidate.name.as_deref()),
+            )));
+        }
+    }
+    Ok(None)
+}
+
+struct BodyCandidate {
+    stored_event_id: String,
+    source_file: String,
+    source_sequence: u32,
+    sequence: u32,
+    text: Option<String>,
+    name: Option<String>,
+    text_ref: Option<TextRef>,
 }
 
 fn snippet_for(search: &str, text: Option<&str>, name: Option<&str>) -> String {

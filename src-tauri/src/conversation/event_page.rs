@@ -40,14 +40,15 @@ pub(crate) fn prepare_events_read(
 ) -> Result<PreparedEventsRead, String> {
     let prepared = prepare_detail(conn, source, session_id)?;
     if event_index_ready(conn, home, &prepared)? {
-        let page = event_index::indexed_events_page(
+        if let Some(page) = event_index::indexed_events_page(
             conn,
             prepared.source.as_str(),
             &prepared.session.session_id,
             anchor,
             limit,
-        )?;
-        return Ok(PreparedEventsRead::Ready(page));
+        )? {
+            return Ok(PreparedEventsRead::Ready(page));
+        }
     }
     Ok(PreparedEventsRead::NeedsParse(Box::new(prepared)))
 }

@@ -17,6 +17,7 @@ use crate::domain::{
     ConversationContextLayer, ConversationEvent, ConversationEventKind as EventKind, Source,
 };
 
+use super::event_storage::restore_event_id;
 use super::{context_manifest, event_index};
 
 const SUBAGENT_TOOLS: &[&str] = &["task", "agent", "spawn_agent"];
@@ -79,22 +80,23 @@ pub(crate) fn candidates_from_index(
     let mut statement = conn
         .prepare(
             r#"
-            SELECT event_id, sequence, kind, name, text
-            FROM conversation_events
-            WHERE source = ?1 AND session_id = ?2 AND index_generation = ?3
-              AND kind IN ('tool_call', 'system_status')
-            ORDER BY sequence
+            SELECT e.event_id, f.path, e.source_sequence, e.sequence, e.kind, e.name, e.text
+            FROM conversation_events AS e
+            JOIN conversation_files AS f ON f.file_id = e.file_id
+            WHERE e.source = ?1 AND e.session_id = ?2 AND e.index_generation = ?3
+              AND e.kind IN ('tool_call', 'system_status')
+            ORDER BY e.sequence
             "#,
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
         .query_map(params![source.as_str(), session_id, generation], |row| {
             Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, u32>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, Option<String>>(4)?,
+                restore_event_id(row.get(0)?, &row.get::<_, String>(1)?, row.get(2)?),
+                row.get::<_, u32>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+                row.get::<_, Option<String>>(6)?,
             ))
         })
         .map_err(|error| error.to_string())?;

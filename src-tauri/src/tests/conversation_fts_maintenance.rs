@@ -42,17 +42,21 @@ fn sequence_update_does_not_touch_fts() {
     assert_eq!(before, after, "重排 sequence 不应增加删除计数");
 }
 
-/// 老库的触发器是 `AFTER UPDATE ON conversation_events`（不收窄列）。重新打开后应该
-/// 自动替换成 `AFTER UPDATE OF text, name`。
+/// 换成不存原文的倒排之前，老形态库的触发器是 `AFTER UPDATE ON conversation_events`
+/// （不收窄列）。重新打开后应该自动替换成 `AFTER UPDATE OF text, name`，且仍是回表形态。
 #[test]
 fn legacy_triggers_replaced_on_reopen() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("usage.sqlite");
     let conn = store::open_db(db_path.to_str().unwrap()).unwrap();
-    // 模拟老触发器：删掉收窄版，建一个不收窄的
     conn.execute_batch(
         r#"
-        DROP TRIGGER conversation_events_au;
+        DROP TRIGGER conversation_events_ad;
+        DROP TABLE conversation_events_fts;
+        CREATE VIRTUAL TABLE conversation_events_fts USING fts5(
+            text, name, content='conversation_events', content_rowid='rowid',
+            tokenize='trigram', detail='none', columnsize=0
+        );
         CREATE TRIGGER conversation_events_au AFTER UPDATE ON conversation_events BEGIN
             INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
             VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
@@ -85,9 +89,25 @@ fn legacy_triggers_replaced_on_reopen() {
         )
         .unwrap();
     assert!(
-        delete_sql.contains("conversation_fts_maintenance"),
-        "删除触发器应计数删除量，实际：{delete_sql}"
+        delete_sql.contains("conversation_fts_maintenance") && delete_sql.contains("'delete'"),
+        "老形态的删除触发器应回表删并计数删除量，实际：{delete_sql}"
     );
+    assert!(store::conversation_fts_needs_migration(&reopened).unwrap());
+}
+
+/// 不存原文的倒排只有删除触发器：插入由写入方显式做，删除按 rowid 删。
+#[test]
+fn contentless_fts_has_only_delete_trigger() {
+    let conn = store::open_memory().unwrap();
+    assert!(store::conversation_fts_is_contentless(&conn).unwrap());
+    let triggers: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'conversation_events' ORDER BY name")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(triggers, vec!["conversation_events_ad".to_string()]);
 }
 
 /// `conversation_fts_needs_optimize` 在没有维护记录时（老库升级、从备份恢复）返回 true，
@@ -162,9 +182,9 @@ fn vacuum_threshold_logic() {
     assert!(vacuum_is_due(PAGE, MIN_PAGES * 10, MIN_PAGES * 2));
 }
 
-/// `rebuild_conversation_fts` 执行后，删除计数清零、记下当前行数，正文仍能搜到。
+/// `compact_conversation_fts` 执行后，删除计数清零、记下当前行数，正文仍能搜到。
 #[test]
-fn rebuild_resets_counter() {
+fn compact_resets_counter() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
     write_codex_session(home, "rollout.jsonl", "conv-opt", "title", "body text");
@@ -179,7 +199,7 @@ fn rebuild_resets_counter() {
     .unwrap();
     assert!(store::conversation_fts_needs_optimize(&conn).unwrap());
 
-    store::rebuild_conversation_fts(&conn).unwrap();
+    store::compact_conversation_fts(&conn).unwrap();
 
     let (deleted, rows): (i64, Option<i64>) = conn
         .query_row(
@@ -198,7 +218,7 @@ fn rebuild_resets_counter() {
             |row| row.get(0),
         )
         .unwrap();
-    assert_eq!(hits, 1, "重灌后正文 body text 仍应可搜");
+    assert_eq!(hits, 1, "整理后正文 body text 仍应可搜");
 }
 
 /// 维护方式改成重灌之前就记过基准的老库，升级后要清掉基准、尽快重灌一次；只清这一次。

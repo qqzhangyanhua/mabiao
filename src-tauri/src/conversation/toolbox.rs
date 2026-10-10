@@ -413,7 +413,7 @@ pub(crate) fn normalize_tool_result_details(item: &Value) -> Value {
     details
 }
 
-fn event_id_for(source_file: &str, source_sequence: u32) -> String {
+pub(crate) fn event_id_for(source_file: &str, source_sequence: u32) -> String {
     format!(
         "{}:{source_sequence}",
         BASE64_URL_SAFE_NO_PAD.encode(source_file.as_bytes())

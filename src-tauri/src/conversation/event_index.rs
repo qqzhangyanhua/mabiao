@@ -7,9 +7,13 @@ use serde_json::Value;
 
 use crate::domain::{ConversationEvent, ConversationEventAnchor, ConversationEventPage, Source};
 
+use super::event_storage::{
+    hydrate_texts, plan_text_refs, restore_event_id, split_derived_event_id, stored_event_id,
+    TextRef,
+};
 use super::event_tables::{clear_session_tools, refresh_session_tools, FileIds};
 use super::merge::event_identity;
-use super::toolbox::ParsedConversation;
+use super::toolbox::{FileIndexCursor, ParsedConversation};
 
 pub fn write_file_events(
     conn: &Connection,
@@ -26,49 +30,30 @@ pub fn write_file_events(
             generation
         }
     };
-    let insert_sql = format!(
-        "INSERT INTO conversation_events({columns}) \
-         VALUES(?1,?2,?3,NULL,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)",
-        columns = crate::store::CONVERSATION_EVENT_COLUMN_LIST,
-    );
-    let mut statement = conn.prepare(&insert_sql).map_err(|e| e.to_string())?;
-    let mut files = FileIds::default();
-    let mut occurrences = BTreeMap::<String, i64>::new();
-    for event in &parsed.events {
-        let identity = identity_hash(event);
-        let occurrence = occurrences.entry(identity.clone()).or_default();
-        let attachments = serde_json::to_string(&event.attachments).map_err(|e| e.to_string())?;
-        statement
-            .execute(params![
-                source.as_str(),
-                session_id,
-                event.event_id,
-                files.resolve(conn, &event.source_file)?,
-                event.source_sequence,
-                enum_token(event.kind)?,
-                event.actor.map(enum_token).transpose()?,
-                event.name,
-                event.occurred_at,
-                occurred_at_sort_key(&event.occurred_at),
-                event.text,
-                attachments,
-                enum_token(event.capability_status)?,
-                enum_token(event.content_status)?,
-                identity,
-                *occurrence,
-                generation,
-            ])
-            .map_err(|error| error.to_string())?;
-        *occurrence += 1;
-    }
-    Ok(())
+    insert_events(
+        conn,
+        EventBatch {
+            source,
+            session_id,
+            generation,
+            events: &parsed.events,
+            origin: FileIndexCursor {
+                byte_offset: 0,
+                line: 0,
+            },
+            first_sequence: None,
+        },
+        &mut BTreeMap::new(),
+    )
 }
 
+/// `origin` 是这批后缀事件在源文件里被解析的起点，外置正文要据此算行偏移。
 pub fn append_live_events(
     conn: &Connection,
     source: Source,
     session_id: &str,
     events: &[ConversationEvent],
+    origin: FileIndexCursor,
 ) -> Result<u32, String> {
     if live_index_would_rewind(conn, source, session_id, events)? {
         return Err("新事件时间早于已有索引，需要整份重索引".to_string());
@@ -76,28 +61,75 @@ pub fn append_live_events(
     let Some(generation) = live_generation(conn, source.as_str(), session_id)? else {
         return Err("会话还没有已发布的事件索引".to_string());
     };
-    let mut next_sequence = max_sequence(conn, source.as_str(), session_id, generation)?
+    let first_sequence = max_sequence(conn, source.as_str(), session_id, generation)?
         .map(|sequence| sequence + 1)
         .unwrap_or(0);
-    let mut occurrences = identity_occurrences(conn, source.as_str(), session_id, generation)?;
+    let mut next_occurrences = identity_occurrences(conn, source.as_str(), session_id, generation)?
+        .into_iter()
+        .map(|(identity, occurrence)| (identity, occurrence + 1))
+        .collect();
+    insert_events(
+        conn,
+        EventBatch {
+            source,
+            session_id,
+            generation,
+            events,
+            origin,
+            first_sequence: Some(first_sequence),
+        },
+        &mut next_occurrences,
+    )?;
+    refresh_session_tools(conn, source.as_str(), session_id, generation)?;
+    Ok((first_sequence + events.len() as u32).saturating_sub(1))
+}
+
+struct EventBatch<'a> {
+    source: Source,
+    session_id: &'a str,
+    generation: i64,
+    events: &'a [ConversationEvent],
+    origin: FileIndexCursor,
+    /// 整份写入时为空，由 `finalize_session_events` 统一排序后再编号。
+    first_sequence: Option<u32>,
+}
+
+fn insert_events(
+    conn: &Connection,
+    batch: EventBatch<'_>,
+    next_occurrences: &mut BTreeMap<String, i64>,
+) -> Result<(), String> {
+    let EventBatch {
+        source,
+        session_id,
+        generation,
+        events,
+        origin,
+        first_sequence,
+    } = batch;
+    let contentless_fts = crate::store::conversation_fts_is_contentless(conn)?;
+    let text_refs = if contentless_fts {
+        plan_text_refs(source, session_id, events, origin)
+    } else {
+        vec![None; events.len()]
+    };
     let insert_sql = format!(
         "INSERT INTO conversation_events({columns}) \
-         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)",
+         VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)",
         columns = crate::store::CONVERSATION_EVENT_COLUMN_LIST,
     );
     let mut statement = conn.prepare(&insert_sql).map_err(|e| e.to_string())?;
     let mut files = FileIds::default();
-    for event in events {
+    for (index, (event, text_ref)) in events.iter().zip(text_refs).enumerate() {
         let identity = identity_hash(event);
-        let occurrence = occurrences.entry(identity.clone()).or_insert(-1);
-        *occurrence += 1;
+        let occurrence = next_occurrences.entry(identity.clone()).or_default();
         let attachments = serde_json::to_string(&event.attachments).map_err(|e| e.to_string())?;
         statement
             .execute(params![
                 source.as_str(),
                 session_id,
-                event.event_id,
-                next_sequence,
+                stored_event_id(event),
+                first_sequence.map(|sequence| sequence + index as u32),
                 files.resolve(conn, &event.source_file)?,
                 event.source_sequence,
                 enum_token(event.kind)?,
@@ -105,19 +137,28 @@ pub fn append_live_events(
                 event.name,
                 event.occurred_at,
                 occurred_at_sort_key(&event.occurred_at),
-                event.text,
+                event.text.as_deref().filter(|_| text_ref.is_none()),
                 attachments,
                 enum_token(event.capability_status)?,
                 enum_token(event.content_status)?,
                 identity,
                 *occurrence,
                 generation,
+                text_ref.map(|text_ref| text_ref.line_offset),
+                text_ref.map(|text_ref| text_ref.text_hash),
             ])
             .map_err(|error| error.to_string())?;
-        next_sequence += 1;
+        *occurrence += 1;
+        if contentless_fts {
+            crate::store::insert_conversation_fts(
+                conn,
+                conn.last_insert_rowid(),
+                event.text.as_deref().unwrap_or(""),
+                event.name.as_deref().unwrap_or(""),
+            )?;
+        }
     }
-    refresh_session_tools(conn, source.as_str(), session_id, generation)?;
-    Ok(next_sequence.saturating_sub(1))
+    Ok(())
 }
 
 fn max_sequence(
@@ -224,12 +265,15 @@ pub fn finalize_session_events(
         .map_err(|error| error.to_string())?;
     let mut ordered = order_statement
         .query_map(params![source.as_str(), session_id, generation], |row| {
+            let path = row.get::<_, String>(2)?;
+            let source_sequence = row.get::<_, u32>(3)?;
+            let event_id = restore_event_id(row.get(4)?, &path, source_sequence);
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, Option<String>>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, u32>(3)?,
-                row.get::<_, String>(4)?,
+                path,
+                source_sequence,
+                event_id,
             ))
         })
         .map_err(|error| error.to_string())?
@@ -317,21 +361,23 @@ pub fn clear_session_events(
 
 const EVENT_SELECT: &str = r#"
     SELECT e.event_id, f.path, e.source_sequence, e.kind, e.actor, e.name, e.occurred_at, e.text,
-           e.attachments_json, e.capability_status, e.content_status, e.sequence
+           e.attachments_json, e.capability_status, e.content_status, e.sequence,
+           e.line_offset, e.text_hash
     FROM conversation_events e
     JOIN conversation_files f ON f.file_id = e.file_id
     WHERE e.source = ?1 AND e.session_id = ?2 AND e.index_generation = ?3
 "#;
 
+/// 外置正文回不了源文件时返回 `None`，调用方整份解析源文件。
 pub fn indexed_events(
     conn: &Connection,
     source: &str,
     session_id: &str,
-) -> Result<Vec<ConversationEvent>, String> {
+) -> Result<Option<Vec<ConversationEvent>>, String> {
     let Some(generation) = live_generation(conn, source, session_id)? else {
-        return Ok(Vec::new());
+        return Ok(Some(Vec::new()));
     };
-    query_events(
+    let rows = query_events(
         conn,
         EventQuery {
             source,
@@ -342,9 +388,11 @@ pub fn indexed_events(
             order_by: "sequence ASC",
             limit: None,
         },
-    )
+    )?;
+    Ok(hydrated(source, session_id, rows))
 }
 
+/// 外置正文回不了源文件时与「索引里没有」一样返回 `None`，调用方走整份解析。
 pub fn indexed_event(
     conn: &Connection,
     source: &str,
@@ -354,15 +402,61 @@ pub fn indexed_event(
     let Some(generation) = live_generation(conn, source, session_id)? else {
         return Ok(None);
     };
+    let (file_id, source_sequence, stored_suffix) = match split_derived_event_id(event_id) {
+        Some((path, source_sequence, suffix)) => (
+            file_id_for_path(conn, &path)?.unwrap_or(-1),
+            i64::from(source_sequence),
+            suffix,
+        ),
+        None => (-1, -1, String::new()),
+    };
+    let row = conn
+        .query_row(
+            &format!(
+                "{EVENT_SELECT} AND (e.event_id = ?4 \
+                 OR (e.file_id = ?5 AND e.source_sequence = ?6 AND e.event_id = ?7))"
+            ),
+            params![
+                source,
+                session_id,
+                generation,
+                event_id,
+                file_id,
+                source_sequence,
+                stored_suffix
+            ],
+            IndexedRow::from_sql,
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    Ok(hydrated(source, session_id, vec![row.into_event()?])
+        .and_then(|events| events.into_iter().next()))
+}
+
+fn file_id_for_path(conn: &Connection, path: &str) -> Result<Option<i64>, String> {
     conn.query_row(
-        &format!("{EVENT_SELECT} AND event_id = ?4"),
-        params![source, session_id, generation, event_id],
-        map_event_tuple,
+        "SELECT file_id FROM conversation_files WHERE path = ?1",
+        params![path],
+        |row| row.get(0),
     )
     .optional()
-    .map_err(|error| error.to_string())?
-    .map(event_from_tuple)
-    .transpose()
+    .map_err(|error| error.to_string())
+}
+
+fn hydrated(
+    source: &str,
+    session_id: &str,
+    rows: Vec<(ConversationEvent, Option<TextRef>)>,
+) -> Option<Vec<ConversationEvent>> {
+    let (mut events, refs): (Vec<_>, Vec<_>) = rows.into_iter().unzip();
+    if refs.iter().all(Option::is_none) {
+        return Some(events);
+    }
+    let source = Source::parse(source)?;
+    hydrate_texts(source, session_id, &mut events, &refs).then_some(events)
 }
 
 pub fn indexed_event_count(
@@ -386,18 +480,19 @@ pub fn indexed_event_count(
     .map_err(|error| error.to_string())
 }
 
+/// 外置正文回不了源文件时返回 `None`，调用方整份解析源文件再分页。
 pub fn indexed_events_page(
     conn: &Connection,
     source: &str,
     session_id: &str,
     anchor: &ConversationEventAnchor,
     limit: u32,
-) -> Result<ConversationEventPage, String> {
+) -> Result<Option<ConversationEventPage>, String> {
     let limit = limit.clamp(1, 200);
     let Some(generation) = live_generation(conn, source, session_id)? else {
-        return Ok(empty_event_page());
+        return Ok(Some(empty_event_page()));
     };
-    let events = match anchor {
+    let rows = match anchor {
         ConversationEventAnchor::First => query_events(
             conn,
             EventQuery {
@@ -467,12 +562,15 @@ pub fn indexed_events_page(
             },
         )?,
     };
-    if events.is_empty() {
-        return empty_page_flags(conn, source, session_id, generation, anchor);
+    if rows.is_empty() {
+        return empty_page_flags(conn, source, session_id, generation, anchor).map(Some);
     }
+    let Some(events) = hydrated(source, session_id, rows) else {
+        return Ok(None);
+    };
     let min_sequence = events[0].sequence;
     let max_sequence = events.last().expect("page is not empty").sequence;
-    Ok(ConversationEventPage {
+    Ok(Some(ConversationEventPage {
         events,
         has_more_before: sequence_exists(
             conn,
@@ -490,7 +588,7 @@ pub fn indexed_events_page(
             "sequence > ?4",
             max_sequence,
         )?,
-    })
+    }))
 }
 
 pub fn live_index_would_rewind(
@@ -549,7 +647,7 @@ struct EventQuery<'a> {
 fn query_events(
     conn: &Connection,
     query: EventQuery<'_>,
-) -> Result<Vec<ConversationEvent>, String> {
+) -> Result<Vec<(ConversationEvent, Option<TextRef>)>, String> {
     let EventQuery {
         source,
         session_id,
@@ -572,97 +670,105 @@ fn query_events(
         (Some(bound), Some(limit)) => statement
             .query_map(
                 params![source, session_id, generation, bound, i64::from(limit)],
-                map_event_tuple,
+                IndexedRow::from_sql,
             )
             .map_err(|error| error.to_string())?
             .collect::<Result<Vec<_>, _>>(),
         (None, Some(limit)) => statement
             .query_map(
                 params![source, session_id, generation, i64::from(limit)],
-                map_event_tuple,
+                IndexedRow::from_sql,
             )
             .map_err(|error| error.to_string())?
             .collect::<Result<Vec<_>, _>>(),
         (Some(bound), None) => statement
             .query_map(
                 params![source, session_id, generation, bound],
-                map_event_tuple,
+                IndexedRow::from_sql,
             )
             .map_err(|error| error.to_string())?
             .collect::<Result<Vec<_>, _>>(),
         (None, None) => statement
-            .query_map(params![source, session_id, generation], map_event_tuple)
+            .query_map(
+                params![source, session_id, generation],
+                IndexedRow::from_sql,
+            )
             .map_err(|error| error.to_string())?
             .collect::<Result<Vec<_>, _>>(),
     }
     .map_err(|error| error.to_string())?;
-    rows.into_iter().map(event_from_tuple).collect()
+    rows.into_iter().map(IndexedRow::into_event).collect()
 }
 
-type IndexedEventTuple = (
-    String,
-    String,
-    u32,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    String,
-    String,
-    String,
-    u32,
-);
-
-fn map_event_tuple(row: &rusqlite::Row<'_>) -> rusqlite::Result<IndexedEventTuple> {
-    Ok((
-        row.get(0)?,
-        row.get(1)?,
-        row.get(2)?,
-        row.get(3)?,
-        row.get(4)?,
-        row.get(5)?,
-        row.get(6)?,
-        row.get(7)?,
-        row.get(8)?,
-        row.get(9)?,
-        row.get(10)?,
-        row.get(11)?,
-    ))
+/// `EVENT_SELECT` 的一行，列顺序与它一一对应。
+struct IndexedRow {
+    stored_event_id: String,
+    source_file: String,
+    source_sequence: u32,
+    kind: String,
+    actor: Option<String>,
+    name: Option<String>,
+    occurred_at: Option<String>,
+    text: Option<String>,
+    attachments_json: String,
+    capability_status: String,
+    content_status: String,
+    sequence: u32,
+    line_offset: Option<i64>,
+    text_hash: Option<i64>,
 }
 
-fn event_from_tuple(
-    (
-        event_id,
-        source_file,
-        source_sequence,
-        kind,
-        actor,
-        name,
-        occurred_at,
-        text,
-        attachments_json,
-        capability_status,
-        content_status,
-        sequence,
-    ): IndexedEventTuple,
-) -> Result<ConversationEvent, String> {
-    let attachments = serde_json::from_str(&attachments_json).map_err(|e| e.to_string())?;
-    Ok(ConversationEvent {
-        event_id,
-        sequence,
-        source_file,
-        source_sequence,
-        kind: parse_token(&kind)?,
-        occurred_at,
-        actor: actor.map(|value| parse_token(&value)).transpose()?,
-        name,
-        text,
-        details: Value::Null,
-        attachments,
-        capability_status: parse_token(&capability_status)?,
-        content_status: parse_token(&content_status)?,
-    })
+impl IndexedRow {
+    fn from_sql(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            stored_event_id: row.get(0)?,
+            source_file: row.get(1)?,
+            source_sequence: row.get(2)?,
+            kind: row.get(3)?,
+            actor: row.get(4)?,
+            name: row.get(5)?,
+            occurred_at: row.get(6)?,
+            text: row.get(7)?,
+            attachments_json: row.get(8)?,
+            capability_status: row.get(9)?,
+            content_status: row.get(10)?,
+            sequence: row.get(11)?,
+            line_offset: row.get(12)?,
+            text_hash: row.get(13)?,
+        })
+    }
+
+    fn into_event(self) -> Result<(ConversationEvent, Option<TextRef>), String> {
+        let attachments =
+            serde_json::from_str(&self.attachments_json).map_err(|e| e.to_string())?;
+        let text_ref = match (self.line_offset, self.text_hash) {
+            (Some(line_offset), Some(text_hash)) => Some(TextRef {
+                line_offset,
+                text_hash,
+            }),
+            _ => None,
+        };
+        let event = ConversationEvent {
+            event_id: restore_event_id(
+                self.stored_event_id,
+                &self.source_file,
+                self.source_sequence,
+            ),
+            sequence: self.sequence,
+            source_file: self.source_file,
+            source_sequence: self.source_sequence,
+            kind: parse_token(&self.kind)?,
+            occurred_at: self.occurred_at,
+            actor: self.actor.map(|value| parse_token(&value)).transpose()?,
+            name: self.name,
+            text: self.text,
+            details: Value::Null,
+            attachments,
+            capability_status: parse_token(&self.capability_status)?,
+            content_status: parse_token(&self.content_status)?,
+        };
+        Ok((event, text_ref))
+    }
 }
 
 fn sequence_exists(

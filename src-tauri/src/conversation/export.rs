@@ -177,7 +177,8 @@ fn stream_indexed_markdown(
             &session.session_id,
             &anchor,
             MAX_PAGE_SIZE,
-        )?;
+        )?
+        .ok_or_else(|| "原始文件在导出期间发生变化，请重试".to_string())?;
         if page.events.is_empty() {
             break;
         }

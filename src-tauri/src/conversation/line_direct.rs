@@ -33,13 +33,43 @@ pub fn rebuild_events_from_line(
     source_sequence: u32,
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
+    if !source_maps_line_to_events(source) {
+        return Err("该来源的事件映射不是按行无上下文的".to_string());
+    }
+    let raw = read_jsonl_record(path, source_sequence)?;
+    rebuild_events_from_raw(
+        source,
+        path,
+        session_id,
+        source_sequence,
+        &raw,
+        include_deferred_content,
+    )
+}
+
+/// 调用方已经按偏移读出了那一行，省掉从文件头数行的那一遍。
+pub(super) fn rebuild_events_from_raw(
+    source: Source,
+    path: &Path,
+    session_id: &str,
+    source_sequence: u32,
+    raw: &str,
+    include_deferred_content: bool,
+) -> Result<Vec<ConversationEvent>, String> {
     match source {
-        Source::Codex => rebuild_codex(path, session_id, source_sequence, include_deferred_content),
+        Source::Codex => rebuild_codex(
+            path,
+            session_id,
+            source_sequence,
+            raw,
+            include_deferred_content,
+        ),
         Source::Claude | Source::Pi | Source::Omp => rebuild_jsonl_values(
             source,
             path,
             session_id,
             source_sequence,
+            raw,
             include_deferred_content,
         ),
         _ => Err("该来源的事件映射不是按行无上下文的".to_string()),
@@ -249,9 +279,9 @@ fn rebuild_codex(
     path: &Path,
     session_id: &str,
     source_sequence: u32,
+    raw: &str,
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
-    let raw = read_jsonl_record(path, source_sequence)?;
     let parsed = super::codex::parse_content(
         path,
         &format!("{raw}\n"),
@@ -270,9 +300,9 @@ fn rebuild_jsonl_values(
     path: &Path,
     session_id: &str,
     source_sequence: u32,
+    raw: &str,
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
-    let raw = read_jsonl_record(path, source_sequence)?;
     let value: Value = serde_json::from_str(raw.trim())
         .map_err(|error| format!("第 {} 行 JSON 无效：{error}", source_sequence + 1))?;
     let values = vec![(source_sequence as usize, value)];
