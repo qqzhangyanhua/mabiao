@@ -293,6 +293,7 @@ fn qoder_cn_event_index_matches_full_parse() {
     assert_conversation_index_matches_parse(&conn, home, "qoder_cn", "qoder-cn-session-1");
 }
 
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
