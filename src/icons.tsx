@@ -283,4 +283,5 @@ export const sourceTone: Record<string, string> = {
   cline: "tone-cline",
   workbuddy: "tone-workbuddy",
   zcode: "tone-zcode",
+  alma: "tone-alma",
 };

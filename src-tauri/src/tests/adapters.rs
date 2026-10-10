@@ -760,6 +760,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Zcode.application_name(), "ZCode");
     assert_eq!(Source::Zcode.as_str(), "zcode");
     assert_eq!(Source::parse("zcode"), Some(Source::Zcode));
+    assert_eq!(Source::Alma.application_name(), "Alma");
+    assert_eq!(Source::Alma.as_str(), "alma");
+    assert_eq!(Source::parse("alma"), Some(Source::Alma));
 }
 
 #[test]
@@ -2011,4 +2014,69 @@ fn agy_parse_returns_empty_when_generation_cannot_decode() {
         records.is_empty(),
         "解不出生成元数据时视为非 agy 数据，不得产出消耗记录"
     );
+}
+
+#[test]
+fn alma_adapter_strips_provider_prefix_and_subtracts_cache() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("chat_threads.db");
+    write_alma_full_db(&path);
+    let records = alma::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 3);
+    assert!(records.iter().all(|r| r.source == Source::Alma));
+    assert!(records
+        .iter()
+        .all(|r| !matches!(r.session_id.as_str(), "thC" | "thD" | "thE" | "thF")));
+
+    let astra = records.iter().find(|r| r.model == "gpt-6-astra").unwrap();
+    assert_eq!(astra.provider, "plugin");
+    assert_eq!(astra.project, "/work/alma");
+    assert_eq!(astra.session_id, "thA");
+    assert_eq!(astra.input_tokens, 400);
+    assert_eq!(astra.output_tokens, 50);
+    assert_eq!(astra.cache_read_tokens, 600);
+    assert_eq!(astra.cache_creation_tokens, 0);
+    assert_eq!(astra.total_tokens, 1050);
+
+    let opus = records
+        .iter()
+        .find(|r| r.model == "claude-opus-5-5")
+        .unwrap();
+    assert_eq!(opus.provider, "claude-subscription");
+    assert_eq!(opus.input_tokens, 100);
+    assert_eq!(opus.output_tokens, 20);
+    assert_eq!(opus.cache_read_tokens, 100);
+    assert_eq!(opus.cache_creation_tokens, 300);
+    assert_eq!(opus.total_tokens, 520);
+
+    let aux = records.iter().find(|r| r.session_id == "thB").unwrap();
+    assert_eq!(aux.model, "gemini-3.1-flash-lite-preview");
+    assert_eq!(aux.input_tokens, 30);
+    assert_eq!(aux.output_tokens, 5);
+    assert_eq!(aux.total_tokens, 35);
+}
+
+#[test]
+fn alma_model_strips_provider_and_plugin_prefix() {
+    assert_eq!(
+        alma::alma_model("plugin:openai-codex-auth:openai-codex:gpt-5.4", "plugin"),
+        "gpt-5.4"
+    );
+    assert_eq!(
+        alma::alma_model("claude-subscription:claude-opus-4-6", "claude-subscription"),
+        "claude-opus-4-6"
+    );
+    assert_eq!(
+        alma::alma_model(
+            "muqbtywmwhw85ee22l:anthropic/claude-opus-5-5",
+            "muqbtywmwhw85ee22l"
+        ),
+        "anthropic/claude-opus-5-5"
+    );
+    assert_eq!(
+        alma::alma_model("gemini:gemini-3.1-pro-preview", ""),
+        "gemini-3.1-pro-preview"
+    );
+    assert_eq!(alma::alma_model("ollama:qwen3:8b", "ollama"), "qwen3:8b");
+    assert_eq!(alma::alma_model("gemini-2.5-pro", ""), "gemini-2.5-pro");
 }

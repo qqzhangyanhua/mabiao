@@ -973,7 +973,8 @@ export type UsageSource =
   | "qoder_cn"
   | "cline"
   | "workbuddy"
-  | "zcode";
+  | "zcode"
+  | "alma";
 
 export type SourceIngestReport = {
   source: UsageSource;

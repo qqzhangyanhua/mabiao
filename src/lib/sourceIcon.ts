@@ -24,6 +24,7 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   cline: "cline",
   workbuddy: "workbuddy",
   zcode: "zcode",
+  alma: "alma",
 };
 
 export function resolveSourceIconId(source: string): SourceIconId {

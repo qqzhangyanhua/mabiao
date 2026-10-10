@@ -110,6 +110,7 @@ const sourceNames: Record<string, string> = {
   cline: "Cline",
   workbuddy: "WorkBuddy",
   zcode: "ZCode",
+  alma: "Alma",
   devin: "Devin",
 };
 

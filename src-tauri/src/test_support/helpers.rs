@@ -249,6 +249,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     std::fs::write(&dsh, compressed).unwrap();
     write_opencode_fixture_db(home);
     write_zcode_fixture_db(home);
+    super::write_alma_ingest_db(home);
     super::write_default_hermes_home(home);
     // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =

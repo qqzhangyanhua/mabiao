@@ -31,6 +31,7 @@
 | Cline | `CLINE_SESSION_DATA_DIR` | `~/.cline/data/sessions`（扫 `*.messages.json`） |
 | WorkBuddy | `WORKBUDDY_CONFIG_DIR` | `~/.workbuddy`（扫 `projects/`） |
 | ZCode | `ZCODE_HOME` | `~/.zcode`（扫 `cli/db/db.sqlite`） |
+| Alma | `ALMA_HOME` | Electron `userData`/`alma`：Linux `~/.config/alma`、macOS `~/Library/Application Support/alma`、Windows `%APPDATA%/alma`（扫 `chat_threads.db`；不是 `~/.local/share/alma`） |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径）在显式设置对应环境变量后也不再自动附加。
 
