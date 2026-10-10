@@ -1,9 +1,10 @@
 import type { SettingsTab, SettingsTabId } from "./type";
 
 export const SETTINGS_UNPRICED_ANCHOR = "settings-unpriced";
+export const REMOTE_SERVER_ANCHOR = "settings-remote-server";
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-  { id: "general", label: "通用", anchors: ["settings-appearance", "settings-overview"] },
+  { id: "general", label: "通用", anchors: ["settings-appearance", "settings-overview", REMOTE_SERVER_ANCHOR] },
   {
     id: "sources",
     label: "数据",

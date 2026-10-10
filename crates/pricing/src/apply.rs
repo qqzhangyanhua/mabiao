@@ -1,6 +1,6 @@
 //! 把价目套到 token 数上，得出费用与来源。
 
-use crate::lookup::resolve_entry;
+use crate::lookup::{resolve_entry, PriceCache};
 use crate::{CostSource, DerivedCost, PriceEntry, PriceOrigin, PriceTable};
 
 pub struct PricedUsage<'a> {
@@ -128,19 +128,37 @@ pub fn price_usage(
     allow_signature_match: bool,
 ) -> PricedCost {
     if usage.native_cost.is_some() {
-        return PricedCost {
-            derived: apply_entry(&usage, None),
-            basis: PricingBasis::Native,
-        };
+        return priced_with_entry(&usage, None);
     }
     let entry = resolve_entry(usage.model, usage.provider, prices, allow_signature_match);
-    let basis = match entry {
-        None => PricingBasis::Unpriced,
-        Some(entry) if entry.provider.is_some() => PricingBasis::Exact,
-        Some(_) => PricingBasis::Fallback,
+    priced_with_entry(&usage, entry)
+}
+
+/// 批量版 [`price_usage`]：同一 (model, provider) 只查一次价目，结果与单条路径逐条一致。
+pub fn price_usage_cached<'p, 'r>(
+    cache: &mut PriceCache<'p, 'r>,
+    usage: PricedUsage<'r>,
+    allow_signature_match: bool,
+) -> PricedCost {
+    if usage.native_cost.is_some() {
+        return priced_with_entry(&usage, None);
+    }
+    let entry = cache.resolve(usage.model, usage.provider, allow_signature_match);
+    priced_with_entry(&usage, entry)
+}
+
+fn priced_with_entry(usage: &PricedUsage<'_>, entry: Option<&PriceEntry>) -> PricedCost {
+    let basis = if usage.native_cost.is_some() {
+        PricingBasis::Native
+    } else {
+        match entry {
+            None => PricingBasis::Unpriced,
+            Some(entry) if entry.provider.is_some() => PricingBasis::Exact,
+            Some(_) => PricingBasis::Fallback,
+        }
     };
     PricedCost {
-        derived: apply_entry(&usage, entry),
+        derived: apply_entry(usage, entry),
         basis,
     }
 }
@@ -247,6 +265,27 @@ mod tests {
         let loose = price_usage(usage("claude-4.6-sonnet", "", None), &prices, true);
         assert_eq!(loose.basis, PricingBasis::Fallback);
         assert_eq!(loose.derived.cost_source, CostSource::Snapshot);
+    }
+
+    #[test]
+    fn cached_pricing_agrees_with_single_pricing_for_every_basis() {
+        let prices = table(vec![
+            entry("exact", Some("p"), 1.0, PriceOrigin::User),
+            entry("fallback", None, 2.0, PriceOrigin::Snapshot),
+        ]);
+        let mut cache = PriceCache::new(&prices);
+        for (model, provider, native) in [
+            ("exact", "p", None),
+            ("fallback", "x", None),
+            ("missing", "p", None),
+            ("exact", "p", Some(0.25)),
+            // 同一 (model, provider) 第二次走缓存
+            ("fallback", "x", None),
+        ] {
+            let cached = price_usage_cached(&mut cache, usage(model, provider, native), false);
+            let single = price_usage(usage(model, provider, native), &prices, false);
+            assert_eq!(cached, single, "{model}/{provider}/{native:?}");
+        }
     }
 
     #[test]

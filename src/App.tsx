@@ -232,6 +232,7 @@ export default function App() {
                     revision={data.sessionsRevision}
                     focus={data.conversationFocus}
                     onFocusConsumed={data.clearConversationFocus}
+                    onOpenRemoteServerSettings={data.openRemoteServerSettings}
                     onError={data.reportError}
                   />
                 ) : null}

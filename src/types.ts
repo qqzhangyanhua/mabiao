@@ -1209,3 +1209,71 @@ export type RemoteServerDto = {
   /** 过期或被拒时的一句中文提示。 */
   notice: string | null;
 };
+
+/** 推送区间：RFC 3339，两端都含；`sources` 为空表示全部来源。 */
+export type PushRange = {
+  from: string | null;
+  to: string | null;
+  sources: string[];
+};
+
+export type PushSessionKey = {
+  source: string;
+  session_id: string;
+};
+
+/** 一场没推成的会话。`skipped` 是本机读不全，`failed` 是联网失败（可重试）。 */
+export type PushSessionIssue = PushSessionKey & {
+  title: string;
+  reason: string;
+};
+
+export type PushPreviewDto = {
+  sessions: number;
+  events: number;
+  usage_records: number;
+  usage_skipped_invalid_time: number;
+  estimated_bytes: number;
+  /** 正文与注入原文被打码的处数。 */
+  redactions: number;
+  skipped: PushSessionIssue[];
+  /** 「管理员可以查看你推送的全部正文」。 */
+  notice: string;
+};
+
+export type PushRunInput = {
+  range: PushRange;
+  only: PushSessionKey[];
+  include_usage: boolean;
+};
+
+export type PushOutcome = {
+  sessions_succeeded: number;
+  failed: PushSessionIssue[];
+  skipped: PushSessionIssue[];
+  usage_inserted: number;
+  usage_duplicates: number;
+  usage_skipped_invalid_time: number;
+  usage_error: string | null;
+  /** 途中服务端不再认这次登录。 */
+  login_required: boolean;
+};
+
+export type PushProgress = {
+  done: number;
+  total: number;
+  title: string;
+};
+
+export type PushHistoryEntry = {
+  at: string;
+  from: string | null;
+  to: string | null;
+  sources: string[];
+  sessions_succeeded: number;
+  sessions_failed: number;
+  sessions_skipped: number;
+  usage_inserted: number;
+  usage_duplicates: number;
+  usage_failed: boolean;
+};

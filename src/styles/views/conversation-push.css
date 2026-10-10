@@ -1,0 +1,110 @@
+/* 对话记录页「推送」：目录头部的按钮区，与对话框（复用生成摘要对话框的外壳，这里只补预览、进度、结果与历史）。 */
+.conversation-catalog-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.conversation-summary-dialog.conversation-push-dialog {
+  width: min(560px, 100%);
+  max-height: min(82vh, 760px);
+  overflow: auto;
+}
+
+.conversation-push-account {
+  margin: 4px 0 0;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.conversation-push-preview,
+.conversation-push-result {
+  display: grid;
+  gap: 10px;
+}
+
+.conversation-push-preview dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.conversation-push-preview dl > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--overlay-recessed);
+}
+
+.conversation-push-preview dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.conversation-push-preview dd {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.conversation-push-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.conversation-push-issues h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.conversation-push-issues ul,
+.conversation-push-history ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.conversation-push-issues li,
+.conversation-push-history li {
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--overlay-1);
+}
+
+.conversation-push-issue-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-push-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.conversation-push-progress progress {
+  width: 100%;
+}
+
+.conversation-push-history summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.conversation-push-history ul {
+  margin-top: 6px;
+}

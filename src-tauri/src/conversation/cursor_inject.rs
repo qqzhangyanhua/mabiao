@@ -5,6 +5,7 @@
 //! 分段计量。与对话记录适配器隔离：不写 `conversation_events`、不把注入正文
 //! 送进任何缓存。体积只保留字符数。MCP 只计工具名列表，不含 schema。
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -187,25 +188,40 @@ pub(crate) fn content_for_item(
     session: &ConversationSessionRow,
     item_id: &str,
 ) -> Option<String> {
-    let path = find_store_db(home, &session.session_id)?;
+    all_contents(home, session).remove(item_id)
+}
+
+/// 首轮 user 消息里每个指令 / 规则 / skill 条目的原文（条目 id → 原文）。
+/// 只还原一次 store.db；快照不在或首轮不是 user 消息时返回空表。
+pub(crate) fn all_contents(
+    home: &Path,
+    session: &ConversationSessionRow,
+) -> BTreeMap<String, String> {
+    let mut contents = BTreeMap::new();
+    let Some(path) = find_store_db(home, &session.session_id) else {
+        return contents;
+    };
     let messages = restore_messages(&path);
-    let user = messages.get(1)?;
+    let Some(user) = messages.get(1) else {
+        return contents;
+    };
     if user.get("role").and_then(Value::as_str) != Some("user") {
-        return None;
+        return contents;
     }
-    let text = json_message_text(user)?;
-    parsed_from_text(&text)
-        .into_iter()
-        .find(|parsed| {
-            parsed.item.id == item_id
-                && matches!(
-                    parsed.item.kind,
-                    ConversationContextKind::Instruction
-                        | ConversationContextKind::Rule
-                        | ConversationContextKind::Skill
-                )
-        })
-        .map(|parsed| parsed.body)
+    let Some(text) = json_message_text(user) else {
+        return contents;
+    };
+    for parsed in parsed_from_text(&text) {
+        if matches!(
+            parsed.item.kind,
+            ConversationContextKind::Instruction
+                | ConversationContextKind::Rule
+                | ConversationContextKind::Skill
+        ) {
+            contents.entry(parsed.item.id).or_insert(parsed.body);
+        }
+    }
+    contents
 }
 
 fn items_from_text(text: &str) -> Vec<ConversationContextItem> {

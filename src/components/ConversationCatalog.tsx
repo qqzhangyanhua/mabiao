@@ -11,6 +11,7 @@ import { EmptyState } from "./EmptyState";
 import { LoadingOverlay } from "./LoadingOverlay";
 import { Pagination } from "./Pagination";
 import { Spinner } from "./Spinner";
+import { Button } from "./ui/Button";
 import { SearchField } from "./ui/Field";
 import { Segmented } from "./ui/Segmented";
 import { Select } from "./ui/Select";
@@ -35,6 +36,7 @@ export function ConversationCatalog({
   toolFailed,
   onToolNames,
   onToolFailed,
+  onPush,
   onOpen,
   onSummarize,
   onViewSummary,
@@ -53,6 +55,7 @@ export function ConversationCatalog({
   toolFailed: boolean;
   onToolNames: (names: string[]) => void;
   onToolFailed: (failed: boolean) => void;
+  onPush: () => void;
   onOpen: (row: ConversationSessionRow) => void;
   onSummarize: (row: ConversationSessionRow) => void;
   onViewSummary: (row: ConversationSessionRow) => void;
@@ -99,15 +102,20 @@ export function ConversationCatalog({
             onChange={(value) => onToolFailed(value === "failed")}
           />
         </div>
-        <span className="muted conversation-total">
-          共 {total} 条
-          {loading ? (
-            <span className="inline-loading">
-              <Spinner size={12} />
-              加载中…
-            </span>
-          ) : null}
-        </span>
+        <div className="conversation-catalog-actions">
+          <Button size="sm" onClick={onPush}>
+            推送
+          </Button>
+          <span className="muted conversation-total">
+            共 {total} 条
+            {loading ? (
+              <span className="inline-loading">
+                <Spinner size={12} />
+                加载中…
+              </span>
+            ) : null}
+          </span>
+        </div>
       </div>
       {indexProgress && indexIncomplete ? (
         <p className="conversation-index-progress" role="status">

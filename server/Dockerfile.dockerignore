@@ -1,5 +1,6 @@
-# 只要 crates/ 与 server/ 进构建上下文。
+# 只要 crates/、server/ 与内置 LiteLLM 快照进构建上下文。
 *
 !crates
 !server
+!src-tauri/assets/litellm_prices.json
 **/target

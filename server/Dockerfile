@@ -1,8 +1,9 @@
-# 构建上下文是仓库根（要带上 crates/push-protocol）：
+# 构建上下文是仓库根（要带上 crates/ 与桌面端内置的 LiteLLM 快照，统一价目的兜底价表）：
 #   docker build -f server/Dockerfile .
 FROM rust:1-bookworm AS build
 WORKDIR /src
 COPY crates ./crates
+COPY src-tauri/assets/litellm_prices.json ./src-tauri/assets/litellm_prices.json
 COPY server ./server
 WORKDIR /src/server
 RUN cargo build --release --locked

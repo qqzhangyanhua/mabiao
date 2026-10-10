@@ -25,6 +25,7 @@ import type {
 } from "../types";
 import { ConversationCatalog } from "./ConversationCatalog";
 import { ConversationDetailView } from "./ConversationDetailView";
+import { ConversationPushDialog } from "./ConversationPushDialog";
 import { ConversationSummaryDialog } from "./ConversationSummaryDialog";
 import { ConversationSummaryViewDialog } from "./ConversationSummaryViewDialog";
 
@@ -33,12 +34,14 @@ export function Conversations({
   revision,
   focus,
   onFocusConsumed,
+  onOpenRemoteServerSettings,
   onError,
 }: {
   filter: Filter;
   revision: number;
   focus?: ConversationFocus | null;
   onFocusConsumed?: () => void;
+  onOpenRemoteServerSettings?: () => void;
   onError?: (error: unknown) => void;
 }) {
   const {
@@ -80,6 +83,7 @@ export function Conversations({
   const { fetchDetail, clearExport, reset: resetDetail, exportConversation } = loader;
   const [summaryTarget, setSummaryTarget] = useState<ConversationSessionRow | null>(null);
   const [viewTarget, setViewTarget] = useState<ConversationSessionRow | null>(null);
+  const [pushOpen, setPushOpen] = useState(false);
   const { prepareOpen, prepareClose, prepareBack, prepareEnterChild, rememberEventsScroll } =
     follow;
   const usageIdentity =
@@ -305,6 +309,7 @@ export function Conversations({
       toolFailed={toolFailed}
       onToolNames={setToolNames}
       onToolFailed={setToolFailed}
+      onPush={() => setPushOpen(true)}
       onOpen={loadDetail}
       onSummarize={(row) => {
         setViewTarget(null);
@@ -320,6 +325,13 @@ export function Conversations({
   return (
     <>
       {view}
+      {pushOpen ? (
+        <ConversationPushDialog
+          filter={filter}
+          onClose={() => setPushOpen(false)}
+          onOpenSettings={() => onOpenRemoteServerSettings?.()}
+        />
+      ) : null}
       {summaryTarget ? (
         <ConversationSummaryDialog
           session={summaryTarget}

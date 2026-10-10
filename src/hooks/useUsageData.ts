@@ -27,7 +27,11 @@ import {
   worktimeHashForDay,
   type ViewScope,
 } from "./viewCache";
-import { hashForTab, SETTINGS_UNPRICED_ANCHOR } from "../lib/settingsTabs";
+import {
+  hashForTab,
+  REMOTE_SERVER_ANCHOR,
+  SETTINGS_UNPRICED_ANCHOR,
+} from "../lib/settingsTabs";
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
@@ -264,6 +268,11 @@ export function useUsageData() {
     replaceLocationHash(SETTINGS_UNPRICED_ANCHOR);
   }, []);
 
+  const openRemoteServerSettings = useCallback(() => {
+    setView("settings");
+    replaceLocationHash(REMOTE_SERVER_ANCHOR);
+  }, []);
+
   const openScanPathSettings = useCallback(() => {
     setView("settings");
     replaceLocationHash(hashForTab("sources"));
@@ -382,6 +391,7 @@ export function useUsageData() {
     canGoBack,
     applyFilter,
     openConversations,
+    openRemoteServerSettings,
     openWorktime,
     openUnpricedDiagnosis,
     openScanPathSettings,

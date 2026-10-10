@@ -34,7 +34,23 @@ _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor
 
 **对话记录 (Conversation Record)**：
 本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011；Codex / pi / omp 能按行重建的正文只存源文件位置，ADR 0025）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 19 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn、cline、workbuddy、zcode、alma。**未适配**：hermes、agy（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。Cursor / Grok 对话详情可挂「上下文清单」三层证据：`injected`（会话首轮真实注入；Cursor 读 `~/.cursor/chats/<hash>/<session>/store.db`：blobs 按内容 sha256 寻址，root blob 的 repeated bytes 字段 1 还原有序消息，取下标 1 的 user 消息按 skills / workspace rules / user rules / 动态工具命名空间 / 环境信息 / 子代理类型分段计量，MCP 只计工具名列表、不含 schema，差额以「未识别 N 字符」入账，注入正文不落库；Grok 读 `prompt_context.json` 的 `agents_md_files[]`，按 `file_path` 生成指令条目，`load_mode=always`，体积以字符数为权威值；并读 `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成，生成 injected MCP 条目，`injection_status` 为 connected / failed / auth_required / disabled。连上的按工具名列表字符数计量；连上但零调用标红为噪音；未连上的不占 token、不吃红标。噪音差集（injected 减 observed）只对 skill 与 MCP 生效）、`observed`（本会话事件里真实出现的工具 / 系统状态 / skill 引用，含 Cursor `Skill` 工具的 `input.skill`；合成的 `transcript_missing` 不算已观测）与 `on_disk_possible`（磁盘上真实存在且产品口径已确认会加载的指令，标「可能生效 / 磁盘存在」）。Cursor 按会话 `project` 对照项目与用户级指令 / rules / skills / MCP，单独一档列入 `~/.cursor/skills-cursor`（编辑器内置，计入体积、不吃噪音红标）；Grok 扫用户级 `~/.grok` 官方 Project Rules（候选指令文件与 `rules/*.md`）、`~/.grok/skills/`（及 `[skills] paths`，受 `ignore` / `disabled` 约束），以及四条 MCP 加载链（`config.toml` 用户级与 cwd→git root 的 repo 级、最深优先；`~/.claude.json`；用户级与项目级 `.cursor/mcp.json`；项目根 `.mcp.json`），合并优先级 config.toml > Claude > Cursor > `.mcp.json`，并跟随 `[compat.claude]` / `[compat.cursor]` 的 `skills` / `mcps` 开关。不扫项目根 `AGENTS.md`、`.cursor/rules`。Grok 的 `injected` 层可读会话目录注入快照；`injected` 层可表述为已注入，`on_disk_possible` 层仍然不得。Cursor 无注入快照时明确降级为按当前磁盘重建；磁盘项 mtime 晚于会话时标注会话后已改动；`requestContextCompleteness` 仅在含 false 时点名；Cursor 体积标估算。摄取时把度量结果（条目名、字符数、load_mode、injection_status、失败原因类型、工具数量）写入派生缓存，正文 / 用户规则全文 / 指令全文 / MCP 错误全文不落库、不进备份；Cursor 快照被清理后仍可显示缓存度量并标明来自缓存。缓存可删后从仍在的源文件重建，不装不可再生数据。
-_Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或上传；不要把 on_disk_possible 说成已注入（injected 层可以）；不要在无注入快照时把磁盘重建装成已注入；Cursor 体积必须标估算；不要把规则/指令/MCP 错误全文写入缓存或备份；不要把缓存度量装成现场快照
+_Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份；正文只在用户显式推送时离开本机（见「推送」），其它任何路径都不上传；不要把 on_disk_possible 说成已注入（injected 层可以）；不要在无注入快照时把磁盘重建装成已注入；Cursor 体积必须标估算；不要把规则/指令/MCP 错误全文写入缓存或备份；不要把缓存度量装成现场快照
+
+**推送 (Push)**：
+用户在对话记录页发起、把选定时间区间（可按来源筛）内的数据单向送到远程服务的动作，用于团队按人复盘与管理。默认手动；成员可自行打开每日自动推送（默认关）。一次推送带：与区间有重叠的对话记录（整场，不切开；含语义事件正文与上下文清单，`injected` 层带注入原文、`on_disk_possible` 层只带条目与体积）、`occurred_at` 落在区间内的消耗记录（带推送当时本机算出的费用快照与定价来源）。正文推送前按内置规则打码常见密钥。Cursor 账号用量、官方额度、代码量、全局指令不推。数据归属发起推送的远程账号与设备。这是码表唯一把本机数据往外送的通道；其它联网维度（Cursor 账号用量、官方额度）都只拉不推。见 `docs/adr/0026-push-to-remote-server.md`。
+_Avoid_: 同步（暗示双向）、备份（备份是给人拷走的本机文件，不带正文）、导出（导出是单会话写本机文件）、上传
+
+**远程服务 (Remote Server)**：
+接收推送、按远程账号隔离存储并供团队复盘的服务端，代码与桌面端同仓。一个部署对应一个团队。自带只读网页做按人 / 项目 / 来源 / 模型的分析。跨人比较费用用**团队价目**按与本机相同的优先级统一重算，成员推上来的本机费用快照只作对照。同一仓库在不同成员机器上路径不同，优先按 git remote 归并成同一项目。不是来源 (Source)，也不是摄取缓存：桌面端不从它读回数据参与本机统计。
+_Avoid_: 云端（会和 Cursor 云端账号用量混淆）、后台、同步服务器
+
+**团队价目 (Team Price Table)**：
+远程服务上由管理员维护的 model（+ provider）单价，加上内置 LiteLLM 快照兜底，用于**统一费用**：服务端对每条已入库消耗记录按与桌面端相同的优先级（来源自带 > 团队价目精确匹配 > model 兜底 / 快照 > 未定价）重算，跨人对比费用看它。成员推上来的本机费用快照与定价来源原样保留、并列返回，只作对照。团队价目变更后同名模型的已入库记录立即重算。与桌面端的用户价目互不影响。
+_Avoid_: 价格表（单说会和桌面端用户价目混淆）、统一定价
+
+**远程账号 (Remote Account)**：
+远程服务上的登录身份，推送的数据按它归属。两档角色：**管理员**看全体成员数据（含对话正文）、管账号、维护团队价目；**成员**只看、只删自己推的数据。没有自助注册，账号由管理员创建。与 Cursor 账号、官方额度里的各家账号、自定义提供商无关。
+_Avoid_: 账号（单说会和 Cursor 账号用量、官方额度撞名）、用户、Cursor 账号
 
 **对话记录适配器 (Conversation Adapter)**：
 把某个 Source 的原始会话文件解析成对话记录（目录行与语义事件）的模块。与把同一来源变成消耗记录的适配器是两回事：各一张表，互不替代。

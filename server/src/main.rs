@@ -87,6 +87,11 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     db::migrate(&pool).await?;
     match cli.command {
         Command::Serve { bind } => {
+            match mabiao_server::team_pricing::backfill_missing(&pool).await {
+                Ok(filled) if filled > 0 => tracing::info!(filled, "已补算统一费用"),
+                Ok(_) => {}
+                Err(error) => tracing::warn!(%error, "补算统一费用失败，可调用重算接口重试"),
+            }
             tokio::spawn(purge_expired_tokens_hourly(pool.clone()));
             let listener = tokio::net::TcpListener::bind(&bind).await?;
             tracing::info!(%bind, "mabiao-server 已启动");

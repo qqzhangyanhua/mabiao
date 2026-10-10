@@ -105,13 +105,28 @@ fn from_prompt_context(path: &Path) -> Option<Vec<ConversationContextItem>> {
 }
 
 pub(crate) fn content_for_item(session: &ConversationSessionRow, item_id: &str) -> Option<String> {
-    let dir = session_dir(&session.source_file)?;
-    let text = fs::read_to_string(dir.join(PROMPT_CONTEXT)).ok()?;
-    let parsed = serde_json::from_str::<PromptContext>(&text).ok()?;
-    parsed.agents_md_files.into_iter().find_map(|file| {
+    all_contents(session).remove(item_id)
+}
+
+/// `prompt_context.json` 里每个指令文件的原文，键与清单条目 `id`（`file_path`）一致。
+pub(crate) fn all_contents(session: &ConversationSessionRow) -> BTreeMap<String, String> {
+    let mut contents = BTreeMap::new();
+    let Some(dir) = session_dir(&session.source_file) else {
+        return contents;
+    };
+    let Ok(text) = fs::read_to_string(dir.join(PROMPT_CONTEXT)) else {
+        return contents;
+    };
+    let Ok(parsed) = serde_json::from_str::<PromptContext>(&text) else {
+        return contents;
+    };
+    for file in parsed.agents_md_files {
         let path = file.file_path.trim();
-        (path == item_id).then_some(file.content)
-    })
+        if !path.is_empty() {
+            contents.entry(path.to_string()).or_insert(file.content);
+        }
+    }
+    contents
 }
 
 fn from_events(path: &Path) -> GrokSnapshot {

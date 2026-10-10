@@ -1,5 +1,6 @@
 //! 按需读取注入快照正文。不写 sqlite、不进详情 DTO、不进备份。
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use rusqlite::Connection;
@@ -34,6 +35,20 @@ pub fn load_context_item_content(
         item_id: item_id.to_string(),
         content,
     })
+}
+
+/// 推送用：一次读出该会话所有 `injected` 层条目的注入原文（条目 id → 原文）。
+/// 快照读不到返回空表；逐条取会让 Cursor 每条都重新还原整个 store.db。
+pub(crate) fn injected_contents(
+    home: &Path,
+    source: Source,
+    session: &ConversationSessionRow,
+) -> BTreeMap<String, String> {
+    match source {
+        Source::Grok => grok_inject::all_contents(session),
+        Source::CursorAgent => cursor_inject::all_contents(home, session),
+        _ => BTreeMap::new(),
+    }
 }
 
 fn snapshot_content(

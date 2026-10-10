@@ -14,7 +14,7 @@ use crate::auth::AuthedAccount;
 use crate::error::{ApiJson, AppError};
 use crate::sessions::parse_timestamp;
 use crate::usage::PreparedUsage;
-use crate::{devices, projects, sessions, usage, AppState};
+use crate::{devices, projects, sessions, team_pricing, usage, AppState};
 
 /// 单次请求里最多多少条消耗记录。客户端按会话分批，超了说明客户端有问题。
 pub const MAX_USAGE_RECORDS_PER_REQUEST: usize = 5000;
@@ -118,6 +118,8 @@ pub async fn push_usage(
     }
 
     let mut tx = state.pool.begin().await?;
+    team_pricing::lock_shared(&mut tx).await?;
+    let table = team_pricing::load_table(&mut tx).await?;
     let device_pk = devices::upsert(&mut *tx, caller.id, &request.device).await?;
 
     // 消耗记录只带目录，没有 remote；同一路径只解析一次。
@@ -139,7 +141,7 @@ pub async fn push_usage(
         });
     }
 
-    let inserted = usage::insert_new(&mut tx, caller.id, device_pk, &prepared).await?;
+    let inserted = usage::insert_new(&mut tx, caller.id, device_pk, &prepared, &table).await?;
     tx.commit().await?;
 
     let total = request.records.len() as u64;

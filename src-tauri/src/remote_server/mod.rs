@@ -8,7 +8,7 @@ pub mod client;
 pub mod store;
 
 use chrono::{DateTime, Utc};
-use push_protocol::RemoteRole;
+use push_protocol::{DeviceInfo, RemoteRole};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -168,6 +168,62 @@ pub fn verify(paths: &RemoteServerPaths, now: DateTime<Utc>) -> Result<RemoteSer
         Err(other) => return Err(other.into_message()),
     }
     Ok(panel(paths, now))
+}
+
+/// 推送要用的一切：地址、token、设备身份。
+pub struct PushCredentials {
+    pub base_url: String,
+    pub token: String,
+    pub device: DeviceInfo,
+}
+
+impl std::fmt::Debug for PushCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PushCredentials")
+            .field("base_url", &self.base_url)
+            .field("token", &"<redacted>")
+            .field("device", &self.device)
+            .finish()
+    }
+}
+
+const NOT_LOGGED_IN: &str = "还没有登录远程服务，请先到设置页登录";
+
+/// 推送前取凭证。只有「登录有效」才给；其它状态给一句能照着做的话。
+pub fn push_credentials(
+    paths: &RemoteServerPaths,
+    now: DateTime<Utc>,
+) -> Result<PushCredentials, String> {
+    let config = store::load_config(&paths.config);
+    let token = store::load_token(&paths.token);
+    match session_state(token.as_ref(), now) {
+        SessionState::LoggedIn => {}
+        SessionState::NotLoggedIn => return Err(NOT_LOGGED_IN.to_string()),
+        SessionState::Expired => return Err(EXPIRED_NOTICE.to_string()),
+        SessionState::Rejected => return Err(REJECTED_NOTICE.to_string()),
+    }
+    let token = token.ok_or_else(|| NOT_LOGGED_IN.to_string())?;
+    if config.device_id.is_empty() {
+        return Err(NOT_LOGGED_IN.to_string());
+    }
+    Ok(PushCredentials {
+        base_url: address::normalize_base_url(&config.base_url)?,
+        token: token.token,
+        device: DeviceInfo {
+            device_id: config.device_id,
+            device_name: config.device_name,
+        },
+    })
+}
+
+/// 推送途中服务端回 `token_expired`：清掉 token、标成需要重登，设置页随即提示。
+pub fn mark_token_rejected(paths: &RemoteServerPaths) -> Result<(), String> {
+    let Some(mut token) = store::load_token(&paths.token) else {
+        return Ok(());
+    };
+    token.token.clear();
+    token.rejected = true;
+    store::save_token(&paths.token, &token)
 }
 
 /// 登录接口对「token 被拒」没有意义，万一网关乱回 401 也按普通失败报。

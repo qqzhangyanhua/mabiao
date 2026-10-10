@@ -127,7 +127,7 @@
 2. 不推：Cursor 账号用量、官方额度、代码量、全局指令。其它任何路径都不得把对话正文送出本机。
 3. 正文与注入原文推送前按内置规则打码；`injected` 层原文推送时现场读源快照，不落库；`on_disk_possible` 层只推条目、路径与体积。
 4. 密码不落盘；token 单独存 0600 文件，不进备份；强制 https，回环地址例外。
-5. 线上格式在「推送协议」层；费用快照与定价来源用 `crates/pricing` 的 `price_usage`，不另写计价。
+5. 线上格式在「推送协议」层；费用快照与定价来源用 `crates/pricing`（逐条 `price_usage`，批量用与它逐条等价的 `price_usage_cached`），不另写计价。
 6. 读 ADR 0026、0011、0025。
 
 ### 远程服务登录与凭证（`src-tauri/src/remote_server/`）
@@ -139,7 +139,19 @@
 5. token 只有服务端明确回 `token_expired` 才标成 `rejected` 并清掉；断网、5xx 不改本机登录态。
 6. 测试：`cargo test remote_server`，对本机回环上的桩服务器跑真实 HTTP。
 
-推送本身（读会话、打码、分批发送）还没落地。落地时在这里补专属的 `cargo test push` 层命令；在此之前只需「推送协议」层命令、`cargo test remote_server` 与 `src-tauri` 全量测试绿。
+### 读会话、打码、分批发送（`src-tauri/src/push/`、`conversation/push_source.rs`）
+
+入口是对话记录页的「推送」对话框：选区间 → 预览（`push::preview`，不联网）→ 确认后 `push::run`。
+
+1. 选会话与读正文只在 `conversation::push_source`：区间按**重叠**整场选（结束 ≥ from 且开始 ≤ to，两端含，已归档也列出）；正文走事件索引，ADR 0025 外置正文按 `text_hash` 校验，读不回或对不上就**整场跳过**并给原因，不退回去推旧正文，也不推半截。事件 `details` 不出本机。
+2. 上下文清单三层：`injected` 原文推送时现场读源快照（`context_content::injected_contents`），不落库；`on_disk_possible` 只推条目、路径、体积；快照已清理（`metrics_from_cache`）只推缓存度量并标 `from_cache`，不带原文。没有真实注入快照（Cursor 按磁盘重建）不得当注入原文推。
+3. 打码只在 `push/redact.rs` 一处（标题、事件正文、注入原文都过它）；路径与项目名不打码。加规则必须同时补「该打」与「不该打」两类用例，并保持幂等。
+4. git remote 只读 `<项目>/.git/config`（`push/git_remote.rs`），不跑 git；URL 里的凭据推送前剥掉。
+5. 协议转换只在 `push/payload.rs`；`occurred_at` 不是 RFC 3339 的消耗记录本机挡掉（服务端会整批拒收）。
+6. 一场会话一个请求；失败（可重试）与跳过（本机读不全）分开列。`token_expired` 立即停，剩下的记为失败并提示重登。同一时刻只允许一次预览或推送（命令层的 `RunGuard`）。本机历史只记数字，不记正文。
+7. 测试：`cargo test push`（桩服务器在 `test_support/http_stub.rs`，与 `remote_server` 共用）；前端纯函数在 `src/lib/pushRange.ts`。
+
+完成：「推送协议」层命令、`cargo test push`、`cargo test remote_server`、`pnpm test` 与 `src-tauri` 全量测试绿。
 
 ## 远程服务
 
@@ -159,12 +171,25 @@
 
 1. 账号永远取自 token，body 里没有账号字段。会话键是 (账号, 设备, 来源, session_id)，同一个 `session_id` 在不同设备、成员、来源下是不同的行。
 2. 会话整场覆盖：同键再推就替换整条（变长、变短都一样），events 存 JSONB，不做增量合并。
-3. 消耗记录按 `usage_fingerprint` 去重（账号 + 设备 + 指纹唯一，`ON CONFLICT DO NOTHING`）。费用快照与定价来源按客户端发来的原样存，服务端不重算。一批里有一条非法就整批拒绝。
+3. 消耗记录按 `usage_fingerprint` 去重（账号 + 设备 + 指纹唯一，`ON CONFLICT DO NOTHING`）。费用快照与定价来源按客户端发来的原样存，不改写；统一费用另算另存（见「团队价目与统一费用」）。一批里有一条非法就整批拒绝。
 4. 项目：优先按规范化 git remote 归并（去凭据、协议、端口、大小写、`.git`，凭据不入库），没有 remote 用目录名兜底，都没有则不挂项目。同一路径原先只有目录兜底、后来拿到 git remote 时，`projects::point_path_at` 把历史会话与用量一并改挂；已归到 git 项目的路径不降级，路径换了 remote 也只影响之后的推送，旧历史留在旧项目。原始路径保留在 `project_paths`。
 5. 「最后推送时间」「已覆盖到哪天」由 `coverage.rs` 实时从数据算，不单独存，删除后自动跟着变。
 6. 删除：成员删自己的，管理员删任意的（走 `can_access`）；只删会话，不动消耗记录和项目。服务端不自动删任何东西；桌面端本机删除不得触发远端删除。
 7. 推送路由单独放宽 body 上限（`PUSH_BODY_LIMIT_BYTES`），消耗记录单批 ≤ `MAX_USAGE_RECORDS_PER_REQUEST`。
 8. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test push`。
+
+### 团队价目与统一费用（`server/src/team_pricing.rs`、`usage_query.rs`）
+
+接口：`GET /api/v1/admin/pricing`、`PUT /api/v1/admin/pricing/prices`、`DELETE /api/v1/admin/pricing/prices/{id}`、`POST /api/v1/admin/pricing/recompute`、`GET /api/v1/usage`。
+
+1. 计价规则只在 `crates/pricing/`，服务端不另写：逐条一律走 `price_usage_cached`，不开签名模糊匹配（那是 Cursor 账号事件专用）。优先级：来源自带 `native_cost` > 团队价目精确匹配 > 按 model 兜底（团队价目或内置快照）> 未定价。改优先级先改那个 crate。
+2. 生效价表 = 团队价目 + 内置 LiteLLM 快照，拼法 `effective_table` 与桌面端 `litellm::merge` 同一规则（团队配了某模型的任意单价，该模型就不再引入快照兜底；按大小写敏感的 model 名排除，是有意与桌面端一致的）。快照文件与桌面端共用 `src-tauri/assets/litellm_prices.json`（`include_str!`），所以 Docker 上下文要带它，不要在 `server/` 另放一份。
+3. 统一费用存在 `usage_records.unified_cost` / `unified_pricing_source` / `unified_cost_source` 三列，**不覆盖**客户端的 `cost_snapshot` / `pricing_source`；查询接口两组并列返回。三列全空表示「没算过」。
+4. 什么时候算：推送消耗记录入库时算；管理员改 / 删团队价目时，在同一事务里重算同名模型（不分大小写）已入库的记录；`POST …/recompute` 全量重算（升级后内置快照变了时用）；`serve` 启动时补算「没算过」的旧数据。
+5. 推送消耗记录取咨询锁的共享锁，改价目与重算取排他锁（`lock_shared` / `lock_exclusive`）：重算期间进来的推送要等它提交，不会带着旧价目的结果落库后无人再算。新增写 `usage_records` 的路径要先取共享锁、用 `load_table` 读价表。
+6. 价目接口全是管理员专属（`AdminAccount`）。`GET /api/v1/usage` 走 `can_access`：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体；`from` 含、`to` 不含，`totals` 是过滤条件下的全部合计、不受分页影响。
+7. 单价是每 token 的价格，范围 0 到 `MAX_PRICE_PER_TOKEN`，挡掉「每百万 token」误填。
+8. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test pricing`。
 
 完成：fmt、clippy、`cargo test --manifest-path server/Cargo.toml` 三条绿。
 

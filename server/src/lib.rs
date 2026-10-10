@@ -1,6 +1,6 @@
 //! 码表远程服务（ADR 0026）。一个部署对应一个团队。
 //!
-//! 含远程账号、登录与鉴权，以及推送接收；统一价目与只读网页是后续票。
+//! 含远程账号、登录与鉴权、推送接收，以及团队价目与统一费用重算；只读网页是后续票。
 
 pub mod accounts;
 pub mod api;
@@ -14,8 +14,10 @@ pub mod projects;
 pub mod push;
 pub mod routes;
 pub mod sessions;
+pub mod team_pricing;
 pub mod tokens;
 pub mod usage;
+pub mod usage_query;
 
 use sqlx::PgPool;
 

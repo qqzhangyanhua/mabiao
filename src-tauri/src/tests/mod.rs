@@ -51,6 +51,7 @@ mod opencode_quota;
 mod overview;
 mod parity;
 mod paths;
+mod push;
 mod qoder_conversation;
 mod query;
 mod quota_alerts;

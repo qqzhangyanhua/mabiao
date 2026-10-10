@@ -5,9 +5,14 @@
 use std::time::Duration;
 
 use super::address;
-use push_protocol::{ApiError, ApiErrorCode, LoginRequest, LoginResponse};
+use push_protocol::{
+    ApiError, ApiErrorCode, LoginRequest, LoginResponse, PushSessionRequest, PushSessionResponse,
+    PushUsageRequest, PushUsageResponse,
+};
 
 const TIMEOUT: Duration = Duration::from_secs(15);
+/// 一场长会话的正文可以有几十 MB，服务端要整场写库，15 秒不够。
+const PUSH_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum RemoteError {
@@ -33,6 +38,43 @@ pub const TOKEN_REJECTED: &str = "登录已失效，请重新登录";
 
 fn agent(base_url: &str) -> ureq::Agent {
     crate::net::agent_without_redirects(TIMEOUT, address::is_loopback_address(base_url))
+}
+
+fn push_agent(base_url: &str) -> ureq::Agent {
+    crate::net::agent_without_redirects(PUSH_TIMEOUT, address::is_loopback_address(base_url))
+}
+
+/// 推一场会话（一个请求）。
+pub fn push_session(
+    base_url: &str,
+    token: &str,
+    request: &PushSessionRequest,
+) -> Result<PushSessionResponse, RemoteError> {
+    post_json(base_url, token, "/api/v1/push/session", request)
+}
+
+/// 推一批消耗记录。
+pub fn push_usage(
+    base_url: &str,
+    token: &str,
+    request: &PushUsageRequest,
+) -> Result<PushUsageResponse, RemoteError> {
+    post_json(base_url, token, "/api/v1/push/usage", request)
+}
+
+fn post_json<B: serde::Serialize, R: serde::de::DeserializeOwned>(
+    base_url: &str,
+    token: &str,
+    path: &str,
+    body: &B,
+) -> Result<R, RemoteError> {
+    let response = push_agent(base_url)
+        .post(&format!("{base_url}{path}"))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(body);
+    settle(response)?.into_json::<R>().map_err(|_| {
+        RemoteError::message("这个地址返回的不是码表远程服务的响应，请检查地址是否填对")
+    })
 }
 
 /// 用密码换 token。密码只存在于这一次请求里。

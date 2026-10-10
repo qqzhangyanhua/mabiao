@@ -120,6 +120,17 @@ impl IntoResponse for AppError {
 #[from_request(via(axum::Json), rejection(AppError))]
 pub struct ApiJson<T>(pub T);
 
+/// 查询串解析失败同样返回 `ApiError`。
+#[derive(axum::extract::FromRequestParts)]
+#[from_request(via(axum::extract::Query), rejection(AppError))]
+pub struct ApiQuery<T>(pub T);
+
+impl From<axum::extract::rejection::QueryRejection> for AppError {
+    fn from(rejection: axum::extract::rejection::QueryRejection) -> Self {
+        Self::invalid(rejection.body_text())
+    }
+}
+
 impl From<axum::extract::rejection::JsonRejection> for AppError {
     fn from(rejection: axum::extract::rejection::JsonRejection) -> Self {
         Self::invalid(rejection.body_text())

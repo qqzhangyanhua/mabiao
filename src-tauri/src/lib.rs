@@ -23,6 +23,7 @@ pub mod net;
 pub mod official_quota;
 pub mod paths;
 pub(crate) mod proto_wire;
+pub mod push;
 pub mod query;
 pub mod remote_server;
 pub mod report;
@@ -498,6 +499,9 @@ pub fn run() {
             commands::remote_server_logout,
             commands::rename_remote_device,
             commands::verify_remote_server,
+            commands::preview_push,
+            commands::run_push,
+            commands::get_push_history,
             commands::get_scan_path_config,
             commands::detect_source_presence,
             commands::save_scan_path_config,

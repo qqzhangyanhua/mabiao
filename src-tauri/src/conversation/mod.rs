@@ -43,6 +43,7 @@ mod omp;
 mod opencode;
 mod persist;
 mod pi;
+mod push_source;
 mod qoder;
 mod qwen;
 mod read;
@@ -78,6 +79,8 @@ pub use line_direct::{
     load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
     rebuild_events_from_line,
 };
+pub use push_source::{list_sessions as list_push_sessions, read_session as read_push_session};
+pub use push_source::{PushContext, PushSessionSource};
 #[cfg(test)]
 pub(crate) use read::read_consistent_snapshot;
 pub use read::{detail_state, load_detail, load_parsed_detail};
