@@ -377,12 +377,20 @@ fn decrypt_gcm(key: &[u8], iv: &[u8], sealed: &[u8]) -> Option<Vec<u8>> {
         aad: &[],
     };
     match iv.len() {
-        12 => AesGcm::<Aes256, U12>::new(Key::<AesGcm<Aes256, U12>>::from_slice(key))
-            .decrypt(Nonce::<U12>::from_slice(iv), payload())
-            .ok(),
-        16 => AesGcm::<Aes256, U16>::new(Key::<AesGcm<Aes256, U16>>::from_slice(key))
-            .decrypt(Nonce::<U16>::from_slice(iv), payload())
-            .ok(),
+        12 => {
+            let key = Key::<AesGcm<Aes256, U12>>::try_from(key).ok()?;
+            let nonce = Nonce::<U12>::try_from(iv).ok()?;
+            AesGcm::<Aes256, U12>::new(&key)
+                .decrypt(&nonce, payload())
+                .ok()
+        }
+        16 => {
+            let key = Key::<AesGcm<Aes256, U16>>::try_from(key).ok()?;
+            let nonce = Nonce::<U16>::try_from(iv).ok()?;
+            AesGcm::<Aes256, U16>::new(&key)
+                .decrypt(&nonce, payload())
+                .ok()
+        }
         _ => None,
     }
 }

@@ -211,7 +211,9 @@ struct McpEntry {
 }
 
 fn load_toml(path: &Path) -> Option<toml::Value> {
-    fs::read_to_string(path).ok()?.parse().ok()
+    // toml 0.9 的 `str::parse::<Value>()` 只解析单个值，文档要以 `from_str` 读。
+    let text = fs::read_to_string(path).ok()?;
+    toml::from_str(&text).ok()
 }
 
 fn toml_bool(root: Option<&toml::Value>, keys: &[&str], default: bool) -> bool {
