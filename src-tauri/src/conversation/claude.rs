@@ -15,9 +15,25 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
+    parse_as(path, include_deferred_content, Source::Claude)
+}
+
+pub(super) fn parse_as(
+    path: &Path,
+    include_deferred_content: bool,
+    source: Source,
+) -> Result<ParsedConversation, String> {
     let values = parse_jsonl_conversation_values(path)?;
     let line = values.last().map(|(l, _)| *l as i64 + 1).unwrap_or(0);
-    let mut parsed = parse_from_values(path, values, include_deferred_content, None, false, false)?;
+    let mut parsed = parse_from_values(
+        path,
+        values,
+        include_deferred_content,
+        None,
+        false,
+        false,
+        source,
+    )?;
     // 全量解析也设游标，这样首次索引后 indexed_byte_offset 就是文件大小，
     // 下一次文件增长时 plan_conversation_file_index 才能走增量路径。
     let byte_offset = fs::metadata(path).map(|m| m.len() as i64).unwrap_or(0);
@@ -32,6 +48,16 @@ pub(super) fn index_suffix(
     byte_offset: u64,
     start_line: u32,
     session_id: &str,
+) -> Result<ParsedConversation, ConversationIndexIssue> {
+    index_suffix_as(path, byte_offset, start_line, session_id, Source::Claude)
+}
+
+pub(super) fn index_suffix_as(
+    path: &Path,
+    byte_offset: u64,
+    start_line: u32,
+    session_id: &str,
+    source: Source,
 ) -> Result<ParsedConversation, ConversationIndexIssue> {
     let content = read_file_suffix(path, byte_offset)?;
     let parsed_values =
@@ -50,6 +76,7 @@ pub(super) fn index_suffix(
         Some(session_id),
         true, // line_direct: 跳过 session_started 事件（后缀里没有 started_at）
         true, // suffix_mode: 跳过首条 ModelChange（后缀里第一个 model 是当前模型）
+        source,
     )
     .map_err(|message| ConversationIndexIssue {
         path: path.to_string_lossy().to_string(),
@@ -153,6 +180,7 @@ pub(super) fn parse_from_values(
     session_hint: Option<&str>,
     line_direct: bool,
     suffix_mode: bool,
+    source: Source,
 ) -> Result<ParsedConversation, String> {
     let mut parent_session_id = String::new();
     let mut agent_id = String::new();
@@ -359,7 +387,7 @@ pub(super) fn parse_from_values(
         }
     };
     finish_source_conversation(
-        Source::Claude,
+        source,
         path,
         session_id,
         title,

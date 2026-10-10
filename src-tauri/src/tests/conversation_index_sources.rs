@@ -266,6 +266,34 @@ fn gemini_event_index_matches_full_parse() {
 }
 
 #[test]
+fn qoder_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".qoder/projects/-work-qoder/qoder-session-1.jsonl",
+        "qoder-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Qoder);
+    assert_conversation_index_matches_parse(&conn, home, "qoder", "qoder-session-1");
+}
+
+#[test]
+fn qoder_cn_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".qoder-cn/projects/-work-qoder-cn/qoder-cn-session-1.jsonl",
+        "qoder-cn-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::QoderCn);
+    assert_conversation_index_matches_parse(&conn, home, "qoder_cn", "qoder-cn-session-1");
+}
+
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

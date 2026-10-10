@@ -40,6 +40,7 @@ mod omp;
 mod opencode;
 mod persist;
 mod pi;
+mod qoder;
 mod qwen;
 mod read;
 mod refresh;
@@ -102,6 +103,8 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Opencode,
     Source::Qwen,
     Source::Copilot,
+    Source::Qoder,
+    Source::QoderCn,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
@@ -286,6 +289,26 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: copilot::index,
         index_suffix: None,
         detail: copilot::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Qoder,
+        discover: discover_jsonl,
+        index: qoder::index,
+        index_suffix: Some(qoder::index_suffix),
+        detail: qoder::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::QoderCn,
+        discover: discover_jsonl,
+        index: qoder::index_cn,
+        index_suffix: Some(qoder::index_suffix_cn),
+        detail: qoder::detail_cn,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
