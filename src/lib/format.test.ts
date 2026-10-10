@@ -141,6 +141,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("agy")).toBe("Antigravity");
     expect(sourceLabel("devin")).toBe("Devin");
     expect(sourceLabel("hermes")).toBe("Hermes");
+    expect(sourceLabel("qoder")).toBe("Qoder");
   });
 
   it("always offers Cursor in the source filter list", () => {

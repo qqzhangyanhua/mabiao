@@ -133,6 +133,16 @@ struct ClaudeTurn {
 /// 下面两轮扫描都通过 `lines()` 重新拿一份新的行迭代器，配合磁盘流式读取场景，
 /// 不需要先把整份文件内容读进内存再扫两遍。
 pub fn parse_claude_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
+    parse_claude_shaped_jsonl(lines, source_file, Source::Claude)
+}
+
+/// Claude Code 形态的 jsonl：`type=assistant` + `message.usage`，按 `message.id` 去重。
+/// Qoder / Qoder CN 复用同一套归一化，只改 `source`。
+pub fn parse_claude_shaped_jsonl(
+    lines: &LineFactory<'_>,
+    source_file: &str,
+    source: Source,
+) -> Vec<UsageRecord> {
     let mut project = String::new();
     let mut session_id = String::new();
     for value in parse_jsonl_value_lines(lines()) {
@@ -174,7 +184,7 @@ pub fn parse_claude_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usa
         };
         let record = finish(UsageRecord {
             occurred_at: text_field(&value, &["timestamp"]),
-            source: Source::Claude,
+            source,
             model: text_field(&message, &["model"]),
             provider: String::new(),
             project: project.clone(),

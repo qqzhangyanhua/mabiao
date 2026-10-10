@@ -1,0 +1,4 @@
+{"type":"user","sessionId":"22222222-bbbb-4ccc-8ddd-000000000002","timestamp":"2026-09-27T10:00:00.000Z","cwd":"/work/qoder"}
+{"type":"assistant","sessionId":"22222222-bbbb-4ccc-8ddd-000000000002","timestamp":"2026-09-27T10:00:10.000Z","message":{"model":"qwen3-coder-plus","id":"msg-dup","usage":{"input_tokens":4,"output_tokens":10,"cache_read_input_tokens":100,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"22222222-bbbb-4ccc-8ddd-000000000002","timestamp":"2026-09-27T10:00:12.000Z","message":{"model":"qwen3-coder-plus","id":"msg-dup","stop_reason":"end_turn","usage":{"input_tokens":4,"output_tokens":18,"cache_read_input_tokens":100,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"22222222-bbbb-4ccc-8ddd-000000000002","timestamp":"2026-09-27T10:00:13.000Z","message":{"model":"qwen3-coder-plus","usage":{"input_tokens":0,"output_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}

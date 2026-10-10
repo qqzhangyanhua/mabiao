@@ -39,6 +39,7 @@
 .tone-cursor,
 .tone-copilot,
 .tone-hermes,
+.tone-qoder,
 .tone-other {
   background: var(--tone-other-bg);
   color: var(--tone-other-fg);

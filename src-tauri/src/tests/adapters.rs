@@ -615,6 +615,48 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Agy.application_name(), "Antigravity");
     assert_eq!(Source::Agy.as_str(), "agy");
     assert_eq!(Source::parse("agy"), Some(Source::Agy));
+    assert_eq!(Source::Qoder.application_name(), "Qoder");
+    assert_eq!(Source::Qoder.as_str(), "qoder");
+    assert_eq!(Source::parse("qoder"), Some(Source::Qoder));
+}
+
+#[test]
+fn qoder_adapter_maps_claude_shaped_usage() {
+    let records = qoder::parse_qoder_jsonl(
+        &fixture_lines(&fixture("qoder.jsonl")),
+        "/home/dev/.qoder/projects/-work-qoder/11111111-aaaa-4bbb-8ccc-000000000001.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Qoder);
+    assert_eq!(records[0].model, "qwen3-coder-plus");
+    assert_eq!(
+        records[0].session_id,
+        "11111111-aaaa-4bbb-8ccc-000000000001"
+    );
+    assert_eq!(records[0].project, "/work/qoder");
+    assert_eq!(records[0].input_tokens, 40);
+    assert_eq!(records[0].output_tokens, 25);
+    assert_eq!(records[0].cache_read_tokens, 300);
+    assert_eq!(records[0].cache_creation_tokens, 0);
+    assert_eq!(records[0].total_tokens, 365);
+    assert_eq!(records[1].input_tokens, 10);
+    assert_eq!(records[1].output_tokens, 8);
+    assert_eq!(records[1].cache_read_tokens, 300);
+    assert_eq!(records[1].cache_creation_tokens, 20);
+    assert_eq!(records[1].total_tokens, 338);
+}
+
+#[test]
+fn qoder_adapter_dedups_message_id_and_skips_zero_usage() {
+    let records = qoder::parse_qoder_jsonl(
+        &fixture_lines(&fixture("qoder-dedup.jsonl")),
+        "/home/dev/.qoder/projects/-work-qoder/s-qoder.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Qoder);
+    assert_eq!(records[0].output_tokens, 18);
+    assert_eq!(records[0].input_tokens, 4);
+    assert_eq!(records[0].cache_read_tokens, 100);
 }
 
 #[test]

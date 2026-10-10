@@ -16,6 +16,7 @@ pub mod omp;
 pub mod opencode;
 pub mod pi;
 pub mod project;
+pub mod qoder;
 pub mod qwen;
 
 use std::path::{Path, PathBuf};
@@ -303,6 +304,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "轮级六元组（无原生费用）",
         display_dirs: None,
         detected: Some(agy::detected),
+    },
+    UsageAdapter {
+        source: Source::Qoder,
+        path_env: "QODER_CONFIG_DIR",
+        scan_dirs: qoder::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: qoder::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        soft_parse_failure: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
     },
 ];
 

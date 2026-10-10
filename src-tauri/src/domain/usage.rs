@@ -18,10 +18,11 @@ pub enum Source {
     Copilot,
     Hermes,
     Agy,
+    Qoder,
 }
 
 impl Source {
-    pub const ALL: [Source; 15] = [
+    pub const ALL: [Source; 16] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -37,6 +38,7 @@ impl Source {
         Source::Copilot,
         Source::Hermes,
         Source::Agy,
+        Source::Qoder,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -56,6 +58,7 @@ impl Source {
             Source::Copilot => "copilot",
             Source::Hermes => "hermes",
             Source::Agy => "agy",
+            Source::Qoder => "qoder",
         }
     }
 
@@ -76,6 +79,7 @@ impl Source {
             Source::Copilot => "GitHub Copilot CLI",
             Source::Hermes => "Hermes",
             Source::Agy => "Antigravity",
+            Source::Qoder => "Qoder",
         }
     }
 
@@ -96,6 +100,7 @@ impl Source {
             "copilot" => Some(Source::Copilot),
             "hermes" => Some(Source::Hermes),
             "agy" => Some(Source::Agy),
+            "qoder" => Some(Source::Qoder),
             _ => None,
         }
     }
