@@ -2,10 +2,11 @@ use crate::official_quota;
 use tauri::Manager;
 
 use crate::domain::{
-    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHookDto,
-    OfficialQuotaRow,
+    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaHistoryDto,
+    OfficialQuotaHookDto, OfficialQuotaRow,
 };
 use crate::official_quota::QuotaTarget;
+use crate::store;
 use crate::AppState;
 
 fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, String> {
@@ -147,6 +148,15 @@ pub fn apply_official_quota_hook() -> Result<OfficialQuotaHookDto, String> {
         &official_quota::hook::default_settings_path(),
         &official_quota::hook::hook_command(),
     )
+}
+
+#[tauri::command]
+pub fn get_official_quota_history(
+    state: tauri::State<AppState>,
+    provider: Option<String>,
+) -> Result<OfficialQuotaHistoryDto, String> {
+    let conn = state.lock_read()?;
+    store::load_official_quota_history(&conn, provider.as_deref())
 }
 
 #[tauri::command]

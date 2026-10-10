@@ -464,6 +464,7 @@ pub fn run() {
             commands::refresh_official_quota_provider_force,
             commands::get_official_quota_hook,
             commands::apply_official_quota_hook,
+            commands::get_official_quota_history,
             commands::save_official_quota_config,
             commands::list_custom_quota_providers,
             commands::save_custom_quota_provider,

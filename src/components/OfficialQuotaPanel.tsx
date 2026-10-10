@@ -20,6 +20,7 @@ import {
 } from "../lib/officialQuotaDisplay";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
 import type { OfficialQuotaDto, OfficialQuotaRow, OfficialQuotaWindow } from "../types";
+import { OfficialQuotaHistoryChart } from "./OfficialQuotaHistoryChart";
 import { EmptyState } from "./EmptyState";
 import { SourceLabel } from "./SourceIcon";
 import type { OfficialQuotaListProps } from "./type";
@@ -86,6 +87,10 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
             staleAfterMinutes={staleAfterMinutes}
             busyProvider={busyProvider}
             onRefresh={(provider) => void refreshProvider(provider)}
+          />
+          <OfficialQuotaHistoryChart
+            providers={rows.map((row) => row.provider)}
+            revision={rows.map((row) => `${row.provider}:${row.captured_at ?? ""}`).join("|")}
           />
           {undetectedNote ? <p className="panel-note">{undetectedNote}</p> : null}
         </>
