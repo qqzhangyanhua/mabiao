@@ -93,7 +93,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | pi | jsonl `~/.pi/agent/sessions` | ✅ | ✅ 自带 |
 | OMP | jsonl `~/.omp/agent/sessions` | ✅ | ✅ 自带 `cost.total` |
 | dsh | zstd jsonl `~/.dsh/sessions` | ✅(需解压) | ❌ |
-| opencode | sqlite+json `~/.local/share/opencode` | ✅ | ✅ 自带 |
+| opencode | sqlite+json `~/.local/share/opencode`（`message` 与 OpenCode 2 的 `session_v2` / `session_message`） | ✅ | ✅ 自带 |
 | kimi | jsonl `~/.kimi/sessions/*/wire.jsonl` | ✅ | ❌ |
 | gemini | json / jsonl `~/.gemini/tmp/*/chats/session-*`（`GEMINI_DATA_DIR` 可覆盖） | ✅ | ❌ |
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
