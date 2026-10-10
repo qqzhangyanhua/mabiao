@@ -1,0 +1,129 @@
+use std::io::{IsTerminal, Read};
+
+use clap::{Parser, Subcommand};
+use mabiao_server::{accounts, db, router, AppState};
+use push_protocol::RemoteRole;
+
+#[derive(Parser)]
+#[command(name = "mabiao-server", about = "码表远程服务")]
+struct Cli {
+    /// PostgreSQL 连接串。clap 不许 global 参数同时 required，所以在 `run` 里再检查。
+    #[arg(long, env = "DATABASE_URL", global = true, hide_env_values = true)]
+    database_url: Option<String>,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// 跑迁移并启动 HTTP 服务。
+    Serve {
+        #[arg(long, env = "MABIAO_BIND", default_value = "0.0.0.0:8080")]
+        bind: String,
+    },
+    /// 创建管理员账号。唯一的开户入口之一，没有注册接口。
+    /// 密码读环境变量 MABIAO_ADMIN_PASSWORD；没有就在终端提示输入，或从 stdin 读一行。
+    CreateAdmin {
+        #[arg(long)]
+        account: String,
+    },
+}
+
+fn read_password() -> Result<String, Box<dyn std::error::Error>> {
+    if let Ok(password) = std::env::var("MABIAO_ADMIN_PASSWORD") {
+        return Ok(password);
+    }
+    if std::io::stdin().is_terminal() {
+        let first = rpassword::prompt_password("管理员密码: ")?;
+        let second = rpassword::prompt_password("再输一遍: ")?;
+        if first != second {
+            return Err("两次输入不一致".into());
+        }
+        return Ok(first);
+    }
+    let mut line = String::new();
+    std::io::stdin().read_to_string(&mut line)?;
+    Ok(line.trim_end_matches(['\r', '\n']).to_owned())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        let _ = tokio::signal::ctrl_c().await;
+    };
+    #[cfg(unix)]
+    let terminate = async {
+        if let Ok(mut signal) =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        {
+            signal.recv().await;
+        }
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+}
+
+async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    let database_url = cli
+        .database_url
+        .ok_or("缺少数据库连接串：设置环境变量 DATABASE_URL 或传 --database-url")?;
+    let pool = db::connect(&database_url).await?;
+    db::migrate(&pool).await?;
+    match cli.command {
+        Command::Serve { bind } => {
+            let listener = tokio::net::TcpListener::bind(&bind).await?;
+            tracing::info!(%bind, "mabiao-server 已启动");
+            axum::serve(listener, router(AppState { pool }))
+                .with_graceful_shutdown(shutdown_signal())
+                .await?;
+        }
+        Command::CreateAdmin { account } => {
+            let password = read_password()?;
+            let row = accounts::create(&pool, &account, &password, RemoteRole::Admin).await?;
+            println!("已创建管理员 {}（id {}）", row.account, row.id);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
+    if let Err(error) = run(Cli::parse()).await {
+        eprintln!("错误：{error}");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn cli_definition_is_valid() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn subcommands_parse_with_database_url_after_them() {
+        let cli = Cli::try_parse_from([
+            "mabiao-server",
+            "create-admin",
+            "--account",
+            "root",
+            "--database-url",
+            "postgres://x",
+        ])
+        .unwrap();
+        assert_eq!(cli.database_url.as_deref(), Some("postgres://x"));
+        assert!(matches!(cli.command, Command::CreateAdmin { .. }));
+    }
+}

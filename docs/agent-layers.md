@@ -119,6 +119,33 @@
 
 完成：三条命令绿，且 `cargo test --manifest-path src-tauri/Cargo.toml` 仍绿。
 
+## 推送
+
+桌面端把本机数据单向送到远程服务（ADR 0026）。这是码表唯一的出站数据通道。
+
+1. 只在用户显式发起时发送；成员自己打开的每日自动推送默认关，不复用本机摄取定时器。
+2. 不推：Cursor 账号用量、官方额度、代码量、全局指令。其它任何路径都不得把对话正文送出本机。
+3. 正文与注入原文推送前按内置规则打码；`injected` 层原文推送时现场读源快照，不落库；`on_disk_possible` 层只推条目、路径与体积。
+4. 密码不落盘；token 单独存 0600 文件，不进备份；强制 https，回环地址例外。
+5. 线上格式在「推送协议」层；费用快照与定价来源用 `crates/pricing` 的 `price_usage`，不另写计价。
+6. 读 ADR 0026、0011、0025。
+
+桌面端推送代码还没落地。落地时在这里补专属的 `cargo test push` 层命令；在此之前只需「推送协议」层命令与 `src-tauri` 全量测试绿。
+
+## 远程服务
+
+`server/`：axum + sqlx + PostgreSQL，独立 Cargo 项目，不在 workspace 里。部署文件在 `deploy/`。
+
+1. **没有注册接口。** 账号只能由命令行 `mabiao-server create-admin` 或管理员接口创建；管理员接口只建成员。账号只停用不删除，停用时立即吊销该账号全部 token。
+2. 密码用 argon2id 哈希；token 是 256 位随机数，库里只存 SHA-256，有效期 30 天。登录对「账号不存在 / 密码错 / 已停用」返回同一个错误。
+3. 数据隔离只有一个判定：`AuthedAccount::can_access`。每个按账号归属的数据接口先过它；管理员专属 handler 用 `AdminAccount` 参数。新增接口必须配「成员访问别人数据被拒」的测试。
+4. 每个请求先过 `push_protocol::check_protocol_version`；错误体一律是 `push_protocol::ApiError`。
+5. SQL 用运行时的 `sqlx::query`，不用 `query!` 宏，免得编译要连库。迁移在 `server/migrations/`，已有迁移文件不改，改 schema 只加新文件。
+6. 测试连真 PostgreSQL（`DATABASE_URL`），`#[sqlx::test]` 每个测试一个临时库，连接用户要能建库。
+7. 命令在 `AGENTS.md`；CI 的 `server` 作业同时 `docker build -f server/Dockerfile .`。
+
+完成：fmt、clippy、`cargo test --manifest-path server/Cargo.toml` 三条绿。
+
 ## 样式
 
 1. 按 `src/styles/` 分层、按域拆文件。入口 `src/styles.css` 只含 `@import`。

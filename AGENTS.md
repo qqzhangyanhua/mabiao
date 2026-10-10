@@ -22,6 +22,16 @@ cargo clippy --manifest-path crates/<crate>/Cargo.toml --all-targets -- -D warni
 cargo test --manifest-path crates/<crate>/Cargo.toml
 ```
 
+改 `server/` 时另跑（独立 Cargo 项目，测试要一个能建库的 PostgreSQL，如
+`docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres:16`）：
+
+```bash
+cargo fmt --manifest-path server/Cargo.toml -- --check
+cargo clippy --manifest-path server/Cargo.toml --all-targets -- -D warnings
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  cargo test --manifest-path server/Cargo.toml
+```
+
 包管理只用 pnpm。以上全部通过才算改完。迭代时按层收窄 Rust 测试：
 
 | 层 | 命令 |
@@ -35,6 +45,7 @@ cargo test --manifest-path crates/<crate>/Cargo.toml
 | 全局指令 | `cargo test instructions` |
 | 备份 | `cargo test backup` |
 | 工作纪要 | `cargo test work_notes` |
+| 远程服务 | `DATABASE_URL=postgres://… cargo test --manifest-path server/Cargo.toml`（要 PostgreSQL，见下） |
 
 Rust 测试在 `src-tauri/src/tests/`，辅助在 `src-tauri/src/test_support/`。
 
@@ -46,11 +57,11 @@ Rust 测试在 `src-tauri/src/tests/`，辅助在 `src-tauri/src/test_support/`�
 
 ## 层清单
 
-改 **Adapter**、**聚合**、**DTO**、**摄取**、**扫描路径**、**Cursor 账号**、**Cursor 会话**、**官方额度**、**对话记录**、**全局指令**、**用户文件**、**报告**、**工作纪要**、**推送协议**、**样式**、**Rust 模块边界** 时，读 [`docs/agent-layers.md`](docs/agent-layers.md)，做完该层每一项，再跑对应测试。动手前读该层点名的 ADR。
+改 **Adapter**、**聚合**、**DTO**、**摄取**、**扫描路径**、**Cursor 账号**、**Cursor 会话**、**官方额度**、**对话记录**、**全局指令**、**用户文件**、**报告**、**工作纪要**、**推送**、**推送协议**、**远程服务**、**样式**、**Rust 模块边界** 时，读 [`docs/agent-layers.md`](docs/agent-layers.md)，做完该层每一项，再跑对应测试。动手前读该层点名的 ADR。
 
 写用户拥有的文件只走 ADR 0010（mtime 校验、写前备份、原子 rename、白名单）。其它路径只读。
 
-术语以 [`CONTEXT.md`](CONTEXT.md) 为准。写到 **消耗记录**、**来源**、**Adapter**、**代码量**、**官方额度**、**Cursor 会话**、**对话记录**、**全局指令**、**工作时间线**、**报告**、**洞察**、**工作纪要**、**纪要引擎** 时，先对过对应词条。决策以 [`docs/adr/`](docs/adr/) 为准。
+术语以 [`CONTEXT.md`](CONTEXT.md) 为准。写到 **推送**、**远程服务**、**远程账号**、**消耗记录**、**来源**、**Adapter**、**代码量**、**官方额度**、**Cursor 会话**、**对话记录**、**全局指令**、**工作时间线**、**报告**、**洞察**、**工作纪要**、**纪要引擎** 时，先对过对应词条。决策以 [`docs/adr/`](docs/adr/) 为准。
 
 ## 分支、PR、发版
 

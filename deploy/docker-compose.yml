@@ -1,0 +1,37 @@
+# 服务端 + PostgreSQL 一键起：
+#   cp deploy/.env.example deploy/.env   # 改掉 POSTGRES_PASSWORD
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+# 建第一个管理员见 deploy/README.md。
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mabiao
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?在 deploy/.env 里设置 POSTGRES_PASSWORD}
+      POSTGRES_DB: mabiao
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mabiao -d mabiao"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://mabiao:${POSTGRES_PASSWORD}@postgres:5432/mabiao
+      MABIAO_BIND: 0.0.0.0:8080
+    ports:
+      # 只绑回环：桌面端强制 https，前面要放反向代理做 TLS。
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  pgdata:

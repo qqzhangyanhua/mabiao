@@ -1,0 +1,39 @@
+[package]
+name = "mabiao-server"
+version = "0.1.0"
+description = "码表远程服务：接收推送、按远程账号隔离存储（ADR 0026）"
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "mabiao_server"
+
+[[bin]]
+name = "mabiao-server"
+path = "src/main.rs"
+
+[dependencies]
+argon2 = "0.6.0"
+axum = { version = "0.8.9", features = ["macros"] }
+chrono = { version = "0.4.45", features = ["serde"] }
+clap = { version = "4.6.7", features = ["derive", "env"] }
+getrandom = "0.4.3"
+push-protocol = { path = "../crates/push-protocol" }
+rpassword = "7.5.4"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "chrono", "macros"] }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "signal", "net"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+
+# 开发构建里 argon2 太慢，测试要登录很多次。
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tower = { version = "0.5.3", features = ["util"] }

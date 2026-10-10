@@ -9,6 +9,11 @@ pub enum ApiErrorCode {
     /// token 过期或无效，客户端提示重新登录。
     TokenExpired,
     InvalidPayload,
+    /// 已登录但角色不够，或在访问别人的数据。
+    Forbidden,
+    NotFound,
+    /// 与现有数据冲突，如账号名已被占用。
+    Conflict,
     Internal,
 }
 

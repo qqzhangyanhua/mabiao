@@ -1,0 +1,5 @@
+# 只要 crates/ 与 server/ 进构建上下文。
+*
+!crates
+!server
+**/target

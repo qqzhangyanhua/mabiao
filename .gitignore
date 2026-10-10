@@ -12,3 +12,5 @@ src-tauri/gen/
 .worktrees/
 .playwright-cli/
 docs/probe/.captures/
+
+deploy/.env
