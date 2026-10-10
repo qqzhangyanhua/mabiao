@@ -115,6 +115,12 @@ const marks: Record<SourceIconId, SourceMark> = {
       <path d="M8 4h8l-2 3H9.5A4.5 4.5 0 0 0 5 11.5 4.5 4.5 0 0 0 9.5 16H14l2 3H9.5A7.5 7.5 0 0 1 2 11.5 7.5 7.5 0 0 1 9.5 4H8zm6 5 6 3.5L14 16V5z" />
     ),
   },
+  workbuddy: {
+    viewBox: "0 0 24 24",
+    body: (
+      <path d="M4 6h16v3H4zm0 5h7v7H4zm9 0h7v7h-7z" />
+    ),
+  },
   unknown: {
     viewBox: "0 0 24 24",
     body: (

@@ -1,0 +1,5 @@
+{"id":"u1","timestamp":1790503200000,"type":"message","role":"user","content":[{"type":"input_text","text":"Draft the launch notes"}],"sessionId":"sess-wb-1","cwd":"/work/wb"}
+{"timestamp":1790503201000,"type":"ai-title","aiTitle":"Launch notes","sessionId":"sess-wb-1","cwd":"/work/wb"}
+{"id":"a1","timestamp":1790503205000,"type":"function_call","name":"Read","providerData":{"messageId":"m1","model":"hy3","usage":{"inputTokens":1200,"outputTokens":80,"inputTokensDetails":[{"cached_tokens":1000}]}},"sessionId":"sess-wb-1","cwd":"/work/wb"}
+{"id":"a2","timestamp":1790503210000,"type":"message","role":"assistant","providerData":{"messageId":"m2","model":"hy3","usage":{"inputTokens":1400,"outputTokens":40,"inputTokensDetails":[{"cached_tokens":1200}]}},"sessionId":"sess-wb-1","cwd":"/work/wb"}
+{"id":"a2","timestamp":1790503210000,"type":"function_call","name":"Write","providerData":{"messageId":"m2","model":"hy3","usage":{"inputTokens":9999,"outputTokens":888,"inputTokensDetails":[{"cached_tokens":7777}]}},"sessionId":"sess-wb-1","cwd":"/work/wb"}

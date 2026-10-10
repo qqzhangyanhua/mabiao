@@ -22,6 +22,7 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   qoder: "qoder",
   qoder_cn: "qoder",
   cline: "cline",
+  workbuddy: "workbuddy",
 };
 
 export function resolveSourceIconId(source: string): SourceIconId {

@@ -624,6 +624,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Cline.application_name(), "Cline");
     assert_eq!(Source::Cline.as_str(), "cline");
     assert_eq!(Source::parse("cline"), Some(Source::Cline));
+    assert_eq!(Source::WorkBuddy.application_name(), "WorkBuddy");
+    assert_eq!(Source::WorkBuddy.as_str(), "workbuddy");
+    assert_eq!(Source::parse("workbuddy"), Some(Source::WorkBuddy));
 }
 
 #[test]
@@ -760,6 +763,47 @@ fn cline_adapter_skips_messages_before_forked_at() {
     assert_eq!(records[0].output_tokens, 12);
     assert_eq!(records[0].cache_read_tokens, 30);
     assert_eq!(records[0].total_tokens, 102);
+}
+
+#[test]
+fn workbuddy_adapter_subtracts_cache_and_keeps_last_usage_per_message() {
+    let records = workbuddy::parse_workbuddy_jsonl(
+        &fixture_lines(&fixture("workbuddy.jsonl")),
+        "/home/dev/.workbuddy/projects/-work-wb/sess-wb-1.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::WorkBuddy);
+    assert_eq!(records[0].model, "hy3");
+    assert_eq!(records[0].project, "/work/wb");
+    assert_eq!(records[0].session_id, "sess-wb-1");
+    assert_eq!(records[0].input_tokens, 200);
+    assert_eq!(records[0].output_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 1000);
+    assert_eq!(records[0].total_tokens, 1280);
+    assert_eq!(records[1].input_tokens, 2222);
+    assert_eq!(records[1].output_tokens, 888);
+    assert_eq!(records[1].cache_read_tokens, 7777);
+    assert_eq!(records[1].total_tokens, 10887);
+}
+
+#[test]
+fn workbuddy_adapter_reads_legacy_usage_fields_and_meta_cwd() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("sess-wb-old.jsonl");
+    std::fs::write(&path, fixture("workbuddy-old.jsonl")).unwrap();
+    std::fs::write(
+        dir.path().join("sess-wb-old.meta.json"),
+        fixture("workbuddy.meta.json"),
+    )
+    .unwrap();
+    let records = workbuddy::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 350);
+    assert_eq!(records[0].output_tokens, 20);
+    assert_eq!(records[0].cache_read_tokens, 100);
+    assert_eq!(records[0].cache_creation_tokens, 50);
+    assert_eq!(records[0].total_tokens, 520);
+    assert_eq!(records[0].project, "/work/wb-meta");
 }
 
 #[test]
