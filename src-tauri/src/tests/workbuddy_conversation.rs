@@ -80,3 +80,24 @@ fn workbuddy_subagent_is_not_a_catalog_row() {
             .is_some_and(|session| session.session_id == "scout")
     }));
 }
+
+#[test]
+fn workbuddy_desktop_app_directory_is_scanned_for_usage_and_conversations() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".workbuddy-ai/projects/-work-wb/sess-wb-1.jsonl",
+        "workbuddy.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    assert_eq!(report.files_failed, 0, "{report:?}");
+
+    assert!(!usage_rows(&conn, "workbuddy", "sess-wb-1").is_empty());
+    let page = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    assert!(page
+        .rows
+        .iter()
+        .any(|row| row.source == "workbuddy" && row.session_id == "sess-wb-1"));
+}

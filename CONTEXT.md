@@ -107,7 +107,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | Qoder | jsonl `~/.qoder/projects`（Claude Code 形态，`QODER_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
 | Qoder CN | jsonl `~/.qoder-cn/projects`（Claude Code 形态，`QODERCN_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
 | Cline | JSON `~/.cline/data/sessions/<id>/<id>.messages.json`（`CLINE_SESSION_DATA_DIR` 可覆盖；input 不含 cache） | ✅ | ✅ 自带 `metrics.cost`（有则取） |
-| WorkBuddy | jsonl `~/.workbuddy/projects`（`WORKBUDDY_CONFIG_DIR` 可覆盖；input 不含 cache；同 messageId 取最后一次 usage） | ✅ | ❌ |
+| WorkBuddy | jsonl `~/.workbuddy/projects` 和 `~/.workbuddy-ai/projects`（`WORKBUDDY_CONFIG_DIR` 可覆盖；input 不含 cache；同 messageId 取最后一次 usage） | ✅ | ❌ |
 | ZCode | sqlite `~/.zcode/cli/db/db.sqlite`（OpenCode 形态；`ZCODE_HOME` 可覆盖；AI SDK input 含 cache，入账时拆出） | ✅ | ✅ 自带 `cost`（有则取） |
 | Alma | sqlite Electron `userData`/`alma/chat_threads.db`（Linux `~/.config/alma`，macOS `~/Library/Application Support/alma`，Windows `%APPDATA%/alma`；**不是** `~/.local/share/alma`；`ALMA_HOME` 可覆盖；跳过隐身与 cron；input 不含 cache） | ✅ | ❌ |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
