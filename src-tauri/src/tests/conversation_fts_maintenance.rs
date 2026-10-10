@@ -95,6 +95,43 @@ fn legacy_triggers_replaced_on_reopen() {
     assert!(store::conversation_fts_needs_migration(&reopened).unwrap());
 }
 
+/// 倒排已是不存原文的形态、触发器却还是老的（`'delete'` 命令会被 FTS5 拒绝）时，
+/// 重新打开应换成按 rowid 删的触发器，删除事件不再报错。
+#[test]
+fn stale_legacy_triggers_on_contentless_fts_are_replaced() {
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("usage.sqlite");
+    let conn = store::open_db(db_path.to_str().unwrap()).unwrap();
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER conversation_events_ad;
+        CREATE TRIGGER conversation_events_ad AFTER DELETE ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(conversation_events_fts, rowid, text, name)
+            VALUES ('delete', old.rowid, COALESCE(old.text, ''), COALESCE(old.name, ''));
+        END;
+        CREATE TRIGGER conversation_events_ai AFTER INSERT ON conversation_events BEGIN
+            INSERT INTO conversation_events_fts(rowid, text, name)
+            VALUES (new.rowid, COALESCE(new.text, ''), COALESCE(new.name, ''));
+        END;
+        "#,
+    )
+    .unwrap();
+    drop(conn);
+
+    let reopened = store::open_db(db_path.to_str().unwrap()).unwrap();
+    let triggers: Vec<String> = reopened
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'conversation_events' ORDER BY name")
+        .unwrap()
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(triggers, vec!["conversation_events_ad".to_string()]);
+    reopened
+        .execute("DELETE FROM conversation_events", [])
+        .unwrap();
+}
+
 /// 不存原文的倒排只有删除触发器：插入由写入方显式做，删除按 rowid 删。
 #[test]
 fn contentless_fts_has_only_delete_trigger() {

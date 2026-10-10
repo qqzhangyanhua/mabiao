@@ -200,6 +200,24 @@ fn legacy_triggers_are_current(conn: &Connection) -> Result<bool, String> {
         && delete.is_some_and(|sql| sql.contains("conversation_fts_maintenance")))
 }
 
+/// 不存原文的倒排表上若还留着老形态的触发器，删除事件时会执行 `'delete'` 命令，
+/// FTS5 对 `contentless_delete=1` 的表直接报错，整个会话的索引补建因此一直失败。
+/// `CREATE TRIGGER IF NOT EXISTS` 不会覆盖同名老触发器，所以要先清掉。
+fn drop_legacy_triggers_on_contentless(conn: &Connection) -> Result<(), String> {
+    let delete = sqlite_master_sql(conn, "trigger", "conversation_events_ad")?;
+    if delete.is_some_and(|sql| sql.contains("'delete'")) {
+        conn.execute_batch("DROP TRIGGER conversation_events_ad;")
+            .map_err(|e| e.to_string())?;
+    }
+    conn.execute_batch(
+        r#"
+        DROP TRIGGER IF EXISTS conversation_events_ai;
+        DROP TRIGGER IF EXISTS conversation_events_au;
+        "#,
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// 正文全文索引是 `conversation_events` 的派生缓存：源文件仍是权威，重建事件表后可再灌。
 /// trigram 按子串匹配，对应原先目录 LIKE 的「关键字」预期；短于 3 个字符的查询只走标题。
 ///
@@ -219,6 +237,7 @@ pub(super) fn ensure_conversation_events_fts(conn: &Connection) -> Result<(), St
         return mark_referenced_sessions_stale(conn);
     };
     if is_contentless(&sql) {
+        drop_legacy_triggers_on_contentless(conn)?;
         return conn
             .execute_batch(CONVERSATION_FTS_TRIGGERS)
             .map_err(|e| e.to_string());
