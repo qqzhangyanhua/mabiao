@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import {
+  accessKeyPlaceholder,
   credentialHint,
   fetchInputsOf,
   implementedPresetLabels,
+  needsAccessKeyId,
   requiresSecretReentry,
   secretPlaceholder,
   submittedSecret,
@@ -46,6 +48,7 @@ type TestCustomQuotaProvider = {
   preset: CustomQuotaPreset;
   base_url: string;
   secret: string | null;
+  access_key_id: string | null;
 };
 
 type CustomQuotaTestDto = {
@@ -148,6 +151,7 @@ export function CustomQuotaProviderForm({
       preset: draft.preset,
       base_url: draft.baseUrl,
       secret: submittedSecret(draft.secret),
+      access_key_id: needsAccessKeyId(draft.preset) ? submittedSecret(draft.accessKeyId) : null,
     };
     // 认的是点下按钮那一刻的输入：测试打到一半用户又改了地址，回来的结果
     // 不该挂到新地址上。
@@ -194,8 +198,36 @@ export function CustomQuotaProviderForm({
         onChange={(event) => onChange({ ...draft, baseUrl: event.target.value })}
       />
       <RequestEcho preview={preview} />
+      {needsAccessKeyId(draft.preset) ? (
+        <Field
+          label={
+            editing
+              ? hostChanged
+                ? "AccessKey ID（更换地址后必填）"
+                : "AccessKey ID（留空则不改）"
+              : "AccessKey ID"
+          }
+          type="password"
+          autoComplete="off"
+          placeholder={accessKeyPlaceholder(editing, hostChanged)}
+          value={draft.accessKeyId}
+          onChange={(event) => onChange({ ...draft, accessKeyId: event.target.value })}
+        />
+      ) : null}
       <Field
-        label={editing ? (hostChanged ? "密钥（更换地址后必填）" : "密钥（留空则不改）") : "密钥"}
+        label={
+          editing
+            ? hostChanged
+              ? needsAccessKeyId(draft.preset)
+                ? "Secret Access Key（更换地址后必填）"
+                : "密钥（更换地址后必填）"
+              : needsAccessKeyId(draft.preset)
+                ? "Secret Access Key（留空则不改）"
+                : "密钥（留空则不改）"
+            : needsAccessKeyId(draft.preset)
+              ? "Secret Access Key"
+              : "密钥"
+        }
         type="password"
         autoComplete="off"
         placeholder={secretPlaceholder(draft.preset, editing, hostChanged)}

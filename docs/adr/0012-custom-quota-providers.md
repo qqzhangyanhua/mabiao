@@ -1,6 +1,6 @@
 # 自定义额度提供商
 
-> **2026-10-10 修订（实现细节）**：预设枚举现为 11 种（0013 的 `litellm_proxy`，以及 Kimi Code / MiniMax Coding Plan / GLM · Z.ai Coding Plan / Command Code）；已实现档见 `CustomQuotaPreset::implemented()`（OpenAI 兼容 / NewAPI 别名 / LiteLLM Proxy / 四档 API-key 套餐）。托盘「最紧一档」不再按 `custom:` 前缀一刀切，而是按窗口有无 `resets_at` 分流（0013，`official_quota::tightest_window`）。读到下文「跳过全部 `custom:`」「一次性 6 种」时以 0013 为准；边界条款（只打计费接口、不进消耗记录、密钥不进备份）仍以本篇为准。
+> **2026-10-10 修订（实现细节）**：预设枚举现为 12 种（0013 的 `litellm_proxy`、四档 API-key 套餐，以及火山方舟）；已实现档见 `CustomQuotaPreset::implemented()`（OpenAI 兼容 / NewAPI 别名 / LiteLLM Proxy / 四档 API-key 套餐 / 火山方舟）。凭证文件以 `secrets` 存单密钥，可选的 `access_key_ids` 只给双密钥预设；旧文件没有后者也能读。托盘「最紧一档」不再按 `custom:` 前缀一刀切，而是按窗口有无 `resets_at` 分流（0013，`official_quota::tightest_window`）。读到下文「跳过全部 `custom:`」「一次性 6 种」时以 0013 为准；边界条款（只打计费接口、不进消耗记录、密钥不进备份）仍以本篇为准。
 
 内置的 9 个官方额度账号之外，用户还在用第三方 API 中转站和聚合服务：OpenAI 兼容中转、自建的 NewAPI / OneAPI 站点、OpenRouter、DeepSeek 等。这些普遍是充值制，比订阅制**更容易毫无预警地断掉**——而「官方额度」区块只认写死的那 9 家，恰好漏掉了最容易断的那条。
 
@@ -35,7 +35,7 @@
 - `OfficialQuotaWindow` 增加三个可选金额字段（已用金额、上限金额、币种），允许「只有百分比 / 百分比 + 金额 / 只有金额」三种形态并存。新增字段全是 `Option`，旧缓存不需要迁移（有独立测试盯着这条）。
 - 请求地址归一化只在 Rust 存在一份：剥掉结尾斜杠与结尾的 `/v1`，再按预设类型拼接接口路径。前端不重写，否则界面上写的和真正请求的会各自漂移。设置页 base URL 下方那行「将请求」回显走的**就是**取数用的那份请求构造（`request_urls`）——回显存在的唯一目的是「点保存之前就知道填对没有」，另写一份的话它迟早开始骗人。
 - **「测试连接」用表单里尚未保存的配置打一次，成功时把解析出的额度窗口原样画出来**，画法与首页共用一份。只回一句「成功」证明不了预设类型选对了，读到的数才能，而共用画法意味着用户此刻确认的就是之后每天看到的那一行。这条通道不写额度缓存、不记退避、也不受既有冷却拦截：配置还没保存，退避里没有它的位置，而用户点测试往往正是为了修好一条正在冷却的。测试失败**不拦保存**——断网、中转站临时抽风、或用户想先把配置填好稍后再验，都不该变成「存不进去」。
-- 预设类型枚举现为 **11 种**（上列 7 种再加 Kimi Code / MiniMax Coding Plan / GLM · Z.ai Coding Plan / Command Code）。**已实现档**见 `CustomQuotaPreset::implemented()`：OpenAI 兼容、NewAPI 别名、LiteLLM Proxy、以及四档 API-key 套餐；其余在取数入口给出「暂未支持」的人话错误，不 panic。套餐档只打公开计费接口、https only、密钥不写回磁盘。
+- 预设类型枚举现为 **12 种**（上列 7 种再加 Kimi Code / MiniMax Coding Plan / GLM · Z.ai Coding Plan / Command Code / 火山方舟）。**已实现档**见 `CustomQuotaPreset::implemented()`：OpenAI 兼容、NewAPI 别名、LiteLLM Proxy、四档 API-key 套餐、以及火山方舟。套餐档只打公开计费接口、https only、密钥不写回磁盘。火山方舟用账号 AccessKey ID + Secret Access Key 做 HMAC-SHA256，凭证仍只进 `custom_quota_credentials.json`（0600）；`access_key_ids` 缺省为空，旧单密钥文件不用迁移。
 - 解析接缝按预设类型分派、**只有一个入口**。后续补齐其余预设时接缝数不增长，新解析器直接复用同一个测试入口。
 - 恢复备份后配置在、密钥为空。该行显示「未配置密钥，请在设置页重新填写」——这是待办提示，不是取数失败。
 - 取数失败沿用「最后一次正确结果」：保留上次窗口，只更新错误文案，且错误必须是人话（密钥失效 / 地址不对 / 网络不通），不是裸的 HTTP 状态码。

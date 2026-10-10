@@ -15,6 +15,7 @@ mod plan_presets;
 mod preview_and_test;
 mod rows;
 mod tray_and_alerts;
+mod volcengine;
 
 use crate::official_quota::custom::store::{CustomQuotaProvider, ResolvedProvider};
 use crate::official_quota::custom::CustomQuotaPreset;
@@ -42,6 +43,7 @@ fn resolved(id: &str, name: &str) -> ResolvedProvider {
     ResolvedProvider {
         config: provider(id, name),
         secret: Some("sk-relay".to_string()),
+        access_key_id: None,
     }
 }
 
@@ -49,6 +51,7 @@ fn unresolved(id: &str, name: &str) -> ResolvedProvider {
     ResolvedProvider {
         config: provider(id, name),
         secret: None,
+        access_key_id: None,
     }
 }
 
