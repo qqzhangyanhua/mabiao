@@ -23,6 +23,8 @@ import { OverviewLayoutBar } from "./OverviewLayoutBar";
 import { OverviewPanels } from "./OverviewPanels";
 import {
   cacheHitRate,
+  overviewCacheHitRate,
+  formatCacheHitRate,
   deltaPct,
   formatClock,
   formatCompact,
@@ -195,7 +197,17 @@ export const Overview = memo(function Overview({
   const tokenDelta = formatDelta(deltaPct(data.total_tokens, previous?.total_tokens ?? null));
   const costDelta =
     data.cost == null ? null : formatDelta(deltaPct(data.cost, previous?.cost ?? null));
+  const cacheHitRateValue = overviewCacheHitRate(
+    data.cache_read_tokens,
+    data.cache_creation_tokens,
+    data.input_tokens,
+  );
   const cacheHitRateLabel = formatPercent(cacheHitRate(data.cache_read_tokens, data.input_tokens));
+  const cacheHitKpiValue = formatCacheHitRate(cacheHitRateValue);
+  const cacheHitHint =
+    cacheHitRateValue == null
+      ? "当前筛选范围内没有缓存读或缓存写，无法计算。口径：cache_read / (input + cache_read)，与来源统计相同。"
+      : "cache_read / (input + cache_read)。没有缓存口径的来源不参与，不会把命中率拉成 0%。";
   const [reportOpen, setReportOpen] = useState(false);
   const [presence, setPresence] = useState<SourcePresenceDto | null>(null);
 
@@ -267,6 +279,8 @@ export const Overview = memo(function Overview({
           dailyDelta={formatDelta(
             deltaPct(dailyAvg, previous ? previous.total_tokens / Math.max(days, 1) : null),
           )}
+          cacheHitValue={cacheHitKpiValue}
+          cacheHitHint={cacheHitHint}
           spark={spark}
           costSpark={trend.map((point) => point.cost ?? 0)}
           live={live}

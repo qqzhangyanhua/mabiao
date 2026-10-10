@@ -10,6 +10,7 @@ import {
   filterForBucket,
   filterWithCallRange,
   cacheHitRate,
+  overviewCacheHitRate,
   formatBytes,
   formatCacheHitRate,
   formatClock,
@@ -263,6 +264,21 @@ describe("cacheHitRate", () => {
 
   it("is null when input and cache read are both zero", () => {
     expect(cacheHitRate(0, 0)).toBeNull();
+  });
+});
+
+describe("overviewCacheHitRate", () => {
+  it("matches Rust: none when the filter has no cache tokens", () => {
+    expect(overviewCacheHitRate(0, 0, 100)).toBeNull();
+    expect(overviewCacheHitRate(0, 0, 0)).toBeNull();
+  });
+
+  it("treats cache writes as evidence of a cache dimension even at 0% hit", () => {
+    expect(overviewCacheHitRate(0, 10, 100)).toBe(0);
+  });
+
+  it("is cache_read / (input + cache_read)", () => {
+    expect(overviewCacheHitRate(20, 0, 80)).toBeCloseTo(0.2);
   });
 });
 
