@@ -63,6 +63,7 @@ fn qoder_detail_keeps_messages_and_tool_calls() {
         vec![
             "Inspect the importer".to_string(),
             "Checking the importer.".to_string(),
+            "fn main() {}".to_string(),
             "The importer is ready.".to_string()
         ]
     );
