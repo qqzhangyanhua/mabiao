@@ -2,7 +2,9 @@
 
 > 背景：CodexBar / CodeBurn / Token Monitor / TokenTracker 等竞品已扫描的来源里，本项目还没有覆盖或覆盖很弱的有 OpenClaw、Zed、Antigravity 本地 transcript、Cline/Roo/Kilo、Cherry Studio、Qoder CN、Windsurf；国内向的有 CodeBuddy/WorkBuddy/ZCode/Trae CN。另外已接入的 qwen/gemini/factory/copilot 四个来源字段有残缺。本文档记录一次本机 probe 后的优先级排序，供后续排期实现。
 >
-> **进度更新（2026-09-03）**：原 Tier 1 第一名 **Hermes 已实现并合并**（PR #145，`adapters/hermes.rs` + `USAGE_ADAPTERS` 表 `Source::Hermes`，coverage「模型级 Token（含原生费用）」），已从下方待新增列表移除，见「已实现」小节。当前 Tier 1 待新增顺序为 Cline/Roo/Kilo → ZCode → WorkBuddy。
+> **进度更新（2026-09-03）**：原 Tier 1 第一名 **Hermes 已实现并合并**（PR #145，`adapters/hermes.rs` + `USAGE_ADAPTERS` 表 `Source::Hermes`，coverage「模型级 Token（含原生费用）」），已从下方待新增列表移除，见「已实现」小节。当前 Tier 1 待新增顺序为 VS Code 系 Cline/Roo/Kilo → ZCode → WorkBuddy。
+>
+> **进度更新（2026-10-10）**：**Cline CLI**（`~/.cline/data/sessions/<id>/<id>.messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」仍指 VS Code 扩展的 `ui_messages.json` 路径，与 Cline CLI 不是同一套落地文件。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -35,7 +37,7 @@
 | 来源 | 状态 |
 |---|---|
 | OpenClaw | 本机无安装痕迹，无法 probe |
-| Qoder CN | 本机无安装痕迹，无法 probe |
+| Qoder CN | 已作为独立 Usage Source 接入（`adapters/qoder_cn.rs`，Claude 形态 jsonl） |
 
 排期前提：拿到任一渠道（自己装、社区 fixture、官方文档）的真实本机会话样本后，重新走一次本文档的 probe 流程再决定归入 Tier 1 还是 Tier 3。
 
@@ -47,6 +49,12 @@
 - **实现**：`src-tauri/src/adapters/hermes.rs`，在 `USAGE_ADAPTERS` 表注册为 `Source::Hermes`，coverage「模型级 Token（含原生费用）」；按 `session_model_usage`（`session_id + model + billing_provider` 维度）累计 token，取 `actual_cost_usd` 为原生费用；缺列时回落默认值，不让整个来源失败
 - **为什么当时排第一**：所有候选里唯一自带原生费用字段（`actual_cost_usd`）的来源，且是结构化 SQLite，直接 SQL 映射到 `UsageRecord`
 - **落地时的取舍**：以模型级累计（`session_model_usage`）为准，未按会话级（`sessions`）再计一遍，避免会话级 vs 模型级重复计数；`cost_source` 枚举仍以本机样本为限，后续拿到更多真实会话可再校验
+
+### Cline CLI ✅
+
+- **本机路径**：`~/.cline/data/sessions/<id>/<id>.messages.json`，侧车 `<id>.json` 提供 `cwd` / `metadata.fork.forkedAt`；环境变量 `CLINE_SESSION_DATA_DIR` 直接覆盖会话目录
+- **实现**：`src-tauri/src/adapters/cline.rs`，注册为 `Source::Cline`，coverage「轮级 Token（input 不含 cache）」；`input = max(0, inputTokens - cacheRead - cacheWrite)`，`metrics.cost > 0` 写入 `native_cost`；`ts < forkedAt` 的消息跳过
+- **与 VS Code Cline 的区别**：这是 Cline CLI 的本机会话目录，不是扩展 `globalStorage/.../tasks/*/ui_messages.json`
 
 ## Tier 3 — 本轮不投入
 

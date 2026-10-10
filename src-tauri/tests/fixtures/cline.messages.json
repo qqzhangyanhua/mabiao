@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "sessionId": "sess-cline-1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Speed up the importer",
+      "ts": 1790503200000
+    },
+    {
+      "role": "assistant",
+      "content": "checking",
+      "ts": 1790503210000,
+      "modelInfo": { "id": "claude-opus-4", "provider": "anthropic" },
+      "metrics": {
+        "inputTokens": 200,
+        "outputTokens": 15,
+        "cacheReadTokens": 80,
+        "cacheWriteTokens": 20,
+        "cost": 0.02
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "done",
+      "ts": 1790503320000,
+      "modelInfo": { "id": "claude-haiku-4", "provider": "anthropic" },
+      "metrics": {
+        "inputTokens": 40,
+        "outputTokens": 10,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    }
+  ]
+}

@@ -970,7 +970,8 @@ export type UsageSource =
   | "hermes"
   | "agy"
   | "qoder"
-  | "qoder_cn";
+  | "qoder_cn"
+  | "cline";
 
 export type SourceIngestReport = {
   source: UsageSource;
