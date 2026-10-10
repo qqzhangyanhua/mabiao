@@ -236,12 +236,14 @@ fn parse(
                     raw_kind,
                     structural_details(line, &value),
                 ));
-                diagnostics.push(ConversationIndexIssue {
-                    path: path.to_string_lossy().to_string(),
-                    message: format!("DSH 压缩会话第 {} 行事件类型尚未适配", line + 1),
-                    event_type: Some("dsh_event".to_string()),
-                    line: Some((line + 1) as u64),
-                });
+                if !is_known_operational_kind(raw_kind) {
+                    diagnostics.push(ConversationIndexIssue {
+                        path: path.to_string_lossy().to_string(),
+                        message: format!("DSH 压缩会话第 {} 行事件类型尚未适配", line + 1),
+                        event_type: Some("dsh_event".to_string()),
+                        line: Some((line + 1) as u64),
+                    });
+                }
                 sequence += 1;
             }
         }
@@ -265,6 +267,41 @@ fn parse(
         },
     )?;
     Ok((parsed, diagnostics))
+}
+
+/// v4 写入的运行时记录（钩子、重试、压缩、审批等）。它们不是对话内容，原样保留为未适配事件，
+/// 但不再逐条报「尚未适配」：一台机器上能有几千条，会淹没真正的新事件类型。
+fn is_known_operational_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "assistant/attempt"
+            | "hook/invoked"
+            | "hook/result"
+            | "agent/inbox/spliced"
+            | "session-log-deepseek/delivery-accepted"
+            | "session/title"
+            | "session/title-llm-request"
+            | "compaction/prune"
+            | "compaction/start"
+            | "compaction/end"
+            | "compaction/summary"
+            | "system/message"
+            | "permission/preset"
+            | "sandbox/mode"
+            | "approval/policy"
+            | "approval/asked"
+            | "approval/decided"
+            | "llm/retry"
+            | "llm/retry-started"
+            | "model/selection"
+            | "workspace/changes"
+            | "subagent/catalog"
+            | "subagent/descriptor"
+            | "web/deepseek-search-llm-request"
+            | "deliverables/presented"
+            | "command/run"
+            | "command/done"
+    )
 }
 
 fn decode_values(path: &Path) -> Result<Vec<(usize, Value)>, String> {
