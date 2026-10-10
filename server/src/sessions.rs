@@ -4,6 +4,7 @@ use sqlx::types::Json;
 use sqlx::{PgConnection, PgPool, Row};
 
 use crate::error::AppError;
+use crate::usage_query::Filter;
 
 /// 客户端时间都是 RFC 3339 字符串；解析不了就当没有，不因此拒收整场会话。
 pub fn parse_timestamp(value: &str) -> Option<DateTime<Utc>> {
@@ -65,6 +66,77 @@ pub async fn upsert(
     .await?;
     let inserted: bool = row.get("inserted");
     Ok((row.get("id"), !inserted))
+}
+
+/// 列表里的一场会话：只有目录元数据，不带事件正文与上下文清单。
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SessionListRow {
+    pub id: i64,
+    pub account_id: i64,
+    pub account: String,
+    pub device_name: String,
+    pub source: String,
+    pub session_id: String,
+    pub title: String,
+    pub project_path: String,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub model: String,
+    pub started_at: Option<DateTime<Utc>>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub event_count: i32,
+    pub generated_by_work_notes: bool,
+    pub pushed_at: DateTime<Utc>,
+}
+
+/// 会话时间取结束时间；客户端时间解析不了时退回开始、再退回推送时间，免得会话从列表里消失。
+const SESSION_TIME: &str = "COALESCE(s.ended_at, s.started_at, s.pushed_at)";
+
+const SESSION_FILTER: &str = "($1::bigint IS NULL OR s.account_id = $1)
+           AND ($2::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) >= $2)
+           AND ($3::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) < $3)";
+
+/// 按时间从新到旧。`from` 含、`to` 不含，与消耗记录查询一致。
+pub async fn list(
+    pool: &PgPool,
+    filter: &Filter,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<SessionListRow>, AppError> {
+    let sql = format!(
+        "SELECT s.id, s.account_id, a.account, d.device_name, s.source, s.session_id, s.title,
+                s.project_path, s.project_id, p.name AS project_name, s.model,
+                s.started_at, s.ended_at, s.event_count, s.generated_by_work_notes, s.pushed_at
+         FROM sessions s
+         JOIN remote_accounts a ON a.id = s.account_id
+         JOIN devices d ON d.id = s.device_pk
+         LEFT JOIN projects p ON p.id = s.project_id
+         WHERE {SESSION_FILTER}
+         ORDER BY {SESSION_TIME} DESC, s.id DESC
+         LIMIT $4 OFFSET $5"
+    );
+    Ok(sqlx::query_as(&sql)
+        .bind(filter.account_id)
+        .bind(filter.from)
+        .bind(filter.to)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?)
+}
+
+/// 过滤条件下的会话总数，不受分页影响。
+pub async fn count(pool: &PgPool, filter: &Filter) -> Result<i64, AppError> {
+    let sql = format!(
+        "SELECT count(*) FROM sessions s
+         WHERE {SESSION_FILTER}"
+    );
+    Ok(sqlx::query_scalar(&sql)
+        .bind(filter.account_id)
+        .bind(filter.from)
+        .bind(filter.to)
+        .fetch_one(pool)
+        .await?)
 }
 
 /// 会话所属账号。会话不存在时为 `None`。

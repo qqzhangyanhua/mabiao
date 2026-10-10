@@ -1,17 +1,22 @@
+use std::path::PathBuf;
+
 use axum::extract::DefaultBodyLimit;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use push_protocol::{check_protocol_version, LoginRequest, LoginResponse, RemoteRole};
+use tower_http::services::ServeDir;
 
 use crate::api::{
     AccountView, CoverageView, CreateMemberRequest, DeviceView, PricingOverview, RecomputeResponse,
-    SetTeamPriceRequest, SetTeamPriceResponse, SnapshotMetaView, UsageQuery, UsageResponse,
+    SessionListQuery, SessionListResponse, SetTeamPriceRequest, SetTeamPriceResponse,
+    SnapshotMetaView, SummaryQuery, SummaryResponse, UsageQuery, UsageResponse,
 };
 use crate::auth::{AdminAccount, AuthedAccount};
 use crate::error::{ApiJson, ApiQuery, AppError};
-use crate::sessions::parse_timestamp;
+use crate::sessions::{self, parse_timestamp};
+use crate::summary;
 use crate::team_pricing::{self, Scope};
 use crate::usage_query::{self, Filter};
 use crate::{accounts, coverage, devices, password, push, tokens, AppState};
@@ -47,8 +52,18 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/admin/pricing/recompute", post(admin_recompute))
         .route("/api/v1/usage", get(usage_list))
+        .route("/api/v1/usage/summary", get(usage_summary))
+        .route("/api/v1/sessions", get(session_list))
         .merge(push_routes)
         .with_state(state)
+}
+
+/// 在 API 之上托管管理网页的构建产物。
+///
+/// 网页用 hash 路由，所以不需要「未知路径回退到 index.html」：那样会让拼错的 `/api/...`
+/// 返回 200 的 HTML。API 路由先匹配，其余才落到静态文件。
+pub fn router_with_web(state: AppState, web_dir: PathBuf) -> Router {
+    router(state).fallback_service(ServeDir::new(web_dir))
 }
 
 async fn healthz(State(state): State<AppState>) -> Result<&'static str, AppError> {
@@ -230,41 +245,89 @@ fn parse_bound(
         .transpose()
 }
 
+fn build_filter(
+    account_id: Option<i64>,
+    from: Option<&str>,
+    to: Option<&str>,
+) -> Result<Filter, AppError> {
+    Ok(Filter {
+        account_id,
+        from: parse_bound("from", from)?,
+        to: parse_bound("to", to)?,
+    })
+}
+
 /// 成员只看自己的；管理员默认看全体，可用 `account_id` 收窄。
 /// 成员指定别人的 `account_id` 得到 403，与其它按账号归属的接口走同一个 `can_access`。
-async fn usage_list(
-    State(state): State<AppState>,
-    caller: AuthedAccount,
-    ApiQuery(query): ApiQuery<UsageQuery>,
-) -> Result<Json<UsageResponse>, AppError> {
-    let account_id = match query.account_id {
-        Some(id) if !caller.can_access(id) => {
-            return Err(AppError::forbidden("只能查看自己的数据"));
-        }
-        Some(id) => Some(id),
-        None if caller.is_admin() => None,
-        None => Some(caller.id),
-    };
-    let limit = query.limit.unwrap_or(usage_query::DEFAULT_LIMIT);
+fn scope_account(caller: &AuthedAccount, requested: Option<i64>) -> Result<Option<i64>, AppError> {
+    match requested {
+        Some(id) if !caller.can_access(id) => Err(AppError::forbidden("只能查看自己的数据")),
+        Some(id) => Ok(Some(id)),
+        None if caller.is_admin() => Ok(None),
+        None => Ok(Some(caller.id)),
+    }
+}
+
+fn parse_paging(limit: Option<i64>, offset: Option<i64>) -> Result<(i64, i64), AppError> {
+    let limit = limit.unwrap_or(usage_query::DEFAULT_LIMIT);
     if !(1..=usage_query::MAX_LIMIT).contains(&limit) {
         return Err(AppError::invalid(format!(
             "limit 要在 1 到 {} 之间",
             usage_query::MAX_LIMIT
         )));
     }
-    let offset = query.offset.unwrap_or(0);
+    let offset = offset.unwrap_or(0);
     if offset < 0 {
         return Err(AppError::invalid("offset 不能为负"));
     }
-    let filter = Filter {
-        account_id,
-        from: parse_bound("from", query.from.as_deref())?,
-        to: parse_bound("to", query.to.as_deref())?,
-    };
+    Ok((limit, offset))
+}
+
+async fn usage_list(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    ApiQuery(query): ApiQuery<UsageQuery>,
+) -> Result<Json<UsageResponse>, AppError> {
+    let account_id = scope_account(&caller, query.account_id)?;
+    let (limit, offset) = parse_paging(query.limit, query.offset)?;
+    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
     let rows = usage_query::list(&state.pool, &filter, limit, offset).await?;
     let totals = usage_query::totals(&state.pool, &filter).await?;
     Ok(Json(UsageResponse {
         records: rows.into_iter().map(Into::into).collect(),
         totals: totals.into(),
+    }))
+}
+
+/// 网页的团队总览与成员页：按天、人、来源、模型、项目拆分，范围规则同 `usage_list`。
+async fn usage_summary(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    ApiQuery(query): ApiQuery<SummaryQuery>,
+) -> Result<Json<SummaryResponse>, AppError> {
+    let account_id = scope_account(&caller, query.account_id)?;
+    let tz_offset = query.tz_offset_minutes.unwrap_or(0);
+    if !(summary::MIN_TZ_OFFSET_MINUTES..=summary::MAX_TZ_OFFSET_MINUTES).contains(&tz_offset) {
+        return Err(AppError::invalid("tz_offset_minutes 要在 -720 到 840 之间"));
+    }
+    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
+    let result = summary::build(&state.pool, &filter, tz_offset).await?;
+    Ok(Json(result.into()))
+}
+
+/// 会话目录列表（不含正文）。范围规则同 `usage_list`。
+async fn session_list(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    ApiQuery(query): ApiQuery<SessionListQuery>,
+) -> Result<Json<SessionListResponse>, AppError> {
+    let account_id = scope_account(&caller, query.account_id)?;
+    let (limit, offset) = parse_paging(query.limit, query.offset)?;
+    let filter = build_filter(account_id, query.from.as_deref(), query.to.as_deref())?;
+    let rows = sessions::list(&state.pool, &filter, limit, offset).await?;
+    let total = sessions::count(&state.pool, &filter).await?;
+    Ok(Json(SessionListResponse {
+        sessions: rows.into_iter().map(Into::into).collect(),
+        total,
     }))
 }

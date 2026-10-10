@@ -193,6 +193,29 @@
 
 完成：fmt、clippy、`cargo test --manifest-path server/Cargo.toml` 三条绿。
 
+### 网页用的聚合与会话列表（`server/src/summary.rs`、`sessions::list`）
+
+接口：`GET /api/v1/usage/summary`、`GET /api/v1/sessions`。
+
+1. 聚合在服务端做，网页只展示。`summary` 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。
+2. 两个接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
+3. `from` 含、`to` 不含，RFC 3339；按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
+4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。
+5. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`。
+
+### 管理网页（`server/web/`）
+
+React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnpm-lock.yaml`，不在根 pnpm 里，根 `pnpm lint` 忽略它）。TypeScript strict、禁止 `any`，单文件 ≤ 400 行由 eslint `max-lines` 卡。
+
+1. 响应类型在 `src/api/types.ts`，与 `server/src/api.rs` 一一对应；改了服务端响应就同步改它。
+2. 登录后 token 只放 `sessionStorage`。401 一律退回登录页；登录请求自己的 401 不算。
+3. hash 路由（`#/overview`、`#/members`、`#/member/:id`），所以服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面，真正的拦截仍在服务端。
+4. 费用口径（统一价 / 客户端快照）只改展示，不重新请求。导出 CSV 两种费用都带；`lib/csv.ts` 会给以 `= + - @` 开头的文本加 `'`，防公式注入。
+5. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。
+6. 在 `server/web/` 下跑：`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm test`、`pnpm build`。
+
+完成：服务端三条命令绿，且网页四条命令绿。
+
 ## 样式
 
 1. 按 `src/styles/` 分层、按域拆文件。入口 `src/styles.css` 只含 `@import`。

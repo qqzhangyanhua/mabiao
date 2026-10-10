@@ -32,6 +32,16 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
   cargo test --manifest-path server/Cargo.toml
 ```
 
+改 `server/web/` 时另跑（独立前端项目，不在根 pnpm 里；Cloud 不需要 PostgreSQL）：
+
+```bash
+cd server/web
+pnpm install --frozen-lockfile   # lockfile 变了才跑
+pnpm lint
+pnpm test
+pnpm build
+```
+
 包管理只用 pnpm。以上全部通过才算改完。迭代时按层收窄 Rust 测试：
 
 | 层 | 命令 |

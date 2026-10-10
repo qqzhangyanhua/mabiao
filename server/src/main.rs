@@ -1,7 +1,7 @@
 use std::io::{IsTerminal, Read};
 
 use clap::{Parser, Subcommand};
-use mabiao_server::{accounts, db, router, AppState};
+use mabiao_server::{accounts, db, router, router_with_web, AppState};
 use push_protocol::RemoteRole;
 
 #[derive(Parser)]
@@ -20,6 +20,9 @@ enum Command {
     Serve {
         #[arg(long, env = "MABIAO_BIND", default_value = "0.0.0.0:8080")]
         bind: String,
+        /// 管理网页构建产物（`server/web/dist`）所在目录。不设则只提供 API。
+        #[arg(long, env = "MABIAO_WEB_DIR")]
+        web_dir: Option<std::path::PathBuf>,
     },
     /// 创建管理员账号。唯一的开户入口之一，没有注册接口。
     /// 密码读环境变量 MABIAO_ADMIN_PASSWORD；没有就在终端提示输入，或从 stdin 读一行。
@@ -86,7 +89,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     let pool = db::connect(&database_url).await?;
     db::migrate(&pool).await?;
     match cli.command {
-        Command::Serve { bind } => {
+        Command::Serve { bind, web_dir } => {
             match mabiao_server::team_pricing::backfill_missing(&pool).await {
                 Ok(filled) if filled > 0 => tracing::info!(filled, "已补算统一费用"),
                 Ok(_) => {}
@@ -95,7 +98,18 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             tokio::spawn(purge_expired_tokens_hourly(pool.clone()));
             let listener = tokio::net::TcpListener::bind(&bind).await?;
             tracing::info!(%bind, "mabiao-server 已启动");
-            axum::serve(listener, router(AppState { pool }))
+            let state = AppState { pool };
+            let app = match web_dir {
+                Some(dir) => {
+                    if !dir.join("index.html").is_file() {
+                        return Err(format!("网页目录里没有 index.html：{}", dir.display()).into());
+                    }
+                    tracing::info!(dir = %dir.display(), "托管管理网页");
+                    router_with_web(state, dir)
+                }
+                None => router(state),
+            };
+            axum::serve(listener, app)
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;
         }

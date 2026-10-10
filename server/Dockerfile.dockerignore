@@ -4,3 +4,5 @@
 !server
 !src-tauri/assets/litellm_prices.json
 **/target
+server/web/node_modules
+server/web/dist

@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::accounts::AccountRow;
 use crate::coverage::MemberCoverage;
 use crate::devices::DeviceRow;
+use crate::sessions::SessionListRow;
+use crate::summary::{BreakdownRow, Summary};
 use crate::team_pricing::TeamPriceRow;
 use crate::usage_query::{Totals, UsageRow};
 
@@ -243,4 +245,134 @@ impl From<MemberCoverage> for CoverageView {
             covered_through: row.covered_through,
         }
     }
+}
+
+/// `GET /api/v1/usage/summary` 的查询串。`from` 含、`to` 不含，RFC 3339。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SummaryQuery {
+    pub account_id: Option<i64>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    /// 按天切日界用的 UTC 偏移（分钟，东为正）。默认 0，即 UTC。
+    pub tz_offset_minutes: Option<i32>,
+}
+
+/// 一个分组的合计：统一费用与客户端快照并列。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BreakdownView {
+    /// 日期（`YYYY-MM-DD`）、账号名、来源、模型，或项目 key（没有项目为空串）。
+    pub key: String,
+    pub label: String,
+    /// 账号或项目的 id，其它维度为空。
+    pub id: Option<i64>,
+    pub record_count: i64,
+    pub total_tokens: i64,
+    pub cost_snapshot: f64,
+    pub unified_cost: f64,
+    /// 统一价未定价的记录数；大于 0 时统一费用是下限。
+    pub unpriced_count: i64,
+}
+
+impl From<BreakdownRow> for BreakdownView {
+    fn from(row: BreakdownRow) -> Self {
+        Self {
+            key: row.key,
+            label: row.label,
+            id: row.id,
+            record_count: row.record_count,
+            total_tokens: row.total_tokens,
+            cost_snapshot: row.cost_snapshot,
+            unified_cost: row.unified_cost,
+            unpriced_count: row.unpriced_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SummaryResponse {
+    pub totals: UsageTotalsView,
+    /// 按日期升序。
+    pub by_day: Vec<BreakdownView>,
+    /// 以下四个维度按统一费用从高到低。
+    pub by_account: Vec<BreakdownView>,
+    pub by_source: Vec<BreakdownView>,
+    pub by_model: Vec<BreakdownView>,
+    pub by_project: Vec<BreakdownView>,
+}
+
+impl From<Summary> for SummaryResponse {
+    fn from(summary: Summary) -> Self {
+        fn views(rows: Vec<BreakdownRow>) -> Vec<BreakdownView> {
+            rows.into_iter().map(Into::into).collect()
+        }
+        Self {
+            totals: summary.totals.into(),
+            by_day: views(summary.by_day),
+            by_account: views(summary.by_account),
+            by_source: views(summary.by_source),
+            by_model: views(summary.by_model),
+            by_project: views(summary.by_project),
+        }
+    }
+}
+
+/// `GET /api/v1/sessions` 的查询串。`from` 含、`to` 不含，按会话结束时间。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct SessionListQuery {
+    pub account_id: Option<i64>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+/// 列表里的会话只有目录元数据；正文在会话详情里，不在这里。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionListItem {
+    pub id: i64,
+    pub account_id: i64,
+    pub account: String,
+    pub device_name: String,
+    pub source: String,
+    pub session_id: String,
+    pub title: String,
+    pub project: String,
+    pub project_id: Option<i64>,
+    pub project_name: Option<String>,
+    pub model: String,
+    pub started_at: Option<DateTime<Utc>>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub event_count: i32,
+    pub generated_by_work_notes: bool,
+    pub pushed_at: DateTime<Utc>,
+}
+
+impl From<SessionListRow> for SessionListItem {
+    fn from(row: SessionListRow) -> Self {
+        Self {
+            id: row.id,
+            account_id: row.account_id,
+            account: row.account,
+            device_name: row.device_name,
+            source: row.source,
+            session_id: row.session_id,
+            title: row.title,
+            project: row.project_path,
+            project_id: row.project_id,
+            project_name: row.project_name,
+            model: row.model,
+            started_at: row.started_at,
+            ended_at: row.ended_at,
+            event_count: row.event_count,
+            generated_by_work_notes: row.generated_by_work_notes,
+            pushed_at: row.pushed_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionListResponse {
+    pub sessions: Vec<SessionListItem>,
+    /// 过滤条件下的会话总数，不受分页影响。
+    pub total: i64,
 }
