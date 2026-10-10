@@ -97,7 +97,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | kimi | jsonl `~/.kimi/sessions/*/wire.jsonl` | ✅ | ❌ |
 | gemini | json / jsonl `~/.gemini/tmp/*/chats/session-*`（`GEMINI_DATA_DIR` 可覆盖） | ✅ | ❌ |
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
-| Hermes | sqlite `~/.hermes/state.db`（`session_model_usage`） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
+| Hermes | sqlite `~/.hermes/state.db` 与 `~/.hermes/profiles/*/state.db`（`HERMES_HOME` 若在 `profiles/<name>` 则回到根） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
 | Antigravity | 每会话一个 SQLite、裸 protobuf BLOB；CLI `~/.gemini/antigravity-cli` + IDE `~/.gemini/antigravity-ide`（各进 `conversations/`；`AGY_DATA_DIR` 可整体覆盖） | ✅（轮级六元组：input / output / cache 读写 / thinking） | ❌（无原生费用，靠价目快照兜底） |
 | qwen | `~/.qwen/tmp/*/logs.json` | ❌（本地无 Token） | ❌ |
 | Factory/droid | `~/.factory/sessions/**/<id>.jsonl` 正文 + `<id>.settings.json` 累计用量 | ✅（会话累计、无模型名） | ❌ |
