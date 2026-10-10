@@ -6,11 +6,13 @@ import { Button } from "./ui/Button";
 export function SessionResumeCommand({
   source,
   sessionId,
+  cwd,
 }: {
   source: string;
   sessionId: string;
+  cwd?: string | null;
 }) {
-  const hint = sessionResumeHint(source, sessionId);
+  const hint = sessionResumeHint(source, sessionId, { cwd });
   const [copied, setCopied] = useState(false);
 
   async function copyCommand(event: MouseEvent<HTMLButtonElement>) {

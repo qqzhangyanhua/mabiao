@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sessionResumeHint, shellArg } from "./sessionResume";
+import {
+  prefixResumeCommand,
+  powershellLiteral,
+  sessionResumeHint,
+  shellArg,
+} from "./sessionResume";
 
 describe("shellArg", () => {
   it("leaves safe identifiers unquoted", () => {
@@ -12,6 +17,38 @@ describe("shellArg", () => {
   it("single-quotes values that need a shell-safe argument", () => {
     expect(shellArg("auth refactor")).toBe("'auth refactor'");
     expect(shellArg("it's-me")).toBe("'it'\\''s-me'");
+  });
+});
+
+describe("powershellLiteral", () => {
+  it("doubles single quotes inside a PowerShell literal", () => {
+    expect(powershellLiteral("C:\\Users\\me\\it's")).toBe("'C:\\Users\\me\\it''s'");
+  });
+});
+
+describe("prefixResumeCommand", () => {
+  it("leaves the command alone when cwd is missing", () => {
+    expect(prefixResumeCommand("codex resume abc", "")).toBe("codex resume abc");
+    expect(prefixResumeCommand("codex resume abc", "   ")).toBe("codex resume abc");
+    expect(prefixResumeCommand("codex resume abc", null)).toBe("codex resume abc");
+  });
+
+  it("prefixes a Unix cd when cwd is known", () => {
+    expect(prefixResumeCommand("codex resume abc", "/work/app")).toBe(
+      "cd /work/app && codex resume abc",
+    );
+    expect(prefixResumeCommand("codex resume abc", "/work/it's")).toBe(
+      "cd '/work/it'\\''s' && codex resume abc",
+    );
+  });
+
+  it("prefixes Set-Location on Windows", () => {
+    expect(prefixResumeCommand("codex resume abc", "C:\\work\\app", true)).toBe(
+      "Set-Location -LiteralPath 'C:\\work\\app'; codex resume abc",
+    );
+    expect(prefixResumeCommand("codex resume abc", "C:\\work\\it's", true)).toBe(
+      "Set-Location -LiteralPath 'C:\\work\\it''s'; codex resume abc",
+    );
   });
 });
 
@@ -31,10 +68,20 @@ describe("sessionResumeHint", () => {
     expect(sessionResumeHint("grok", "g1").command).toBe("grok --resume g1");
     expect(sessionResumeHint("qwen", "q1").command).toBe("qwen --resume q1");
     expect(sessionResumeHint("factory", "droid-1").command).toBe("droid --resume droid-1");
-    expect(sessionResumeHint("cursor_agent", "cur-1").command).toBe(
-      "cursor-agent --resume cur-1",
-    );
+    expect(sessionResumeHint("cursor_agent", "cur-1").command).toBe("cursor-agent --resume cur-1");
     expect(sessionResumeHint("copilot", "cp-1").command).toBe("copilot --resume=cp-1");
+    expect(sessionResumeHint("qoder", "q-1").command).toBe("qodercli --resume q-1");
+    expect(sessionResumeHint("qoder_cn", "qcn-1").command).toBe("qoderclicn --resume qcn-1");
+    expect(sessionResumeHint("cline", "cl-1").command).toBe("cline --id cl-1");
+  });
+
+  it("prefixes cwd when the session has a project directory", () => {
+    expect(
+      sessionResumeHint("qoder", "q-1", { cwd: "/work/app", windows: false }).command,
+    ).toBe("cd /work/app && qodercli --resume q-1");
+    expect(
+      sessionResumeHint("cline", "cl-1", { cwd: "D:\\src\\app", windows: true }).command,
+    ).toBe("Set-Location -LiteralPath 'D:\\src\\app'; cline --id cl-1");
   });
 
   it("quotes session ids that are not shell-safe", () => {
@@ -49,6 +96,11 @@ describe("sessionResumeHint", () => {
       command: null,
       hint: "该来源暂无公开的 CLI 恢复命令，可复制会话 ID",
     });
+    expect(sessionResumeHint("workbuddy", "wb-1").command).toBeNull();
+    expect(sessionResumeHint("zcode", "z-1").command).toBeNull();
+    expect(sessionResumeHint("alma", "a-1").command).toBeNull();
+    expect(sessionResumeHint("hermes", "h-1").command).toBeNull();
+    expect(sessionResumeHint("agy", "g-1").command).toBeNull();
     expect(sessionResumeHint("unknown", "sess-1").command).toBeNull();
   });
 

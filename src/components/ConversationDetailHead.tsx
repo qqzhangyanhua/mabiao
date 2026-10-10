@@ -169,7 +169,11 @@ export function ConversationDetailHead({
             </dd>
           </div>
         </dl>
-        <SessionResumeCommand source={session.source} sessionId={session.session_id} />
+        <SessionResumeCommand
+          source={session.source}
+          sessionId={session.session_id}
+          cwd={session.project}
+        />
       </CollapsibleSection>
     </section>
   );
