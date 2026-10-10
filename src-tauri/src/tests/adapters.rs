@@ -453,6 +453,41 @@ fn gemini_adapter_maps_chat_tokens() {
 }
 
 #[test]
+fn gemini_adapter_reads_jsonl_and_honors_rewind() {
+    let records = gemini::parse_gemini_jsonl(
+        &fixture_lines(&fixture("gemini-session.jsonl")),
+        "/home/dev/.gemini/tmp/demo-app/chats/session-2026-03-07.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Gemini);
+    assert_eq!(records[0].session_id, "sess-g-jsonl");
+    assert_eq!(records[0].project, "demo-app");
+    assert_eq!(records[0].model, "gemini-flash");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 10);
+    assert_eq!(records[0].reasoning_tokens, 5);
+    assert_eq!(records[0].total_tokens, 115);
+}
+
+#[test]
+fn gemini_discover_includes_session_jsonl() {
+    let dir = tempfile::tempdir().unwrap();
+    let chats = dir.path().join("demo-app/chats");
+    std::fs::create_dir_all(&chats).unwrap();
+    std::fs::write(chats.join("session-one.jsonl"), "{}\n").unwrap();
+    std::fs::write(chats.join("notes.jsonl"), "{}\n").unwrap();
+    std::fs::write(chats.join("session-two.json"), "{}").unwrap();
+    let found = gemini::discover(&[dir.path().to_path_buf()]).unwrap();
+    let names: Vec<_> = found
+        .iter()
+        .filter_map(|path| path.file_name()?.to_str())
+        .collect();
+    assert!(names.contains(&"session-one.jsonl"));
+    assert!(names.contains(&"session-two.json"));
+    assert!(!names.contains(&"notes.jsonl"));
+}
+
+#[test]
 fn grok_adapter_decodes_project_and_dedups_prompt() {
     let records = grok::parse_grok_updates(
         &fixture("grok-updates.jsonl"),
