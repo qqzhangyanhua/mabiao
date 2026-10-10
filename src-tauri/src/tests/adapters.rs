@@ -2135,3 +2135,39 @@ fn hermes_discovers_named_profiles_and_resolves_profile_home() {
     assert_eq!(records[0].project, "/work/profile");
     assert_eq!(records[0].input_tokens, 7);
 }
+
+#[test]
+fn codex_discovers_zst_when_plain_jsonl_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let body = fixture("codex.jsonl");
+    let packed = zstd::encode_all(body.as_bytes(), 0).unwrap();
+    let zst = sessions.join("rollout-2026-01-01T00-00-00-abc.jsonl.zst");
+    std::fs::write(&zst, packed).unwrap();
+
+    let found = crate::adapters::codex::discover(std::slice::from_ref(&sessions)).unwrap();
+    assert_eq!(found, vec![zst.clone()]);
+
+    let records = crate::adapters::codex::parse(&zst, &sessions).unwrap();
+    let plain = crate::adapters::codex::parse_codex_jsonl(
+        &fixture_lines(&body),
+        zst.to_string_lossy().as_ref(),
+    );
+    assert_eq!(records, plain);
+}
+
+#[test]
+fn codex_skips_zst_when_plain_jsonl_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let body = fixture("codex.jsonl");
+    let plain = sessions.join("rollout-2026-01-01T00-00-00-abc.jsonl");
+    let zst = sessions.join("rollout-2026-01-01T00-00-00-abc.jsonl.zst");
+    std::fs::write(&plain, &body).unwrap();
+    std::fs::write(&zst, zstd::encode_all(body.as_bytes(), 0).unwrap()).unwrap();
+
+    let found = crate::adapters::codex::discover(&[sessions]).unwrap();
+    assert_eq!(found, vec![plain]);
+}

@@ -88,7 +88,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         source: Source::Codex,
         path_env: "CODEX_HOME",
         scan_dirs: codex::scan_dirs,
-        discover: discover_jsonl,
+        discover: codex::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: codex::parse,
         prepare_dir: None,
