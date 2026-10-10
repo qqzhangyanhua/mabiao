@@ -34,21 +34,21 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toml = "0.8"
-rusqlite = { version = "0.32", features = ["bundled", "backup"] }
-zstd = "0.13"
+toml = "0.9"
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
+zstd = "0.14"
 chrono = { version = "0.4", features = ["serde"] }
 urlencoding = "2"
-dirs = "6"
+dirs = "7"
 rfd = "0.17.2"
-base64 = "0.22"
+base64 = "0.23"
 arboard = "3"
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 tauri-plugin-notification = "2.3.3"
 ureq = { version = "2", default-features = false, features = ["json", "tls", "socks-proxy"] }
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 mimalloc = { version = "0.1", default-features = false }
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dev-dependencies]
 tempfile = "3"

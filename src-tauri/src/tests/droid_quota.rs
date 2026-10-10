@@ -83,9 +83,9 @@ fn droid_credentials_decrypt_from_keyfile_triplet() {
     let iv = [3u8; 16];
     let plain = r#"{"access_token":"tok-abc","refresh_token":"r","active_organization_id":"org"}"#;
 
-    let sealed = Gcm16::new(Key::<Gcm16>::from_slice(&key))
+    let sealed = Gcm16::new(&Key::<Gcm16>::try_from(key.as_slice()).unwrap())
         .encrypt(
-            Nonce::<U16>::from_slice(&iv),
+            &Nonce::<U16>::try_from(iv.as_slice()).unwrap(),
             Payload {
                 msg: plain.as_bytes(),
                 aad: &[],
