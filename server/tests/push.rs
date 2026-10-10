@@ -540,7 +540,7 @@ async fn git_remote_merges_one_repo_across_devices_members_and_remote_spellings(
     .await;
     assert_eq!(distinct, 1);
     let paths: Vec<String> =
-        sqlx::query_scalar("SELECT project_path FROM sessions ORDER BY project_path")
+        sqlx::query_scalar("SELECT project_path FROM sessions ORDER BY project_path COLLATE \"C\"")
             .fetch_all(&pool)
             .await
             .unwrap();
