@@ -1,0 +1,66 @@
+src-tauri/src/remote_server/address.rs
+  s_e93ca7add8398e::t_6543266b33cf95 47-51
+  s_e93ca7add8398e::t_dfde61e12fd8fe 1-46,52-59
+src/components/Settings.tsx
+  s_e93ca7add8398e::t_3ae43f471cfa0e 200
+  s_e93ca7add8398e::t_e8934d56232aba 25
+docs/agent-layers.md
+  s_e93ca7add8398e::t_0193ed9b2e75fb 137
+  s_e93ca7add8398e::t_acdbd331f8a9bc 133-136,138-142
+src-tauri/src/commands/mod.rs
+  s_e93ca7add8398e::t_21befc43e06a04 7
+  s_e93ca7add8398e::t_8d9680eda679ca 18
+AGENTS.md
+  s_e93ca7add8398e::t_0193ed9b2e75fb 47
+src-tauri/Cargo.toml
+  s_e93ca7add8398e::t_3bc5ff24a3b03b 52
+src-tauri/src/lib.rs
+  s_e93ca7add8398e::t_eafb0286d28f11 27
+  s_e93ca7add8398e::t_e14db883f63fe3 495-500
+src-tauri/src/remote_server/mod.rs
+  s_e93ca7add8398e::t_f00bd54ec0e595 1-63,66-119,121,123-256
+  s_e93ca7add8398e::t_f6d1a919e7bc7e 64-65
+  s_e93ca7add8398e::t_0193ed9b2e75fb 120,122
+src/styles/views/remote-server.css
+  s_e93ca7add8398e::t_4126c04811165c 1-25
+src-tauri/src/commands/remote_server.rs
+  s_e93ca7add8398e::t_f66e3a2a5a084c 1-42
+src-tauri/src/remote_server/store.rs
+  s_e93ca7add8398e::t_88664cfccf6b9d 1-152
+src-tauri/src/remote_server/client.rs
+  s_e93ca7add8398e::t_6543266b33cf95 7,34-37,41,52
+  s_e93ca7add8398e::t_f6d1a919e7bc7e 91
+  s_e93ca7add8398e::t_d1e549b79ce791 1-6,8-33,38-40,42-51,53-90,92-122
+src-tauri/src/tests/mod.rs
+  s_e93ca7add8398e::t_51ad45cb0d6e7c 61
+src-tauri/src/net.rs
+  s_e93ca7add8398e::t_f205847ae877ba 81-85,94-96
+  s_e93ca7add8398e::t_6543266b33cf95 86-93
+src/components/RemoteServerPanel.tsx
+  s_e93ca7add8398e::t_2e9c22782ad794 1-228
+src-tauri/src/tests/remote_server.rs
+  s_e93ca7add8398e::t_43d9828f14c9b8 1-203,206-217,220-240,245-316,319-353,356-368,371-383,386-588
+  s_e93ca7add8398e::t_f6d1a919e7bc7e 204-205,218-219,241-244,317-318,354-355,369-370,384-385
+src/styles.css
+  s_e93ca7add8398e::t_4126c04811165c 18
+src/types.ts
+  s_e93ca7add8398e::t_4126c04811165c 1196-1211
+src-tauri/Cargo.lock
+  s_e93ca7add8398e::t_dfe39100740427 2272
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "1f381c575b290af1b6b8e9f1d3b68c06f5efa775",
+  "prompts": {},
+  "sessions": {
+    "s_e93ca7add8398e": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "3389e1ee-47a9-4f30-afd7-f22d7a667a0c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
