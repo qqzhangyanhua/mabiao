@@ -1,0 +1,47 @@
+src-tauri/src/official_quota/notify.rs
+  s_9fef32260aa9ff::t_5f7a9d261ed27a 263-268
+src-tauri/src/store/schema.rs
+  s_9fef32260aa9ff::t_0cf9cbc8c5f182 459-461
+src-tauri/src/lib.rs
+  s_9fef32260aa9ff::t_2a6ace59aac94f 148-152
+src-tauri/src/commands/quota.rs
+  s_9fef32260aa9ff::t_5e59ec3be6810e 1-3,5,14-17,22-25
+  s_9fef32260aa9ff::t_b7d787f13b979d 8-9
+  s_9fef32260aa9ff::t_13bfc4c0a38e52 38-39,51-84
+src/hooks/useOfficialQuotaUpdates.ts
+  s_9fef32260aa9ff::t_10f3b1f93f267e 2,8,14,26
+  s_9fef32260aa9ff::t_fcc8c3a832e6b0 1,3-7,9-13,15-25,27
+src/TrayQuotaApp.tsx
+  s_9fef32260aa9ff::t_a38b404dadda1f 31
+  s_9fef32260aa9ff::t_dd37a44fc1ea2d 9
+src-tauri/src/store/official_quota.rs
+  s_9fef32260aa9ff::t_66a956fbedaf69 3
+src-tauri/src/official_quota/mod.rs
+  s_9fef32260aa9ff::t_38535b9a9d3e78 37-38
+  s_9fef32260aa9ff::t_a12a65ba7106ac 39-40
+src-tauri/src/official_quota/fetch.rs
+  s_9fef32260aa9ff::t_a0a7871f75c6bc 222-233
+  s_9fef32260aa9ff::t_77acea8654a0e0 79-80
+  s_9fef32260aa9ff::t_5d8677e68ad163 245-249
+src/App.tsx
+  s_9fef32260aa9ff::t_c8d3d9f8ac119b 8
+  s_9fef32260aa9ff::t_a92861642858ba 38
+docs/adr/0008-official-quota-dimension.md
+  s_9fef32260aa9ff::t_267a8d769c87c1 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3194dd2ef9672b374b865710ad98f4b0513e3179",
+  "prompts": {},
+  "sessions": {
+    "s_9fef32260aa9ff": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "d8999d17-0d9e-43fc-b50d-bd4878f93697",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
