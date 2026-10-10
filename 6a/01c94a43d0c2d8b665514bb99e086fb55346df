@@ -1,0 +1,29 @@
+crates/push-protocol/src/lib.rs
+  s_a324b8e9200eb3::t_de191d15ffc638 5-7,22-23
+crates/push-protocol/tests/round_trip.rs
+  s_a324b8e9200eb3::t_de191d15ffc638 66
+crates/push-protocol/src/usage.rs
+  s_a324b8e9200eb3::t_de191d15ffc638 56
+AGENTS.md
+  s_a324b8e9200eb3::t_49a8fcaacb14d1 17-24,49
+crates/push-protocol/src/session.rs
+  s_a324b8e9200eb3::t_de191d15ffc638 5,103,110-114,122-123,134,137-139,148-162,164,167-168,170,216-244,297,307-309,312-365
+docs/agent-layers.md
+  s_a324b8e9200eb3::t_49a8fcaacb14d1 110-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6a01c94a43d0c2d8b665514bb99e086fb55346df",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
