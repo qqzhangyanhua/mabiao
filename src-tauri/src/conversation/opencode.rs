@@ -838,10 +838,9 @@ fn v2_migration_completed(db: &Connection) -> bool {
         .is_some_and(|phase| phase == "completed")
 }
 
-fn read_v2(
-    _path: &Path,
-    db: &Connection,
-) -> Result<(Vec<SessionRow>, Vec<MessageRow>, Vec<PartRow>), String> {
+type V2Tables = (Vec<SessionRow>, Vec<MessageRow>, Vec<PartRow>);
+
+fn read_v2(_path: &Path, db: &Connection) -> Result<V2Tables, String> {
     let columns = table_columns(db, "session_v2")?;
     let sql = format!(
         "SELECT id, {}, {}, {}, {}, {} FROM session_v2 ORDER BY id",
