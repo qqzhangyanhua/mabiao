@@ -41,6 +41,7 @@ fn parse(
     let mut started_at = String::new();
     let mut ended_at = String::new();
     let mut sequence = 0usize;
+    let mut parent_id = String::new();
 
     for (line, value) in values {
         let occurred_at = timestamp(&value);
@@ -95,6 +96,10 @@ fn parse(
                     let next_title = first_text(&value, &["title"]);
                     if !next_title.is_empty() {
                         title = next_title;
+                    }
+                    let calling = first_text(&value, &["callingSessionId"]);
+                    if !calling.is_empty() {
+                        parent_id = calling;
                     }
                 }
                 events.push(semantic_event(
@@ -151,6 +156,17 @@ fn parse(
         }
     }
 
+    if !parent_id.is_empty() {
+        events.push(semantic_event(
+            0,
+            EventKind::SystemStatus,
+            &started_at,
+            None,
+            Some("session_started".to_string()),
+            None,
+            serde_json::json!({ "parent_id": parent_id }),
+        ));
+    }
     let parsed = finish_source_conversation(
         Source::Factory,
         path,
@@ -162,7 +178,7 @@ fn parse(
         ended_at,
         messages,
         events,
-        true,
+        parent_id.is_empty(),
         ConversationFinishPrep {
             native_ids: NativeEventIdPrep::Skip,
             degradation: CapabilityDegradationPrep::Inferred { sequence },

@@ -18,6 +18,7 @@ mod conversation_boundary;
 mod conversation_cache_layout;
 mod conversation_context;
 mod conversation_events_page;
+mod conversation_formats;
 mod conversation_fts;
 mod conversation_fts_maintenance;
 mod conversation_index;
