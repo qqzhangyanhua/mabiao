@@ -1,0 +1,190 @@
+CONTEXT.md
+  h_4132837b09b7e7 36,48
+docs/adr/0008-official-quota-dimension.md
+  h_4132837b09b7e7 55-56,58
+docs/adr/0011-conversation-event-index.md
+  h_4132837b09b7e7 38
+docs/adr/0012-custom-quota-providers.md
+  h_4132837b09b7e7 3,38
+docs/adr/0013-custom-quota-implemented-presets.md
+  h_4132837b09b7e7 48-49
+src-tauri/Cargo.toml
+  h_4132837b09b7e7 51
+src-tauri/src/bin/quota.rs
+  h_4132837b09b7e7 12,69
+src-tauri/src/commands/quota.rs
+  h_4132837b09b7e7 5-6,9,153-166,230-242
+src-tauri/src/commands/settings.rs
+  h_4132837b09b7e7 56-73
+src-tauri/src/conversation/alma.rs
+  h_4132837b09b7e7 1-340
+src-tauri/src/conversation/claude.rs
+  h_4132837b09b7e7 17-24,28-36,51-60,79,183,390
+src-tauri/src/conversation/cline.rs
+  h_4132837b09b7e7 1-210
+src-tauri/src/conversation/codex.rs
+  h_4132837b09b7e7 37,55-62,75-110
+src-tauri/src/conversation/discover.rs
+  h_4132837b09b7e7 50-80
+src-tauri/src/conversation/droid.rs
+  h_4132837b09b7e7 44,100-103,159-169,181
+src-tauri/src/conversation/gemini.rs
+  h_4132837b09b7e7 22-34,182-215
+src-tauri/src/conversation/line_direct.rs
+  h_4132837b09b7e7 25,67-76,312,319
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 10,16,46,54-55,71-73,112-117,120,178,306-365
+src-tauri/src/conversation/opencode.rs
+  h_4132837b09b7e7 22,131-133,137-163,166-169,194-196,225-230,261-269,288,291,302-304,597,600-614,822-971
+src-tauri/src/conversation/qoder.rs
+  h_4132837b09b7e7 1-77
+src-tauri/src/conversation/workbuddy.rs
+  h_4132837b09b7e7 1-181
+src-tauri/src/conversation/zcode.rs
+  h_4132837b09b7e7 1-457
+src-tauri/src/domain/quota.rs
+  h_4132837b09b7e7 163-172,179-190,196-198,203-218,243-261
+src-tauri/src/lib.rs
+  h_4132837b09b7e7 477-478,491
+src-tauri/src/official_quota/custom/mod.rs
+  h_4132837b09b7e7 17,46-47,72-73,77,89,105,122,140,144-148,348,370,375-376,381,383-386,408,417-421,426-433,439-444,450-452
+src-tauri/src/official_quota/custom/panel.rs
+  h_4132837b09b7e7 22-24,67-69,95-96,167-199,230,256,285-287,309-310,313-325,348-350
+src-tauri/src/official_quota/custom/store.rs
+  h_4132837b09b7e7 47,50-53,62-63,123-132,209-225
+src-tauri/src/official_quota/custom/volcengine_ark.rs
+  h_4132837b09b7e7 1-373
+src-tauri/src/official_quota/fetch.rs
+  h_4132837b09b7e7 148
+src-tauri/src/official_quota/mod.rs
+  h_4132837b09b7e7 62-70,73,167,173-175,179-180
+src-tauri/src/official_quota/notify.rs
+  h_4132837b09b7e7 4,7-9,14-19,27-28,61,67-75,78,81,93,102,105,113-132,134,142-152,159-186,205-213,220,232,239,264,269-280
+src-tauri/src/scan_paths.rs
+  h_4132837b09b7e7 249-296
+src-tauri/src/store/official_quota.rs
+  h_4132837b09b7e7 1,4-6,43-52,208-333
+src-tauri/src/store/schema.rs
+  h_4132837b09b7e7 459-477
+src-tauri/src/tests/alma_conversation.rs
+  h_4132837b09b7e7 1-87
+src-tauri/src/tests/cline_conversation.rs
+  h_4132837b09b7e7 1-109
+src-tauri/src/tests/conversation_formats.rs
+  h_4132837b09b7e7 1-296
+src-tauri/src/tests/conversation_index_sources.rs
+  h_4132837b09b7e7 268-342
+src-tauri/src/tests/custom_quota/enabled.rs
+  h_4132837b09b7e7 47,62,88
+src-tauri/src/tests/custom_quota/litellm_proxy.rs
+  h_4132837b09b7e7 216,254,280,308,323,373,393
+src-tauri/src/tests/custom_quota/mod.rs
+  h_4132837b09b7e7 18,46,54
+src-tauri/src/tests/custom_quota/newapi.rs
+  h_4132837b09b7e7 117,143,174
+src-tauri/src/tests/custom_quota/panel_commands.rs
+  h_4132837b09b7e7 16,44,77,97,118,157,183,203,233,277,284
+src-tauri/src/tests/custom_quota/parsing.rs
+  h_4132837b09b7e7 255-258,260
+src-tauri/src/tests/custom_quota/preview_and_test.rs
+  h_4132837b09b7e7 17,236,244,257
+src-tauri/src/tests/custom_quota/tray_and_alerts.rs
+  h_4132837b09b7e7 96
+src-tauri/src/tests/custom_quota/volcengine.rs
+  h_4132837b09b7e7 1-220
+src-tauri/src/tests/mod.rs
+  h_4132837b09b7e7 5,12,21,49,55,72-73
+src-tauri/src/tests/official_quota.rs
+  h_4132837b09b7e7 360
+src-tauri/src/tests/official_quota_history.rs
+  h_4132837b09b7e7 1-92
+src-tauri/src/tests/qoder_conversation.rs
+  h_4132837b09b7e7 1-122
+src-tauri/src/tests/quota_alerts.rs
+  h_4132837b09b7e7 78-238
+src-tauri/src/tests/scan_paths.rs
+  h_4132837b09b7e7 239-266
+src-tauri/src/tests/workbuddy_conversation.rs
+  h_4132837b09b7e7 1-82
+src-tauri/src/tests/zcode_conversation.rs
+  h_4132837b09b7e7 1-146
+src-tauri/tests/fixtures/gemini-session-conversation.jsonl
+  h_4132837b09b7e7 1-5
+src-tauri/tests/fixtures/qoder-cn-conversation.jsonl
+  h_4132837b09b7e7 1-3
+src-tauri/tests/fixtures/qoder-conversation.jsonl
+  h_4132837b09b7e7 1-5
+src/App.tsx
+  h_4132837b09b7e7 13,55-57,136
+src/components/ConversationDetailHead.tsx
+  h_4132837b09b7e7 172-176
+src/components/CustomQuotaProviderForm.tsx
+  h_4132837b09b7e7 4,8,51,154,201-216,218-230
+src/components/CustomQuotaProviderPanel.tsx
+  h_4132837b09b7e7 5,29,45,60,120-122,152,205-216
+src/components/EmptyState.tsx
+  h_4132837b09b7e7 1,15,23,35
+src/components/OfficialQuotaHistoryChart.tsx
+  h_4132837b09b7e7 1-85
+src/components/OfficialQuotaPanel.tsx
+  h_4132837b09b7e7 23,91-94
+src/components/OfficialQuotaSettingsPanel.tsx
+  h_4132837b09b7e7 4-9,15,30-32,34,39-44,72-89,91-92,144-189
+src/components/Overview.tsx
+  h_4132837b09b7e7 1-2,19-20,26-27,112,145,200-204,206-210,212-218,256-258,282-283
+src/components/OverviewKpiSection.tsx
+  h_4132837b09b7e7 20-21,38-39,84-91
+src/components/OverviewSourcePresence.tsx
+  h_4132837b09b7e7 1-82
+src/components/SessionResumeCommand.tsx
+  h_4132837b09b7e7 9,13,15
+src/hooks/useUsageData.ts
+  h_4132837b09b7e7 30,267-271,387
+src/lib/customQuotaDraft.test.ts
+  h_4132837b09b7e7 4,7,22,41,92-101,128-135
+src/lib/customQuotaDraft.ts
+  h_4132837b09b7e7 20-21,30-31,42,58-68,137-139,172-181
+src/lib/format.test.ts
+  h_4132837b09b7e7 13,270-284
+src/lib/format.ts
+  h_4132837b09b7e7 212-227
+src/lib/officialQuotaConfig.test.ts
+  h_4132837b09b7e7 1-47
+src/lib/officialQuotaConfig.ts
+  h_4132837b09b7e7 1-47
+src/lib/quotaHistoryChart.test.ts
+  h_4132837b09b7e7 1-70
+src/lib/quotaHistoryChart.ts
+  h_4132837b09b7e7 1-102
+src/lib/sessionResume.test.ts
+  h_4132837b09b7e7 2-7,23-54,71,73-84,99-103
+src/lib/sessionResume.ts
+  h_4132837b09b7e7 1,3-6,13-17,23-27,84-95,99,102-132,141-145,147
+src/lib/sourcePresence.test.ts
+  h_4132837b09b7e7 1-24
+src/lib/sourcePresence.ts
+  h_4132837b09b7e7 1-31
+src/styles.css
+  h_4132837b09b7e7 17-18
+src/styles/shared/feedback.css
+  h_4132837b09b7e7 79-82
+src/styles/views/official-quota-alerts.css
+  h_4132837b09b7e7 1-41
+src/styles/views/official-quota-history.css
+  h_4132837b09b7e7 1-43
+src/styles/views/overview.css
+  h_4132837b09b7e7 12,280-318
+src/types.ts
+  h_4132837b09b7e7 139-144,157-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3d43d9250a5f10352fcc7a320945ac3546df0ef8",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
