@@ -1,0 +1,18 @@
+src-tauri/src/instructions/grok_disk.rs
+  h_4132837b09b7e7 214-216
+src-tauri/src/official_quota/droid.rs
+  h_4132837b09b7e7 380-393
+src-tauri/src/tests/droid_quota.rs
+  h_4132837b09b7e7 86,88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "59f2af91e72788e2aa7fe4a6d824bf57f30f2ec8",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
