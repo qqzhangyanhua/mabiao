@@ -9,7 +9,7 @@
 _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记录）
 
 **来源 (Source)**：
-一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 17 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
+一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 18 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn、cline。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
 _Avoid_: 工具、tool、渠道
 
 **适配器 (Adapter)**：
@@ -33,7 +33,7 @@ _Avoid_: 把它叫成本机用量、消耗记录，或与代码量混称；不�
 _Avoid_: 与消耗记录、对话记录、代码量混称；不要把 `~/.cursor-agent-usage` 当成官方会话目录；不要把子代理 jsonl 当成独立会话；不要把账号用量或代码量画进工作时间线
 
 **对话记录 (Conversation Record)**：
-本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes、agy（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。Cursor / Grok 对话详情可挂「上下文清单」三层证据：`injected`（会话首轮真实注入；Cursor 读 `~/.cursor/chats/<hash>/<session>/store.db`：blobs 按内容 sha256 寻址，root blob 的 repeated bytes 字段 1 还原有序消息，取下标 1 的 user 消息按 skills / workspace rules / user rules / 动态工具命名空间 / 环境信息 / 子代理类型分段计量，MCP 只计工具名列表、不含 schema，差额以「未识别 N 字符」入账，注入正文不落库；Grok 读 `prompt_context.json` 的 `agents_md_files[]`，按 `file_path` 生成指令条目，`load_mode=always`，体积以字符数为权威值；并读 `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成，生成 injected MCP 条目，`injection_status` 为 connected / failed / auth_required / disabled。连上的按工具名列表字符数计量；连上但零调用标红为噪音；未连上的不占 token、不吃红标。噪音差集（injected 减 observed）只对 skill 与 MCP 生效）、`observed`（本会话事件里真实出现的工具 / 系统状态 / skill 引用，含 Cursor `Skill` 工具的 `input.skill`；合成的 `transcript_missing` 不算已观测）与 `on_disk_possible`（磁盘上真实存在且产品口径已确认会加载的指令，标「可能生效 / 磁盘存在」）。Cursor 按会话 `project` 对照项目与用户级指令 / rules / skills / MCP，单独一档列入 `~/.cursor/skills-cursor`（编辑器内置，计入体积、不吃噪音红标）；Grok 扫用户级 `~/.grok` 官方 Project Rules（候选指令文件与 `rules/*.md`）、`~/.grok/skills/`（及 `[skills] paths`，受 `ignore` / `disabled` 约束），以及四条 MCP 加载链（`config.toml` 用户级与 cwd→git root 的 repo 级、最深优先；`~/.claude.json`；用户级与项目级 `.cursor/mcp.json`；项目根 `.mcp.json`），合并优先级 config.toml > Claude > Cursor > `.mcp.json`，并跟随 `[compat.claude]` / `[compat.cursor]` 的 `skills` / `mcps` 开关。不扫项目根 `AGENTS.md`、`.cursor/rules`。Grok 的 `injected` 层可读会话目录注入快照；`injected` 层可表述为已注入，`on_disk_possible` 层仍然不得。Cursor 无注入快照时明确降级为按当前磁盘重建；磁盘项 mtime 晚于会话时标注会话后已改动；`requestContextCompleteness` 仅在含 false 时点名；Cursor 体积标估算。摄取时把度量结果（条目名、字符数、load_mode、injection_status、失败原因类型、工具数量）写入派生缓存，正文 / 用户规则全文 / 指令全文 / MCP 错误全文不落库、不进备份；Cursor 快照被清理后仍可显示缓存度量并标明来自缓存。缓存可删后从仍在的源文件重建，不装不可再生数据。
+本机会话目录：索引元数据，详情按页读事件索引（正文在 `conversation_events`，ADR 0011）。目录搜索可命中标题与已索引正文（FTS 派生缓存，不进备份、不上传）。**已适配 13 个 Usage Source**（`conversation::CONVERSATION_ADAPTERS`）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot。**未适配**：hermes、agy、qoder、qoder_cn、cline（无对话正文索引）。Cursor Agent 与其它来源共用同一目录；Cursor 单条行为聚合挂在对话详情上，不另开一份正文索引。Cursor / Grok 对话详情可挂「上下文清单」三层证据：`injected`（会话首轮真实注入；Cursor 读 `~/.cursor/chats/<hash>/<session>/store.db`：blobs 按内容 sha256 寻址，root blob 的 repeated bytes 字段 1 还原有序消息，取下标 1 的 user 消息按 skills / workspace rules / user rules / 动态工具命名空间 / 环境信息 / 子代理类型分段计量，MCP 只计工具名列表、不含 schema，差额以「未识别 N 字符」入账，注入正文不落库；Grok 读 `prompt_context.json` 的 `agents_md_files[]`，按 `file_path` 生成指令条目，`load_mode=always`，体积以字符数为权威值；并读 `events.jsonl` 的 MCP 配置解析 / 连接成功 / 连接失败 / 初始化完成，生成 injected MCP 条目，`injection_status` 为 connected / failed / auth_required / disabled。连上的按工具名列表字符数计量；连上但零调用标红为噪音；未连上的不占 token、不吃红标。噪音差集（injected 减 observed）只对 skill 与 MCP 生效）、`observed`（本会话事件里真实出现的工具 / 系统状态 / skill 引用，含 Cursor `Skill` 工具的 `input.skill`；合成的 `transcript_missing` 不算已观测）与 `on_disk_possible`（磁盘上真实存在且产品口径已确认会加载的指令，标「可能生效 / 磁盘存在」）。Cursor 按会话 `project` 对照项目与用户级指令 / rules / skills / MCP，单独一档列入 `~/.cursor/skills-cursor`（编辑器内置，计入体积、不吃噪音红标）；Grok 扫用户级 `~/.grok` 官方 Project Rules（候选指令文件与 `rules/*.md`）、`~/.grok/skills/`（及 `[skills] paths`，受 `ignore` / `disabled` 约束），以及四条 MCP 加载链（`config.toml` 用户级与 cwd→git root 的 repo 级、最深优先；`~/.claude.json`；用户级与项目级 `.cursor/mcp.json`；项目根 `.mcp.json`），合并优先级 config.toml > Claude > Cursor > `.mcp.json`，并跟随 `[compat.claude]` / `[compat.cursor]` 的 `skills` / `mcps` 开关。不扫项目根 `AGENTS.md`、`.cursor/rules`。Grok 的 `injected` 层可读会话目录注入快照；`injected` 层可表述为已注入，`on_disk_possible` 层仍然不得。Cursor 无注入快照时明确降级为按当前磁盘重建；磁盘项 mtime 晚于会话时标注会话后已改动；`requestContextCompleteness` 仅在含 false 时点名；Cursor 体积标估算。摄取时把度量结果（条目名、字符数、load_mode、injection_status、失败原因类型、工具数量）写入派生缓存，正文 / 用户规则全文 / 指令全文 / MCP 错误全文不落库、不进备份；Cursor 快照被清理后仍可显示缓存度量并标明来自缓存。缓存可删后从仍在的源文件重建，不装不可再生数据。
 _Avoid_: 消耗记录、Cursor 会话仪表盘；不要把正文送进备份或上传；不要把 on_disk_possible 说成已注入（injected 层可以）；不要在无注入快照时把磁盘重建装成已注入；Cursor 体积必须标估算；不要把规则/指令/MCP 错误全文写入缓存或备份；不要把缓存度量装成现场快照
 
 **对话记录适配器 (Conversation Adapter)**：
@@ -81,7 +81,7 @@ _Avoid_: 报告（那个只读消耗记录、规则在 Rust）；周报；洞察
 _Avoid_: 适配器（那指把原始格式解析成消耗记录或对话记录的模块，方向相反）；来源 (Source)；把它当成又一个数据采集通道
 
 **全局指令 (Global Instruction)**：
-某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp、agy。agy 没有跨项目的用户手写指令文件：产品文档里 rules 只有目录级 `GEMINI.md` / `AGENTS.md`；全局根下无 rules 目录或全局规则文件；用户记忆经 language-server RPC 注入系统提示，不落本机 markdown。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
+某个 Source 会跨项目加载的、由用户手写的自定义指令文本。独立于消耗记录、代码量、Cursor 会话与官方额度，不并入本机 token KPI。判定口径是「该 Source 真正会加载的」，不是磁盘上有哪些 markdown。**已扫描 13 个来源**（`instructions/mod.rs::scan`）：claude、codex、gemini、cursor、pi、opencode、kimi、dsh、grok、qwen、factory、cursor_agent、copilot；**未扫描** hermes、omp、amp、agy、qoder、qoder_cn、cline。agy 没有跨项目的用户手写指令文件：产品文档里 rules 只有目录级 `GEMINI.md` / `AGENTS.md`；全局根下无 rules 目录或全局规则文件；用户记忆经 language-server RPC 注入系统提示，不落本机 markdown。实时读盘，不写入 sqlite；可编辑文件走 ADR 0010 唯一写入入口。Cursor 遗留 memories、Claude 自动记忆是机器写的残渣，只可作体检项，不进本词条。
 _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、memory（会和 Claude 自动记忆、Cursor 残留 memories 撞名）；提示词
 
 ## 采集源现状
@@ -106,6 +106,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | copilot | jsonl `~/.copilot/session-state/<id>/events.jsonl` | ✅（仅会话结束时，按模型累计） | ❌ |
 | Qoder | jsonl `~/.qoder/projects`（Claude Code 形态，`QODER_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
 | Qoder CN | jsonl `~/.qoder-cn/projects`（Claude Code 形态，`QODERCN_CONFIG_DIR` 可覆盖） | ✅ | ✅ 自带 `costUSD`（有则取） |
+| Cline | JSON `~/.cline/data/sessions/<id>/<id>.messages.json`（`CLINE_SESSION_DATA_DIR` 可覆盖；input 不含 cache） | ✅ | ✅ 自带 `metrics.cost`（有则取） |
 | amp | 本机仅配置 | ❌（云端） | ❌ |
 
 表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Antigravity** 行的 Source slug 是 **`agy`**，界面 application 名是 **Antigravity**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。

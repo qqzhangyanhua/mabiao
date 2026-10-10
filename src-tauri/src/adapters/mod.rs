@@ -1,5 +1,6 @@
 pub mod agy;
 pub mod claude;
+pub mod cline;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
@@ -333,6 +334,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Cline,
+        path_env: "CLINE_SESSION_DATA_DIR",
+        scan_dirs: cline::scan_dirs,
+        discover: cline::discover,
+        sidecar_fingerprint: cline::sidecar_fingerprint,
+        parse: cline::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,
         detected: None,
     },

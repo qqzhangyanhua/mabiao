@@ -621,6 +621,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::QoderCn.application_name(), "Qoder CN");
     assert_eq!(Source::QoderCn.as_str(), "qoder_cn");
     assert_eq!(Source::parse("qoder_cn"), Some(Source::QoderCn));
+    assert_eq!(Source::Cline.application_name(), "Cline");
+    assert_eq!(Source::Cline.as_str(), "cline");
+    assert_eq!(Source::parse("cline"), Some(Source::Cline));
 }
 
 #[test]
@@ -696,6 +699,67 @@ fn qoder_cn_adapter_dedups_message_id_and_skips_zero_usage() {
     assert_eq!(records[0].source, Source::QoderCn);
     assert_eq!(records[0].output_tokens, 20);
     assert_eq!(records[0].input_tokens, 6);
+}
+
+fn write_cline_session(
+    home: &std::path::Path,
+    id: &str,
+    messages: &str,
+    manifest: &str,
+) -> PathBuf {
+    let dir = home.join(".cline/data/sessions").join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    let messages_path = dir.join(format!("{id}.messages.json"));
+    std::fs::write(&messages_path, messages).unwrap();
+    std::fs::write(dir.join(format!("{id}.json")), manifest).unwrap();
+    messages_path
+}
+
+#[test]
+fn cline_adapter_subtracts_cache_from_input_and_keeps_native_cost() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_cline_session(
+        dir.path(),
+        "sess-cline-1",
+        &fixture("cline.messages.json"),
+        &fixture("cline.manifest.json"),
+    );
+    let records = cline::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Cline);
+    assert_eq!(records[0].model, "claude-opus-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].project, "/work/cline");
+    assert_eq!(records[0].session_id, "sess-cline-1");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 15);
+    assert_eq!(records[0].cache_read_tokens, 80);
+    assert_eq!(records[0].cache_creation_tokens, 20);
+    assert_eq!(records[0].total_tokens, 215);
+    assert!((records[0].native_cost.unwrap() - 0.02).abs() < 1e-9);
+    assert_eq!(records[1].model, "claude-haiku-4");
+    assert_eq!(records[1].input_tokens, 40);
+    assert_eq!(records[1].output_tokens, 10);
+    assert_eq!(records[1].total_tokens, 50);
+    assert!(records[1].native_cost.is_none());
+}
+
+#[test]
+fn cline_adapter_skips_messages_before_forked_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_cline_session(
+        dir.path(),
+        "sess-cline-fork",
+        &fixture("cline-fork.messages.json"),
+        &fixture("cline-fork.manifest.json"),
+    );
+    let records = cline::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Cline);
+    assert_eq!(records[0].input_tokens, 60);
+    assert_eq!(records[0].output_tokens, 12);
+    assert_eq!(records[0].cache_read_tokens, 30);
+    assert_eq!(records[0].total_tokens, 102);
 }
 
 #[test]

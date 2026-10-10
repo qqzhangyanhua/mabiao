@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "sessionId": "sess-cline-fork",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "copied",
+      "ts": 1790503210000,
+      "modelInfo": { "id": "claude-opus-4", "provider": "anthropic" },
+      "metrics": {
+        "inputTokens": 200,
+        "outputTokens": 15,
+        "cacheReadTokens": 80,
+        "cacheWriteTokens": 20,
+        "cost": 0.02
+      }
+    },
+    {
+      "role": "assistant",
+      "content": "new work",
+      "ts": 1790510460000,
+      "modelInfo": { "id": "claude-opus-4", "provider": "anthropic" },
+      "metrics": {
+        "inputTokens": 90,
+        "outputTokens": 12,
+        "cacheReadTokens": 30,
+        "cacheWriteTokens": 0,
+        "cost": 0.01
+      }
+    }
+  ]
+}

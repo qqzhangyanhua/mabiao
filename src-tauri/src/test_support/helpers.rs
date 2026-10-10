@@ -181,7 +181,7 @@ pub fn assert_rollups_match_overview(
 /// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode / Hermes 写 sqlite，
 /// Cursor Agent 写 token 包装目录下的 jsonl。
 pub fn write_all_source_fixtures(home: &std::path::Path) {
-    let paths: [(&str, &str); 12] = [
+    let paths: [(&str, &str); 13] = [
         (".codex/sessions/one.jsonl", "codex.jsonl"),
         (
             ".claude/projects/-Users-zhangyanhua-AI-TradingAgents-CN/04868551-34c3-4588-b984-6ae9a5d95f8a.jsonl",
@@ -224,6 +224,10 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
             ".qoder-cn/projects/-work-qoder-cn/33333333-cccc-4ddd-8eee-000000000003.jsonl",
             "qoder-cn.jsonl",
         ),
+        (
+            ".cline/data/sessions/sess-cline-1/sess-cline-1.messages.json",
+            "cline.messages.json",
+        ),
     ];
     for (rel, name) in paths {
         let path = home.join(rel);
@@ -246,6 +250,9 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");
     std::fs::create_dir_all(agy.parent().unwrap()).unwrap();
     std::fs::write(&agy, b"").unwrap();
+    let cline_manifest = home.join(".cline/data/sessions/sess-cline-1/sess-cline-1.json");
+    std::fs::create_dir_all(cline_manifest.parent().unwrap()).unwrap();
+    std::fs::write(&cline_manifest, fixture("cline.manifest.json")).unwrap();
 }
 
 fn write_opencode_fixture_db(home: &std::path::Path) {

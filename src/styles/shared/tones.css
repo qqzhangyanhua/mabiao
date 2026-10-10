@@ -40,6 +40,7 @@
 .tone-copilot,
 .tone-hermes,
 .tone-qoder,
+.tone-cline,
 .tone-other {
   background: var(--tone-other-bg);
   color: var(--tone-other-fg);

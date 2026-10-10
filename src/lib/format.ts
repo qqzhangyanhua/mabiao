@@ -107,6 +107,7 @@ const sourceNames: Record<string, string> = {
   antigravity: "Antigravity",
   qoder: "Qoder",
   qoder_cn: "Qoder CN",
+  cline: "Cline",
   devin: "Devin",
 };
 

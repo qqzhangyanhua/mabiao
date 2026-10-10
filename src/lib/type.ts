@@ -26,6 +26,7 @@ export type SourceIconId =
   | "cursor"
   | "hermes"
   | "qoder"
+  | "cline"
   | "unknown";
 
 export type TrendStats = {
