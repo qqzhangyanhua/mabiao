@@ -209,7 +209,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: dsh::index,
         index_suffix: None,
         detail: dsh::detail,
-        revision: regular_source_revision,
+        revision: dsh::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },

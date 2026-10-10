@@ -35,4 +35,4 @@
 
 ## 对话记录适配来源（2026-09）
 
-`conversation::CONVERSATION_ADAPTERS` 覆盖 **19 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn、cline、workbuddy、zcode、alma。**未覆盖**：hermes、agy。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION` = 18**（独立于 `store::ADAPTER_VERSION`）；本代补 OpenCode 2 / Gemini `session-*.jsonl` / Codex `.jsonl.zst`，并把 Droid `callingSessionId` 子代理挂到父会话；纯重构不得改动，改动意味着事件归一化输出变了。
+`conversation::CONVERSATION_ADAPTERS` 覆盖 **19 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn、cline、workbuddy、zcode、alma。**未覆盖**：hermes、agy。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION` = 18**（独立于 `store::ADAPTER_VERSION`）；本代补 OpenCode 2 / Gemini `session-*.jsonl` / Codex `.jsonl.zst`，并把 Droid `callingSessionId` 子代理挂到父会话；dsh v4 的 `session/end-seed` 是写盘时刻而非会话活动，不再计入会话起止时间（只改 dsh 的 `revision`，不递增版本号，避免全部来源整库重索引）；纯重构不得改动，改动意味着事件归一化输出变了。

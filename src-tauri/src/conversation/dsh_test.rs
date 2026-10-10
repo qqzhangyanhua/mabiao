@@ -104,3 +104,72 @@ fn finish_prep_appends_inferred_capability_degradation() {
         &serde_json::json!(["user_message", "model", "tool_result", "timestamp"])
     );
 }
+
+#[test]
+fn discovery_reads_v4_files_and_skips_legacy_copies_next_to_them() {
+    let temp = tempfile::tempdir().unwrap();
+    let content = "{\"type\":\"session\",\"id\":\"dsh-v4\",\"cwd\":\"/workspace\"}\n";
+    for (dir, files) in [
+        ("both", vec!["session.jsonl.zstd", "session.v4.jsonl.zstd"]),
+        ("legacy", vec!["session.jsonl.zstd"]),
+        ("v4", vec!["session.v4.jsonl.zstd"]),
+    ] {
+        let dir = temp.path().join(dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for file in files {
+            write_compressed(&dir.join(file), content);
+        }
+    }
+
+    let found = crate::conversation::discover_dsh(&[temp.path().to_path_buf()]).unwrap();
+    let relative: Vec<_> = found
+        .iter()
+        .map(|path| {
+            path.strip_prefix(temp.path())
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert_eq!(
+        relative,
+        [
+            "both/session.v4.jsonl.zstd",
+            "legacy/session.jsonl.zstd",
+            "v4/session.v4.jsonl.zstd"
+        ]
+    );
+}
+
+#[test]
+fn end_seed_written_at_save_time_does_not_stretch_the_session_range() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.v4.jsonl.zstd");
+    write_compressed(
+        &path,
+        concat!(
+            "{\"type\":\"session\",\"version\":4,\"id\":\"dsh-seeded\",\"createdAt\":1787000000000,\"cwd\":\"/workspace\"}\n",
+            "{\"type\":\"user/message\",\"seq\":1,\"time\":1787000001000,\"data\":{\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],\"source\":{\"kind\":\"user\"}}}\n",
+            "{\"type\":\"session/end-seed\",\"seq\":2,\"time\":1790000000000,\"data\":{}}\n"
+        ),
+    );
+
+    let batch = index(&path).unwrap();
+    let session = &batch.conversations[0].session;
+    assert_eq!(session.started_at, "2026-08-17T20:53:20+00:00");
+    assert_eq!(session.ended_at, "2026-08-17T20:53:21+00:00");
+}
+
+#[test]
+fn only_v4_files_get_the_range_revision_suffix() {
+    let temp = tempfile::tempdir().unwrap();
+    let legacy = temp.path().join("session.jsonl.zstd");
+    let v4 = temp.path().join("session.v4.jsonl.zstd");
+    write_compressed(&legacy, "{}\n");
+    write_compressed(&v4, "{}\n");
+
+    assert!(!super::source_revision(&legacy)
+        .unwrap()
+        .contains(":range-v2"));
+    assert!(super::source_revision(&v4).unwrap().ends_with(":range-v2"));
+}

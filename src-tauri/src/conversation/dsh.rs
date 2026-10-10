@@ -10,6 +10,20 @@ use super::{diagnostic_detail, diagnostic_index, ConversationIndexBatch, Convers
 #[path = "dsh_test.rs"]
 mod tests;
 
+/// 会话起止时间不再计入 `session/end-seed`。只有 v4 文件带这条事件，已建好的 v4 索引要重解析，
+/// 旧版文件不受影响。改修订号而不递增全局 `CONVERSATION_ADAPTER_VERSION`：后者会让全部来源整库重索引，
+/// 而每次重索引都要重写对话全文倒排，在大库上以小时计。
+pub(super) fn source_revision(path: &Path) -> Result<String, String> {
+    let revision = super::regular_source_revision(path)?;
+    let is_v4 = path.file_name().and_then(|name| name.to_str())
+        == Some(crate::adapters::dsh::V4_SESSION_FILE);
+    Ok(if is_v4 {
+        format!("{revision}:range-v2")
+    } else {
+        revision
+    })
+}
+
 pub(super) fn index(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
     diagnostic_index(path, "dsh_session", parse)
 }
@@ -55,7 +69,11 @@ fn parse(
     for (line, value) in values {
         let kind = value.get("type").and_then(Value::as_str).unwrap_or("");
         let occurred_at = dsh_timestamp(&value);
-        update_time_bounds(&occurred_at, &mut started_at, &mut ended_at);
+        // v4 在迁移或重存会话时追加 `session/end-seed`，时间是写盘时刻而不是会话活动时刻，
+        // 算进去会让 8 月的旧会话在「近 30 天」里出现。
+        if kind != "session/end-seed" {
+            update_time_bounds(&occurred_at, &mut started_at, &mut ended_at);
+        }
         let data = value.get("data").unwrap_or(&Value::Null);
         match kind {
             "session" => {
