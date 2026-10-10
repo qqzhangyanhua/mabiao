@@ -6,7 +6,47 @@ use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "HERMES_HOME", ".hermes", "")
+    let roots = ingest::resolve_dirs(overrides, home, "HERMES_HOME", ".hermes", "");
+    let mut dirs = Vec::new();
+    for raw in roots {
+        let root = hermes_root(&raw);
+        if !dirs.iter().any(|dir| dir == &root) {
+            dirs.push(root.clone());
+        }
+        let profiles = root.join("profiles");
+        let Ok(entries) = std::fs::read_dir(&profiles) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            if name.starts_with('.') {
+                continue;
+            }
+            let path = entry.path();
+            if path.is_dir() && !dirs.iter().any(|dir| dir == &path) {
+                dirs.push(path);
+            }
+        }
+    }
+    dirs
+}
+
+/// `HERMES_HOME` 若指向 `profiles/<name>`，与 Hermes 自己一样回到根。
+fn hermes_root(path: &Path) -> PathBuf {
+    let is_profile = path
+        .parent()
+        .and_then(|parent| parent.file_name())
+        .and_then(|name| name.to_str())
+        == Some("profiles");
+    if is_profile {
+        if let Some(root) = path.parent().and_then(|parent| parent.parent()) {
+            return root.to_path_buf();
+        }
+    }
+    path.to_path_buf()
 }
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {

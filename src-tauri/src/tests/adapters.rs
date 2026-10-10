@@ -2080,3 +2080,58 @@ fn alma_model_strips_provider_and_plugin_prefix() {
     assert_eq!(alma::alma_model("ollama:qwen3:8b", "ollama"), "qwen3:8b");
     assert_eq!(alma::alma_model("gemini-2.5-pro", ""), "gemini-2.5-pro");
 }
+
+#[test]
+fn hermes_discovers_named_profiles_and_resolves_profile_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_default_hermes_home(home);
+    let profile = home.join(".hermes/profiles/work/state.db");
+    write_hermes_state_db(
+        &profile,
+        &[HermesSessionRow {
+            id: "sess-profile".into(),
+            started_at: 1_775_376_000.0,
+            cwd: "/work/profile".into(),
+            git_repo_root: "/work/profile".into(),
+        }],
+        &[HermesModelUsageRow {
+            session_id: "sess-profile".into(),
+            model: "gpt-5.6".into(),
+            billing_provider: "custom".into(),
+            billing_base_url: String::new(),
+            billing_mode: String::new(),
+            task: String::new(),
+            input_tokens: 7,
+            output_tokens: 1,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            reasoning_tokens: 0,
+            actual_cost_usd: 0.0,
+            cost_source: None,
+        }],
+    );
+
+    let dirs = hermes::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(dirs.contains(&home.join(".hermes")));
+    assert!(dirs.contains(&home.join(".hermes/profiles/work")));
+
+    let found = hermes::discover(&dirs).unwrap();
+    assert_eq!(found.len(), 2);
+    assert!(found
+        .iter()
+        .any(|path| path == &home.join(".hermes/state.db")));
+    assert!(found.iter().any(|path| path == &profile));
+
+    let overrides =
+        ingest::PathOverrides::from([("HERMES_HOME", vec![home.join(".hermes/profiles/work")])]);
+    let resolved = hermes::scan_dirs(&overrides, home);
+    assert!(resolved.contains(&home.join(".hermes")));
+    assert!(resolved.contains(&home.join(".hermes/profiles/work")));
+
+    let records = hermes::parse(&profile, home).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].session_id, "sess-profile");
+    assert_eq!(records[0].project, "/work/profile");
+    assert_eq!(records[0].input_tokens, 7);
+}

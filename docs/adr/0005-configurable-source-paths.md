@@ -24,7 +24,7 @@
 | Factory/droid | `FACTORY_SESSIONS_DIR` | `~/.factory/sessions` |
 | cursor-agent | `CURSOR_AGENT_USAGE_DIR` | token 包装默认 `~/.cursor-agent-usage`（可选）。会话与 IDE 共用 `~/.cursor/chats`、`~/.cursor/projects`，不由此变量改 |
 | GitHub Copilot CLI | `COPILOT_HOME` | `~/.copilot`（扫 `session-state/`） |
-| Hermes | `HERMES_HOME` | `~/.hermes`（扫 `state.db`） |
+| Hermes | `HERMES_HOME` | `~/.hermes`（扫 `state.db` 与 `profiles/*/state.db`；指向 `profiles/<name>` 时回到根） |
 | Antigravity | `AGY_DATA_DIR` | `~/.gemini/antigravity-cli` **和** `~/.gemini/antigravity-ide`（都扫 `conversations/`） |
 | Qoder | `QODER_CONFIG_DIR` | `~/.qoder`（扫 `projects/`） |
 | Qoder CN | `QODERCN_CONFIG_DIR` | `~/.qoder-cn`（扫 `projects/`） |
