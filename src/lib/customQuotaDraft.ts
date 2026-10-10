@@ -13,7 +13,10 @@ export type CustomQuotaPreset =
   | "deepseek"
   | "siliconflow"
   | "moonshot"
-  | "litellm_proxy";
+  | "litellm_proxy"
+  | "kimi_code"
+  | "minimax_coding"
+  | "zhipu_coding";
 
 /** 表单草稿。`id` 为 null 表示新建；密钥留空 = 沿用已存的那把。 */
 export type CustomQuotaDraft = {
@@ -103,6 +106,15 @@ export function credentialHint(preset: CustomQuotaPreset): string | null {
   }
   if (preset === "litellm_proxy") {
     return "只需自己的 virtual key，不需要 master key。";
+  }
+  if (preset === "kimi_code") {
+    return "填 Kimi Code 套餐的 API key。地址用 https://api.kimi.com/coding 或 https://api.kimi.ai/coding。";
+  }
+  if (preset === "minimax_coding") {
+    return "填 MiniMax Coding Plan 的 API key（sk-cp-…）。地址用 https://api.minimaxi.com 或 https://api.minimax.io。";
+  }
+  if (preset === "zhipu_coding") {
+    return "填 GLM / Z.ai Coding Plan 的 API key。Authorization 头直接放密钥，不加 Bearer。地址用 https://open.bigmodel.cn 或 https://api.z.ai。";
   }
   return null;
 }
