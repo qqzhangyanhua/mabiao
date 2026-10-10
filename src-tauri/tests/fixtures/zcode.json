@@ -1,0 +1,25 @@
+[
+  {
+    "session_id": "ses-zcode-1",
+    "data": {
+      "role": "assistant",
+      "modelID": "zcode-test-model",
+      "providerID": "zcode",
+      "path": { "cwd": "/work/zcode", "root": "/work/zcode" },
+      "time": { "created": 1780000001000, "completed": 1780000003000 },
+      "tokens": { "input": 1000, "output": 80, "reasoning": 20, "cache": { "read": 200, "write": 50 } },
+      "cost": 0.11
+    }
+  },
+  {
+    "session_id": "ses-zcode-1",
+    "data": {
+      "role": "assistant",
+      "modelId": "zcode-second-model",
+      "providerId": "zcode",
+      "path": { "cwd": "/work/zcode", "root": "/work/zcode" },
+      "time": { "created": 1780000004000, "completed": 1780000005000 },
+      "tokens": { "input": 400, "output": 30, "reasoning": 10, "cache": { "read": 100, "write": 0 } }
+    }
+  }
+]

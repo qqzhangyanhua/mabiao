@@ -972,7 +972,8 @@ export type UsageSource =
   | "qoder"
   | "qoder_cn"
   | "cline"
-  | "workbuddy";
+  | "workbuddy"
+  | "zcode";
 
 export type SourceIngestReport = {
   source: UsageSource;

@@ -28,6 +28,7 @@ export type SourceIconId =
   | "qoder"
   | "cline"
   | "workbuddy"
+  | "zcode"
   | "unknown";
 
 export type TrendStats = {

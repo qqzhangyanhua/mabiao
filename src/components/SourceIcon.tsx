@@ -121,6 +121,12 @@ const marks: Record<SourceIconId, SourceMark> = {
       <path d="M4 6h16v3H4zm0 5h7v7H4zm9 0h7v7h-7z" />
     ),
   },
+  zcode: {
+    viewBox: "0 0 24 24",
+    body: (
+      <path d="M5 5h14v3.2L10.6 15H19v4H5v-3.2L13.4 9H5z" />
+    ),
+  },
   unknown: {
     viewBox: "0 0 24 24",
     body: (

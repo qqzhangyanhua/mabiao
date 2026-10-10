@@ -627,6 +627,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::WorkBuddy.application_name(), "WorkBuddy");
     assert_eq!(Source::WorkBuddy.as_str(), "workbuddy");
     assert_eq!(Source::parse("workbuddy"), Some(Source::WorkBuddy));
+    assert_eq!(Source::Zcode.application_name(), "ZCode");
+    assert_eq!(Source::Zcode.as_str(), "zcode");
+    assert_eq!(Source::parse("zcode"), Some(Source::Zcode));
 }
 
 #[test]
@@ -804,6 +807,70 @@ fn workbuddy_adapter_reads_legacy_usage_fields_and_meta_cwd() {
     assert_eq!(records[0].cache_creation_tokens, 50);
     assert_eq!(records[0].total_tokens, 520);
     assert_eq!(records[0].project, "/work/wb-meta");
+}
+
+#[test]
+fn zcode_adapter_subtracts_cache_from_ai_sdk_input() {
+    let records = zcode::parse_zcode_messages(&zcode_fixture_messages());
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Zcode);
+    assert_eq!(records[0].model, "zcode-test-model");
+    assert_eq!(records[0].provider, "zcode");
+    assert_eq!(records[0].project, "/work/zcode");
+    assert_eq!(records[0].session_id, "ses-zcode-1");
+    assert_eq!(records[0].input_tokens, 750);
+    assert_eq!(records[0].output_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].cache_creation_tokens, 50);
+    assert_eq!(records[0].reasoning_tokens, 20);
+    assert_eq!(records[0].total_tokens, 1100);
+    assert!((records[0].native_cost.unwrap() - 0.11).abs() < 1e-9);
+    assert_eq!(records[1].model, "zcode-second-model");
+    assert_eq!(records[1].input_tokens, 300);
+    assert_eq!(records[1].output_tokens, 30);
+    assert_eq!(records[1].cache_read_tokens, 100);
+    assert_eq!(records[1].cache_creation_tokens, 0);
+    assert_eq!(records[1].reasoning_tokens, 10);
+    assert_eq!(records[1].total_tokens, 440);
+    assert!(records[1].native_cost.is_none());
+}
+
+#[test]
+fn zcode_adapter_skips_user_and_incomplete_assistant() {
+    let rows = [
+        crate::adapters::zcode::ZcodeMessage {
+            session_id: "ses-zcode-skip".into(),
+            source_file: "/tmp/db.sqlite".into(),
+            data: serde_json::json!({
+                "role": "user",
+                "modelID": "ignored",
+                "tokens": { "input": 9, "output": 1, "cache": { "read": 0, "write": 0 } },
+                "time": { "created": 1, "completed": 2 }
+            }),
+        },
+        crate::adapters::zcode::ZcodeMessage {
+            session_id: "ses-zcode-skip".into(),
+            source_file: "/tmp/db.sqlite".into(),
+            data: serde_json::json!({
+                "role": "assistant",
+                "modelID": "partial",
+                "tokens": { "input": 9, "output": 1, "cache": { "read": 0, "write": 0 } },
+                "time": { "created": 1 }
+            }),
+        },
+    ];
+    assert!(zcode::parse_zcode_messages(&rows).is_empty());
+}
+
+fn zcode_fixture_messages() -> Vec<crate::adapters::zcode::ZcodeMessage> {
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&fixture("zcode.json")).unwrap();
+    rows.into_iter()
+        .map(|row| crate::adapters::zcode::ZcodeMessage {
+            session_id: row["session_id"].as_str().unwrap().to_string(),
+            source_file: "/home/dev/.zcode/cli/db/db.sqlite".into(),
+            data: row["data"].clone(),
+        })
+        .collect()
 }
 
 #[test]
