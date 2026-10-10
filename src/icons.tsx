@@ -279,4 +279,5 @@ export const sourceTone: Record<string, string> = {
   antigravity: "tone-gemini",
   agy: "tone-gemini",
   qoder: "tone-qoder",
+  qoder_cn: "tone-qoder",
 };

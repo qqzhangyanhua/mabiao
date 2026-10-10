@@ -618,6 +618,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Qoder.application_name(), "Qoder");
     assert_eq!(Source::Qoder.as_str(), "qoder");
     assert_eq!(Source::parse("qoder"), Some(Source::Qoder));
+    assert_eq!(Source::QoderCn.application_name(), "Qoder CN");
+    assert_eq!(Source::QoderCn.as_str(), "qoder_cn");
+    assert_eq!(Source::parse("qoder_cn"), Some(Source::QoderCn));
 }
 
 #[test]
@@ -657,6 +660,42 @@ fn qoder_adapter_dedups_message_id_and_skips_zero_usage() {
     assert_eq!(records[0].output_tokens, 18);
     assert_eq!(records[0].input_tokens, 4);
     assert_eq!(records[0].cache_read_tokens, 100);
+}
+
+#[test]
+fn qoder_cn_adapter_maps_claude_shaped_usage() {
+    let records = qoder_cn::parse_qoder_cn_jsonl(
+        &fixture_lines(&fixture("qoder-cn.jsonl")),
+        "/home/dev/.qoder-cn/projects/-work-qoder-cn/33333333-cccc-4ddd-8eee-000000000003.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::QoderCn);
+    assert_eq!(records[0].model, "glm-5");
+    assert_eq!(
+        records[0].session_id,
+        "33333333-cccc-4ddd-8eee-000000000003"
+    );
+    assert_eq!(records[0].project, "/work/qoder-cn");
+    assert_eq!(records[0].input_tokens, 50);
+    assert_eq!(records[0].output_tokens, 15);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].total_tokens, 265);
+    assert_eq!(records[1].input_tokens, 8);
+    assert_eq!(records[1].output_tokens, 6);
+    assert_eq!(records[1].cache_creation_tokens, 10);
+    assert_eq!(records[1].total_tokens, 224);
+}
+
+#[test]
+fn qoder_cn_adapter_dedups_message_id_and_skips_zero_usage() {
+    let records = qoder_cn::parse_qoder_cn_jsonl(
+        &fixture_lines(&fixture("qoder-cn-dedup.jsonl")),
+        "/home/dev/.qoder-cn/projects/-work-qoder-cn/s-qoder-cn.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::QoderCn);
+    assert_eq!(records[0].output_tokens, 20);
+    assert_eq!(records[0].input_tokens, 6);
 }
 
 #[test]

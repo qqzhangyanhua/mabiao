@@ -17,6 +17,7 @@ pub mod opencode;
 pub mod pi;
 pub mod project;
 pub mod qoder;
+pub mod qoder_cn;
 pub mod qwen;
 
 use std::path::{Path, PathBuf};
@@ -312,6 +313,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: qoder::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        soft_parse_failure: false,
+        coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::QoderCn,
+        path_env: "QODERCN_CONFIG_DIR",
+        scan_dirs: qoder_cn::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: empty_sidecar,
+        parse: qoder_cn::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: true,
