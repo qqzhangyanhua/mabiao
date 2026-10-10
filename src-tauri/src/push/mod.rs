@@ -6,6 +6,7 @@
 //! 编排：选会话 → 逐场「读 → 打码 → 一个请求」→ 消耗记录分批 → 记历史。读连接只在读一场会话
 //! 的那一刻持有，联网时已放开，不挡摄取。`now`、路径、连接都由调用方注入。
 
+pub mod auto;
 pub mod git_remote;
 pub mod history;
 pub mod payload;
@@ -248,6 +249,16 @@ pub fn run(
     input: &PushRunInput,
     progress: &dyn Fn(PushProgress),
 ) -> Result<PushOutcome, String> {
+    run_with(env, input, false, progress)
+}
+
+/// `automatic` 只影响历史里的标记：自动推送与手动推送走同一套筛选、打码与整场跳过规则。
+pub fn run_with(
+    env: &PushEnv<'_>,
+    input: &PushRunInput,
+    automatic: bool,
+    progress: &dyn Fn(PushProgress),
+) -> Result<PushOutcome, String> {
     let credentials = remote_server::push_credentials(env.remote, env.now)?;
 
     let mut rows = list_sessions(env, &input.range)?;
@@ -302,7 +313,7 @@ pub fn run(
     }
 
     // 历史是回看用的，写不进去不该把已经成功的推送报成失败。
-    let _ = history::append(env.history, history_entry(env, input, &outcome));
+    let _ = history::append(env.history, history_entry(env, input, &outcome, automatic));
     Ok(outcome)
 }
 
@@ -370,6 +381,7 @@ fn history_entry(
     env: &PushEnv<'_>,
     input: &PushRunInput,
     outcome: &PushOutcome,
+    automatic: bool,
 ) -> PushHistoryEntry {
     PushHistoryEntry {
         at: env.now.to_rfc3339(),
@@ -382,5 +394,6 @@ fn history_entry(
         usage_inserted: outcome.usage_inserted,
         usage_duplicates: outcome.usage_duplicates,
         usage_failed: outcome.usage_error.is_some(),
+        automatic,
     }
 }

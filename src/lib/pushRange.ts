@@ -1,4 +1,5 @@
 import type {
+  AutoPushDto,
   Filter,
   PushHistoryEntry,
   PushOutcome,
@@ -83,7 +84,7 @@ export function pushOutcomeSummary(outcome: PushOutcome): string {
 }
 
 export function pushHistoryLine(entry: PushHistoryEntry): string {
-  const parts = [`成功 ${entry.sessions_succeeded}`];
+  const parts = [entry.automatic ? "自动" : "手动", `成功 ${entry.sessions_succeeded}`];
   if (entry.sessions_failed > 0) {
     parts.push(`失败 ${entry.sessions_failed}`);
   }
@@ -92,4 +93,16 @@ export function pushHistoryLine(entry: PushHistoryEntry): string {
   }
   parts.push(entry.usage_failed ? "消耗记录失败" : `消耗记录 +${entry.usage_inserted}`);
   return parts.join(" · ");
+}
+
+/** 设置页自动推送那行的说明：已推到哪天、最近一次尝试。从没推过返回 null。 */
+export function autoPushProgressLine(auto: AutoPushDto): string | null {
+  const parts: string[] = [];
+  if (auto.pushed_through) {
+    parts.push(`已推送到 ${auto.pushed_through}`);
+  }
+  if (auto.last_attempt_at) {
+    parts.push(`最近一次尝试 ${new Date(auto.last_attempt_at).toLocaleString()}`);
+  }
+  return parts.length > 0 ? parts.join("，") : null;
 }

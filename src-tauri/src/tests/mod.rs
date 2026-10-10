@@ -52,6 +52,7 @@ mod overview;
 mod parity;
 mod paths;
 mod push;
+mod push_auto;
 mod qoder_conversation;
 mod query;
 mod quota_alerts;

@@ -30,7 +30,7 @@ fn write_text(path: &Path, content: &str) {
 }
 
 /// 一场只有一问一答的 Codex 会话，起止时间由调用方定。
-fn seed_codex(
+pub(super) fn seed_codex(
     home: &Path,
     id: &str,
     cwd: &str,
@@ -55,7 +55,7 @@ fn seed_codex(
     path
 }
 
-fn refreshed(home: &Path) -> rusqlite::Connection {
+pub(super) fn refreshed(home: &Path) -> rusqlite::Connection {
     let conn = store::open_memory().unwrap();
     crate::conversation::refresh_codex(&conn, home).unwrap();
     conn
@@ -699,7 +699,7 @@ fn context_layers_map_one_to_one_to_the_wire_layers() {
 
 // ---- 消耗记录 ----
 
-fn usage_row(at: &str, session: &str, total: i64) -> UsageRecord {
+pub(super) fn usage_row(at: &str, session: &str, total: i64) -> UsageRecord {
     let mut record = rec(
         at,
         Source::Codex,
@@ -795,17 +795,17 @@ fn preview_counts_usage_by_occurred_at_including_archived_rows() {
 
 // ---- 推送：对桩服务器 ----
 
-struct Harness {
+pub(super) struct Harness {
     _dir: tempfile::TempDir,
-    home: PathBuf,
-    conns: TestConnection,
-    remote: RemoteServerPaths,
-    history: PathBuf,
-    prices: crate::domain::PriceTable,
+    pub(super) home: PathBuf,
+    pub(super) conns: TestConnection,
+    pub(super) remote: RemoteServerPaths,
+    pub(super) history: PathBuf,
+    pub(super) prices: crate::domain::PriceTable,
 }
 
 impl Harness {
-    fn new(home: &Path, conn: rusqlite::Connection) -> Self {
+    pub(super) fn new(home: &Path, conn: rusqlite::Connection) -> Self {
         let dir = tempfile::tempdir().unwrap();
         let remote = RemoteServerPaths::in_dir(dir.path());
         let history = dir.path().join("push_history.json");
@@ -830,7 +830,11 @@ impl Harness {
         }
     }
 
-    fn login(&self, stub: &Stub) {
+    pub(super) fn dir_path(&self) -> &Path {
+        self._dir.path()
+    }
+
+    pub(super) fn login(&self, stub: &Stub) {
         remote_server::login(
             &self.remote,
             LoginInput {
@@ -845,7 +849,7 @@ impl Harness {
     }
 }
 
-fn login_reply() -> Reply {
+pub(super) fn login_reply() -> Reply {
     json_reply(
         200,
         LoginResponse {
@@ -857,7 +861,7 @@ fn login_reply() -> Reply {
     )
 }
 
-fn session_ok(id: &str) -> Reply {
+pub(super) fn session_ok(id: &str) -> Reply {
     json_reply(
         200,
         PushSessionResponse {
@@ -868,7 +872,7 @@ fn session_ok(id: &str) -> Reply {
     )
 }
 
-fn usage_ok(inserted: u32, duplicates: u32) -> Reply {
+pub(super) fn usage_ok(inserted: u32, duplicates: u32) -> Reply {
     json_reply(
         200,
         PushUsageResponse {

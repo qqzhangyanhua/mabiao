@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Filter, PushOutcome } from "../types";
+import type { AutoPushDto, Filter, PushHistoryEntry, PushOutcome } from "../types";
 import {
+  autoPushProgressLine,
   defaultPushPreset,
   formatBytes,
   issueKeys,
   pushOutcomeSummary,
+  pushHistoryLine,
   pushPresetOptions,
   pushRangeFor,
 } from "./pushRange";
@@ -102,5 +104,43 @@ describe("push summaries", () => {
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(2048)).toBe("2.0 KB");
     expect(formatBytes(3 * 1024 * 1024)).toBe("3.0 MB");
+  });
+});
+
+describe("自动推送文案", () => {
+  const auto: AutoPushDto = {
+    enabled: true,
+    pushed_through: null,
+    last_attempt_at: null,
+    last_error: null,
+    session_state: "logged_in",
+    login_notice: null,
+  };
+
+  it("从没推过没有进度行", () => {
+    expect(autoPushProgressLine(auto)).toBeNull();
+  });
+
+  it("推过就写到哪天", () => {
+    expect(autoPushProgressLine({ ...auto, pushed_through: "2026-10-09" })).toContain(
+      "已推送到 2026-10-09",
+    );
+  });
+
+  it("历史行标出是自动还是手动", () => {
+    const entry: PushHistoryEntry = {
+      at: "2026-10-10T08:00:00Z",
+      from: null,
+      to: null,
+      sources: [],
+      sessions_succeeded: 2,
+      sessions_failed: 0,
+      sessions_skipped: 0,
+      usage_inserted: 5,
+      usage_duplicates: 0,
+      usage_failed: false,
+    };
+    expect(pushHistoryLine(entry)).toMatch(/^手动/);
+    expect(pushHistoryLine({ ...entry, automatic: true })).toMatch(/^自动/);
   });
 });

@@ -427,6 +427,7 @@ pub fn run() {
             spawn_event_index_backfill(app.handle());
             spawn_conversation_cache_migration(app.handle());
             spawn_conversation_fts_maintenance(app.handle());
+            commands::spawn_auto_push(app.handle());
             #[cfg(desktop)]
             {
                 use tauri_plugin_notification::NotificationExt;
@@ -502,6 +503,8 @@ pub fn run() {
             commands::preview_push,
             commands::run_push,
             commands::get_push_history,
+            commands::get_auto_push,
+            commands::set_auto_push,
             commands::get_scan_path_config,
             commands::detect_source_presence,
             commands::save_scan_path_config,

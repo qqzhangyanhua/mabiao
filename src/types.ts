@@ -1276,4 +1276,19 @@ export type PushHistoryEntry = {
   usage_inserted: number;
   usage_duplicates: number;
   usage_failed: boolean;
+  /** 每日自动推送发起的。 */
+  automatic?: boolean;
+};
+
+/** 设置页「每日自动推送」。 */
+export type AutoPushDto = {
+  enabled: boolean;
+  /** 本机日历日 YYYY-MM-DD：这一天（含）之前都已推完；还没推过为 null。 */
+  pushed_through: string | null;
+  last_attempt_at: string | null;
+  /** 最近一次没推干净的原因。 */
+  last_error: string | null;
+  session_state: RemoteSessionState;
+  /** 开着但登录不可用时的提示：自动推送不会运行。 */
+  login_notice: string | null;
 };

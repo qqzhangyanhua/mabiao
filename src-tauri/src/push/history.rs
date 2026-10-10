@@ -24,6 +24,9 @@ pub struct PushHistoryEntry {
     /// 消耗记录这一步是否失败（会话与消耗是分开发的）。
     #[serde(default)]
     pub usage_failed: bool,
+    /// 每日自动推送发起的（否则是用户手动推的）。
+    #[serde(default)]
+    pub automatic: bool,
 }
 
 /// 新的在前。读不动或解析不了按「没有历史」处理：历史只是回看用，不该挡住推送。

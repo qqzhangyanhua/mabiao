@@ -151,6 +151,18 @@
 6. 一场会话一个请求；失败（可重试）与跳过（本机读不全）分开列。`token_expired` 立即停，剩下的记为失败并提示重登。同一时刻只允许一次预览或推送（命令层的 `RunGuard`）。本机历史只记数字，不记正文。
 7. 测试：`cargo test push`（桩服务器在 `test_support/http_stub.rs`，与 `remote_server` 共用）；前端纯函数在 `src/lib/pushRange.ts`。
 
+### 每日自动推送（`src-tauri/src/push/auto.rs`、`commands/push.rs::spawn_auto_push`）
+
+设置页「远程服务」下的独立开关，**默认关**，开关在成员自己手里（ADR 0026）。
+
+1. 不复用本机摄取定时器：调度是 `spawn_auto_push` 自己的一条线程（启动后 90 秒首检，之后每小时），不挂托盘的 5 分钟刷新。线程醒来先读 `push_auto.json`，关着就直接返回。
+2. 编排只在 `auto::run_due`：算出该补的日历日 → 检查凭证 → `prepare`（先把本机摄取跑到最新）→ `push::run_with(.., automatic = true, ..)`。筛选、打码、整场跳过、推送历史全是手动推送那一套，不另写；自动推送不按来源筛，推全部来源，不弹预览。
+3. 进度是单个游标 `pushed_through`（本机日历日，含）。只有「没有失败的会话、消耗记录没出错、登录没被拒」才推进；本机读不全而跳过的会话不挡进度。游标落后就一次补齐（最多 `MAX_CATCH_UP_DAYS` 天）。重新打开开关时游标清零，从昨天算起，关着的那些天不补。
+4. 未登录、过期、被拒：不联网、不记历史，设置页从 `auto::panel` 读到 `login_notice`。
+5. 与手动推送、预览共用 `RunGuard`：正在推就让路，下个小时再看。
+6. `push_auto.json` 与 `push_history.json` 一样不在备份白名单里。
+7. 测试：`cargo test push_auto`（补推区间、默认关、凭证门、失败不推进游标）；文案纯函数在 `src/lib/pushRange.ts`。
+
 完成：「推送协议」层命令、`cargo test push`、`cargo test remote_server`、`pnpm test` 与 `src-tauri` 全量测试绿。
 
 ## 远程服务
