@@ -1,0 +1,65 @@
+server/src/projects.rs
+  s_a324b8e9200eb3::t_85c2193432457f 101-104,110
+  s_a324b8e9200eb3::t_e0e824d0537807 237-238,246-250
+  s_a324b8e9200eb3::t_77609def7146b4 48
+  s_a324b8e9200eb3::t_7f2e2e733fa937 93
+  s_a324b8e9200eb3::t_93dceb0736ca31 1-47,49-92,94-100,105-109,111-121,125-236,239-245,251-265
+  s_a324b8e9200eb3::t_131ef7a73f12d3 122-124
+server/src/api.rs
+  s_a324b8e9200eb3::t_e0e824d0537807 3,8,60-80,83
+  s_a324b8e9200eb3::t_03a6309e357c12 81-82
+server/tests/api.rs
+  s_a324b8e9200eb3::t_11e999293bafa2 3-7
+  s_a324b8e9200eb3::t_c92f3aa2e7507b 9
+server/src/usage.rs
+  s_a324b8e9200eb3::t_d7e2e5cf38dd07 1-90
+server/src/coverage.rs
+  s_a324b8e9200eb3::t_178a7b15cf75fd 1-34
+server/migrations/0002_push_store.sql
+  s_a324b8e9200eb3::t_565eee010409c8 1-83
+server/Cargo.toml
+  s_a324b8e9200eb3::t_77609def7146b4 26
+server/src/sessions.rs
+  s_a324b8e9200eb3::t_4c4c64f7058fbc 1-107
+server/src/lib.rs
+  s_a324b8e9200eb3::t_e0e824d0537807 3,8,13-14,16,18
+server/tests/common/mod.rs
+  s_a324b8e9200eb3::t_11e999293bafa2 1-82
+server/src/push.rs
+  s_a324b8e9200eb3::t_68009db87c7f4e 1-86,89-113,118-179
+  s_a324b8e9200eb3::t_e0e824d0537807 87-88,114-117
+server/src/devices.rs
+  s_a324b8e9200eb3::t_e0e824d0537807 3,15-22,26-27,32-33
+docs/agent-layers.md
+  s_a324b8e9200eb3::t_9540165ea2fdde 154
+  s_a324b8e9200eb3::t_321d40f060d141 147-153,155-159
+  s_a324b8e9200eb3::t_bd2acc97f889f0 142
+server/src/error.rs
+  s_a324b8e9200eb3::t_e0e824d0537807 4,97-102
+  s_a324b8e9200eb3::t_386bf6eed6e825 103-105
+server/src/routes.rs
+  s_a324b8e9200eb3::t_e0e824d0537807 1,4,8,11,15-20,34-36,137-143
+  s_a324b8e9200eb3::t_2e5d13d6c58342 144
+server/tests/push.rs
+  s_a324b8e9200eb3::t_f8a615e19f9d5e 524,560
+  s_a324b8e9200eb3::t_da8e0ba4afca24 1-51,55-143,146-149,155-411,419-464,466-523,525-559,561-625,632-653,660-707,743-764,773-786,792-808,813-823,832-845,854-952,959-1090,1098-1138
+  s_a324b8e9200eb3::t_15990d07bf304e 52-54,144-145,150-154,412-418,465,626-631,654-659,765-772,787-791,809-812,824-831,846-853,953-958,1091-1097
+  s_a324b8e9200eb3::t_81fa43d4892d29 708-714,716-717,719-742
+  s_a324b8e9200eb3::t_47e5234dec8afd 715,718
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4f5949b6b9502b2f7568ede4f2c5c4a4e0f5c7a1",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
