@@ -35,4 +35,4 @@
 
 ## 对话记录适配来源（2026-09）
 
-`conversation::CONVERSATION_ADAPTERS` 覆盖 **15 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn。**未覆盖**：hermes、agy、cline、workbuddy、zcode、alma。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION`**（独立于 `store::ADAPTER_VERSION`）；纯重构不得改动，改动意味着事件归一化输出变了。
+`conversation::CONVERSATION_ADAPTERS` 覆盖 **16 个** Usage Source：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn、cline。**未覆盖**：hermes、agy、workbuddy、zcode、alma。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION`**（独立于 `store::ADAPTER_VERSION`）；纯重构不得改动，改动意味着事件归一化输出变了。

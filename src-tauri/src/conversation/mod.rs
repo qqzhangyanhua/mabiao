@@ -12,6 +12,7 @@ mod backfill;
 mod catalog;
 mod catalog_search;
 mod claude;
+mod cline;
 mod codex;
 mod context_cache;
 mod context_content;
@@ -105,6 +106,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Copilot,
     Source::Qoder,
     Source::QoderCn,
+    Source::Cline,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
@@ -311,6 +313,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: qoder::detail_cn,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Cline,
+        discover: cline::discover,
+        index: cline::index,
+        index_suffix: None,
+        detail: cline::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
         reuse_unchanged_index: true,
     },
 ];

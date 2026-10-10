@@ -8,6 +8,7 @@ mod billing;
 mod budget;
 mod claude_quota;
 mod claude_usage;
+mod cline_conversation;
 mod clipboard;
 mod codex_quota;
 mod codex_usage;

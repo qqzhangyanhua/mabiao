@@ -294,6 +294,25 @@ fn qoder_cn_event_index_matches_full_parse() {
 }
 
 #[test]
+fn cline_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".cline/data/sessions/sess-cline-1/sess-cline-1.messages.json",
+        "cline.messages.json",
+    );
+    write_home_fixture(
+        home,
+        ".cline/data/sessions/sess-cline-1/sess-cline-1.json",
+        "cline.manifest.json",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Cline);
+    assert_conversation_index_matches_parse(&conn, home, "cline", "sess-cline-1");
+}
+
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();
