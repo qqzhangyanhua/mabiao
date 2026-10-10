@@ -278,4 +278,5 @@ export const sourceTone: Record<string, string> = {
   hermes: "tone-hermes",
   antigravity: "tone-gemini",
   agy: "tone-gemini",
+  qoder: "tone-qoder",
 };

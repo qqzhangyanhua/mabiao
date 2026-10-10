@@ -19,6 +19,7 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   cursor: "cursor",
   cursor_agent: "cursor",
   hermes: "hermes",
+  qoder: "qoder",
 };
 
 export function resolveSourceIconId(source: string): SourceIconId {

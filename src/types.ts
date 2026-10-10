@@ -968,7 +968,8 @@ export type UsageSource =
   | "cursor_agent"
   | "copilot"
   | "hermes"
-  | "agy";
+  | "agy"
+  | "qoder";
 
 export type SourceIngestReport = {
   source: UsageSource;

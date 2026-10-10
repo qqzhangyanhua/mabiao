@@ -18,7 +18,7 @@ pub use crate::adapters::cursor_account;
 pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
     agy, claude, codex, copilot, cursor, cursor_agent, dsh, factory, gemini, grok, hermes, kimi,
-    omp, pi, qwen,
+    omp, pi, qoder, qwen,
 };
 pub use crate::aggregate;
 pub use crate::backup;

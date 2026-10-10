@@ -1,0 +1,3 @@
+{"type":"user","sessionId":"11111111-aaaa-4bbb-8ccc-000000000001","timestamp":"2026-09-27T09:00:00.000Z","cwd":"/work/qoder"}
+{"type":"assistant","sessionId":"11111111-aaaa-4bbb-8ccc-000000000001","timestamp":"2026-09-27T09:00:30.000Z","message":{"model":"qwen3-coder-plus","id":"msg-qoder-1","usage":{"input_tokens":40,"cache_creation_input_tokens":0,"cache_read_input_tokens":300,"output_tokens":25}}}
+{"type":"assistant","sessionId":"11111111-aaaa-4bbb-8ccc-000000000001","timestamp":"2026-09-27T09:01:00.000Z","message":{"model":"qwen3-coder-plus","id":"msg-qoder-2","usage":{"input_tokens":10,"cache_creation_input_tokens":20,"cache_read_input_tokens":300,"output_tokens":8}}}
