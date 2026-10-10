@@ -1,0 +1,50 @@
+src-tauri/src/conversation/discover.rs
+  s_728e79483709f7::t_bae611a353595a 30-38
+docs/adr/0011-conversation-event-index.md
+  s_728e79483709f7::t_b7aefd13e7bcc7 38
+src-tauri/src/adapters/dsh.rs
+  s_728e79483709f7::t_d3ab7ba1e73cd2 11-14,16-27,40-42
+  s_728e79483709f7::t_5f2e98be4fb18f 29-36
+  s_728e79483709f7::t_1b1e5b50fc3967 28
+docs/adr/0003-trusted-ingestion-cache.md
+  s_728e79483709f7::t_b7aefd13e7bcc7 13
+docs/probe/token-fields.md
+  s_728e79483709f7::t_c48248ddc29bfe 74
+  s_728e79483709f7::t_0574ffd3203977 88-89
+src-tauri/src/tests/adapters.rs
+  s_728e79483709f7::t_85fd6443b02a6a 529-554
+  s_728e79483709f7::t_366c3e39ca94b3 528
+src-tauri/src/conversation/dsh.rs
+  s_728e79483709f7::t_e67ed19dc6320d 72-76
+  s_728e79483709f7::t_3140e6fbd4816f 13-24
+  s_728e79483709f7::t_72351dc41ca63f 25-26
+src-tauri/src/tests/dsh_droid_conversation.rs
+  s_728e79483709f7::t_402ce26dcdc65d 69-107
+  s_728e79483709f7::t_1b7dfcd23b098f 68
+src-tauri/src/conversation/dsh_test.rs
+  s_728e79483709f7::t_f1d4de16275172 107-123,125-126,133-135,141-142
+  s_728e79483709f7::t_6a99d7594e4c7f 162-175
+  s_728e79483709f7::t_503f035fcca98a 159-160
+  s_728e79483709f7::t_876e506d857c12 143-158,161
+  s_728e79483709f7::t_bae611a353595a 124,127-132,136-140
+src-tauri/src/adapters/mod.rs
+  s_728e79483709f7::t_b99c8fa056569a 197
+src-tauri/src/conversation/mod.rs
+  s_728e79483709f7::t_dbbf379e22bf16 212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "b6aa7314059fcb798a8f4ee47d0abb8292b07e0e",
+  "prompts": {},
+  "sessions": {
+    "s_728e79483709f7": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "3232fd3b-60c5-4d04-8389-4c2334e9758f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
