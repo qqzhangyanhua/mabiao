@@ -2146,7 +2146,7 @@ fn codex_discovers_zst_when_plain_jsonl_absent() {
     let zst = sessions.join("rollout-2026-01-01T00-00-00-abc.jsonl.zst");
     std::fs::write(&zst, packed).unwrap();
 
-    let found = crate::adapters::codex::discover(&[sessions.clone()]).unwrap();
+    let found = crate::adapters::codex::discover(std::slice::from_ref(&sessions)).unwrap();
     assert_eq!(found, vec![zst.clone()]);
 
     let records = crate::adapters::codex::parse(&zst, &sessions).unwrap();
