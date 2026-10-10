@@ -43,6 +43,7 @@
 .tone-cline,
 .tone-workbuddy,
 .tone-zcode,
+.tone-alma,
 .tone-other {
   background: var(--tone-other-bg);
   color: var(--tone-other-fg);

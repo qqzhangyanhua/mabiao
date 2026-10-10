@@ -127,6 +127,12 @@ const marks: Record<SourceIconId, SourceMark> = {
       <path d="M5 5h14v3.2L10.6 15H19v4H5v-3.2L13.4 9H5z" />
     ),
   },
+  alma: {
+    viewBox: "0 0 24 24",
+    body: (
+      <path d="M12 3 4 20h3.2l1.5-3.4h6.6L16.8 20H20L12 3zm-2.2 10.4L12 8.1l2.2 5.3H9.8z" />
+    ),
+  },
   unknown: {
     viewBox: "0 0 24 24",
     body: (

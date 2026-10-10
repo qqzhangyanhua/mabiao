@@ -49,6 +49,7 @@ export const QUOTA_SOURCE_IDS = [
   "cline",
   "workbuddy",
   "zcode",
+  "alma",
 ] as const;
 
 export type QuotaSourceId = (typeof QUOTA_SOURCE_IDS)[number];

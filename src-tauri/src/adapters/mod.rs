@@ -1,4 +1,5 @@
 pub mod agy;
+pub mod alma;
 pub mod claude;
 pub mod cline;
 pub mod codex;
@@ -376,6 +377,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: zcode::discover,
         sidecar_fingerprint: zcode::sidecar_fingerprint,
         parse: zcode::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Alma,
+        path_env: "ALMA_HOME",
+        scan_dirs: alma::scan_dirs,
+        discover: alma::discover,
+        sidecar_fingerprint: alma::sidecar_fingerprint,
+        parse: alma::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: false,
