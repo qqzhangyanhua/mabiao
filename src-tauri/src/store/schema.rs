@@ -456,6 +456,25 @@ fn ensure_work_notes_tables(conn: &Connection) -> Result<(), String> {
         "actual_unpriced",
         "INTEGER NOT NULL DEFAULT 1",
     )?;
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS official_quota_history (
+            provider TEXT NOT NULL,
+            window_kind TEXT NOT NULL,
+            captured_at TEXT NOT NULL,
+            window_label TEXT NOT NULL DEFAULT '',
+            used_percent REAL,
+            used_amount REAL,
+            limit_amount REAL,
+            currency TEXT,
+            PRIMARY KEY (provider, window_kind, captured_at)
+        );
+        CREATE INDEX IF NOT EXISTS idx_official_quota_history_provider
+            ON official_quota_history(provider, captured_at);
+        "#,
+    )
+    .map_err(|e| e.to_string())?;
+    super::official_quota::seed_official_quota_history(conn)?;
     Ok(())
 }
 

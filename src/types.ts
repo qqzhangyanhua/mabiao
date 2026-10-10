@@ -148,6 +148,22 @@ export type OfficialQuotaDto = {
   hidden_providers: string[];
 };
 
+export type OfficialQuotaHistoryPoint = {
+  provider: string;
+  window_kind: string;
+  window_label: string;
+  captured_at: string;
+  used_percent: number | null;
+  used_amount: number | null;
+  limit_amount: number | null;
+  currency: string | null;
+};
+
+export type OfficialQuotaHistoryDto = {
+  points: OfficialQuotaHistoryPoint[];
+  retention_days: number;
+};
+
 export type OfficialQuotaHookDto = {
   settings_path: string;
   command: string;

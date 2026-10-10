@@ -45,6 +45,7 @@ mod litellm;
 mod low_cache_hit;
 mod net;
 mod official_quota;
+mod official_quota_history;
 mod opencode_conversation;
 mod opencode_quota;
 mod overview;
