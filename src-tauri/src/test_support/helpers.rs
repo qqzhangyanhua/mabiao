@@ -248,6 +248,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     let compressed = zstd::encode_all(fixture("dsh.jsonl").as_bytes(), 0).unwrap();
     std::fs::write(&dsh, compressed).unwrap();
     write_opencode_fixture_db(home);
+    write_zcode_fixture_db(home);
     super::write_default_hermes_home(home);
     // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =
@@ -271,6 +272,25 @@ fn write_opencode_fixture_db(home: &std::path::Path) {
             "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
             rusqlite::params![
                 row["session_id"].as_str().expect("opencode session_id"),
+                row["data"].to_string(),
+            ],
+        )
+        .unwrap();
+    }
+}
+
+fn write_zcode_fixture_db(home: &std::path::Path) {
+    let path = home.join(".zcode/cli/db/db.sqlite");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TABLE message (session_id TEXT NOT NULL, data TEXT NOT NULL);")
+        .unwrap();
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&fixture("zcode.json")).unwrap();
+    for row in rows {
+        db.execute(
+            "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+            rusqlite::params![
+                row["session_id"].as_str().expect("zcode session_id"),
                 row["data"].to_string(),
             ],
         )

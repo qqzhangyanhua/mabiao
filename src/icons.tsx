@@ -282,4 +282,5 @@ export const sourceTone: Record<string, string> = {
   qoder_cn: "tone-qoder",
   cline: "tone-cline",
   workbuddy: "tone-workbuddy",
+  zcode: "tone-zcode",
 };

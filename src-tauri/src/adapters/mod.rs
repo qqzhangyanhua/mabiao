@@ -21,6 +21,7 @@ pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
 pub mod workbuddy;
+pub mod zcode;
 
 use std::path::{Path, PathBuf};
 
@@ -363,6 +364,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_dir: None,
         prepare_file: None,
         append_log: true,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Zcode,
+        path_env: "ZCODE_HOME",
+        scan_dirs: zcode::scan_dirs,
+        discover: zcode::discover,
+        sidecar_fingerprint: zcode::sidecar_fingerprint,
+        parse: zcode::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,

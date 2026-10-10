@@ -22,6 +22,7 @@ const KNOWN_SOURCES = [
   "qoder_cn",
   "cline",
   "workbuddy",
+  "zcode",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -44,6 +45,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
     expect(resolveSourceIconId("cline")).toBe("cline");
     expect(resolveSourceIconId("workbuddy")).toBe("workbuddy");
+    expect(resolveSourceIconId("zcode")).toBe("zcode");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {
