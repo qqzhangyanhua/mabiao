@@ -21,10 +21,11 @@ pub enum Source {
     Qoder,
     QoderCn,
     Cline,
+    WorkBuddy,
 }
 
 impl Source {
-    pub const ALL: [Source; 18] = [
+    pub const ALL: [Source; 19] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -43,6 +44,7 @@ impl Source {
         Source::Qoder,
         Source::QoderCn,
         Source::Cline,
+        Source::WorkBuddy,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -65,6 +67,7 @@ impl Source {
             Source::Qoder => "qoder",
             Source::QoderCn => "qoder_cn",
             Source::Cline => "cline",
+            Source::WorkBuddy => "workbuddy",
         }
     }
 
@@ -88,6 +91,7 @@ impl Source {
             Source::Qoder => "Qoder",
             Source::QoderCn => "Qoder CN",
             Source::Cline => "Cline",
+            Source::WorkBuddy => "WorkBuddy",
         }
     }
 
@@ -111,6 +115,7 @@ impl Source {
             "qoder" => Some(Source::Qoder),
             "qoder_cn" => Some(Source::QoderCn),
             "cline" => Some(Source::Cline),
+            "workbuddy" => Some(Source::WorkBuddy),
             _ => None,
         }
     }

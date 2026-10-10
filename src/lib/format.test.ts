@@ -144,6 +144,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("qoder")).toBe("Qoder");
     expect(sourceLabel("qoder_cn")).toBe("Qoder CN");
     expect(sourceLabel("cline")).toBe("Cline");
+    expect(sourceLabel("workbuddy")).toBe("WorkBuddy");
   });
 
   it("always offers Cursor in the source filter list", () => {

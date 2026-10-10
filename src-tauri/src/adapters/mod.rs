@@ -20,6 +20,7 @@ pub mod project;
 pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
+pub mod workbuddy;
 
 use std::path::{Path, PathBuf};
 
@@ -347,6 +348,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_dir: None,
         prepare_file: None,
         append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::WorkBuddy,
+        path_env: "WORKBUDDY_CONFIG_DIR",
+        scan_dirs: workbuddy::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: workbuddy::sidecar_fingerprint,
+        parse: workbuddy::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,

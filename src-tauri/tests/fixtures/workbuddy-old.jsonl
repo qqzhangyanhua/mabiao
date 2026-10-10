@@ -1,0 +1,1 @@
+{"timestamp":1790503300000,"type":"message","role":"assistant","providerData":{"messageId":"old1","model":"glm-5","usage":{"input_tokens":500,"output_tokens":20,"input_tokens_details":{"cached_tokens":100},"cache_creation_input_tokens":50}},"sessionId":"sess-wb-old"}
