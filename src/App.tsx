@@ -133,6 +133,7 @@ export default function App() {
                     onGrain={data.setGrain}
                     onOpenConversations={() => data.openConversations()}
                     onOpenUnpricedDiagnosis={data.openUnpricedDiagnosis}
+                    onOpenScanPaths={data.openScanPathSettings}
                     onOpenCursor={() => data.navigate("cursor")}
                     onProjectClick={(project) =>
                       data.applyFilter({ ...data.filter, projects: [project] })

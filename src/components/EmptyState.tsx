@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Icon, type IconName } from "../icons";
 
 /**
@@ -11,6 +12,7 @@ export function EmptyState({
   tone = "muted",
   compact = false,
   className,
+  action,
 }: {
   icon?: IconName;
   title: string;
@@ -18,6 +20,7 @@ export function EmptyState({
   tone?: "muted" | "warn";
   compact?: boolean;
   className?: string;
+  action?: ReactNode;
 }) {
   const classes = ["empty-state"];
   if (compact) classes.push("empty-state-compact");
@@ -29,6 +32,7 @@ export function EmptyState({
       <Icon name={icon} size={compact ? 18 : 26} className="empty-state-icon" />
       <div className="empty-state-title">{title}</div>
       {hint ? <div className="empty-state-hint">{hint}</div> : null}
+      {action ? <div className="empty-state-action">{action}</div> : null}
     </div>
   );
 }

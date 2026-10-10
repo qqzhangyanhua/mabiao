@@ -78,6 +78,10 @@
   color: var(--text-faint);
 }
 
+.empty-state-action {
+  margin-top: 4px;
+}
+
 .empty-state-compact {
   padding: 6px 4px;
   gap: 4px;

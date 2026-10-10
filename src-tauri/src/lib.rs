@@ -478,6 +478,7 @@ pub fn run() {
             commands::reset_price_snapshot,
             commands::get_source_diagnostics,
             commands::get_scan_path_config,
+            commands::detect_source_presence,
             commands::save_scan_path_config,
             commands::pick_directory,
             commands::rebuild_cache,
