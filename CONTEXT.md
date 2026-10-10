@@ -89,7 +89,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | Source | 存储 | 本机 token | 本机费用 |
 |--------|------|:---:|:---:|
 | Codex | jsonl `~/.codex/sessions` | ✅ | ❌ |
-| Claude Code | jsonl `~/.claude/projects` | ✅ | ✅ 自带 `costUSD` |
+| Claude Code | jsonl `~/.claude/projects`（另扫 XDG `~/.config/claude/projects`，以及已存在的 Claude Desktop / Cowork 嵌套 `.claude/projects`） | ✅ | ✅ 自带 `costUSD` |
 | pi | jsonl `~/.pi/agent/sessions` | ✅ | ✅ 自带 |
 | OMP | jsonl `~/.omp/agent/sessions` | ✅ | ✅ 自带 `cost.total` |
 | dsh | zstd jsonl `~/.dsh/sessions` | ✅(需解压) | ❌ |
@@ -108,4 +108,4 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 
 表内 **Factory/droid** 行的 Source slug 是 **`factory`**，界面 application 名是 **Droid**。**Antigravity** 行的 Source slug 是 **`agy`**，界面 application 名是 **Antigravity**。**Cursor** 行汇总代码量 / 账号用量 / 会话三个独立维度，**不是** Usage Source。**amp** 同理，无本机 token。
 
-以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告口径与洞察见 `docs/adr/0015-report-and-insights.md`、`docs/adr/0023-report-cursor-account-partition.md`；分享入口与周期见 `docs/adr/0020-share-entry-report-only.md`；工作纪要与纪要引擎见 `docs/adr/0021-work-notes-llm-summary.md`。上下文清单加载档位与体积见 `docs/adr/0022-context-manifest-load-modes.md`。
+以上是各 Source 的默认扫描路径；每个 Source 都可以用设置页绝对路径或环境变量整体覆盖（逗号分隔可指定多个目录，同时扫描），用于非默认安装位置或多份数据目录。设置页优先于环境变量，从 Dock 打开也能生效。默认路径与对应环境变量见 `docs/adr/0005-configurable-source-paths.md`。Claude Code 默认会同时扫 `~/.claude/projects` 和 XDG 路径 `~/.config/claude/projects`；若本机存在 Claude Desktop / Cowork 的嵌套 `local-agent-mode-sessions/*/*/local_*/.claude/projects`，也会追加扫描。Cursor 账号用量见 `docs/adr/0006-cursor-account-usage-network-ingest.md`，Cursor 会话见 `docs/adr/0007-cursor-session-local-ingest.md`。全局指令见 `docs/adr/0009-global-instruction-dimension.md`；写入用户文件的约束见 `docs/adr/0010-writing-user-owned-files.md`。报告口径与洞察见 `docs/adr/0015-report-and-insights.md`、`docs/adr/0023-report-cursor-account-partition.md`；分享入口与周期见 `docs/adr/0020-share-entry-report-only.md`；工作纪要与纪要引擎见 `docs/adr/0021-work-notes-llm-summary.md`。上下文清单加载档位与体积见 `docs/adr/0022-context-manifest-load-modes.md`。

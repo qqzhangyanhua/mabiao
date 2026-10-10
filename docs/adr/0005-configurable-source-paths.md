@@ -12,7 +12,7 @@
 | Source | 环境变量 | 默认路径 |
 |---|---|---|
 | Codex | `CODEX_HOME` | `~/.codex`（扫 `sessions/`） |
-| Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` **和** `~/.config/claude`（都扫 `projects/`） |
+| Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` **和** `~/.config/claude`（都扫 `projects/`）。另在已存在时追加 Claude Desktop / Cowork 嵌套 `local-agent-mode-sessions/*/*/local_*/.claude/projects`（macOS `~/Library/Application Support/Claude[+ -3p]`、Linux `~/.config/Claude[+ -3p]`、Windows `%APPDATA%` / `%LOCALAPPDATA%` / MSIX `Packages/Claude_*`）。`CLAUDE_CONFIG_DIR` 只替换 Code 根，不关掉 Desktop 发现 |
 | Pi | `PI_AGENT_DIR` | `~/.pi/agent/sessions` |
 | OMP | `OMP_AGENT_DIR` | `~/.omp/agent/sessions` |
 | OpenCode | `OPENCODE_DATA_DIR` | `~/.local/share/opencode`（扫 `opencode.db`） |
