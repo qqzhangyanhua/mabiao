@@ -358,6 +358,101 @@ fn opencode_adapter_ignores_zero_native_cost() {
 }
 
 #[test]
+fn opencode_adapter_reads_session_v2_and_skips_migrated_v1() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("opencode.db");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        "CREATE TABLE session (id TEXT PRIMARY KEY);
+         CREATE TABLE message (session_id TEXT NOT NULL, data TEXT NOT NULL);
+         CREATE TABLE session_v2 (id TEXT PRIMARY KEY, directory TEXT);
+         CREATE TABLE session_message (
+             id TEXT PRIMARY KEY,
+             session_id TEXT NOT NULL,
+             type TEXT NOT NULL,
+             seq INTEGER NOT NULL,
+             time_created INTEGER NOT NULL,
+             time_updated INTEGER NOT NULL,
+             data TEXT NOT NULL
+         );
+         CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+         INSERT INTO kv VALUES ('migration.v1-v2', '{\"phase\":\"completed\"}');
+         INSERT INTO session_v2 VALUES ('ses-v2', '/work/oc');
+         INSERT INTO session_message VALUES (
+             'msg-a', 'ses-v2', 'assistant', 1, 1790416806000, 1790416830000,
+             '{\"model\":{\"id\":\"gpt-6-astra\",\"providerID\":\"openai\"},\"cost\":0.01,\"tokens\":{\"input\":1000,\"output\":100,\"reasoning\":20,\"cache\":{\"read\":5000,\"write\":0}},\"time\":{\"created\":1790416806000,\"completed\":1790416830000}}'
+         );
+         INSERT INTO session_message VALUES (
+             'msg-c', 'ses-v2', 'compaction', 2, 1790417000000, 1790417010000,
+             '{\"tokens\":{\"input\":5,\"output\":1,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1790417000000}}'
+         );
+         INSERT INTO message VALUES (
+             'ses-gone',
+             '{\"role\":\"assistant\",\"modelID\":\"old-model\",\"tokens\":{\"input\":1,\"output\":1,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1,\"completed\":2}}'
+         );",
+    )
+    .unwrap();
+    let records = crate::adapters::opencode::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Opencode);
+    assert_eq!(records[0].model, "gpt-6-astra");
+    assert_eq!(records[0].provider, "openai");
+    assert_eq!(records[0].project, "/work/oc");
+    assert_eq!(records[0].session_id, "ses-v2");
+    assert_eq!(records[0].input_tokens, 1000);
+    assert_eq!(records[0].output_tokens, 100);
+    assert_eq!(records[0].reasoning_tokens, 20);
+    assert_eq!(records[0].cache_read_tokens, 5000);
+    assert_eq!(records[0].total_tokens, 6120);
+    assert!((records[0].native_cost.unwrap() - 0.01).abs() < 1e-9);
+    assert_eq!(records[1].input_tokens, 5);
+    assert_eq!(records[1].output_tokens, 1);
+    assert_eq!(records[1].session_id, "ses-v2");
+    assert!(records.iter().all(|record| record.model != "old-model"));
+}
+
+#[test]
+fn opencode_adapter_reads_unmigrated_v1_beside_session_v2() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("opencode.db");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        "CREATE TABLE message (session_id TEXT NOT NULL, data TEXT NOT NULL);
+         CREATE TABLE session_v2 (id TEXT PRIMARY KEY, directory TEXT);
+         CREATE TABLE session_message (
+             id TEXT PRIMARY KEY,
+             session_id TEXT NOT NULL,
+             type TEXT NOT NULL,
+             seq INTEGER NOT NULL,
+             time_created INTEGER NOT NULL,
+             time_updated INTEGER NOT NULL,
+             data TEXT NOT NULL
+         );
+         CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+         INSERT INTO kv VALUES ('migration.v1-v2', '{\"phase\":\"sessions\"}');
+         INSERT INTO session_v2 VALUES ('ses-v2', '/work/oc');
+         INSERT INTO session_message VALUES (
+             'msg-a', 'ses-v2', 'assistant', 1, 1, 2,
+             '{\"model\":{\"id\":\"v2-model\"},\"tokens\":{\"input\":10,\"output\":2,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1,\"completed\":2}}'
+         );
+         INSERT INTO message VALUES (
+             'ses-old',
+             '{\"role\":\"assistant\",\"modelID\":\"v1-model\",\"tokens\":{\"input\":3,\"output\":1,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1,\"completed\":2}}'
+         );
+         INSERT INTO message VALUES (
+             'ses-v2',
+             '{\"role\":\"assistant\",\"modelID\":\"dup-model\",\"tokens\":{\"input\":99,\"output\":9,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1,\"completed\":2}}'
+         );",
+    )
+    .unwrap();
+    let records = crate::adapters::opencode::parse(&path, dir.path()).unwrap();
+    let models: Vec<_> = records.iter().map(|record| record.model.as_str()).collect();
+    assert!(models.contains(&"v2-model"));
+    assert!(models.contains(&"v1-model"));
+    assert!(!models.contains(&"dup-model"));
+}
+
+#[test]
 fn kimi_adapter_keeps_last_status_update_per_turn() {
     let records = kimi::parse_kimi_wire(
         &fixture("kimi-wire.jsonl"),

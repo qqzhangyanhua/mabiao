@@ -1,4 +1,4 @@
-pub const ADAPTER_VERSION: i64 = 9;
+pub const ADAPTER_VERSION: i64 = 10;
 
 /// `user_version` 记账：1 = usage_records.model 已归一化成小写。
 pub(crate) const LOWERCASE_MODEL_VERSION: i64 = 1;
