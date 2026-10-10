@@ -266,7 +266,6 @@ fn gemini_event_index_matches_full_parse() {
 }
 
 #[test]
-#[test]
 fn qoder_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

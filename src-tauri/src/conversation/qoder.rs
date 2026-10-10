@@ -1,10 +1,27 @@
 use std::path::Path;
 
 use super::toolbox::*;
-use super::{claude, single_detail, single_index, ConversationIndexBatch, ConversationIndexIssue};
+use super::{claude, single_detail, ConversationIndexBatch, ConversationIndexIssue};
+
+fn wrap_index(
+    path: &Path,
+    parse: fn(&Path, bool) -> Result<ParsedConversation, String>,
+) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
+    parse(path, false)
+        .map(|conversation| ConversationIndexBatch {
+            conversations: vec![conversation],
+            diagnostics: Vec::new(),
+        })
+        .map_err(|message| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message,
+            event_type: None,
+            line: None,
+        })
+}
 
 pub(super) fn index(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, parse)
+    wrap_index(path, parse)
 }
 
 pub(super) fn detail(
@@ -32,7 +49,7 @@ pub(super) fn index_suffix(
 }
 
 pub(super) fn index_cn(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    single_index(path, parse_cn)
+    wrap_index(path, parse_cn)
 }
 
 pub(super) fn detail_cn(
