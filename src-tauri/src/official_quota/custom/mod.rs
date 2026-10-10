@@ -7,10 +7,13 @@
 //! 边界见 `docs/adr/0012-custom-quota-providers.md`：只允许内置预设类型、
 //! 只打计费 / 余额接口、不进消耗记录、不进本机 token KPI、凭证不进备份。
 
+pub mod kimi_code;
 pub mod litellm_proxy;
+pub mod minimax_coding;
 pub mod openai_compatible;
 pub mod panel;
 pub mod store;
+pub mod zhipu_coding;
 
 use std::time::Duration;
 
@@ -37,8 +40,9 @@ pub fn is_custom_id(id: &str) -> bool {
     id.starts_with(ID_PREFIX)
 }
 
-/// 预设类型。本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」，
-/// 以及「LiteLLM Proxy」；其余走 `unsupported`。
+/// 预设类型。本版实现「OpenAI 兼容计费」及其别名「NewAPI / OneAPI」、
+/// 「LiteLLM Proxy」，以及三档 API-key 套餐（Kimi Code / MiniMax Coding Plan /
+/// GLM · Z.ai Coding Plan）；其余走 `unsupported`。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CustomQuotaPreset {
     #[serde(rename = "openai_compatible")]
@@ -55,10 +59,16 @@ pub enum CustomQuotaPreset {
     Moonshot,
     #[serde(rename = "litellm_proxy")]
     LiteLlmProxy,
+    #[serde(rename = "kimi_code")]
+    KimiCode,
+    #[serde(rename = "minimax_coding")]
+    MiniMaxCoding,
+    #[serde(rename = "zhipu_coding")]
+    ZhipuCoding,
 }
 
 impl CustomQuotaPreset {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 10] = [
         Self::OpenAiCompatible,
         Self::NewApi,
         Self::OpenRouter,
@@ -66,6 +76,9 @@ impl CustomQuotaPreset {
         Self::SiliconFlow,
         Self::Moonshot,
         Self::LiteLlmProxy,
+        Self::KimiCode,
+        Self::MiniMaxCoding,
+        Self::ZhipuCoding,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -77,6 +90,9 @@ impl CustomQuotaPreset {
             Self::SiliconFlow => "siliconflow",
             Self::Moonshot => "moonshot",
             Self::LiteLlmProxy => "litellm_proxy",
+            Self::KimiCode => "kimi_code",
+            Self::MiniMaxCoding => "minimax_coding",
+            Self::ZhipuCoding => "zhipu_coding",
         }
     }
 
@@ -89,6 +105,9 @@ impl CustomQuotaPreset {
             Self::SiliconFlow => "硅基流动",
             Self::Moonshot => "Moonshot",
             Self::LiteLlmProxy => "LiteLLM Proxy",
+            Self::KimiCode => "Kimi Code",
+            Self::MiniMaxCoding => "MiniMax Coding Plan",
+            Self::ZhipuCoding => "GLM / Z.ai Coding Plan",
         }
     }
 
@@ -99,8 +118,18 @@ impl CustomQuotaPreset {
     pub fn implemented(self) -> bool {
         matches!(
             self,
-            Self::OpenAiCompatible | Self::NewApi | Self::LiteLlmProxy
+            Self::OpenAiCompatible
+                | Self::NewApi
+                | Self::LiteLlmProxy
+                | Self::KimiCode
+                | Self::MiniMaxCoding
+                | Self::ZhipuCoding
         )
+    }
+
+    /// 智谱 / Z.ai 的额度接口要裸密钥，其余预设走 Bearer。
+    pub fn bearer_authorization(self) -> bool {
+        !matches!(self, Self::ZhipuCoding)
     }
 
     pub fn parse(value: &str) -> Option<Self> {
@@ -215,6 +244,20 @@ fn is_loopback_host(host: &str) -> bool {
     matches!(host, "localhost" | "127.0.0.1" | "::1")
 }
 
+/// 归一化后的 base 去掉路径，只留 scheme + host[:port]。
+pub(crate) fn origin_of_normalized(base: &str) -> String {
+    let scheme = if base.starts_with("https://") {
+        "https://"
+    } else if base.starts_with("http://") {
+        "http://"
+    } else {
+        return base.to_string();
+    };
+    let rest = &base[scheme.len()..];
+    let authority = rest.split('/').next().unwrap_or("");
+    format!("{scheme}{authority}")
+}
+
 fn default_port(scheme: &str) -> Option<u16> {
     match scheme {
         "https://" => Some(443),
@@ -279,6 +322,9 @@ pub fn request_urls(
             Ok(openai_compatible::urls(&base, today))
         }
         CustomQuotaPreset::LiteLlmProxy => Ok(litellm_proxy::urls(&base)),
+        CustomQuotaPreset::KimiCode => Ok(kimi_code::urls(&base)),
+        CustomQuotaPreset::MiniMaxCoding => Ok(minimax_coding::urls(&base)),
+        CustomQuotaPreset::ZhipuCoding => Ok(zhipu_coding::urls(&base)),
         other => Err(unsupported(other)),
     }
 }
@@ -296,6 +342,9 @@ pub fn parse_quota(
             openai_compatible::parse(bodies)
         }
         CustomQuotaPreset::LiteLlmProxy => litellm_proxy::parse(bodies),
+        CustomQuotaPreset::KimiCode => kimi_code::parse(bodies),
+        CustomQuotaPreset::MiniMaxCoding => minimax_coding::parse(bodies),
+        CustomQuotaPreset::ZhipuCoding => zhipu_coding::parse(bodies),
         other => Err(unsupported(other)),
     }
 }
@@ -314,7 +363,7 @@ pub fn fetch_quota(
     // 必需的那条失败才让整次取数失败，错误照旧是人话。
     let bodies = requests
         .iter()
-        .map(|entry| match request(&entry.url, secret) {
+        .map(|entry| match request(preset, &entry.url, secret) {
             Ok(body) => Ok(body),
             Err(error) if entry.required => Err(error),
             Err(_) => Ok(String::new()),
@@ -359,11 +408,12 @@ pub fn is_precheck_error(error: &str) -> bool {
 
 /// 错误一律翻成人话：用户要判断的是「去充值 / 换密钥 / 等网络」，
 /// 一个裸的 HTTP 码回答不了这个问题。
-fn request(url: &str, secret: &str) -> Result<String, String> {
-    // 认证走 Bearer。NewAPI / OneAPI 是别名，LiteLLM Proxy 也是 Bearer，不另开一套头。
+fn request(preset: CustomQuotaPreset, url: &str, secret: &str) -> Result<String, String> {
+    // 默认 Bearer。智谱 / Z.ai Coding Plan 要裸密钥，Authorization 不加 Bearer。
+    let authorization = authorization_value(preset, secret);
     let request = crate::net::agent_with_timeout(TIMEOUT)
         .get(url)
-        .set("Authorization", &format!("Bearer {secret}"))
+        .set("Authorization", &authorization)
         .set("Accept", "application/json");
     match request.call() {
         Ok(response) => response
@@ -380,5 +430,13 @@ fn request(url: &str, secret: &str) -> Result<String, String> {
             "接口返回异常（HTTP {code}），请确认 base URL 与预设类型是否匹配"
         )),
         Err(_) => Err("网络不通，连不上这个地址，请检查网络或代理设置".to_string()),
+    }
+}
+
+pub(crate) fn authorization_value(preset: CustomQuotaPreset, secret: &str) -> String {
+    if preset.bearer_authorization() {
+        format!("Bearer {secret}")
+    } else {
+        secret.to_string()
     }
 }

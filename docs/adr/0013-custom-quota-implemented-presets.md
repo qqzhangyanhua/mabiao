@@ -44,3 +44,5 @@ NewAPI 那档提出需求的用户手上有真实站点，可做真机验证。L
 - ADR 0012 原文保留。读到「跳过 `custom:` 前缀」「一次性定义齐 6 种」时，以本 ADR 为准。
 - `custom:` 前缀仍用于与内置账号永不冲突、以及界面上一眼分辨自定义与内置。它不再是托盘标题的跳过判据。
 - 再加一档能取数的预设，只需要动 `implemented()` 与两处分派；「暂未支持」文案从已实现集合推导。
+- 2026-10-10 再加三档 API-key 套餐：`kimi_code`（`{base}/v1/usages`，Bearer）、`minimax_coding`（`{origin}/v1/token_plan/remains`，Bearer）、`zhipu_coding`（`{origin}/api/monitor/usage/quota/limit`，裸密钥）。端点来自公开文档与 magpie `planquota.go`。凭证只读用户在设置页填写的密钥，不写回任何客户端文件。
+

@@ -11,6 +11,7 @@ mod litellm_proxy;
 mod newapi;
 mod panel_commands;
 mod parsing;
+mod plan_presets;
 mod preview_and_test;
 mod rows;
 mod tray_and_alerts;

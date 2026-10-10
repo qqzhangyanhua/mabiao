@@ -78,6 +78,12 @@ describe("credentialHint", () => {
     expect(credentialHint("siliconflow")).toBeNull();
     expect(credentialHint("moonshot")).toBeNull();
   });
+
+  it("三档套餐预设交代钥匙种类和默认地址", () => {
+    expect(credentialHint("kimi_code")).toContain("Kimi Code");
+    expect(credentialHint("minimax_coding")).toContain("MiniMax");
+    expect(credentialHint("zhipu_coding")).toContain("不加 Bearer");
+  });
 });
 
 describe("secretPlaceholder", () => {
