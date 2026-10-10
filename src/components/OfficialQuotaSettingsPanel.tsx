@@ -2,11 +2,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { useTickingNow } from "../hooks/useTickingNow";
 import {
+  DEFAULT_OFFICIAL_QUOTA_CONFIG,
+  formatAlertThresholdsInput,
+  parseAlertThresholdsInput,
+  persistOfficialQuotaConfig,
+} from "../lib/officialQuotaConfig";
+import {
   officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
-import type { OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
+import type { OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
 import { OfficialQuotaPlanMark, QuotaFreshnessMark } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
@@ -21,13 +27,21 @@ export function OfficialQuotaSettingsPanel({
   onError: (error: unknown) => void;
 }) {
   const [hook, setHook] = useState<OfficialQuotaHookDto | null>(null);
-  const [busy, setBusy] = useState<"idle" | "refresh" | "hook" | "alerts">("idle");
+  const [config, setConfig] = useState<OfficialQuotaConfig>(DEFAULT_OFFICIAL_QUOTA_CONFIG);
+  const [thresholdInput, setThresholdInput] = useState("80, 100");
+  const [busy, setBusy] = useState<"idle" | "refresh" | "hook" | "alerts" | "save">("idle");
   const nowMs = useTickingNow();
-  const alertsEnabled = quota?.alerts_enabled ?? true;
+  const alertsEnabled = quota?.alerts_enabled ?? config.alerts_enabled;
   const undetectedNote = quota ? officialQuotaUndetectedNote(quota.undetected) : null;
 
   useEffect(() => {
     void invoke<OfficialQuotaHookDto>("get_official_quota_hook").then(setHook).catch(onError);
+    void invoke<OfficialQuotaConfig>("get_official_quota_config")
+      .then((next) => {
+        setConfig(next);
+        setThresholdInput(formatAlertThresholdsInput(next.alert_thresholds));
+      })
+      .catch(onError);
   }, [onError]);
 
   async function refresh() {
@@ -55,16 +69,27 @@ export function OfficialQuotaSettingsPanel({
   async function toggleAlerts() {
     setBusy("alerts");
     try {
-      // 配置文件是整份覆盖写入，漏带 hidden_providers 会把「配置显示」里
-      // 关掉的账号悄悄重新打开——这里必须带上当前值再改 alerts_enabled。
-      await invoke("save_official_quota_config", {
-        config: {
-          alerts_enabled: !alertsEnabled,
-          hidden_providers: quota?.hidden_providers ?? [],
-        },
+      // 整份覆盖写入：先读当前配置再改 alerts_enabled，避免冲掉自定义档位。
+      const next = await persistOfficialQuotaConfig({ alerts_enabled: !alertsEnabled });
+      setConfig(next);
+      onQuota(await invoke<OfficialQuotaDto>("get_official_quota"));
+    } catch (error) {
+      onError(error);
+    } finally {
+      setBusy("idle");
+    }
+  }
+
+  async function saveAlertSettings() {
+    setBusy("save");
+    try {
+      const next = await persistOfficialQuotaConfig({
+        alert_thresholds: parseAlertThresholdsInput(thresholdInput),
+        reset_reminder_hours: config.reset_reminder_hours,
+        reset_reminder_max_used_percent: config.reset_reminder_max_used_percent,
       });
-      const next = await invoke<OfficialQuotaDto>("get_official_quota");
-      onQuota(next);
+      setConfig(next);
+      setThresholdInput(formatAlertThresholdsInput(next.alert_thresholds));
     } catch (error) {
       onError(error);
     } finally {
@@ -116,6 +141,52 @@ export function OfficialQuotaSettingsPanel({
         </ul>
       ) : null}
       {undetectedNote ? <p className="panel-note">{undetectedNote}</p> : null}
+      <div className="official-quota-alert-fields">
+        <label className="official-quota-alert-field">
+          <span>告警档位（%）</span>
+          <input
+            value={thresholdInput}
+            onChange={(event) => setThresholdInput(event.target.value)}
+            placeholder="80, 100"
+          />
+          <em>默认 80、100。逗号分隔，1–100。旧配置缺字段时仍用这两档。</em>
+        </label>
+        <label className="official-quota-alert-field">
+          <span>重置前提醒（小时）</span>
+          <input
+            type="number"
+            min={0}
+            max={168}
+            value={config.reset_reminder_hours}
+            onChange={(event) =>
+              setConfig((current) => ({
+                ...current,
+                reset_reminder_hours: Number.parseInt(event.target.value, 10) || 0,
+              }))
+            }
+          />
+          <em>距重置不足此时长、且已用低于下方比例时提醒一次。0 表示关闭。5 小时窗不提醒。</em>
+        </label>
+        <label className="official-quota-alert-field">
+          <span>「还剩很多」上限（已用 %）</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={config.reset_reminder_max_used_percent}
+            onChange={(event) =>
+              setConfig((current) => ({
+                ...current,
+                reset_reminder_max_used_percent: Number.parseInt(event.target.value, 10) || 0,
+              }))
+            }
+          />
+          <em>已用低于此值才提醒。默认 50。每个重置周期只弹一次。</em>
+        </label>
+        <Button disabled={busy !== "idle"} onClick={() => void saveAlertSettings()}>
+          {busy === "save" ? "保存中…" : "保存告警设置"}
+        </Button>
+      </div>
       {hook ? (
         <div className="official-quota-hook">
           <p className="panel-note">

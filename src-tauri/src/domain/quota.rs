@@ -160,10 +160,32 @@ pub struct OfficialQuotaConfig {
     /// 一处关掉两边都不再展示；不影响告警和本机采集。
     #[serde(default)]
     pub hidden_providers: Vec<String>,
+    /// 百分比告警档位。缺省 / 非法时回落到 80、100，旧配置文件不用迁移。
+    #[serde(default = "default_alert_thresholds")]
+    pub alert_thresholds: Vec<u32>,
+    /// 重置前多少小时内、且已用低于 `reset_reminder_max_used_percent` 时提醒一次。
+    /// `0` 表示关掉这条提醒。默认 12 小时。
+    #[serde(default = "default_reset_reminder_hours")]
+    pub reset_reminder_hours: u32,
+    /// 「还剩很多」：已用百分比低于此值才提醒。默认 50。
+    #[serde(default = "default_reset_reminder_max_used_percent")]
+    pub reset_reminder_max_used_percent: u32,
 }
 
 fn default_alerts_enabled() -> bool {
     true
+}
+
+pub fn default_alert_thresholds() -> Vec<u32> {
+    vec![80, 100]
+}
+
+fn default_reset_reminder_hours() -> u32 {
+    12
+}
+
+fn default_reset_reminder_max_used_percent() -> u32 {
+    50
 }
 
 impl Default for OfficialQuotaConfig {
@@ -171,7 +193,26 @@ impl Default for OfficialQuotaConfig {
         Self {
             alerts_enabled: true,
             hidden_providers: Vec::new(),
+            alert_thresholds: default_alert_thresholds(),
+            reset_reminder_hours: default_reset_reminder_hours(),
+            reset_reminder_max_used_percent: default_reset_reminder_max_used_percent(),
         }
+    }
+}
+
+/// 告警档位：1–100、去重、升序。空或全非法则回落默认 80/100。
+pub fn normalize_alert_thresholds(raw: &[u32]) -> Vec<u32> {
+    let mut values: Vec<u32> = raw
+        .iter()
+        .copied()
+        .filter(|value| (1..=100).contains(value))
+        .collect();
+    values.sort_unstable();
+    values.dedup();
+    if values.is_empty() {
+        default_alert_thresholds()
+    } else {
+        values
     }
 }
 
