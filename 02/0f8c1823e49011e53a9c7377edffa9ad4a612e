@@ -1,0 +1,22 @@
+src-tauri/src/conversation/dsh_test.rs
+  s_728e79483709f7::t_495d13447cc749 176-199
+src-tauri/src/conversation/dsh.rs
+  s_728e79483709f7::t_0334806dc0b130 239-246,272-304
+  s_728e79483709f7::t_6edfc5bf2d42d8 305-306
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "020f8c1823e49011e53a9c7377edffa9ad4a612e",
+  "prompts": {},
+  "sessions": {
+    "s_728e79483709f7": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "3232fd3b-60c5-4d04-8389-4c2334e9758f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
