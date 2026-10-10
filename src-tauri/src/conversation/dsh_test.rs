@@ -173,3 +173,27 @@ fn only_v4_files_get_the_range_revision_suffix() {
         .contains(":range-v2"));
     assert!(super::source_revision(&v4).unwrap().ends_with(":range-v2"));
 }
+
+#[test]
+fn known_v4_runtime_records_stay_as_events_without_diagnostics() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("session.v4.jsonl.zstd");
+    write_compressed(
+        &path,
+        concat!(
+            "{\"type\":\"session\",\"id\":\"dsh-v4\",\"cwd\":\"/workspace\",\"timestamp\":\"2026-10-01T00:00:00Z\"}\n",
+            "{\"type\":\"hook/invoked\",\"seq\":1,\"timestamp\":\"2026-10-01T00:00:01Z\",\"data\":{}}\n",
+            "{\"type\":\"llm/retry\",\"seq\":2,\"timestamp\":\"2026-10-01T00:00:02Z\",\"data\":{}}\n",
+            "{\"type\":\"future/event\",\"seq\":3,\"timestamp\":\"2026-10-01T00:00:03Z\"}\n"
+        ),
+    );
+
+    let batch = index(&path).unwrap();
+    let unadapted = batch.conversations[0]
+        .events
+        .iter()
+        .filter(|event| event.kind == EventKind::Unadapted)
+        .count();
+    assert_eq!(unadapted, 3);
+    assert_eq!(batch.diagnostics.len(), 1);
+}
