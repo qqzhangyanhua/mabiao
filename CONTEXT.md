@@ -88,7 +88,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 
 | Source | 存储 | 本机 token | 本机费用 |
 |--------|------|:---:|:---:|
-| Codex | jsonl `~/.codex/sessions` | ✅ | ❌ |
+| Codex | jsonl / jsonl.zst `~/.codex/sessions` | ✅ | ❌ |
 | Claude Code | jsonl `~/.claude/projects`（另扫 XDG `~/.config/claude/projects`，以及已存在的 Claude Desktop / Cowork 嵌套 `.claude/projects`） | ✅ | ✅ 自带 `costUSD` |
 | pi | jsonl `~/.pi/agent/sessions` | ✅ | ✅ 自带 |
 | OMP | jsonl `~/.omp/agent/sessions` | ✅ | ✅ 自带 `cost.total` |

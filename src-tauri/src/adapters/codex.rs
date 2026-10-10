@@ -13,8 +13,39 @@ pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> 
     ingest::resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions")
 }
 
+pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
+    let mut paths = Vec::new();
+    for root in roots {
+        let mut plain = std::collections::BTreeSet::new();
+        for path in ingest::walk_files(root, "jsonl")? {
+            plain.insert(path.clone());
+            paths.push(path);
+        }
+        for path in ingest::walk_suffix(root, ".jsonl.zst")? {
+            let Some(stem) = path.file_stem() else {
+                continue;
+            };
+            let uncompressed = path.with_file_name(stem);
+            if plain.contains(&uncompressed) {
+                continue;
+            }
+            paths.push(path);
+        }
+    }
+    Ok(paths)
+}
+
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    parse_streaming_jsonl(path, parse_codex_jsonl)
+    let is_zst = path.extension().and_then(|ext| ext.to_str()) == Some("zst");
+    if !is_zst {
+        return parse_streaming_jsonl(path, parse_codex_jsonl);
+    }
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let decoded = zstd::decode_all(bytes.as_slice()).map_err(|error| error.to_string())?;
+    let text = String::from_utf8(decoded).map_err(|error| error.to_string())?;
+    let loc = path.to_string_lossy();
+    let factory: &LineFactory<'_> = &|| Box::new(text.lines().map(str::to_string));
+    Ok(parse_codex_jsonl(factory, loc.as_ref()))
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
