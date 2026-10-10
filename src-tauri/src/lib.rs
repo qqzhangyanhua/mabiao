@@ -24,6 +24,7 @@ pub mod official_quota;
 pub mod paths;
 pub(crate) mod proto_wire;
 pub mod query;
+pub mod remote_server;
 pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
@@ -491,6 +492,12 @@ pub fn run() {
             commands::refresh_price_snapshot,
             commands::reset_price_snapshot,
             commands::get_source_diagnostics,
+            commands::get_remote_server,
+            commands::validate_remote_server_url,
+            commands::remote_server_login,
+            commands::remote_server_logout,
+            commands::rename_remote_device,
+            commands::verify_remote_server,
             commands::get_scan_path_config,
             commands::detect_source_presence,
             commands::save_scan_path_config,

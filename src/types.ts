@@ -1193,3 +1193,19 @@ export type DetectedEngine = {
   installed: boolean;
   version: string | null;
 };
+
+export type RemoteSessionState = "not_logged_in" | "logged_in" | "expired" | "rejected";
+
+/** 设置页「远程服务」。不含密码与 token：它们只在 Rust 侧存在。 */
+export type RemoteServerDto = {
+  base_url: string;
+  account: string;
+  /** 首次登录前为 null。 */
+  device_id: string | null;
+  device_name: string;
+  state: RemoteSessionState;
+  role: "admin" | "member" | null;
+  expires_at: string | null;
+  /** 过期或被拒时的一句中文提示。 */
+  notice: string | null;
+};

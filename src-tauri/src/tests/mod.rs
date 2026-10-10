@@ -58,6 +58,7 @@ mod quota_backoff;
 mod quota_exhaust;
 mod qwen_copilot_conversation;
 mod read_pool;
+mod remote_server;
 mod report;
 mod rollup;
 mod rollup_source;

@@ -2269,6 +2269,7 @@ dependencies = [
  "tempfile",
  "toml 0.9.8",
  "ureq",
+ "url",
  "urlencoding",
  "zstd",
 ]

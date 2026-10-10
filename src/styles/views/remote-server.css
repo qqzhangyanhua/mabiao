@@ -1,0 +1,25 @@
+/* 设置页「远程服务」：登录表单复用 .custom-quota-form，这里只补状态行与设备行。 */
+.remote-server-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: 12px;
+}
+
+.remote-server-device {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.remote-server-device .field {
+  flex: 1 1 220px;
+}
+
+.remote-server-id {
+  font-size: 11px;
+  word-break: break-all;
+}

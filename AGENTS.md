@@ -44,6 +44,7 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres \
 | 对话记录 | `cargo test conversation` |
 | 全局指令 | `cargo test instructions` |
 | 备份 | `cargo test backup` |
+| 远程服务登录与凭证 | `cargo test remote_server` |
 | 工作纪要 | `cargo test work_notes` |
 | 远程服务 | `DATABASE_URL=postgres://… cargo test --manifest-path server/Cargo.toml`（要 PostgreSQL，见下） |
 

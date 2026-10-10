@@ -22,6 +22,7 @@ import { OfficialQuotaSettingsPanel } from "./OfficialQuotaSettingsPanel";
 import { OverviewLayoutPanel } from "./OverviewLayoutPanel";
 import { PriceConfigPanel } from "./PriceConfigPanel";
 import { PricePresetPanel } from "./PricePresetPanel";
+import { RemoteServerPanel } from "./RemoteServerPanel";
 import { ScanPathPanel } from "./ScanPathPanel";
 import { SourceDiagnosticsPanel } from "./SourceDiagnosticsPanel";
 import { UnpricedDiagnosisPanel } from "./UnpricedDiagnosisPanel";
@@ -196,6 +197,7 @@ export function Settings({
               presentSources={detectedSources}
               onChange={onOverviewLayoutChange}
             />
+            <RemoteServerPanel />
           </>
         ) : null}
         {tab === "sources" ? (

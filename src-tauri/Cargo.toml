@@ -49,6 +49,7 @@ ureq = { version = "2", default-features = false, features = ["json", "tls", "so
 aes-gcm = "0.11"
 mimalloc = { version = "0.1", default-features = false }
 sha2 = "0.11"
+url = "2"
 push-protocol = { path = "../crates/push-protocol" }
 pricing = { path = "../crates/pricing" }
 
