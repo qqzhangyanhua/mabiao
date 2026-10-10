@@ -1,0 +1,102 @@
+server/web/src/pages/SessionPage.tsx
+  s_eeba4839734e60::t_60cfaf57e68958 1-159
+server/web/src/pages/MemberPage.tsx
+  s_eeba4839734e60::t_2bc159791ec5e2 24,47-50,52,54,124-127,129,131,133,135
+  s_eeba4839734e60::t_3a443548935eff 4-8,51,128,130,132,134
+server/src/summary.rs
+  s_eeba4839734e60::t_356f2b7875c55e 152-176
+  s_eeba4839734e60::t_233c6e232053a8 46-47,68,79,81,91
+server/src/project_admin.rs
+  s_eeba4839734e60::t_d73da6813b8347 62-78,110,112-113,137,141,154-159,161
+  s_eeba4839734e60::t_c6bc8ab648b6e3 174-181
+  s_eeba4839734e60::t_adf04d31512388 1-61,79-109,111,114-136,138-140,142-153,160,162-173,182
+server/web/src/lib/route.test.ts
+  s_eeba4839734e60::t_9abdf8521f19d8 11-16,18,28-30,55-64
+server/tests/detail.rs
+  s_eeba4839734e60::t_fa3f033f6e93bb 1-432,439-482,489-504,506-662,664-814
+  s_eeba4839734e60::t_6fc7c6169cc454 433-438,483-488,505,663
+server/web/src/lib/events.test.ts
+  s_eeba4839734e60::t_9abdf8521f19d8 1-37
+server/web/src/Detail.test.tsx
+  s_eeba4839734e60::t_3b044873ff4e0b 1-309
+server/src/projects.rs
+  s_eeba4839734e60::t_5b4ac3dc7400ac 78-96,109-110,190-191
+server/web/src/components/SessionTable.tsx
+  s_eeba4839734e60::t_13d9645f890150 3,27-32
+server/src/routes.rs
+  s_eeba4839734e60::t_c6bc8ab648b6e3 16-19,22,26,49-59,264,270,309-314,323-330,338-344,357-366,374-417,422-464,466-469
+  s_eeba4839734e60::t_d73da6813b8347 418-421,465
+server/src/sessions.rs
+  s_eeba4839734e60::t_c0ac8d15e1e004 2,97-107,112,126,129-133,141,147-151,156-168,170-171,174-189,191-197
+  s_eeba4839734e60::t_d73da6813b8347 4,169,172-173,190
+  s_eeba4839734e60::t_633648c5d179c4 198
+server/src/api_detail.rs
+  s_eeba4839734e60::t_c6bc8ab648b6e3 1-130
+server/web/src/api/types.ts
+  s_eeba4839734e60::t_28e00076a51d8d 83-176
+server/src/lib.rs
+  s_eeba4839734e60::t_5b4ac3dc7400ac 14
+  s_eeba4839734e60::t_c6bc8ab648b6e3 7
+server/web/src/lib/context.ts
+  s_eeba4839734e60::t_3b044873ff4e0b 7-13
+  s_eeba4839734e60::t_9abdf8521f19d8 1-6,14-58
+server/web/src/lib/route.ts
+  s_eeba4839734e60::t_28e00076a51d8d 4-15,21-27,39-44,53-56,61-70
+server/web/src/components/EventList.tsx
+  s_eeba4839734e60::t_60cfaf57e68958 1-71
+server/web/src/components/Layout.tsx
+  s_eeba4839734e60::t_13d9645f890150 21-24
+  s_eeba4839734e60::t_0c79c1d4c8f7bb 20
+server/web/src/components/ProjectAdmin.tsx
+  s_eeba4839734e60::t_13d9645f890150 1-107
+server/migrations/0004_project_merge.sql
+  s_eeba4839734e60::t_adf04d31512388 1-8
+server/web/src/api/client.ts
+  s_eeba4839734e60::t_28e00076a51d8d 3,7-10,31,57-69,121-122,128,152-166,168-172
+  s_eeba4839734e60::t_0e28606c93186f 38-40
+  s_eeba4839734e60::t_d73da6813b8347 167
+server/web/src/components/ContextManifestView.tsx
+  s_eeba4839734e60::t_60cfaf57e68958 1-80
+server/src/usage_query.rs
+  s_eeba4839734e60::t_d73da6813b8347 7,59-70
+  s_eeba4839734e60::t_233c6e232053a8 20-21,87,89,94,113-114,119
+server/src/api.rs
+  s_eeba4839734e60::t_c6bc8ab648b6e3 135,255,325-327
+server/web/src/lib/context.test.ts
+  s_eeba4839734e60::t_9abdf8521f19d8 1-49
+server/web/src/App.tsx
+  s_eeba4839734e60::t_13d9645f890150 9-11,24-26
+server/web/src/components/SummaryView.tsx
+  s_eeba4839734e60::t_13d9645f890150 26-27,31-37,80-89
+server/web/src/pages/ProjectsPage.tsx
+  s_eeba4839734e60::t_13d9645f890150 1-52
+server/web/src/pages/ProjectPage.tsx
+  s_eeba4839734e60::t_0e28606c93186f 1,23,70
+  s_eeba4839734e60::t_13d9645f890150 2-22,24-69,71-75,80-92
+  s_eeba4839734e60::t_3b044873ff4e0b 76-79
+  s_eeba4839734e60::t_3572919fd36a41 93-101
+server/web/src/api/client.test.ts
+  s_eeba4839734e60::t_3b044873ff4e0b 96-128
+docs/agent-layers.md
+  s_eeba4839734e60::t_26995a0eba922e 206-216,223,225-227
+server/web/src/lib/events.ts
+  s_eeba4839734e60::t_9abdf8521f19d8 1-38
+server/web/src/components/GeneratedFilter.tsx
+  s_eeba4839734e60::t_d114c363deb16c 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8fb744bb8f93faaa8cbf0061d5ad1d68e6899961",
+  "prompts": {},
+  "sessions": {
+    "s_eeba4839734e60": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "6095d2de-3417-4637-b072-22589b381a04",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
