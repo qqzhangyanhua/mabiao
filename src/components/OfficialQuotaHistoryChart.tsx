@@ -19,7 +19,7 @@ export function OfficialQuotaHistoryChart({
 }) {
   const { theme } = useTheme();
   const [history, setHistory] = useState<OfficialQuotaHistoryDto | null>(null);
-  const [selected, setSelected] = useState<string>("");
+  const [selectedOverride, setSelectedOverride] = useState<string>("");
 
   useEffect(() => {
     void invoke<OfficialQuotaHistoryDto>("get_official_quota_history")
@@ -31,12 +31,7 @@ export function OfficialQuotaHistoryChart({
     const fromHistory = history ? quotaHistoryProviders(history.points) : [];
     return fromHistory.length > 0 ? fromHistory : providers;
   }, [history, providers]);
-
-  useEffect(() => {
-    if (!available.includes(selected)) {
-      setSelected(available[0] ?? "");
-    }
-  }, [available, selected]);
+  const selected = available.includes(selectedOverride) ? selectedOverride : (available[0] ?? "");
 
   const series = useMemo(
     () => (history && selected ? groupQuotaHistory(history.points, selected) : []),
@@ -58,7 +53,10 @@ export function OfficialQuotaHistoryChart({
         {available.length > 1 ? (
           <label className="official-quota-history-provider">
             <span>账号</span>
-            <select value={selected} onChange={(event) => setSelected(event.target.value)}>
+            <select
+              value={selected}
+              onChange={(event) => setSelectedOverride(event.target.value)}
+            >
               {available.map((id) => (
                 <option key={id} value={id}>
                   {id}
