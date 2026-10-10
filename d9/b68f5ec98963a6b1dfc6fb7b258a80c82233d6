@@ -1,0 +1,20 @@
+src/components/SourceIcon.tsx
+  s_a294a645791a4a::t_171453450e04a4 108,114,120,126,132,138
+  s_a294a645791a4a::t_0d2f91b08e3719 59-60,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d9b68f5ec98963a6b1dfc6fb7b258a80c82233d6",
+  "prompts": {},
+  "sessions": {
+    "s_a294a645791a4a": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a1259c-3110-79a3-ac65-87751117baf5",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
