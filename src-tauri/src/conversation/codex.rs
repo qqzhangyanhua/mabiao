@@ -34,12 +34,7 @@ fn parse_file_mode(
     tolerate_incomplete_tail: bool,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, ConversationIndexIssue> {
-    let content = fs::read_to_string(path).map_err(|error| ConversationIndexIssue {
-        path: path.to_string_lossy().to_string(),
-        message: format!("读取原始文件失败：{error}"),
-        event_type: None,
-        line: None,
-    })?;
+    let content = read_codex_text(path)?;
     parse_content(
         path,
         &content,
@@ -57,6 +52,14 @@ pub(super) fn index_suffix(
     start_line: u32,
     session_id: &str,
 ) -> Result<ParsedConversation, ConversationIndexIssue> {
+    if is_codex_zst(path) {
+        return Err(ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: "压缩 Codex 会话整份重写，走全量索引".to_string(),
+            event_type: None,
+            line: None,
+        });
+    }
     let content = read_file_suffix(path, byte_offset)?;
     parse_content(
         path,
@@ -67,6 +70,42 @@ pub(super) fn index_suffix(
         false,
         Some(session_id.to_string()),
     )
+}
+
+fn is_codex_zst(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.ends_with(".jsonl.zst"))
+}
+
+fn read_codex_text(path: &Path) -> Result<String, ConversationIndexIssue> {
+    if is_codex_zst(path) {
+        let bytes = fs::read(path).map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("读取原始文件失败：{error}"),
+            event_type: None,
+            line: None,
+        })?;
+        let decoded =
+            zstd::decode_all(bytes.as_slice()).map_err(|error| ConversationIndexIssue {
+                path: path.to_string_lossy().to_string(),
+                message: format!("解压 Codex 会话失败：{error}"),
+                event_type: None,
+                line: None,
+            })?;
+        return String::from_utf8(decoded).map_err(|error| ConversationIndexIssue {
+            path: path.to_string_lossy().to_string(),
+            message: format!("Codex 解压结果不是 UTF-8：{error}"),
+            event_type: None,
+            line: None,
+        });
+    }
+    fs::read_to_string(path).map_err(|error| ConversationIndexIssue {
+        path: path.to_string_lossy().to_string(),
+        message: format!("读取原始文件失败：{error}"),
+        event_type: None,
+        line: None,
+    })
 }
 
 pub(super) fn parse_content(

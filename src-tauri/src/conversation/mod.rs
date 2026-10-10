@@ -67,9 +67,9 @@ pub use context_content::load_context_item_content;
 pub(crate) use context_manifest::assemble;
 pub(crate) use discover::{
     detail_claude, detail_gemini, detail_omp, detail_pi, diagnostic_detail, diagnostic_index,
-    discover_droid, discover_dsh, discover_extension, discover_gemini, discover_jsonl,
-    discover_opencode, index_claude, index_gemini, index_omp, index_pi, regular_source_revision,
-    single_detail,
+    discover_codex, discover_droid, discover_dsh, discover_extension, discover_gemini,
+    discover_jsonl, discover_opencode, index_claude, index_gemini, index_omp, index_pi,
+    regular_source_revision, single_detail,
 };
 pub(crate) use event_index::indexed_event_count;
 pub use line_direct::{
@@ -115,7 +115,7 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::Alma,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 17;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 18;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {
@@ -173,7 +173,7 @@ pub(crate) struct ConversationAdapter {
 pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
     ConversationAdapter {
         source: Source::Codex,
-        discover: discover_jsonl,
+        discover: discover_codex,
         index: codex::index,
         index_suffix: Some(codex::index_suffix),
         detail: codex::detail,

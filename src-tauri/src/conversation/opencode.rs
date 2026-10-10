@@ -19,6 +19,7 @@ struct SessionRow {
     id: String,
     title: String,
     directory: String,
+    parent_id: String,
     created_at: Option<i64>,
     updated_at: Option<i64>,
 }
@@ -127,18 +128,45 @@ fn read_snapshot(path: &Path) -> Result<DatabaseSnapshot, String> {
 
 fn read_transaction(path: &Path, db: &Connection) -> Result<DatabaseSnapshot, String> {
     let tables = table_names(db)?;
-    if !tables.contains("session") {
+    let has_v2 = tables.contains("session_v2") && tables.contains("session_message");
+    let has_v1 = tables.contains("session");
+    if !has_v1 && !has_v2 {
         return Err("OpenCode 数据库缺少必需的 session 表".to_string());
     }
-    let session_columns = table_columns(db, "session")?;
-    if !session_columns.contains("id") {
-        return Err("OpenCode session 表缺少必需的 id 列".to_string());
-    }
 
-    let sessions = read_sessions(db, &session_columns)?;
+    let mut sessions = Vec::new();
+    let mut extra_messages = Vec::new();
+    let mut extra_parts = Vec::new();
+    if has_v2 {
+        let (v2_sessions, v2_messages, v2_parts) = read_v2(path, db)?;
+        sessions.extend(v2_sessions);
+        extra_messages.extend(v2_messages);
+        extra_parts.extend(v2_parts);
+    }
+    if has_v1 && !v2_migration_completed(db) {
+        let session_columns = table_columns(db, "session")?;
+        if !session_columns.contains("id") {
+            return Err("OpenCode session 表缺少必需的 id 列".to_string());
+        }
+        let skip: BTreeSet<String> = sessions.iter().map(|session| session.id.clone()).collect();
+        sessions.extend(
+            read_sessions(db, &session_columns)?
+                .into_iter()
+                .filter(|session| !skip.contains(&session.id)),
+        );
+    } else if has_v1 && !has_v2 {
+        let session_columns = table_columns(db, "session")?;
+        if !session_columns.contains("id") {
+            return Err("OpenCode session 表缺少必需的 id 列".to_string());
+        }
+        sessions = read_sessions(db, &session_columns)?;
+    }
     let mut diagnostics = Vec::new();
     let mut message_schema_available = false;
-    let messages = if !tables.contains("message") {
+    let skip_v1_rows = has_v2 && v2_migration_completed(db);
+    let mut messages = if skip_v1_rows {
+        Vec::new()
+    } else if !tables.contains("message") {
         diagnostics.push(diagnostic(
             path,
             "OpenCode message 表不可用；消息与事件能力已降级",
@@ -163,7 +191,9 @@ fn read_transaction(path: &Path, db: &Connection) -> Result<DatabaseSnapshot, St
         }
     };
     let mut part_schema_available = false;
-    let parts = if !tables.contains("part") {
+    let mut parts = if skip_v1_rows {
+        Vec::new()
+    } else if !tables.contains("part") {
         diagnostics.push(diagnostic(
             path,
             "OpenCode part 表不可用；消息正文与工具事件能力已降级",
@@ -192,6 +222,12 @@ fn read_transaction(path: &Path, db: &Connection) -> Result<DatabaseSnapshot, St
         }
     };
 
+    if !extra_messages.is_empty() {
+        message_schema_available = true;
+        part_schema_available = true;
+    }
+    messages.extend(extra_messages);
+    parts.extend(extra_parts);
     let mut capabilities = Vec::new();
     if message_schema_available && part_schema_available {
         capabilities.push(CAPABILITY_MESSAGES.to_string());
@@ -222,13 +258,15 @@ fn table_names(db: &Connection) -> Result<BTreeSet<String>, String> {
 }
 
 fn table_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let sql = match table {
-        "session" => "PRAGMA table_info(session)",
-        "message" => "PRAGMA table_info(message)",
-        "part" => "PRAGMA table_info(part)",
-        _ => return Err("不支持的 OpenCode 表".to_string()),
-    };
-    let mut statement = db.prepare(sql).map_err(|error| error.to_string())?;
+    if !table
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '_')
+    {
+        return Err("不支持的 OpenCode 表".to_string());
+    }
+    let mut statement = db
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
     let rows = statement
         .query_map([], |row| row.get(1))
         .map_err(|error| error.to_string())?
@@ -247,9 +285,10 @@ fn optional_column(columns: &BTreeSet<String>, column: &str, fallback: &str) -> 
 
 fn read_sessions(db: &Connection, columns: &BTreeSet<String>) -> Result<Vec<SessionRow>, String> {
     let sql = format!(
-        "SELECT id, {}, {}, {}, {} FROM session ORDER BY id",
+        "SELECT id, {}, {}, {}, {}, {} FROM session ORDER BY id",
         optional_column(columns, "title", "''"),
         optional_column(columns, "directory", "''"),
+        optional_column(columns, "parent_id", "''"),
         optional_column(columns, "time_created", "NULL"),
         optional_column(columns, "time_updated", "NULL"),
     );
@@ -260,8 +299,9 @@ fn read_sessions(db: &Connection, columns: &BTreeSet<String>) -> Result<Vec<Sess
                 id: row.get(0)?,
                 title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
                 directory: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
+                parent_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })
         .map_err(|error| error.to_string())?
@@ -554,9 +594,24 @@ fn project_session(
         ended_at,
         messages,
         events,
-        true,
+        session.parent_id.is_empty(),
         ConversationFinishPrep::NONE,
     )?;
+    if !session.parent_id.is_empty() {
+        parsed.events.insert(
+            0,
+            semantic_event(
+                0,
+                EventKind::SystemStatus,
+                &parsed.session.started_at,
+                None,
+                Some("session_started".to_string()),
+                None,
+                serde_json::json!({ "parent_id": session.parent_id }),
+            ),
+        );
+        assign_event_provenance(&mut parsed.events, &parsed.session.source_file);
+    }
     parsed.session.capabilities = capabilities.to_vec();
     Ok(parsed)
 }
@@ -763,4 +818,155 @@ fn millis_timestamp(value: Option<i64>) -> String {
         .and_then(chrono::DateTime::from_timestamp_millis)
         .map(|timestamp| timestamp.to_rfc3339())
         .unwrap_or_default()
+}
+
+fn v2_migration_completed(db: &Connection) -> bool {
+    let tables = table_names(db).unwrap_or_default();
+    if !tables.contains("kv") {
+        return false;
+    }
+    let Ok(raw) = db.query_row(
+        "SELECT value FROM kv WHERE key = 'migration.v1-v2'",
+        [],
+        |row| row.get::<_, String>(0),
+    ) else {
+        return false;
+    };
+    serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|value| value.get("phase")?.as_str().map(str::to_string))
+        .is_some_and(|phase| phase == "completed")
+}
+
+fn read_v2(
+    _path: &Path,
+    db: &Connection,
+) -> Result<(Vec<SessionRow>, Vec<MessageRow>, Vec<PartRow>), String> {
+    let columns = table_columns(db, "session_v2")?;
+    let sql = format!(
+        "SELECT id, {}, {}, {}, {}, {} FROM session_v2 ORDER BY id",
+        optional_column(&columns, "title", "''"),
+        optional_column(&columns, "directory", "''"),
+        optional_column(&columns, "parent_id", "''"),
+        optional_column(&columns, "time_created", "NULL"),
+        optional_column(&columns, "time_updated", "NULL"),
+    );
+    let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
+    let sessions = statement
+        .query_map([], |row| {
+            Ok(SessionRow {
+                id: row.get(0)?,
+                title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                directory: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                parent_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    let mut message_statement = db
+        .prepare(
+            "SELECT id, session_id, type, time_created, data FROM session_message
+             WHERE type IN ('user', 'assistant', 'compaction')
+             ORDER BY seq, id",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = message_statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+
+    let mut messages = Vec::new();
+    let mut parts = Vec::new();
+    for (id, session_id, typ, created_at, raw) in rows {
+        let data: Value = match serde_json::from_str(&raw) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        match typ.as_str() {
+            "user" => {
+                let mut payload = data.clone();
+                if let Value::Object(object) = &mut payload {
+                    object.insert("role".into(), Value::String("user".into()));
+                }
+                messages.push(MessageRow {
+                    id: id.clone(),
+                    session_id: session_id.clone(),
+                    created_at,
+                    data: Some(payload),
+                });
+                if let Some(text) = data.get("text").and_then(Value::as_str) {
+                    if !text.is_empty() {
+                        parts.push(PartRow {
+                            id: format!("{id}:text"),
+                            message_id: id,
+                            session_id,
+                            created_at,
+                            data: Some(serde_json::json!({"type":"text","text":text})),
+                        });
+                    }
+                }
+            }
+            "assistant" => {
+                let model = data
+                    .get("model")
+                    .and_then(|model| model.get("id"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                let mut payload = data.clone();
+                if let Value::Object(object) = &mut payload {
+                    object.insert("role".into(), Value::String("assistant".into()));
+                    if !model.is_empty() {
+                        object.insert("modelID".into(), Value::String(model.to_string()));
+                    }
+                }
+                messages.push(MessageRow {
+                    id: id.clone(),
+                    session_id: session_id.clone(),
+                    created_at,
+                    data: Some(payload),
+                });
+                if let Some(content) = data.get("content").and_then(Value::as_array) {
+                    for (index, part) in content.iter().enumerate() {
+                        parts.push(PartRow {
+                            id: format!("{id}:{index}"),
+                            message_id: id.clone(),
+                            session_id: session_id.clone(),
+                            created_at,
+                            data: Some(part.clone()),
+                        });
+                    }
+                }
+            }
+            "compaction" => {
+                messages.push(MessageRow {
+                    id: id.clone(),
+                    session_id: session_id.clone(),
+                    created_at,
+                    data: Some(serde_json::json!({"role":"system"})),
+                });
+                parts.push(PartRow {
+                    id: format!("{id}:compaction"),
+                    message_id: id,
+                    session_id,
+                    created_at,
+                    data: Some(serde_json::json!({"type":"compaction"})),
+                });
+            }
+            _ => {}
+        }
+    }
+    Ok((sessions, messages, parts))
 }

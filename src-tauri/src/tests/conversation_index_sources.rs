@@ -327,6 +327,20 @@ fn workbuddy_event_index_matches_full_parse() {
 }
 
 #[test]
+fn gemini_jsonl_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".gemini/tmp/gemini-project/chats/session-sess-g-jsonl.jsonl",
+        "gemini-session-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Gemini);
+    assert_conversation_index_matches_parse(&conn, home, "gemini", "sess-g-jsonl");
+}
+
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

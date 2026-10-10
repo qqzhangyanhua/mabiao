@@ -19,11 +19,19 @@ pub(super) fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, String> {
-    // 直接从文件流反序列化，不额外攥一份完整原始文本：单个 Gemini 会话文件会随对话
-    // 增长，避免「原始文本 + 解析后的 Value 树」同时常驻可以省下一半峰值内存。
-    let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-    let root: Value = serde_json::from_reader(BufReader::new(file))
-        .map_err(|error| format!("JSON 无效：{error}"))?;
+    let root = if path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+    {
+        fold_gemini_jsonl(path)?
+    } else {
+        // 直接从文件流反序列化，不额外攥一份完整原始文本：单个 Gemini 会话文件会随对话
+        // 增长，避免「原始文本 + 解析后的 Value 树」同时常驻可以省下一半峰值内存。
+        let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+        serde_json::from_reader(BufReader::new(file))
+            .map_err(|error| format!("JSON 无效：{error}"))?
+    };
     let mut session_id = first_text(&root, &["sessionId", "session_id", "id"]);
     if session_id.is_empty() {
         session_id = path
@@ -170,4 +178,38 @@ pub(super) fn parse(
         true,
         ConversationFinishPrep::NONE,
     )
+}
+
+fn fold_gemini_jsonl(path: &Path) -> Result<Value, String> {
+    let values = parse_jsonl_conversation_values(path)?;
+    let mut session_id = String::new();
+    let mut order: Vec<String> = Vec::new();
+    let mut messages = std::collections::HashMap::<String, Value>::new();
+    for (_, value) in values {
+        let incoming = first_text(&value, &["sessionId"]);
+        if !incoming.is_empty() {
+            session_id = incoming;
+        }
+        if let Some(rewind) = value.get("$rewindTo").and_then(Value::as_str) {
+            if let Some(index) = order.iter().position(|id| id == rewind) {
+                for id in order.split_off(index + 1) {
+                    messages.remove(&id);
+                }
+            }
+            continue;
+        }
+        if value.get("id").and_then(Value::as_str).is_some()
+            && value.get("type").and_then(Value::as_str).is_some()
+        {
+            let id = first_text(&value, &["id"]);
+            if !messages.contains_key(&id) {
+                order.push(id.clone());
+            }
+            messages.insert(id, value);
+        }
+    }
+    Ok(serde_json::json!({
+        "sessionId": session_id,
+        "messages": order.iter().filter_map(|id| messages.get(id).cloned()).collect::<Vec<_>>(),
+    }))
 }
