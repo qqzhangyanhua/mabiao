@@ -1,0 +1,79 @@
+server/migrations/0001_accounts_devices_tokens.sql
+  s_a324b8e9200eb3::t_b8f01c22b1474a 1-39
+server/src/routes.rs
+  s_a324b8e9200eb3::t_2b6400a52d29ea 1-135
+server/src/lib.rs
+  s_a324b8e9200eb3::t_8c1228d2435d51 1-3,5-22
+  s_a324b8e9200eb3::t_fd1d3a3c0dd0be 4
+deploy/README.md
+  s_a324b8e9200eb3::t_ec047534dfc57c 1-33
+server/Cargo.toml
+  s_a324b8e9200eb3::t_5a4ff6ec8dce73 1-15,21,30-35
+  s_a324b8e9200eb3::t_6911072695e866 29
+  s_a324b8e9200eb3::t_9ef75bb1f5833f 17,20
+  s_a324b8e9200eb3::t_97264339c9d30c 19
+  s_a324b8e9200eb3::t_fd1d3a3c0dd0be 16,18,22-28,36-39
+server/src/password.rs
+  s_a324b8e9200eb3::t_d4090a019850db 1-101
+server/src/devices.rs
+  s_a324b8e9200eb3::t_03270434f124a9 1-39
+server/src/api.rs
+  s_a324b8e9200eb3::t_e7c2d11cc0ba71 1-58
+AGENTS.md
+  s_a324b8e9200eb3::t_9eedf198f1b1a5 25-34,48,60,64
+server/Dockerfile
+  s_a324b8e9200eb3::t_ec047534dfc57c 1-19
+server/Dockerfile.dockerignore
+  s_a324b8e9200eb3::t_ec047534dfc57c 1-5
+deploy/.env.example
+  s_a324b8e9200eb3::t_ec047534dfc57c 1-2
+crates/push-protocol/src/error.rs
+  s_a324b8e9200eb3::t_5a4ff6ec8dce73 12-16
+deploy/docker-compose.yml
+  s_a324b8e9200eb3::t_ec047534dfc57c 1-37
+server/src/error.rs
+  s_a324b8e9200eb3::t_97264339c9d30c 79-86
+  s_a324b8e9200eb3::t_25fb1dcb497ae3 62-66
+  s_a324b8e9200eb3::t_e301839deb4146 1-61,67-78,87-118
+server/src/accounts.rs
+  s_a324b8e9200eb3::t_25fb1dcb497ae3 85-87,90-95
+  s_a324b8e9200eb3::t_f39a0048575785 1-84,88-89,96-118
+server/src/tokens.rs
+  s_a324b8e9200eb3::t_f0b96e22ecba65 1-31,33-97
+  s_a324b8e9200eb3::t_25fb1dcb497ae3 32
+server/src/db.rs
+  s_a324b8e9200eb3::t_a5d9e29d98dced 1-17
+.github/workflows/ci.yml
+  s_a324b8e9200eb3::t_9eedf198f1b1a5 112-156
+.gitignore
+  s_a324b8e9200eb3::t_ec047534dfc57c 15-16
+docs/agent-layers.md
+  s_a324b8e9200eb3::t_9eedf198f1b1a5 122-148
+server/src/main.rs
+  s_a324b8e9200eb3::t_25fb1dcb497ae3 85,96
+  s_a324b8e9200eb3::t_4bcbc07c6fc9aa 1-9,11,13-69,74-84,86-95,97-101,128-129
+  s_a324b8e9200eb3::t_0c56f21a3cb5ba 10,12,70-73,102-127
+server/tests/api.rs
+  s_a324b8e9200eb3::t_dfd6f1ae37c420 1-256,265-444,453-456,465-468,477-479,488-490,499-531
+  s_a324b8e9200eb3::t_25fb1dcb497ae3 257-264,445-452,457-464,469-476,480-487,491-498
+server/src/auth.rs
+  s_a324b8e9200eb3::t_168befafe99813 1-113
+server/Cargo.lock
+  s_a324b8e9200eb3::t_213164d8ae97f1 1-2444
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "10928c955ed063cf7067e25a7de7bfbfe157fd52",
+  "prompts": {},
+  "sessions": {
+    "s_a324b8e9200eb3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f504e863-f7a8-4ce0-9a30-c3935ffbf859",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
