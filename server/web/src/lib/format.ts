@@ -29,6 +29,12 @@ export function formatRelativeDay(value: string | null, now: Date = new Date()):
   return formatDateTime(value).slice(0, 10);
 }
 
+/** 每 token 单价：避免 `1.25e-7` 这种科学计数。 */
+export function formatUnitPrice(value: number): string {
+  if (value === 0) return "0";
+  return value.toFixed(12).replace(/\.?0+$/, "");
+}
+
 export function formatCost(value: number): string {
   if (value === 0) return "$0";
   return Math.abs(value) >= 1 ? `$${value.toFixed(2)}` : `$${value.toFixed(4)}`;

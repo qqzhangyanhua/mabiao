@@ -38,11 +38,11 @@ export function TrendChart({
                 title={`${p.label}：${format(p.value)}`}
                 className={cn("rounded-t-sm", sparse ? "w-8" : "min-w-px flex-1")}
                 style={{
-                  background: p.value > 0 ? color : "color-mix(in srgb, var(--border) 80%, transparent)",
+                  background: p.value > 0 ? color : "var(--border)",
                   height: `${
-                    max > 0 ? Math.max((p.value / max) * 100, p.value > 0 ? 3 : 2) : 2
+                    max > 0 ? Math.max((p.value / max) * 100, p.value > 0 ? 3 : 10) : 10
                   }%`,
-                  opacity: p.value > 0 ? 0.92 : 0.35,
+                  opacity: p.value > 0 ? 0.92 : 0.7,
                 }}
               />
             ))}

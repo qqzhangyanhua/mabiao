@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatChars, formatCost, formatDateTime, formatPercent, formatRelativeDay, formatTokens } from "./format";
+import {
+  formatChars,
+  formatCost,
+  formatDateTime,
+  formatPercent,
+  formatRelativeDay,
+  formatTokens,
+  formatUnitPrice,
+} from "./format";
 
 describe("formatTokens", () => {
   it.each([
@@ -10,6 +18,14 @@ describe("formatTokens", () => {
     [3_000_000_000, "3.00B"],
   ])("%d → %s", (input, expected) => {
     expect(formatTokens(input)).toBe(expected);
+  });
+});
+
+describe("formatUnitPrice", () => {
+  it("keeps tiny per-token prices in decimal form", () => {
+    expect(formatUnitPrice(0)).toBe("0");
+    expect(formatUnitPrice(0.00000125)).toBe("0.00000125");
+    expect(formatUnitPrice(0.000000125)).toBe("0.000000125");
   });
 });
 

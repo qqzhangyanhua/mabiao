@@ -6,7 +6,7 @@ import { Card, panelClass } from "../components/ui/card";
 import { Input } from "../components/ui/input";
 import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, formatUnitPrice } from "../lib/format";
 
 export function PricingPage() {
   const { api } = useAuth();
@@ -177,10 +177,10 @@ export function PricingPage() {
                         {price.model}
                       </th>
                       <td className="px-4 py-2">{price.provider ?? "—"}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{price.input}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{price.output}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{price.cache_read}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{price.cache_creation}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.input)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.output)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.cache_read)}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.cache_creation)}</td>
                       <td className="px-4 py-2">{formatDateTime(price.updated_at)}</td>
                       <td className="px-4 py-2 text-right">
                         <button
