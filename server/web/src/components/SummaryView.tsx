@@ -1,47 +1,17 @@
-import { CircleDollarSign, Coins, Hash, Layers, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
-import type { SummaryResponse } from "../api/types";
-import { cn } from "../lib/cn";
-import { costOf, COST_MODE_LABEL, type CostMode } from "../lib/cost";
+import { useState } from "react";
+import type { Breakdown, SummaryResponse } from "../api/types";
+import { costOf, type CostMode } from "../lib/cost";
 import { formatCost, formatTokens } from "../lib/format";
 import { eachDay, type DayRange } from "../lib/range";
-import { routeHash } from "../lib/route";
+import { sourceLabel } from "../lib/source";
+import type { TokenSplit } from "../lib/tokens";
+import { useHref } from "../view";
 import { BreakdownTable } from "./BreakdownTable";
+import { DimensionCards } from "./DimensionCards";
+import { KpiColumn } from "./KpiColumn";
+import { ModelRanking } from "./ModelRanking";
 import { TrendChart } from "./TrendChart";
-import { panelClass } from "./ui/card";
-
-function Kpi({
-  icon: Icon,
-  tone,
-  label,
-  value,
-  note,
-  hint,
-}: {
-  icon: LucideIcon;
-  tone: string;
-  label: string;
-  value: string;
-  note?: ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className={cn(panelClass, "p-4")}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span
-          className="grid size-6 place-items-center rounded-md"
-          style={{ color: tone, background: `color-mix(in srgb, ${tone} 18%, transparent)` }}
-        >
-          <Icon size={14} />
-        </span>
-        {label}
-      </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-      {note && <div className="mt-1 text-xs text-warning">{note}</div>}
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
+import { Segmented } from "./ui/segmented";
 
 function dailyPoints(
   rows: { key: string; value: number }[],
@@ -53,20 +23,29 @@ function dailyPoints(
   return days.map((label) => ({ label, value: values.get(label) ?? 0 }));
 }
 
+type Dimension = "day" | "account" | "source" | "model" | "project";
+
+const DIMENSIONS: { id: Dimension; label: string }[] = [
+  { id: "day", label: "按天" },
+  { id: "account", label: "按成员" },
+  { id: "source", label: "按来源" },
+  { id: "model", label: "按模型" },
+  { id: "project", label: "按项目" },
+];
+
 interface Props {
   summary: SummaryResponse;
   mode: CostMode;
-  /** 选中的日历区间。有的话按天趋势会补上没有数据的日期，避免一根柱子撑满。 */
   range?: DayRange;
-  /** 团队总览要按成员拆；单个成员页没必要。 */
   showAccounts: boolean;
-  /** 管理员可以从成员榜点进成员页。 */
   linkAccounts: boolean;
-  /** 单个项目页里「按项目」只有一行，没必要。默认显示。 */
   showProjects?: boolean;
+  sessions?: number;
+  cacheHit?: number | null;
+  modelSplits?: Map<string, TokenSplit>;
+  projectSplits?: Map<string, TokenSplit>;
 }
 
-/** 团队总览与成员页共用：合计卡片、按天趋势，以及按成员 / 来源 / 模型 / 项目的拆分。 */
 export function SummaryView({
   summary,
   mode,
@@ -74,89 +53,114 @@ export function SummaryView({
   showAccounts,
   linkAccounts,
   showProjects = true,
+  sessions,
+  cacheHit = null,
+  modelSplits,
+  projectSplits,
 }: Props) {
+  const href = useHref();
   const { totals } = summary;
   const cost = mode === "unified" ? totals.unified_cost_total : totals.cost_snapshot_total;
   const unpriced = mode === "unified" ? totals.unified_unpriced_count : 0;
-  const dimensionHint = [
-    `${summary.by_model.length} 个模型`,
-    showProjects ? `${summary.by_project.length} 个项目` : null,
-    showAccounts ? `${summary.by_account.length} 个成员` : null,
-  ]
-    .filter((item) => item !== null)
-    .join(" · ");
+  const [metric, setMetric] = useState<"tokens" | "cost">("tokens");
+  const [dimension, setDimension] = useState<Dimension>(showAccounts ? "account" : "source");
+  const dims = DIMENSIONS.filter((item) => {
+    if (item.id === "account") return showAccounts;
+    if (item.id === "project") return showProjects;
+    return true;
+  });
+
+  const tableRows: Record<Dimension, Breakdown[]> = {
+    day: summary.by_day,
+    account: summary.by_account,
+    source: summary.by_source,
+    model: summary.by_model,
+    project: summary.by_project,
+  };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi icon={Hash} tone="var(--chart-1)" label="记录数" value={String(totals.record_count)} />
-        <Kpi
-          icon={Coins}
-          tone="var(--chart-2)"
-          label="Token"
-          value={formatTokens(totals.total_tokens)}
-        />
-        <Kpi
-          icon={CircleDollarSign}
-          tone="var(--chart-3)"
-          label={`费用（${COST_MODE_LABEL[mode]}）`}
-          value={formatCost(cost)}
-          note={unpriced > 0 ? `另有 ${unpriced} 条记录的模型没有价目，未计入` : undefined}
-        />
-        <Kpi
-          icon={Layers}
-          tone="var(--chart-4)"
-          label="来源"
-          value={String(summary.by_source.length)}
-          hint={dimensionHint}
-        />
-      </div>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <TrendChart
-          title="每天 Token"
-          points={dailyPoints(
-            summary.by_day.map((d) => ({ key: d.key, value: d.total_tokens })),
-            range,
-          )}
-          format={formatTokens}
-          color="var(--chart-1)"
-        />
-        <TrendChart
-          title={`每天费用（${COST_MODE_LABEL[mode]}）`}
-          points={dailyPoints(
-            summary.by_day.map((d) => ({ key: d.key, value: costOf(d, mode) })),
-            range,
-          )}
-          format={formatCost}
-          color="var(--chart-2)"
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <div className="mb-2 flex justify-end">
+            <Segmented
+              label="趋势指标"
+              value={metric}
+              onChange={setMetric}
+              options={[
+                { id: "tokens", label: "Token" },
+                { id: "cost", label: "费用" },
+              ]}
+            />
+          </div>
+          <TrendChart
+            title={metric === "tokens" ? "每天 Token" : "每天费用"}
+            points={dailyPoints(
+              summary.by_day.map((d) => ({
+                key: d.key,
+                value: metric === "tokens" ? d.total_tokens : costOf(d, mode),
+              })),
+              range,
+            )}
+            format={metric === "tokens" ? formatTokens : formatCost}
+            color={metric === "tokens" ? "var(--chart-1)" : "var(--chart-2)"}
+          />
+        </div>
+        <KpiColumn
+          cost={cost}
+          tokens={totals.total_tokens}
+          sessions={sessions}
+          cacheHit={cacheHit}
+          unpriced={unpriced}
+          mode={mode}
+          recordCount={totals.record_count}
         />
       </div>
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {showAccounts && (
-          <BreakdownTable
+        <ModelRanking title="按模型" rows={summary.by_model} mode={mode} splits={modelSplits} />
+        {showProjects && (
+          <DimensionCards
+            title="按项目"
+            rows={summary.by_project}
+            mode={mode}
+            splits={projectSplits}
+            hrefOf={(row) =>
+              row.id === null ? undefined : href({ page: "project", projectId: row.id })
+            }
+          />
+        )}
+        {!showProjects && showAccounts && (
+          <DimensionCards
             title="按成员"
             rows={summary.by_account}
             mode={mode}
-            linkOf={
+            hrefOf={
               linkAccounts
-                ? (row) =>
-                    row.id === null ? undefined : routeHash({ page: "member", accountId: row.id })
+                ? (row) => (row.id === null ? undefined : href({ page: "member", accountId: row.id }))
                 : undefined
             }
           />
         )}
-        <BreakdownTable title="按来源" rows={summary.by_source} mode={mode} />
-        <BreakdownTable title="按模型" rows={summary.by_model} mode={mode} />
-        {showProjects && (
-          <BreakdownTable
-            title="按项目"
-            rows={summary.by_project}
-            mode={mode}
-            linkOf={(row) =>
-              row.id === null ? undefined : routeHash({ page: "project", projectId: row.id })
-            }
-          />
-        )}
+      </div>
+
+      <div>
+        <div className="mb-3">
+          <Segmented label="拆分维度" value={dimension} onChange={setDimension} options={dims} />
+        </div>
+        <BreakdownTable
+          title={dims.find((item) => item.id === dimension)?.label ?? "拆分"}
+          rows={tableRows[dimension]}
+          mode={mode}
+          labelOf={dimension === "source" ? (row) => sourceLabel(row.label) : undefined}
+          linkOf={
+            dimension === "account" && linkAccounts
+              ? (row) => (row.id === null ? undefined : href({ page: "member", accountId: row.id }))
+              : dimension === "project"
+                ? (row) => (row.id === null ? undefined : href({ page: "project", projectId: row.id }))
+                : undefined
+          }
+        />
       </div>
     </div>
   );

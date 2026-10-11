@@ -27,14 +27,66 @@
   --color-sidebar-border: var(--sidebar-border);
 }
 
-/* 与桌面端 `src/styles/base/tokens.css` 同一套色：默认深色，浅色走 data-theme。 */
-:root {
+/* 浅色是控制台默认；深色沿用码表配色。 */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #f6f7f9;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --panel-grad-1: #ffffff;
+  --panel-grad-2: #ffffff;
+  --primary: #6d28d9;
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f6;
+  --secondary-foreground: #111827;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #efeaff;
+  --accent-foreground: #5b21b6;
+  --destructive: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #6d28d9;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #374151;
+  --sidebar-accent: #efeaff;
+  --sidebar-accent-foreground: #5b21b6;
+  --sidebar-border: #e5e7eb;
+  --shadow-soft: rgb(15 23 42 / 6%);
+  --chart-1: #6d28d9;
+  --chart-2: #0891b2;
+  --chart-3: #d97706;
+  --chart-4: #2563eb;
+  --chart-5: #059669;
+  --chart-6: #db2777;
+  --token-input: #6d28d9;
+  --token-output: #0891b2;
+  --token-cache-read: #2563eb;
+  --token-cache-write: #059669;
+  --token-reasoning: #d97706;
+  --tone-claude: #ea580c;
+  --tone-codex: #6d28d9;
+  --tone-pi: #0891b2;
+  --tone-omp: #c026d3;
+  --tone-open: #2563eb;
+  --tone-kimi: #059669;
+  --tone-gemini: #0284c7;
+  --tone-grok: #db2777;
+  --tone-qwen: #7c3aed;
+  --tone-cursor: #64748b;
+}
+
+[data-theme="dark"] {
   color-scheme: dark;
   --background: #070b16;
   --foreground: #e8eef7;
   --card: #10182a;
   --card-foreground: #e8eef7;
-  --panel-grad-1: #182238;
+  --panel-grad-1: #10182a;
   --panel-grad-2: #10182a;
   --primary: #8b6cff;
   --primary-foreground: #160b33;
@@ -62,6 +114,11 @@
   --chart-4: #60a5fa;
   --chart-5: #34d399;
   --chart-6: #f472b6;
+  --token-input: #8b6cff;
+  --token-output: #22d3ee;
+  --token-cache-read: #60a5fa;
+  --token-cache-write: #34d399;
+  --token-reasoning: #f59e0b;
   --tone-claude: #fb923c;
   --tone-codex: #8b6cff;
   --tone-pi: #22d3ee;
@@ -74,53 +131,11 @@
   --tone-cursor: #94a3b8;
 }
 
-[data-theme="light"] {
-  color-scheme: light;
-  --background: #f4f6fb;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --panel-grad-1: #ffffff;
-  --panel-grad-2: #f8fafc;
-  --primary: #6d28d9;
-  --primary-foreground: #ffffff;
-  --secondary: #e8eef4;
-  --secondary-foreground: #0f172a;
-  --muted: #eef2f7;
-  --muted-foreground: #64748b;
-  --accent: #efeaff;
-  --accent-foreground: #6d28d9;
-  --destructive: #dc2626;
-  --success: #15803d;
-  --warning: #b45309;
-  --border: #e2e8f0;
-  --input: #cbd5e1;
-  --ring: #6d28d9;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #475569;
-  --sidebar-accent: #efeaff;
-  --sidebar-accent-foreground: #6d28d9;
-  --sidebar-border: #e2e8f0;
-  --shadow-soft: rgb(15 23 42 / 8%);
-}
-
 body {
   margin: 0;
   min-height: 100vh;
   color: var(--foreground);
   background-color: var(--background);
-  background-image:
-    radial-gradient(
-      880px 420px at -10% -20%,
-      color-mix(in srgb, var(--primary) 28%, transparent),
-      transparent 60%
-    ),
-    radial-gradient(
-      640px 360px at 110% -10%,
-      color-mix(in srgb, var(--chart-2) 18%, transparent),
-      transparent 55%
-    );
-  background-attachment: fixed;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }

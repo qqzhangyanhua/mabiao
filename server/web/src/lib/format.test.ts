@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatCost, formatDateTime, formatTokens } from "./format";
+import {
+  formatChars,
+  formatCost,
+  formatDateTime,
+  formatPercent,
+  formatRelativeDay,
+  formatTokens,
+  formatUnitPrice,
+} from "./format";
 
 describe("formatTokens", () => {
   it.each([
@@ -13,6 +21,14 @@ describe("formatTokens", () => {
   });
 });
 
+describe("formatUnitPrice", () => {
+  it("keeps tiny per-token prices in decimal form", () => {
+    expect(formatUnitPrice(0)).toBe("0");
+    expect(formatUnitPrice(0.00000125)).toBe("0.00000125");
+    expect(formatUnitPrice(0.000000125)).toBe("0.000000125");
+  });
+});
+
 describe("formatCost", () => {
   it.each([
     [0, "$0"],
@@ -20,6 +36,34 @@ describe("formatCost", () => {
     [12.345, "$12.35"],
   ])("%d → %s", (input, expected) => {
     expect(formatCost(input)).toBe(expected);
+  });
+});
+
+describe("formatChars", () => {
+  it("uses Chinese grouping and does not reuse the token K/M suffix", () => {
+    expect(formatChars(1234)).toBe("1,234 字符");
+    expect(formatChars(0)).toBe("0 字符");
+  });
+});
+
+describe("formatPercent", () => {
+  it("keeps one decimal below 10%", () => {
+    expect(formatPercent(0.05)).toBe("5.0%");
+    expect(formatPercent(0.25)).toBe("25%");
+  });
+});
+
+describe("formatRelativeDay", () => {
+  const now = new Date(2026, 2, 11, 15, 0, 0);
+
+  it("shows a dash for missing times", () => {
+    expect(formatRelativeDay(null, now)).toBe("—");
+  });
+
+  it("speaks in today / yesterday / N days ago", () => {
+    expect(formatRelativeDay(new Date(2026, 2, 11, 8).toISOString(), now)).toBe("今天");
+    expect(formatRelativeDay(new Date(2026, 2, 10, 8).toISOString(), now)).toBe("昨天");
+    expect(formatRelativeDay(new Date(2026, 2, 8, 8).toISOString(), now)).toBe("3 天前");
   });
 });
 

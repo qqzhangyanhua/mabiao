@@ -147,9 +147,10 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-function stubServer(role: "admin" | "member") {
+function stubServer(role: "admin" | "member", options: { sessionTotal?: number } = {}) {
   const requests: string[] = [];
   const me = { id: role === "admin" ? 1 : 2, account: role === "admin" ? "root" : "alice", role };
+  const sessionTotal = options.sessionTotal ?? 1;
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -164,7 +165,7 @@ function stubServer(role: "admin" | "member") {
         return Promise.resolve(new Response(null, { status: 204 }));
       if (url === "/api/v1/sessions/31") return Promise.resolve(json(200, DETAIL));
       if (url.startsWith("/api/v1/sessions?"))
-        return Promise.resolve(json(200, { sessions: [LISTED], total: 1 }));
+        return Promise.resolve(json(200, { sessions: [LISTED], total: sessionTotal }));
       if (url.startsWith("/api/v1/projects/11")) return Promise.resolve(json(200, PROJECT));
       if (url === "/api/v1/admin/projects") return Promise.resolve(json(200, ADMIN_PROJECTS));
       if (url === "/api/v1/admin/projects/11" && method === "PUT")
@@ -174,6 +175,12 @@ function stubServer(role: "admin" | "member") {
           json(200, { project: ADMIN_PROJECTS[1], sessions_moved: 3, usage_records_moved: 2 }),
         );
       if (url.startsWith("/api/v1/usage/summary")) return Promise.resolve(json(200, SUMMARY));
+      if (url.startsWith("/api/v1/usage"))
+        return Promise.resolve(json(200, { records: [], totals: TOTALS }));
+      if (url === "/api/v1/admin/pricing")
+        return Promise.resolve(
+          json(200, { prices: [], snapshot: { as_of: "2026-03-01", source: "litellm", count: 12 } }),
+        );
       return Promise.resolve(json(404, { code: "not_found", message: "没有这个接口" }));
     }),
   );
@@ -205,7 +212,12 @@ describe("会话详情", () => {
     signIn();
 
     expect(await screen.findByRole("heading", { name: "修一个 bug" })).toBeTruthy();
-    expect(screen.getByText("请帮我改一下")).toBeTruthy();
+    const strip = screen.getByRole("slider", { name: "事件时间线" });
+    expect(strip).toBeTruthy();
+    strip.focus();
+    fireEvent.keyDown(strip, { key: "ArrowRight" });
+    expect(screen.getAllByText("ls -la").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("请帮我改一下").length).toBeGreaterThan(0);
     expect(screen.getByText("已注入（原文）")).toBeTruthy();
     expect(screen.getByText("磁盘可能生效（非当时注入）")).toBeTruthy();
     // CLAUDE.md 只是磁盘现状，不能出现在「已注入」那一组里。
@@ -219,12 +231,12 @@ describe("会话详情", () => {
     window.location.hash = "#/session/31";
     render(<App />);
     signIn();
-    await screen.findByText("请帮我改一下");
+    await screen.findAllByText("请帮我改一下");
 
-    fireEvent.click(screen.getByRole("button", { name: "工具调用" }));
+    fireEvent.click(screen.getByRole("radio", { name: "工具调用" }));
 
     expect(screen.queryByText("请帮我改一下")).toBeNull();
-    expect(screen.getByText("ls -la")).toBeTruthy();
+    expect(screen.getAllByText("ls -la").length).toBeGreaterThan(0);
   });
 
   it("deletes the session after confirmation and goes back to the owner's page", async () => {
@@ -237,7 +249,7 @@ describe("会话详情", () => {
     fireEvent.click(await screen.findByRole("button", { name: "删除会话" }));
 
     await waitFor(() => expect(requests).toContain("DELETE /api/v1/sessions/31"));
-    await waitFor(() => expect(window.location.hash).toBe("#/member/2"));
+    await waitFor(() => expect(window.location.hash).toMatch(/^#\/member\/2/));
   });
 
   it("does not delete when the confirmation is declined", async () => {
@@ -261,8 +273,8 @@ describe("项目页", () => {
     signIn();
 
     expect(await screen.findByRole("heading", { name: "alpha" })).toBeTruthy();
-    const bob = await screen.findByRole("link", { name: "bob" });
-    expect(bob.getAttribute("href")).toBe("#/member/3");
+    const bob = (await screen.findAllByRole("link", { name: "bob" }))[0];
+    expect(bob?.getAttribute("href")).toMatch(/^#\/member\/3(\?|$)/);
   });
 
   it("offers rename and merge to admins and calls the admin API", async () => {
@@ -282,7 +294,7 @@ describe("项目页", () => {
     fireEvent.change(select, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "合并" }));
     await waitFor(() => expect(requests).toContain("POST /api/v1/admin/projects/11/merge"));
-    await waitFor(() => expect(window.location.hash).toBe("#/project/12"));
+    await waitFor(() => expect(window.location.hash).toMatch(/^#\/project\/12/));
   });
 
   it("members see the project but no management panel and never call admin endpoints", async () => {
@@ -303,7 +315,16 @@ describe("项目页", () => {
     render(<App />);
     signIn();
 
-    const link = await screen.findByRole("link", { name: "alpha" });
-    expect(link.getAttribute("href")).toBe("#/project/11");
+    const link = await screen.findByRole("link", { name: /alpha/ });
+    expect(link.getAttribute("href")).toMatch(/^#\/project\/11(\?|$)/);
+  });
+
+  it("paginates the project session list when there are more than one page", async () => {
+    stubServer("admin", { sessionTotal: 51 });
+    window.location.hash = "#/project/11";
+    render(<App />);
+    signIn();
+    expect(await screen.findByText("1 / 2")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "下一页" })).toBeTruthy();
   });
 });

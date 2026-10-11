@@ -174,6 +174,65 @@ export interface MergeProjectResponse {
   usage_records_moved: number;
 }
 
+export interface UsageTokens {
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_creation: number;
+  reasoning: number;
+  total: number;
+}
+
+export interface UsageRecord {
+  id: number;
+  account_id: number;
+  account: string;
+  occurred_at: string;
+  source: string;
+  model: string;
+  provider: string;
+  project: string;
+  project_id: number | null;
+  session_id: string;
+  tokens: UsageTokens;
+  native_cost: number | null;
+  cost_snapshot: number | null;
+  pricing_source: string;
+  unified_cost: number | null;
+  unified_pricing_source: string | null;
+  unified_cost_source: string | null;
+}
+
+export interface UsageResponse {
+  records: UsageRecord[];
+  totals: UsageTotals;
+}
+
+export interface TeamPrice {
+  id: number;
+  model: string;
+  provider: string | null;
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_creation: number;
+  updated_at: string;
+}
+
+export interface PricingOverview {
+  prices: TeamPrice[];
+  snapshot: { as_of: string; source: string; count: number };
+}
+
+export interface SetTeamPriceResponse {
+  price: TeamPrice;
+  recomputed: number;
+}
+
+export interface RecomputeResponse {
+  recomputed: number;
+}
+
 /** 服务端统一错误体（`push_protocol::ApiError`）。 */
 export interface ApiErrorBody {
   code: string;

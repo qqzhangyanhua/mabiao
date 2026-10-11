@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import type { Project } from "../api/types";
 import { useAuth } from "../auth";
 import { useAsync } from "../hooks";
-import { routeHash } from "../lib/route";
+import { useHref } from "../view";
 import { ErrorNote } from "./Feedback";
 import { Button } from "./ui/button";
 import { panelClass } from "./ui/card";
@@ -15,6 +15,7 @@ import { cn } from "../lib/cn";
  */
 export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenamed: () => void }) {
   const { api } = useAuth();
+  const href = useHref();
   const [name, setName] = useState(project.name);
   const [targetId, setTargetId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -51,7 +52,7 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
       );
       if (!ok) return;
       const result = await api.mergeProject(project.id, target.id);
-      window.location.hash = routeHash({ page: "project", projectId: result.project.id });
+      window.location.hash = href({ page: "project", projectId: result.project.id });
     });
 
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import {
@@ -6,22 +6,24 @@ import {
   GeneratedFilterSelect,
   type GeneratedFilter,
 } from "../components/GeneratedFilter";
-import { RangeBar, useViewState } from "../components/RangeBar";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
 import { Button } from "../components/ui/button";
 import { panelClass } from "../components/ui/card";
+import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
 import { downloadCsv } from "../lib/csv";
 import { sessionRows, summaryRows } from "../lib/export";
+import { cacheHitRate } from "../lib/tokens";
+import { splitsBy, totalSplit } from "../lib/usageAgg";
+import { useView } from "../view";
 
 const PAGE_SIZE = 50;
 
-/** 单个成员：趋势、常用来源与模型、会话列表。成员看自己，管理员看任何人。 */
 export function MemberPage({ accountId }: { accountId: number }) {
   const { api, profile } = useAuth();
-  const view = useViewState();
+  const view = useView();
   const { bounds, offset } = view;
   const [page, setPage] = useState(0);
   const [generated, setGenerated] = useState<GeneratedFilter>("all");
@@ -57,58 +59,47 @@ export function MemberPage({ accountId }: { accountId: number }) {
     [api, bounds, accountId, page, generated],
   );
   const sessions = useAsync(loadSessions);
+  const loadUsage = useCallback(
+    () =>
+      bounds
+        ? api.usage({ ...bounds, accountId }, 1000, 0)
+        : Promise.reject(new Error("日期范围不正确")),
+    [api, bounds, accountId],
+  );
+  const usage = useAsync(loadUsage);
 
   const title = name.data ?? "成员";
   const pageCount = sessions.data ? Math.max(1, Math.ceil(sessions.data.total / PAGE_SIZE)) : 1;
+  const records = usage.data?.records ?? [];
+
+  usePageExports(
+    useMemo(
+      () => [
+        {
+          label: "导出汇总 CSV",
+          disabled: !summary.data,
+          onClick: () =>
+            summary.data && downloadCsv(`${title}-汇总.csv`, summaryRows(summary.data)),
+        },
+        {
+          label: "导出本页会话 CSV",
+          disabled: !sessions.data,
+          onClick: () =>
+            sessions.data && downloadCsv(`${title}-会话.csv`, sessionRows(sessions.data.sessions)),
+        },
+      ],
+      [summary.data, sessions.data, title],
+    ),
+  );
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">
-          {title}
-          {accountId === profile.id && (
-            <span className="ml-2 text-sm font-normal text-muted-foreground">（我）</span>
-          )}
-        </h1>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!summary.data}
-            onClick={() =>
-              summary.data && downloadCsv(`${title}-汇总.csv`, summaryRows(summary.data))
-            }
-          >
-            导出汇总 CSV
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!sessions.data}
-            onClick={() =>
-              sessions.data && downloadCsv(`${title}-会话.csv`, sessionRows(sessions.data.sessions))
-            }
-          >
-            导出本页会话 CSV
-          </Button>
-        </div>
-      </div>
-      <RangeBar
-        view={{
-          ...view,
-          // 换区间后回到第一页，免得停在一个已经不存在的页码上。
-          setPreset: (p) => {
-            setPage(0);
-            view.setPreset(p);
-          },
-          setCustom: (r) => {
-            setPage(0);
-            view.setCustom(r);
-          },
-        }}
-      />
+      <h1 className="text-lg font-semibold">
+        {title}
+        {accountId === profile.id && (
+          <span className="ml-2 text-sm font-normal text-muted-foreground">（我）</span>
+        )}
+      </h1>
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (
@@ -122,6 +113,12 @@ export function MemberPage({ accountId }: { accountId: number }) {
           range={{ fromDay: view.fromDay, toDay: view.toDay }}
           showAccounts={false}
           linkAccounts={false}
+          sessions={sessions.data?.total}
+          cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
+          modelSplits={splitsBy(records, (row) => row.model)}
+          projectSplits={splitsBy(records, (row) =>
+            row.project_id !== null ? String(row.project_id) : "",
+          )}
         />
       )}
 

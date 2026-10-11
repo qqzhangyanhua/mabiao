@@ -112,6 +112,29 @@ describe("createApi", () => {
     );
   });
 
+  it("calls the usage and pricing endpoints", async () => {
+    const { api, fetchFn } = setup(() => jsonResponse(200, {}));
+    await api.usage({ projectId: 4, from: "2026-03-01T00:00:00.000Z" }, 1000, 0);
+    await api.pricing();
+    await api.setPrice({
+      model: "m",
+      input: 0.001,
+      output: 0.002,
+      cache_read: 0,
+      cache_creation: 0,
+    });
+    await api.deletePrice(8);
+    await api.recomputePricing();
+    const calls = fetchFn.mock.calls.map(([url, init]) => [url, init?.method]);
+    expect(calls).toEqual([
+      ["/api/v1/usage?project_id=4&from=2026-03-01T00%3A00%3A00.000Z&limit=1000&offset=0", "GET"],
+      ["/api/v1/admin/pricing", "GET"],
+      ["/api/v1/admin/pricing/prices", "PUT"],
+      ["/api/v1/admin/pricing/prices/8", "DELETE"],
+      ["/api/v1/admin/pricing/recompute", "POST"],
+    ]);
+  });
+
   it("calls the project endpoints", async () => {
     const { api, fetchFn } = setup(() => jsonResponse(200, {}));
     await api.project(4, { accountId: 2 }, 480);

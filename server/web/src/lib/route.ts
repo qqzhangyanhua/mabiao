@@ -1,4 +1,5 @@
 import type { Role } from "../api/types";
+import { viewQueryString, type ViewQuery } from "./query";
 
 export type Route =
   | { page: "overview" }
@@ -6,7 +7,8 @@ export type Route =
   | { page: "member"; accountId: number }
   | { page: "projects" }
   | { page: "project"; projectId: number }
-  | { page: "session"; sessionId: number };
+  | { page: "session"; sessionId: number }
+  | { page: "pricing" };
 
 function parseId(text: string | undefined): number | null {
   if (!text) return null;
@@ -15,10 +17,12 @@ function parseId(text: string | undefined): number | null {
 }
 
 export function parseRoute(hash: string): Route | null {
-  const path = hash.replace(/^#\/?/, "").replace(/\/$/, "");
+  const withoutHash = hash.replace(/^#\/?/, "");
+  const path = (withoutHash.split("?")[0] ?? "").replace(/\/$/, "");
   if (path === "overview") return { page: "overview" };
   if (path === "members") return { page: "members" };
   if (path === "projects") return { page: "projects" };
+  if (path === "pricing") return { page: "pricing" };
   const member = parseId(/^member\/(\d+)$/.exec(path)?.[1]);
   if (member !== null) return { page: "member", accountId: member };
   const project = parseId(/^project\/(\d+)$/.exec(path)?.[1]);
@@ -42,7 +46,16 @@ export function routeHash(route: Route): string {
       return `#/project/${route.projectId}`;
     case "session":
       return `#/session/${route.sessionId}`;
+    case "pricing":
+      return "#/pricing";
   }
+}
+
+/** 路径 + 区间 / 费用口径查询串。侧栏跳转要带上当前查询，避免丢掉日期。 */
+export function buildHash(route: Route, query?: ViewQuery): string {
+  const base = routeHash(route);
+  if (!query) return base;
+  return `${base}?${viewQueryString(query)}`;
 }
 
 /** 管理员落在团队总览；成员只有自己的页面。 */
@@ -51,7 +64,7 @@ export function homeRoute(role: Role, accountId: number): Route {
 }
 
 /**
- * 成员不能进总览与成员管理，也不能看别人；越界一律拉回自己的页面（服务端仍会 403）。
+ * 成员不能进总览、成员管理与价目，也不能看别人；越界一律拉回自己的页面（服务端仍会 403）。
  * 项目页与会话页成员也能进：项目页只统计自己的用量，会话由服务端按归属放行。
  */
 export function allowedRoute(route: Route | null, role: Role, accountId: number): Route {

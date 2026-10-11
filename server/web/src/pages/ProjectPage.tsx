@@ -7,21 +7,24 @@ import {
   type GeneratedFilter,
 } from "../components/GeneratedFilter";
 import { ProjectAdmin } from "../components/ProjectAdmin";
-import { RangeBar, useViewState } from "../components/RangeBar";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
+import { Button } from "../components/ui/button";
 import { panelClass } from "../components/ui/card";
 import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
+import { cacheHitRate } from "../lib/tokens";
+import { splitsBy, totalSplit } from "../lib/usageAgg";
+import { useView } from "../view";
 
-const SESSION_LIMIT = 50;
+const PAGE_SIZE = 50;
 
-/** 单个项目：谁在上面花了多少 token / 费用。成员只看到自己的那部分，管理员看全体并可改名、合并。 */
 export function ProjectPage({ projectId }: { projectId: number }) {
   const { api, profile } = useAuth();
-  const view = useViewState();
+  const view = useView();
   const { bounds, offset } = view;
   const [generated, setGenerated] = useState<GeneratedFilter>("all");
+  const [page, setPage] = useState(0);
 
   const loadProject = useCallback(
     () =>
@@ -35,14 +38,29 @@ export function ProjectPage({ projectId }: { projectId: number }) {
   const loadSessions = useCallback(
     () =>
       bounds
-        ? api.sessions({ ...bounds, projectId }, SESSION_LIMIT, 0, generatedParam(generated))
+        ? api.sessions(
+            { ...bounds, projectId },
+            PAGE_SIZE,
+            page * PAGE_SIZE,
+            generatedParam(generated),
+          )
         : Promise.reject(new Error("日期范围不正确")),
-    [api, bounds, projectId, generated],
+    [api, bounds, projectId, generated, page],
   );
   const sessions = useAsync(loadSessions);
+  const loadUsage = useCallback(
+    () =>
+      bounds
+        ? api.usage({ ...bounds, projectId }, 1000, 0)
+        : Promise.reject(new Error("日期范围不正确")),
+    [api, bounds, projectId],
+  );
+  const usage = useAsync(loadUsage);
 
   const isAdmin = profile.role === "admin";
   const detail = project.data;
+  const records = usage.data?.records ?? [];
+  const pageCount = sessions.data ? Math.max(1, Math.ceil(sessions.data.total / PAGE_SIZE)) : 1;
 
   return (
     <>
@@ -55,7 +73,6 @@ export function ProjectPage({ projectId }: { projectId: number }) {
           </p>
         )}
       </div>
-      <RangeBar view={view} />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : project.error ? (
@@ -70,6 +87,9 @@ export function ProjectPage({ projectId }: { projectId: number }) {
           showAccounts
           linkAccounts={isAdmin}
           showProjects={false}
+          sessions={sessions.data?.total}
+          cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
+          modelSplits={splitsBy(records, (row) => row.model)}
         />
       )}
       {isAdmin && detail && (
@@ -84,18 +104,49 @@ export function ProjectPage({ projectId }: { projectId: number }) {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-medium">
               会话
-              {sessions.data
-                ? `（共 ${sessions.data.total} 场，显示最近 ${sessions.data.sessions.length} 场）`
-                : ""}
+              {sessions.data ? `（共 ${sessions.data.total} 场）` : ""}
             </h2>
-            <GeneratedFilterSelect value={generated} onChange={setGenerated} />
+            <GeneratedFilterSelect
+              value={generated}
+              onChange={(value) => {
+                setPage(0);
+                setGenerated(value);
+              }}
+            />
           </div>
           {sessions.error ? (
             <ErrorNote error={sessions.error} onRetry={sessions.reload} />
           ) : sessions.loading || !sessions.data ? (
             <Loading />
           ) : (
-            <SessionTable sessions={sessions.data.sessions} />
+            <>
+              <SessionTable sessions={sessions.data.sessions} />
+              {pageCount > 1 && (
+                <div className="mt-3 flex items-center justify-end gap-3 text-sm">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 0}
+                    onClick={() => setPage(page - 1)}
+                  >
+                    上一页
+                  </Button>
+                  <span>
+                    {page + 1} / {pageCount}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={page + 1 >= pageCount}
+                    onClick={() => setPage(page + 1)}
+                  >
+                    下一页
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
