@@ -4,6 +4,7 @@ import type {
   CoverageView,
   SessionListItem,
   SummaryResponse,
+  WorkTimelineResponse,
 } from "../api/types";
 import type { CsvCell } from "./csv";
 
@@ -51,6 +52,27 @@ export function sessionRows(sessions: SessionListItem[]): CsvCell[][] {
       s.event_count,
       s.pushed_at,
     ]),
+  ];
+}
+
+export function timelineRows(timeline: WorkTimelineResponse): CsvCell[][] {
+  return [
+    ["日期", "成员", "标题", "来源", "项目", "模型", "开始", "结束", "token", "统一价费用", "客户端快照费用"],
+    ...timeline.days.flatMap((day) =>
+      day.segments.map((segment) => [
+        day.day,
+        segment.account,
+        segment.title,
+        segment.source,
+        segment.project_name ?? segment.project,
+        segment.model,
+        segment.start,
+        segment.end,
+        segment.total_tokens,
+        segment.unified_cost,
+        segment.cost_snapshot,
+      ]),
+    ),
   ];
 }
 

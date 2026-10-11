@@ -21,6 +21,7 @@ pub mod team_pricing;
 pub mod tokens;
 pub mod usage;
 pub mod usage_query;
+pub mod work_timeline;
 
 use sqlx::PgPool;
 

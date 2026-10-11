@@ -40,7 +40,10 @@ function navGroups(route: Route, accountId: number, role: "admin" | "member"): N
   if (role === "admin") {
     groups.push({
       title: "分析",
-      items: [{ label: "团队总览", route: { page: "overview" }, active: route.page === "overview" }],
+      items: [
+        { label: "团队总览", route: { page: "overview" }, active: route.page === "overview" },
+        { label: "工作时间线", route: { page: "timeline" }, active: route.page === "timeline" },
+      ],
     });
   }
   groups.push({
@@ -48,7 +51,13 @@ function navGroups(route: Route, accountId: number, role: "admin" | "member"): N
     items: [
       ...(role === "admin"
         ? [{ label: "成员", route: { page: "members" as const }, active: route.page === "members" }]
-        : []),
+        : [
+            {
+              label: "工作时间线",
+              route: { page: "timeline" as const },
+              active: route.page === "timeline",
+            },
+          ]),
       {
         label: "项目",
         route: { page: "projects" },

@@ -208,13 +208,14 @@
 
 ### 网页用的聚合与会话列表（`server/src/summary.rs`、`sessions::list`）
 
-接口：`GET /api/v1/usage/summary`、`GET /api/v1/sessions`。
+接口：`GET /api/v1/usage/summary`、`GET /api/v1/sessions`、`GET /api/v1/work-timeline`。
 
 1. 聚合在服务端做，网页只展示。`summary` 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。
-2. 两个接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
+2. 三个接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
 3. `from` 含、`to` 不含，RFC 3339；按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
 4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。
-5. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`。
+5. 工作时间线只铺已推送会话：按起止与区间**重叠**选（不是列表那种按结束时间落点），裁到本地日历日；当天 token / 费用只统计该场落在这天的消耗记录。不发明未推送的 Cursor 本机会话，不画账号用量或代码量。可选 `source` 精确匹配。最多 `MAX_SESSIONS` 场，超出标 `truncated`。
+6. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`；时间线 `cargo test --manifest-path server/Cargo.toml --test work_timeline`。
 
 ### 会话详情、项目页与项目合并（`sessions::detail`、`project_admin.rs`）
 
@@ -233,7 +234,7 @@ React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnp
 
 1. 响应类型在 `src/api/types.ts`，与 `server/src/api.rs` 一一对应；改了服务端响应就同步改它。
 2. 登录后 token 只放 `sessionStorage`。401 一律退回登录页；登录请求自己的 401 不算。
-3. hash 路由（`#/overview`、`#/members`、`#/member/:id`、`#/projects`、`#/project/:id`、`#/session/:id`、`#/pricing`），可带 `?range=&mode=` 查询串。服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面（项目页与会话页成员也能进，数据范围由服务端判定；价目只给管理员），真正的拦截仍在服务端。
+3. hash 路由（`#/overview`、`#/members`、`#/member/:id`、`#/projects`、`#/project/:id`、`#/session/:id`、`#/timeline`、`#/pricing`），可带 `?range=&mode=` 查询串。服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面（项目页、会话页与工作时间线成员也能进，数据范围由服务端判定；价目只给管理员），真正的拦截仍在服务端。
 4. 费用口径（统一价 / 客户端快照）只改展示，不重新请求。导出 CSV 两种费用都带；`lib/csv.ts` 会给以 `= + - @` 开头的文本加 `'`，防公式注入。
 5. 会话详情的上下文清单按证据层级分组（`lib/context.ts::tierOf`）：只有 `injected` 层且清单不是来自缓存、有注入快照、条目带原文才写「已注入（原文）」；磁盘可能生效、来自缓存无原文、按磁盘重建都各用自己的说法，不得写成已注入。改说法要同步 `context.test.ts`。项目改名与合并只在项目页对管理员显示，成员不请求 `/admin/` 接口。
 6. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。

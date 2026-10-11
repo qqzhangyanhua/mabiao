@@ -14,6 +14,7 @@ import type {
   SetTeamPriceResponse,
   SummaryResponse,
   UsageResponse,
+  WorkTimelineResponse,
 } from "./types";
 
 /** 与 `crates/push-protocol` 的 `PROTOCOL_VERSION` 一致；登录请求要带。 */
@@ -72,6 +73,7 @@ export interface Api {
   renameProject(id: number, name: string): Promise<Project>;
   mergeProject(id: number, intoProjectId: number): Promise<MergeProjectResponse>;
   usage(scope: ScopeParams, limit: number, offset: number): Promise<UsageResponse>;
+  workTimeline(scope: ScopeParams & { source?: string }, tzOffsetMinutes: number): Promise<WorkTimelineResponse>;
   pricing(): Promise<PricingOverview>;
   setPrice(body: {
     model: string;
@@ -139,11 +141,12 @@ export function createApi(options: ApiOptions): Api {
     return (await response.json()) as T;
   }
 
-  const scopeQuery = (scope: ScopeParams) => ({
+  const scopeQuery = (scope: ScopeParams & { source?: string }) => ({
     account_id: scope.accountId,
     project_id: scope.projectId,
     from: scope.from,
     to: scope.to,
+    source: scope.source,
   });
 
   return {
@@ -190,6 +193,14 @@ export function createApi(options: ApiOptions): Api {
       request(
         "GET",
         `/api/v1/usage${toQueryString({ ...scopeQuery(scope), limit, offset })}`,
+      ),
+    workTimeline: (scope, tzOffsetMinutes) =>
+      request(
+        "GET",
+        `/api/v1/work-timeline${toQueryString({
+          ...scopeQuery(scope),
+          tz_offset_minutes: tzOffsetMinutes,
+        })}`,
       ),
     pricing: () => request("GET", "/api/v1/admin/pricing"),
     setPrice: (body) => request("PUT", "/api/v1/admin/pricing/prices", body),

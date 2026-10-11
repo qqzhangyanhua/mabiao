@@ -11,6 +11,7 @@ import { PricingPage } from "./pages/PricingPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SessionPage } from "./pages/SessionPage";
+import { WorkTimelinePage } from "./pages/WorkTimelinePage";
 import { ThemeProvider } from "./theme";
 import { ViewProvider } from "./view";
 
@@ -28,6 +29,7 @@ function Routed() {
           {route.page === "projects" && <ProjectsPage />}
           {route.page === "project" && <ProjectPage key={route.projectId} projectId={route.projectId} />}
           {route.page === "session" && <SessionPage key={route.sessionId} sessionId={route.sessionId} />}
+          {route.page === "timeline" && <WorkTimelinePage />}
           {route.page === "pricing" && <PricingPage />}
         </Layout>
       </ExportProvider>

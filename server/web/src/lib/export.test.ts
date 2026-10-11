@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AccountView, CoverageView, SummaryResponse } from "../api/types";
-import { memberRows, summaryRows } from "./export";
+import { memberRows, summaryRows, timelineRows } from "./export";
 
 const row = (key: string, unified: number, snapshot: number) => ({
   key,
@@ -41,6 +41,60 @@ describe("summaryRows", () => {
     ]);
     expect(rows.slice(1).map((r) => r[0])).toEqual(["按天", "按成员", "按模型"]);
     expect(rows[1]).toEqual(["按天", "2026-03-01", 2, 3000, 1, 9, 1]);
+  });
+});
+
+describe("timelineRows", () => {
+  it("flattens day segments with both costs", () => {
+    const rows = timelineRows({
+      days: [
+        {
+          day: "2026-03-01",
+          segment_count: 1,
+          total_tokens: 40,
+          cost_snapshot: 9,
+          unified_cost: 0.2,
+          segments: [
+            {
+              id: 7,
+              account_id: 2,
+              account: "alice",
+              source: "codex",
+              session_id: "s-1",
+              title: "改登录",
+              project: "/w/mabiao",
+              project_id: 3,
+              project_name: "mabiao",
+              model: "gpt-5",
+              start: "2026-03-01T09:00:00Z",
+              end: "2026-03-01T10:00:00Z",
+              total_tokens: 40,
+              cost_snapshot: 9,
+              unified_cost: 0.2,
+            },
+          ],
+        },
+      ],
+      segment_count: 1,
+      total_tokens: 40,
+      cost_snapshot: 9,
+      unified_cost: 0.2,
+      truncated: false,
+    });
+    expect(rows[0]?.[0]).toBe("日期");
+    expect(rows[1]).toEqual([
+      "2026-03-01",
+      "alice",
+      "改登录",
+      "codex",
+      "mabiao",
+      "gpt-5",
+      "2026-03-01T09:00:00Z",
+      "2026-03-01T10:00:00Z",
+      40,
+      0.2,
+      9,
+    ]);
   });
 });
 
