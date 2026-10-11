@@ -1,0 +1,63 @@
+src-tauri/src/tests/push.rs
+  s_2ac0eb3c2695cb::t_12835139a96982 23,64,103,822,885,895,951,1023,1043,1085,1117
+src-tauri/src/push/auto.rs
+  s_2ac0eb3c2695cb::t_9e478f40fe79b8 195
+src-tauri/src/push/mod.rs
+  s_2ac0eb3c2695cb::t_26f52714d11f7c 170-171
+  s_2ac0eb3c2695cb::t_9e478f40fe79b8 12,89,92-94,118-120,130-132,235,239,250-256,305,308,335-352,355,383,385-388,394,396-404,407-408,414-415,427,429-435,498
+  s_2ac0eb3c2695cb::t_384c5e44d77cbf 95,97-99,137-139,241,270-271,273,313,363,442,445,447,449-450,460-462
+  s_2ac0eb3c2695cb::t_cbf6ed3636394c 21,268-269,405-406,409-413,416-426,428,448,475-478,482-497
+  s_2ac0eb3c2695cb::t_70a6671161b881 499
+src-tauri/src/commands/push.rs
+  s_2ac0eb3c2695cb::t_b93d117e3b5457 25-26
+src/types.ts
+  s_2ac0eb3c2695cb::t_2a6f14bf475ff9 1237,1239-1240,1266-1267
+  s_2ac0eb3c2695cb::t_407db494d3d6c7 1232,1235-1236,1254-1255,1260-1261
+src-tauri/src/tests/mod.rs
+  s_2ac0eb3c2695cb::t_12835139a96982 56
+src-tauri/src/push/ledger.rs
+  s_2ac0eb3c2695cb::t_384c5e44d77cbf 8,15-18,25-29,80-152
+  s_2ac0eb3c2695cb::t_fec044d2ba5788 1-7,9-14,19-24,30-79,153-171
+docs/adr/0026-push-to-remote-server.md
+  s_2ac0eb3c2695cb::t_bc4573fc39190c 40
+src/components/ConversationPushDialog.tsx
+  s_2ac0eb3c2695cb::t_e39083fedbc4d7 82-84,86-87
+  s_2ac0eb3c2695cb::t_2a6f14bf475ff9 94-99,343,345-346,349-351
+  s_2ac0eb3c2695cb::t_407db494d3d6c7 80,181,190,305-313,344,347-348,352
+src/lib/pushRange.ts
+  s_2ac0eb3c2695cb::t_2a6f14bf475ff9 85-87
+  s_2ac0eb3c2695cb::t_407db494d3d6c7 72-74
+docs/agent-layers.md
+  s_2ac0eb3c2695cb::t_bc4573fc39190c 152
+  s_2ac0eb3c2695cb::t_6c9bd02ba016ba 151,163
+  s_2ac0eb3c2695cb::t_93bbd211face4c 153
+src-tauri/src/push/payload.rs
+  s_2ac0eb3c2695cb::t_ed3421c464648a 14
+  s_2ac0eb3c2695cb::t_ce2e2f22488cf4 34-43
+  s_2ac0eb3c2695cb::t_44e663a2e78a82 44-45
+src-tauri/src/tests/push_ledger.rs
+  s_2ac0eb3c2695cb::t_6b49983a6487e8 3,5-6,9,11-49,54,60-92,97-118,123-144,149-172,178-198,203-365
+  s_2ac0eb3c2695cb::t_ed3421c464648a 7,50-53,55-59,93-96,119-122,145-148,199-202
+  s_2ac0eb3c2695cb::t_41ef6e354afc6e 1-2,4,8,10
+  s_2ac0eb3c2695cb::t_ea28f5ba366142 173-177
+src/lib/pushRange.test.ts
+  s_2ac0eb3c2695cb::t_2a6f14bf475ff9 31,94-101
+  s_2ac0eb3c2695cb::t_407db494d3d6c7 26,91-93
+  s_2ac0eb3c2695cb::t_4c67b780bcb67b 102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4571f18cf966ce47d24aab48d5e189b66acba1aa",
+  "prompts": {},
+  "sessions": {
+    "s_2ac0eb3c2695cb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ebbe04f7-35f0-4a10-a725-2325d0f88ca7",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
