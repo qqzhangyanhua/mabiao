@@ -1,16 +1,17 @@
 import type { SessionListItem } from "../api/types";
 import { formatDateTime } from "../lib/format";
 import { routeHash } from "../lib/route";
+import { Badge } from "./ui/badge";
 
 export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
   if (sessions.length === 0) {
-    return <p className="py-6 text-center text-sm text-slate-500">这段时间没有推送过会话</p>;
+    return <p className="py-6 text-center text-sm text-muted-foreground">这段时间没有推送过会话</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
+          <tr className="border-b border-border text-left text-xs text-muted-foreground">
             <th className="py-1 font-normal">标题</th>
             <th className="py-1 font-normal">来源</th>
             <th className="py-1 font-normal">项目</th>
@@ -22,18 +23,18 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
         </thead>
         <tbody>
           {sessions.map((s) => (
-            <tr key={s.id} className="border-b border-slate-100 last:border-0">
+            <tr key={s.id} className="border-b border-border/70 last:border-0">
               <td className="max-w-72 truncate py-1.5 pr-2" title={s.title}>
                 <a
                   href={routeHash({ page: "session", sessionId: s.id })}
-                  className="text-blue-700 hover:underline"
+                  className="text-primary hover:underline"
                 >
                   {s.title || "（无标题）"}
                 </a>
                 {s.generated_by_work_notes && (
-                  <span className="ml-2 rounded bg-slate-100 px-1 text-xs text-slate-500">
+                  <Badge variant="secondary" className="ml-2">
                     码表生成
-                  </span>
+                  </Badge>
                 )}
               </td>
               <td className="py-1.5 pr-2">{s.source}</td>

@@ -9,6 +9,7 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
 import { SessionPage } from "./pages/SessionPage";
+import { ThemeProvider } from "./theme";
 
 function Routed() {
   const { profile } = useAuth();
@@ -29,5 +30,9 @@ function Routed() {
 }
 
 export function App() {
-  return <AuthProvider signedIn={<Routed />} signedOut={<LoginPage />} />;
+  return (
+    <ThemeProvider>
+      <AuthProvider signedIn={<Routed />} signedOut={<LoginPage />} />
+    </ThemeProvider>
+  );
 }

@@ -52,6 +52,19 @@ export interface QueryBounds {
   to: string;
 }
 
+/** 区间内的每一天（两端含）。格式不对、起止颠倒，或超过 400 天时返回空，调用方沿用原始点。 */
+export function eachDay(fromDay: string, toDay: string): string[] {
+  const start = Date.parse(`${fromDay}T00:00:00Z`);
+  const end = Date.parse(`${toDay}T00:00:00Z`);
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return [];
+  const days: string[] = [];
+  for (let time = start; time <= end && days.length < 400; time += DAY_MS) {
+    days.push(new Date(time).toISOString().slice(0, 10));
+  }
+  if (days.length === 400 && end - start >= 400 * DAY_MS) return [];
+  return days;
+}
+
 /** 日期区间 → 服务端的 `from` / `to`。日期格式不对或起止颠倒返回 `null`。 */
 export function queryBounds(range: DayRange, offsetMinutes: number): QueryBounds | null {
   const from = dayStartUtcMs(range.fromDay, offsetMinutes);

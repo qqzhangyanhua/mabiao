@@ -9,7 +9,10 @@ import {
 import { RangeBar, useViewState } from "../components/RangeBar";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
+import { Button } from "../components/ui/button";
+import { panelClass } from "../components/ui/card";
 import { useAsync } from "../hooks";
+import { cn } from "../lib/cn";
 import { downloadCsv } from "../lib/csv";
 import { sessionRows, summaryRows } from "../lib/export";
 
@@ -64,30 +67,32 @@ export function MemberPage({ accountId }: { accountId: number }) {
         <h1 className="text-lg font-semibold">
           {title}
           {accountId === profile.id && (
-            <span className="ml-2 text-sm font-normal text-slate-500">（我）</span>
+            <span className="ml-2 text-sm font-normal text-muted-foreground">（我）</span>
           )}
         </h1>
         <div className="flex gap-2">
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={!summary.data}
             onClick={() =>
               summary.data && downloadCsv(`${title}-汇总.csv`, summaryRows(summary.data))
             }
-            className="rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50"
           >
             导出汇总 CSV
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             disabled={!sessions.data}
             onClick={() =>
               sessions.data && downloadCsv(`${title}-会话.csv`, sessionRows(sessions.data.sessions))
             }
-            className="rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50"
           >
             导出本页会话 CSV
-          </button>
+          </Button>
         </div>
       </div>
       <RangeBar
@@ -114,15 +119,16 @@ export function MemberPage({ accountId }: { accountId: number }) {
         <SummaryView
           summary={summary.data}
           mode={view.mode}
+          range={{ fromDay: view.fromDay, toDay: view.toDay }}
           showAccounts={false}
           linkAccounts={false}
         />
       )}
 
       {bounds && (
-        <section className="rounded border border-slate-200 bg-white p-4">
+        <section className={cn(panelClass, "p-4")}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium text-slate-700">
+            <h2 className="text-sm font-medium">
               会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}
             </h2>
             <GeneratedFilterSelect
@@ -142,25 +148,27 @@ export function MemberPage({ accountId }: { accountId: number }) {
               <SessionTable sessions={sessions.data.sessions} />
               {pageCount > 1 && (
                 <div className="mt-3 flex items-center justify-end gap-3 text-sm">
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     disabled={page === 0}
                     onClick={() => setPage(page - 1)}
-                    className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
                   >
                     上一页
-                  </button>
+                  </Button>
                   <span>
                     {page + 1} / {pageCount}
                   </span>
-                  <button
+                  <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     disabled={page + 1 >= pageCount}
                     onClick={() => setPage(page + 1)}
-                    className="rounded border border-slate-300 px-2 py-1 disabled:opacity-50"
                   >
                     下一页
-                  </button>
+                  </Button>
                 </div>
               )}
             </>

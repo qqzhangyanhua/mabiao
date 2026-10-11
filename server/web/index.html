@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>码表 · 团队</title>
+    <script>
+      try {
+        var theme = localStorage.getItem("mabiao.web.theme");
+        document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+      } catch (e) {
+        document.documentElement.dataset.theme = "dark";
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

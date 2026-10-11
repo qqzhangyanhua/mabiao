@@ -1,3 +1,6 @@
+import { cn } from "../lib/cn";
+import { panelClass } from "./ui/card";
+
 export interface TrendPoint {
   label: string;
   value: number;
@@ -8,32 +11,43 @@ export function TrendChart({
   title,
   points,
   format,
+  color = "var(--chart-1)",
 }: {
   title: string;
   points: TrendPoint[];
   format: (value: number) => string;
+  color?: string;
 }) {
   const max = Math.max(0, ...points.map((p) => p.value));
+  const sparse = points.length <= 3;
   return (
-    <section className="rounded border border-slate-200 bg-white p-4">
-      <h3 className="mb-3 text-sm font-medium text-slate-700">{title}</h3>
+    <section className={cn(panelClass, "p-4")}>
+      <h3 className="mb-3 text-sm font-medium">{title}</h3>
       {points.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-500">这段时间没有数据</p>
+        <p className="py-6 text-center text-sm text-muted-foreground">这段时间没有数据</p>
       ) : (
         <>
-          <div role="img" aria-label={title} className="flex h-32 items-end gap-px">
+          <div
+            role="img"
+            aria-label={title}
+            className={cn("flex h-32 items-end", sparse ? "justify-center gap-2" : "gap-px")}
+          >
             {points.map((p) => (
               <div
                 key={p.label}
                 title={`${p.label}：${format(p.value)}`}
-                className="min-w-px flex-1 rounded-t-sm bg-blue-500 hover:bg-blue-700"
+                className={cn(
+                  "rounded-t-sm opacity-90 hover:opacity-100",
+                  sparse ? "w-8" : "min-w-px flex-1",
+                )}
                 style={{
+                  background: color,
                   height: `${max > 0 ? Math.max((p.value / max) * 100, p.value > 0 ? 2 : 0) : 0}%`,
                 }}
               />
             ))}
           </div>
-          <div className="mt-1 flex justify-between text-xs text-slate-500">
+          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
             <span>{points[0]?.label}</span>
             <span>峰值 {format(max)}</span>
             <span>{points[points.length - 1]?.label}</span>

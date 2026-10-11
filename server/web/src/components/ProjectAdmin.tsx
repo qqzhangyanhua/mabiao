@@ -4,6 +4,10 @@ import { useAuth } from "../auth";
 import { useAsync } from "../hooks";
 import { routeHash } from "../lib/route";
 import { ErrorNote } from "./Feedback";
+import { Button } from "./ui/button";
+import { panelClass } from "./ui/card";
+import { Input, NativeSelect } from "./ui/input";
+import { cn } from "../lib/cn";
 
 /**
  * 管理员手动改名、合并（覆盖 git remote / 目录名的自动归并）。
@@ -51,39 +55,40 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
     });
 
   return (
-    <section className="space-y-4 rounded border border-slate-200 bg-white p-4">
-      <h2 className="text-sm font-medium text-slate-700">项目管理（管理员）</h2>
-      <p className="text-xs text-slate-500">
-        自动归并的依据：{project.git_remote ? `git remote ${project.git_remote}` : "没有 remote，按目录名"}
+    <section className={cn(panelClass, "space-y-4 p-4")}>
+      <h2 className="text-sm font-medium">项目管理（管理员）</h2>
+      <p className="text-xs text-muted-foreground">
+        自动归并的依据：
+        {project.git_remote ? `git remote ${project.git_remote}` : "没有 remote，按目录名"}
         。认错了可以手动改名或合并。
       </p>
       {error && <ErrorNote error={error} />}
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-500">项目名</span>
-          <input
+          <span className="text-xs text-muted-foreground">项目名</span>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
-            className="w-64 rounded border border-slate-300 px-2 py-1"
+            className="w-64"
           />
         </label>
-        <button
+        <Button
           type="button"
+          variant="outline"
           disabled={busy || name.trim() === "" || name.trim() === project.name}
           onClick={() => void rename()}
-          className="rounded border border-slate-300 px-3 py-1 hover:bg-slate-100 disabled:opacity-50"
         >
           改名
-        </button>
+        </Button>
       </div>
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-slate-500">合并进</span>
-          <select
+          <span className="text-xs text-muted-foreground">合并进</span>
+          <NativeSelect
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
-            className="w-64 rounded border border-slate-300 px-2 py-1"
+            className="w-64"
           >
             <option value="">选择目标项目…</option>
             {targets.map((p) => (
@@ -91,16 +96,11 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
                 {p.name}（{p.session_count} 场 / {p.usage_record_count} 条记录）
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
-        <button
-          type="button"
-          disabled={busy || !target}
-          onClick={() => void merge()}
-          className="rounded border border-red-300 px-3 py-1 text-red-700 hover:bg-red-50 disabled:opacity-50"
-        >
+        <Button type="button" variant="destructive" disabled={busy || !target} onClick={() => void merge()}>
           合并
-        </button>
+        </Button>
       </div>
     </section>
   );

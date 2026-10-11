@@ -2,7 +2,7 @@ export function ErrorNote({ error, onRetry }: { error: Error; onRetry?: () => vo
   return (
     <div
       role="alert"
-      className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+      className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
     >
       {error.message}
       {onRetry && (
@@ -15,9 +15,9 @@ export function ErrorNote({ error, onRetry }: { error: Error; onRetry?: () => vo
 }
 
 export function Loading() {
-  return <p className="py-8 text-center text-sm text-slate-500">加载中…</p>;
+  return <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>;
 }
 
 export function Empty({ children }: { children: string }) {
-  return <p className="py-8 text-center text-sm text-slate-500">{children}</p>;
+  return <p className="py-8 text-center text-sm text-muted-foreground">{children}</p>;
 }

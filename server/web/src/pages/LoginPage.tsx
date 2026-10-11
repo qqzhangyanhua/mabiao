@@ -1,5 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useGuest } from "../auth";
+import { Button } from "../components/ui/button";
+import { Card } from "../components/ui/card";
+import { Input } from "../components/ui/input";
 
 export function LoginPage() {
   const { signIn } = useGuest();
@@ -22,48 +25,48 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <form
-        onSubmit={submit}
-        className="w-full max-w-sm space-y-4 rounded border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <h1 className="text-lg font-semibold">码表 · 团队</h1>
-        <p className="text-sm text-slate-500">
-          用管理员给你开的账号登录。成员只能看到自己推送的数据。
-        </p>
-        <label className="block text-sm">
-          账号
-          <input
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
-            autoComplete="username"
-            required
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-          />
-        </label>
-        <label className="block text-sm">
-          密码
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-          />
-        </label>
-        {error && (
-          <p role="alert" className="text-sm text-red-700">
-            {error}
+      <Card className="w-full max-w-sm p-6">
+        <form onSubmit={submit} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 place-items-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
+              码
+            </span>
+            <h1 className="text-lg font-semibold">码表 · 团队</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            用管理员给你开的账号登录。成员只能看到自己推送的数据。
           </p>
-        )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded bg-blue-600 py-2 text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {busy ? "登录中…" : "登录"}
-        </button>
-      </form>
+          <label className="block text-sm">
+            账号
+            <Input
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              autoComplete="username"
+              required
+              className="mt-1"
+            />
+          </label>
+          <label className="block text-sm">
+            密码
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              className="mt-1"
+            />
+          </label>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={busy} className="w-full">
+            {busy ? "登录中…" : "登录"}
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }

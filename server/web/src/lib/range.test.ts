@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { presetRange, queryBounds } from "./range";
+import { eachDay, presetRange, queryBounds } from "./range";
 
 const EAST_8 = 8 * 60;
 
@@ -30,6 +30,15 @@ describe("queryBounds", () => {
       from: "2026-02-28T16:00:00.000Z",
       to: "2026-03-02T16:00:00.000Z",
     });
+  });
+
+  it("lists every calendar day in the range", () => {
+    expect(eachDay("2026-03-01", "2026-03-03")).toEqual([
+      "2026-03-01",
+      "2026-03-02",
+      "2026-03-03",
+    ]);
+    expect(eachDay("2026-03-03", "2026-03-01")).toEqual([]);
   });
 
   it("a single day spans 24 hours", () => {

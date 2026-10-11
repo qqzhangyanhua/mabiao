@@ -1,12 +1,130 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: "SF Pro Text", "PingFang SC", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+}
+
+/* 与桌面端 `src/styles/base/tokens.css` 同一套色：默认深色，浅色走 data-theme。 */
+:root {
+  color-scheme: dark;
+  --background: #070b16;
+  --foreground: #e8eef7;
+  --card: #10182a;
+  --card-foreground: #e8eef7;
+  --panel-grad-1: #182238;
+  --panel-grad-2: #10182a;
+  --primary: #8b6cff;
+  --primary-foreground: #160b33;
+  --secondary: #1a2236;
+  --secondary-foreground: #e8eef7;
+  --muted: #151c2e;
+  --muted-foreground: #8b97ab;
+  --accent: #2a2148;
+  --accent-foreground: #c4b5fd;
+  --destructive: #fb7185;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --border: #243044;
+  --input: #314056;
+  --ring: #8b6cff;
+  --sidebar: #080c18;
+  --sidebar-foreground: #b7c2d4;
+  --sidebar-accent: #2a2148;
+  --sidebar-accent-foreground: #c4b5fd;
+  --sidebar-border: #1c2638;
+  --shadow-soft: rgb(0 0 0 / 35%);
+  --chart-1: #8b6cff;
+  --chart-2: #22d3ee;
+  --chart-3: #f59e0b;
+  --chart-4: #60a5fa;
+  --chart-5: #34d399;
+  --chart-6: #f472b6;
+  --tone-claude: #fb923c;
+  --tone-codex: #8b6cff;
+  --tone-pi: #22d3ee;
+  --tone-omp: #e879f9;
+  --tone-open: #60a5fa;
+  --tone-kimi: #34d399;
+  --tone-gemini: #38bdf8;
+  --tone-grok: #f472b6;
+  --tone-qwen: #a78bfa;
+  --tone-cursor: #94a3b8;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #f4f6fb;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --panel-grad-1: #ffffff;
+  --panel-grad-2: #f8fafc;
+  --primary: #6d28d9;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eef4;
+  --secondary-foreground: #0f172a;
+  --muted: #eef2f7;
+  --muted-foreground: #64748b;
+  --accent: #efeaff;
+  --accent-foreground: #6d28d9;
+  --destructive: #dc2626;
+  --success: #15803d;
+  --warning: #b45309;
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #6d28d9;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+  --sidebar-accent: #efeaff;
+  --sidebar-accent-foreground: #6d28d9;
+  --sidebar-border: #e2e8f0;
+  --shadow-soft: rgb(15 23 42 / 8%);
+}
+
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
-  font-family:
-    system-ui,
-    -apple-system,
-    "PingFang SC",
-    "Microsoft YaHei",
-    "Segoe UI",
-    sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  background-color: var(--background);
+  background-image:
+    radial-gradient(
+      880px 420px at -10% -20%,
+      color-mix(in srgb, var(--primary) 28%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      640px 360px at 110% -10%,
+      color-mix(in srgb, var(--chart-2) 18%, transparent),
+      transparent 55%
+    );
+  background-attachment: fixed;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
 }

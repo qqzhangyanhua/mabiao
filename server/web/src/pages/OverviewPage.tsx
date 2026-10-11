@@ -3,6 +3,7 @@ import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { RangeBar, useViewState } from "../components/RangeBar";
 import { SummaryView } from "../components/SummaryView";
+import { Button } from "../components/ui/button";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { summaryRows } from "../lib/export";
@@ -20,16 +21,17 @@ export function OverviewPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold">团队总览</h1>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           disabled={!data}
           onClick={() => data && downloadCsv("团队总览.csv", summaryRows(data))}
-          className="rounded border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-100 disabled:opacity-50"
         >
           导出 CSV
-        </button>
+        </Button>
       </div>
       <RangeBar view={view} />
       {!bounds ? (
@@ -39,7 +41,13 @@ export function OverviewPage() {
       ) : loading || !data ? (
         <Loading />
       ) : (
-        <SummaryView summary={data} mode={view.mode} showAccounts linkAccounts />
+        <SummaryView
+          summary={data}
+          mode={view.mode}
+          range={{ fromDay: view.fromDay, toDay: view.toDay }}
+          showAccounts
+          linkAccounts
+        />
       )}
     </>
   );

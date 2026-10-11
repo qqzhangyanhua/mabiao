@@ -1,3 +1,5 @@
+import { NativeSelect } from "./ui/input";
+
 export type GeneratedFilter = "all" | "only" | "hide";
 
 const OPTIONS: { id: GeneratedFilter; label: string }[] = [
@@ -20,17 +22,17 @@ export function GeneratedFilterSelect({
   onChange: (value: GeneratedFilter) => void;
 }) {
   return (
-    <select
+    <NativeSelect
       aria-label="码表生成过滤"
       value={value}
       onChange={(e) => onChange(e.target.value as GeneratedFilter)}
-      className="rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+      className="w-auto"
     >
       {OPTIONS.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }

@@ -12,10 +12,7 @@ export function ProjectsPage() {
   const view = useViewState();
   const { bounds, offset } = view;
   const load = useCallback(
-    () =>
-      bounds
-        ? api.summary(bounds, offset)
-        : Promise.reject(new Error("日期范围不正确")),
+    () => (bounds ? api.summary(bounds, offset) : Promise.reject(new Error("日期范围不正确"))),
     [api, bounds, offset],
   );
   const summary = useAsync(load);
@@ -41,7 +38,7 @@ export function ProjectsPage() {
             }
           />
           {profile.role === "admin" && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               自动归并认错了？进入项目页可以手动改名或合并。
             </p>
           )}
