@@ -233,6 +233,43 @@ export interface RecomputeResponse {
   recomputed: number;
 }
 
+/** 工作时间线里裁到当天的一根横条。`id` 是远端会话主键。 */
+export interface WorkSegment {
+  id: number;
+  account_id: number;
+  account: string;
+  source: string;
+  session_id: string;
+  title: string;
+  project: string;
+  project_id: number | null;
+  project_name: string | null;
+  model: string;
+  start: string;
+  end: string;
+  total_tokens: number;
+  cost_snapshot: number;
+  unified_cost: number;
+}
+
+export interface WorkDay {
+  day: string;
+  segment_count: number;
+  total_tokens: number;
+  cost_snapshot: number;
+  unified_cost: number;
+  segments: WorkSegment[];
+}
+
+export interface WorkTimelineResponse {
+  days: WorkDay[];
+  segment_count: number;
+  total_tokens: number;
+  cost_snapshot: number;
+  unified_cost: number;
+  truncated: boolean;
+}
+
 /** 服务端统一错误体（`push_protocol::ApiError`）。 */
 export interface ApiErrorBody {
   code: string;

@@ -84,6 +84,17 @@ function stubServer(role: "admin" | "member") {
         return Promise.resolve(json(200, { records: [], totals: EMPTY_SUMMARY.totals }));
       if (url.startsWith("/api/v1/sessions"))
         return Promise.resolve(json(200, { sessions: [], total: 0 }));
+      if (url.startsWith("/api/v1/work-timeline"))
+        return Promise.resolve(
+          json(200, {
+            days: [],
+            segment_count: 0,
+            total_tokens: 0,
+            cost_snapshot: 0,
+            unified_cost: 0,
+            truncated: false,
+          }),
+        );
       if (url === "/api/v1/admin/accounts") return Promise.resolve(json(200, ACCOUNTS));
       if (url === "/api/v1/admin/coverage") return Promise.resolve(json(200, COVERAGE));
       if (url === "/api/v1/admin/pricing")
@@ -128,6 +139,7 @@ describe("登录", () => {
     signIn();
     expect(await screen.findByRole("heading", { name: "团队总览" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "成员" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "工作时间线" })).toBeTruthy();
     expect(
       requests.some((r) => r.startsWith("GET /api/v1/usage/summary?") && !r.includes("account_id")),
     ).toBe(true);
@@ -141,6 +153,7 @@ describe("登录", () => {
     expect(await screen.findByRole("heading", { name: /alice/ })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "团队总览" })).toBeNull();
     expect(screen.queryByRole("link", { name: "成员" })).toBeNull();
+    expect(screen.getByRole("link", { name: "工作时间线" })).toBeTruthy();
     expect(requests.some((r) => r.includes("/usage/summary") && r.includes("account_id=2"))).toBe(
       true,
     );
@@ -165,6 +178,31 @@ describe("登录", () => {
     fireEvent.click(screen.getByRole("link", { name: "成员" }));
     await waitFor(() => expect(window.location.hash).toMatch(/^#\/members\?range=7d/));
     expect(await screen.findByRole("heading", { name: "成员" })).toBeTruthy();
+  });
+
+  it("lets an admin open the work timeline", async () => {
+    const requests = stubServer("admin");
+    window.location.hash = "#/timeline";
+    render(<App />);
+    signIn();
+    expect(await screen.findByRole("heading", { name: "工作时间线" })).toBeTruthy();
+    expect(await screen.findByText(/没有与区间重叠的会话/)).toBeTruthy();
+    expect(
+      requests.some((r) => r.startsWith("GET /api/v1/work-timeline?") && !r.includes("account_id")),
+    ).toBe(true);
+  });
+
+  it("lets a member open the work timeline scoped to themselves", async () => {
+    const requests = stubServer("member");
+    window.location.hash = "#/timeline";
+    render(<App />);
+    signIn();
+    expect(await screen.findByRole("heading", { name: "工作时间线" })).toBeTruthy();
+    expect(await screen.findByText(/没有与区间重叠的会话/)).toBeTruthy();
+    expect(requests.some((r) => r.includes("/work-timeline") && r.includes("account_id=2"))).toBe(
+      true,
+    );
+    expect(requests.some((r) => r.includes("/admin/"))).toBe(false);
   });
 
   it("lets an admin open the team price table", async () => {

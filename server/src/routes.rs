@@ -23,6 +23,7 @@ use crate::sessions::{self, parse_timestamp, SessionFilter};
 use crate::summary;
 use crate::team_pricing::{self, Scope};
 use crate::usage_query::{self, Filter};
+use crate::work_timeline::{self, WorkTimelineQuery, WorkTimelineResponse};
 use crate::{accounts, coverage, devices, password, project_admin, push, tokens, AppState};
 
 /// 注意：这里没有注册 / 自助开户的路由，账号只能由管理员接口或服务端命令行创建。
@@ -67,6 +68,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/admin/pricing/recompute", post(admin_recompute))
         .route("/api/v1/usage", get(usage_list))
         .route("/api/v1/usage/summary", get(usage_summary))
+        .route("/api/v1/work-timeline", get(work_timeline))
         .route("/api/v1/sessions", get(session_list))
         .merge(push_routes)
         .with_state(state)
@@ -344,6 +346,29 @@ async fn usage_summary(
     )?;
     let result = summary::build(&state.pool, &filter, tz_offset).await?;
     Ok(Json(result.into()))
+}
+
+/// 工作时间线：已推送会话按重叠裁到本地日历日，挂上当天消耗。聚合在服务端做。
+async fn work_timeline(
+    State(state): State<AppState>,
+    caller: AuthedAccount,
+    ApiQuery(query): ApiQuery<WorkTimelineQuery>,
+) -> Result<Json<WorkTimelineResponse>, AppError> {
+    let account_id = scope_account(&caller, query.account_id)?;
+    let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
+    let filter = build_filter(
+        account_id,
+        query.project_id,
+        query.from.as_deref(),
+        query.to.as_deref(),
+    )?;
+    let source = query
+        .source
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let result = work_timeline::build(&state.pool, &filter, source, tz_offset).await?;
+    Ok(Json(result))
 }
 
 /// 会话目录列表（不含正文）。范围规则同 `usage_list`。

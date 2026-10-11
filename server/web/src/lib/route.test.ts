@@ -13,6 +13,7 @@ describe("parseRoute", () => {
     expect(parseRoute("#/project/4")).toEqual({ page: "project", projectId: 4 });
     expect(parseRoute("#/session/31/")).toEqual({ page: "session", sessionId: 31 });
     expect(parseRoute("#/pricing")).toEqual({ page: "pricing" });
+    expect(parseRoute("#/timeline")).toEqual({ page: "timeline" });
   });
 
   it("ignores the hash query string used for range and cost mode", () => {
@@ -38,6 +39,7 @@ describe("parseRoute", () => {
       { page: "project", projectId: 8 },
       { page: "session", sessionId: 9 },
       { page: "pricing" },
+      { page: "timeline" },
     ] as const) {
       expect(parseRoute(routeHash(route))).toEqual(route);
     }
@@ -78,6 +80,7 @@ describe("allowedRoute", () => {
       { page: "projects" },
       { page: "project", projectId: 3 },
       { page: "session", sessionId: 3 },
+      { page: "timeline" },
     ] as const) {
       expect(allowedRoute(route, "member", 5)).toEqual(route);
     }
