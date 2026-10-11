@@ -29,12 +29,30 @@ export function timelineSpan(
   return end > start ? { start, end } : { start, end: start + 1 };
 }
 
+export function spreadTicks(ticks: TimelineTick[], minGap = 1.6): TimelineTick[] {
+  if (ticks.length === 0) return [];
+  const ordered = ticks.map((tick, index) => ({ tick, index }));
+  ordered.sort((a, b) => a.tick.left - b.tick.left || a.index - b.index);
+  const lefts = ordered.map((item) => item.tick.left);
+  for (let i = 1; i < lefts.length; i++) {
+    const prev = lefts[i - 1] ?? 0;
+    const current = lefts[i] ?? 0;
+    if (current < prev + minGap) lefts[i] = prev + minGap;
+  }
+  const last = lefts[lefts.length - 1] ?? 0;
+  const scale = last > 100 ? 100 / last : 1;
+  return ordered.map((item, i) => ({
+    ...item.tick,
+    left: (lefts[i] ?? 0) * scale,
+  }));
+}
+
 export function timelineTicks(
   events: Pick<SessionEvent, "event_id" | "occurred_at" | "kind">[],
   span: { start: number; end: number } | null,
 ): TimelineTick[] {
   const duration = span ? span.end - span.start : 0;
-  return events.map((event, index) => {
+  const raw = events.map((event, index) => {
     const at = parseTime(event.occurred_at);
     const left =
       span && at !== null && duration > 0
@@ -48,6 +66,7 @@ export function timelineTicks(
       left: Math.min(100, Math.max(0, left)),
     };
   });
+  return spreadTicks(raw);
 }
 
 export function nearestTickId(ticks: TimelineTick[], percent: number): string | undefined {

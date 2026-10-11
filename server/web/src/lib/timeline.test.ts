@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { nearestTickId, percentFromClientX, timelineSpan, timelineTicks } from "./timeline";
+import {
+  nearestTickId,
+  percentFromClientX,
+  spreadTicks,
+  timelineSpan,
+  timelineTicks,
+} from "./timeline";
 
 const events = [
   { event_id: "a", kind: "message" as const, occurred_at: "2026-10-10T02:00:00Z" },
@@ -35,6 +41,20 @@ describe("timelineTicks", () => {
       null,
     );
     expect(ticks.map((tick) => tick.left)).toEqual([0, 50, 100]);
+  });
+});
+
+describe("spreadTicks", () => {
+  it("opens a burst so each step is hittable without leaving the session scale", () => {
+    const opened = spreadTicks(
+      [
+        { event_id: "a", kind: "message", left: 0.2 },
+        { event_id: "b", kind: "plan", left: 0.3 },
+        { event_id: "c", kind: "tool_call", left: 0.4 },
+      ],
+      2,
+    );
+    expect(opened.map((tick) => tick.left)).toEqual([0.2, 2.2, 4.2]);
   });
 });
 

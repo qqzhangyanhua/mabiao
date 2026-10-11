@@ -94,7 +94,7 @@ export function EventTimeline({
           onKeyDown={onKeyDown}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          className="relative h-10 cursor-ew-resize touch-none rounded-md bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative h-11 cursor-ew-resize touch-none rounded-md bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-border" />
           {selectedTick && (
