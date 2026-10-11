@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowedRoute, homeRoute, parseRoute, routeHash } from "./route";
+import { buildHash, allowedRoute, homeRoute, parseRoute, routeHash } from "./route";
 
 describe("parseRoute", () => {
   it("parses the three pages with or without slashes", () => {
@@ -8,10 +8,19 @@ describe("parseRoute", () => {
     expect(parseRoute("#/member/12")).toEqual({ page: "member", accountId: 12 });
   });
 
-  it("parses the project and session pages", () => {
+  it("parses the project, session and pricing pages", () => {
     expect(parseRoute("#/projects")).toEqual({ page: "projects" });
     expect(parseRoute("#/project/4")).toEqual({ page: "project", projectId: 4 });
     expect(parseRoute("#/session/31/")).toEqual({ page: "session", sessionId: 31 });
+    expect(parseRoute("#/pricing")).toEqual({ page: "pricing" });
+  });
+
+  it("ignores the hash query string used for range and cost mode", () => {
+    expect(parseRoute("#/overview?range=7d&mode=unified")).toEqual({ page: "overview" });
+    expect(parseRoute("#/member/12?range=custom&from=2026-03-01&to=2026-03-08")).toEqual({
+      page: "member",
+      accountId: 12,
+    });
   });
 
   it("returns null for anything else", () => {
@@ -28,9 +37,19 @@ describe("parseRoute", () => {
       { page: "projects" },
       { page: "project", projectId: 8 },
       { page: "session", sessionId: 9 },
+      { page: "pricing" },
     ] as const) {
       expect(parseRoute(routeHash(route))).toEqual(route);
     }
+  });
+
+  it("buildHash appends the view query", () => {
+    expect(
+      buildHash(
+        { page: "members" },
+        { preset: "7d", mode: "unified", fromDay: "2026-03-01", toDay: "2026-03-07" },
+      ),
+    ).toBe("#/members?range=7d&mode=unified");
   });
 });
 
@@ -49,6 +68,7 @@ describe("allowedRoute", () => {
     expect(allowedRoute(own, "member", 5)).toEqual(own);
     expect(allowedRoute({ page: "overview" }, "member", 5)).toEqual(own);
     expect(allowedRoute({ page: "members" }, "member", 5)).toEqual(own);
+    expect(allowedRoute({ page: "pricing" }, "member", 5)).toEqual(own);
     expect(allowedRoute({ page: "member", accountId: 6 }, "member", 5)).toEqual(own);
     expect(allowedRoute(null, "member", 5)).toEqual(own);
   });

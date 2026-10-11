@@ -31,10 +31,13 @@ export function LoginPage() {
             <span className="grid size-9 place-items-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
               码
             </span>
-            <h1 className="text-lg font-semibold">码表 · 团队</h1>
+            <div>
+              <h1 className="text-lg font-semibold">码表 · 团队</h1>
+              <p className="text-xs text-muted-foreground">远程服务管理网页</p>
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            用管理员给你开的账号登录。成员只能看到自己推送的数据。
+            用管理员给你开的账号登录。成员只能看到自己推送的数据；管理员可查看你推送的全部正文。
           </p>
           <label className="block text-sm">
             账号

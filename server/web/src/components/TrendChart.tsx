@@ -6,7 +6,7 @@ export interface TrendPoint {
   value: number;
 }
 
-/** 纯 CSS 柱状图，天数再多也只是柱子变细；每根柱子带 title 当悬停提示。 */
+/** 纯 CSS 柱状图。无数据的日子用极淡柱，避免「左边空了一大块」。 */
 export function TrendChart({
   title,
   points,
@@ -29,20 +29,20 @@ export function TrendChart({
         <>
           <div
             role="img"
-            aria-label={title}
-            className={cn("flex h-32 items-end", sparse ? "justify-center gap-2" : "gap-px")}
+            aria-label={`${title}，峰值 ${format(max)}`}
+            className={cn("flex h-40 items-end", sparse ? "justify-center gap-2" : "gap-px")}
           >
             {points.map((p) => (
               <div
                 key={p.label}
                 title={`${p.label}：${format(p.value)}`}
-                className={cn(
-                  "rounded-t-sm opacity-90 hover:opacity-100",
-                  sparse ? "w-8" : "min-w-px flex-1",
-                )}
+                className={cn("rounded-t-sm", sparse ? "w-8" : "min-w-px flex-1")}
                 style={{
-                  background: color,
-                  height: `${max > 0 ? Math.max((p.value / max) * 100, p.value > 0 ? 2 : 0) : 0}%`,
+                  background: p.value > 0 ? color : "color-mix(in srgb, var(--border) 80%, transparent)",
+                  height: `${
+                    max > 0 ? Math.max((p.value / max) * 100, p.value > 0 ? 3 : 2) : 2
+                  }%`,
+                  opacity: p.value > 0 ? 0.92 : 0.35,
                 }}
               />
             ))}

@@ -80,10 +80,16 @@ function stubServer(role: "admin" | "member") {
       }
       if (url === "/api/v1/me") return Promise.resolve(json(200, me));
       if (url.startsWith("/api/v1/usage/summary")) return Promise.resolve(json(200, EMPTY_SUMMARY));
+      if (url.startsWith("/api/v1/usage"))
+        return Promise.resolve(json(200, { records: [], totals: EMPTY_SUMMARY.totals }));
       if (url.startsWith("/api/v1/sessions"))
         return Promise.resolve(json(200, { sessions: [], total: 0 }));
       if (url === "/api/v1/admin/accounts") return Promise.resolve(json(200, ACCOUNTS));
       if (url === "/api/v1/admin/coverage") return Promise.resolve(json(200, COVERAGE));
+      if (url === "/api/v1/admin/pricing")
+        return Promise.resolve(
+          json(200, { prices: [], snapshot: { as_of: "2026-03-01", source: "litellm", count: 12 } }),
+        );
       return Promise.resolve(json(404, { code: "not_found", message: "没有这个接口" }));
     }),
   );
@@ -147,6 +153,38 @@ describe("登录", () => {
     signIn();
     expect(await screen.findByRole("heading", { name: /alice/ })).toBeTruthy();
     expect(requests.some((r) => r.includes("/admin/"))).toBe(false);
+  });
+
+  it("keeps the date range in the hash when the admin changes it and switches pages", async () => {
+    stubServer("admin");
+    render(<App />);
+    signIn();
+    await screen.findByRole("heading", { name: "团队总览" });
+    fireEvent.click(screen.getByRole("radio", { name: "近 7 天" }));
+    await waitFor(() => expect(window.location.hash).toContain("range=7d"));
+    fireEvent.click(screen.getByRole("link", { name: "成员" }));
+    await waitFor(() => expect(window.location.hash).toMatch(/^#\/members\?range=7d/));
+    expect(await screen.findByRole("heading", { name: "成员" })).toBeTruthy();
+  });
+
+  it("lets an admin open the team price table", async () => {
+    stubServer("admin");
+    window.location.hash = "#/pricing";
+    render(<App />);
+    signIn();
+    expect(await screen.findByRole("heading", { name: "团队价目" })).toBeTruthy();
+    expect(await screen.findByText(/还没有团队价目/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "价目" })).toBeTruthy();
+  });
+
+  it("a member who types the pricing URL is sent back to their own page", async () => {
+    const requests = stubServer("member");
+    window.location.hash = "#/pricing";
+    render(<App />);
+    signIn();
+    expect(await screen.findByRole("heading", { name: /alice/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "价目" })).toBeNull();
+    expect(requests.some((r) => r.includes("/admin/pricing"))).toBe(false);
   });
 
   it("logging out returns to the login page and drops the token", async () => {

@@ -1,24 +1,41 @@
 import type { SessionListItem } from "../api/types";
 import { formatDateTime } from "../lib/format";
-import { routeHash } from "../lib/route";
+import { sourceLabel } from "../lib/source";
+import { useHref } from "../view";
 import { Badge } from "./ui/badge";
 
 export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
+  const href = useHref();
   if (sessions.length === 0) {
     return <p className="py-6 text-center text-sm text-muted-foreground">这段时间没有推送过会话</p>;
   }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
+        <caption className="sr-only">会话目录</caption>
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted-foreground">
-            <th className="py-1 font-normal">标题</th>
-            <th className="py-1 font-normal">来源</th>
-            <th className="py-1 font-normal">项目</th>
-            <th className="py-1 font-normal">模型</th>
-            <th className="py-1 font-normal">设备</th>
-            <th className="py-1 font-normal">结束时间</th>
-            <th className="py-1 text-right font-normal">事件</th>
+            <th scope="col" className="py-1 font-normal">
+              标题
+            </th>
+            <th scope="col" className="py-1 font-normal">
+              来源
+            </th>
+            <th scope="col" className="py-1 font-normal">
+              项目
+            </th>
+            <th scope="col" className="py-1 font-normal">
+              模型
+            </th>
+            <th scope="col" className="py-1 font-normal">
+              设备
+            </th>
+            <th scope="col" className="py-1 font-normal">
+              结束时间
+            </th>
+            <th scope="col" className="py-1 text-right font-normal">
+              事件
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -26,7 +43,7 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
             <tr key={s.id} className="border-b border-border/70 last:border-0">
               <td className="max-w-72 truncate py-1.5 pr-2" title={s.title}>
                 <a
-                  href={routeHash({ page: "session", sessionId: s.id })}
+                  href={href({ page: "session", sessionId: s.id })}
                   className="text-primary hover:underline"
                 >
                   {s.title || "（无标题）"}
@@ -37,7 +54,7 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
                   </Badge>
                 )}
               </td>
-              <td className="py-1.5 pr-2">{s.source}</td>
+              <td className="py-1.5 pr-2">{sourceLabel(s.source)}</td>
               <td className="max-w-40 truncate py-1.5 pr-2" title={s.project}>
                 {s.project_name ?? s.project}
               </td>

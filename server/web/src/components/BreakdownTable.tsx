@@ -3,7 +3,7 @@ import type { Breakdown } from "../api/types";
 import { sliceColor } from "../lib/chart";
 import { cn } from "../lib/cn";
 import { costOf, type CostMode } from "../lib/cost";
-import { formatCost, formatTokens } from "../lib/format";
+import { formatCost, formatPercent, formatTokens } from "../lib/format";
 import { panelClass } from "./ui/card";
 
 const COLLAPSED_ROWS = 10;
@@ -12,13 +12,8 @@ interface Props {
   title: string;
   rows: Breakdown[];
   mode: CostMode;
-  /** 给每行名称生成链接；返回 `undefined` 表示不可点。 */
   linkOf?: (row: Breakdown) => string | undefined;
-}
-
-function percent(share: number): string {
-  if (share <= 0) return "0%";
-  return `${(share * 100).toFixed(share < 0.1 ? 1 : 0)}%`;
+  labelOf?: (row: Breakdown) => string;
 }
 
 function Composition({
@@ -52,7 +47,7 @@ function Composition({
         .map((part) => (
           <div
             key={part.key}
-            title={`${part.label} ${percent(part.value / total)}`}
+            title={`${part.label} ${formatPercent(part.value / total)}`}
             style={{ width: `${(part.value / total) * 100}%`, background: part.color }}
           />
         ))}
@@ -60,61 +55,8 @@ function Composition({
   );
 }
 
-function Row({
-  row,
-  mode,
-  share,
-  color,
-  href,
-}: {
-  row: Breakdown;
-  mode: CostMode;
-  share: number;
-  color: string;
-  href: string | undefined;
-}) {
-  const cost = costOf(row, mode);
-  return (
-    <tr className="border-b border-border/70 last:border-0">
-      <td className="max-w-56 truncate py-1.5 pr-2" title={row.label}>
-        {href ? (
-          <a href={href} className="text-primary hover:underline">
-            {row.label}
-          </a>
-        ) : (
-          row.label
-        )}
-      </td>
-      <td className="py-1.5 text-right tabular-nums">{row.record_count}</td>
-      <td className="py-1.5 text-right tabular-nums">{formatTokens(row.total_tokens)}</td>
-      <td className="py-1.5 text-right tabular-nums">
-        {formatCost(cost)}
-        {mode === "unified" && row.unpriced_count > 0 && (
-          <span className="ml-1 text-warning" title={`${row.unpriced_count} 条未定价，费用偏低`}>
-            *
-          </span>
-        )}
-      </td>
-      <td className="py-1.5 pl-3">
-        <div className="flex items-center gap-2">
-          <div className="h-1.5 flex-1 rounded-full bg-muted">
-            <div
-              className="h-1.5 rounded-full"
-              style={{ width: `${(share * 100).toFixed(1)}%`, background: color }}
-            />
-          </div>
-          <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-            {percent(share)}
-          </span>
-        </div>
-      </td>
-    </tr>
-  );
-}
-
-export function BreakdownTable({ title, rows, mode, linkOf }: Props) {
+export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
   const [expanded, setExpanded] = useState(false);
-  // 服务端按统一价排序；切到快照口径时按快照重排，榜单才和看到的数字一致。
   const sorted = [...rows].sort(
     (a, b) => costOf(b, mode) - costOf(a, mode) || b.total_tokens - a.total_tokens,
   );
@@ -124,6 +66,7 @@ export function BreakdownTable({ title, rows, mode, linkOf }: Props) {
   const total = sorted.reduce((sum, row) => sum + weight(row), 0);
   const colorOf = new Map(sorted.map((row, index) => [row.key, sliceColor(row.key, index)]));
   const lead = sorted[0];
+  const nameOf = (row: Breakdown) => labelOf?.(row) ?? row.label;
 
   return (
     <section className={cn(panelClass, "p-4")}>
@@ -133,7 +76,7 @@ export function BreakdownTable({ title, rows, mode, linkOf }: Props) {
           {rows.length === 0
             ? "0 项"
             : lead && total > 0
-              ? `${rows.length} 项 · ${lead.label} ${percent(weight(lead) / total)}`
+              ? `${rows.length} 项 · ${nameOf(lead)} ${formatPercent(weight(lead) / total)}`
               : `${rows.length} 项`}
         </span>
       </div>
@@ -142,29 +85,76 @@ export function BreakdownTable({ title, rows, mode, linkOf }: Props) {
       ) : (
         <>
           <Composition rows={sorted} weight={weight} colorOf={colorOf} />
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="py-1 font-normal">名称</th>
-                <th className="py-1 text-right font-normal">记录</th>
-                <th className="py-1 text-right font-normal">Token</th>
-                <th className="py-1 text-right font-normal">费用</th>
-                <th className="w-28 py-1 pl-3 font-normal">占比</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((row) => (
-                <Row
-                  key={row.key}
-                  row={row}
-                  mode={mode}
-                  share={total > 0 ? weight(row) / total : 0}
-                  color={colorOf.get(row.key) ?? "var(--chart-1)"}
-                  href={linkOf?.(row)}
-                />
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <caption className="sr-only">{title}</caption>
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th scope="col" className="py-1 font-normal">
+                    名称
+                  </th>
+                  <th scope="col" className="py-1 text-right font-normal">
+                    记录
+                  </th>
+                  <th scope="col" className="py-1 text-right font-normal">
+                    Token
+                  </th>
+                  <th scope="col" className="py-1 text-right font-normal">
+                    费用
+                  </th>
+                  <th scope="col" className="w-28 py-1 pl-3 font-normal">
+                    占比
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((row) => {
+                  const share = total > 0 ? weight(row) / total : 0;
+                  const href = linkOf?.(row);
+                  const label = nameOf(row);
+                  return (
+                    <tr key={row.key} className="border-b border-border/70 last:border-0">
+                      <th scope="row" className="max-w-56 truncate py-1.5 pr-2 font-normal" title={label}>
+                        {href ? (
+                          <a href={href} className="text-primary hover:underline">
+                            {label}
+                          </a>
+                        ) : (
+                          label
+                        )}
+                      </th>
+                      <td className="py-1.5 text-right tabular-nums">{row.record_count}</td>
+                      <td className="py-1.5 text-right tabular-nums">{formatTokens(row.total_tokens)}</td>
+                      <td className="py-1.5 text-right tabular-nums">
+                        {formatCost(costOf(row, mode))}
+                        {mode === "unified" && row.unpriced_count > 0 && (
+                          <span className="ml-1 text-warning" title={`${row.unpriced_count} 条未定价，费用偏低`}>
+                            *
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1.5 pl-3">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 rounded-full bg-muted">
+                            <div
+                              className="h-1.5 rounded-full"
+                              style={{
+                                width: `${(share * 100).toFixed(1)}%`,
+                                background: colorOf.get(row.key) ?? "var(--chart-1)",
+                              }}
+                            />
+                          </div>
+                          <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+                            {formatPercent(share)}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
       {rows.length > COLLAPSED_ROWS && (

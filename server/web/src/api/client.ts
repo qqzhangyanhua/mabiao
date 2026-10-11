@@ -5,11 +5,15 @@ import type {
   CoverageView,
   LoginResponse,
   MergeProjectResponse,
+  PricingOverview,
   Project,
   ProjectDetail,
+  RecomputeResponse,
   SessionDetail,
   SessionListResponse,
+  SetTeamPriceResponse,
   SummaryResponse,
+  UsageResponse,
 } from "./types";
 
 /** 与 `crates/push-protocol` 的 `PROTOCOL_VERSION` 一致；登录请求要带。 */
@@ -67,6 +71,18 @@ export interface Api {
   adminProjects(): Promise<AdminProject[]>;
   renameProject(id: number, name: string): Promise<Project>;
   mergeProject(id: number, intoProjectId: number): Promise<MergeProjectResponse>;
+  usage(scope: ScopeParams, limit: number, offset: number): Promise<UsageResponse>;
+  pricing(): Promise<PricingOverview>;
+  setPrice(body: {
+    model: string;
+    provider?: string;
+    input: number;
+    output: number;
+    cache_read: number;
+    cache_creation: number;
+  }): Promise<SetTeamPriceResponse>;
+  deletePrice(id: number): Promise<RecomputeResponse>;
+  recomputePricing(): Promise<RecomputeResponse>;
 }
 
 export interface ApiOptions {
@@ -170,5 +186,14 @@ export function createApi(options: ApiOptions): Api {
     renameProject: (id, name) => request("PUT", `/api/v1/admin/projects/${id}`, { name }),
     mergeProject: (id, intoProjectId) =>
       request("POST", `/api/v1/admin/projects/${id}/merge`, { into_project_id: intoProjectId }),
+    usage: (scope, limit, offset) =>
+      request(
+        "GET",
+        `/api/v1/usage${toQueryString({ ...scopeQuery(scope), limit, offset })}`,
+      ),
+    pricing: () => request("GET", "/api/v1/admin/pricing"),
+    setPrice: (body) => request("PUT", "/api/v1/admin/pricing/prices", body),
+    deletePrice: (id) => request("DELETE", `/api/v1/admin/pricing/prices/${id}`),
+    recomputePricing: () => request("POST", "/api/v1/admin/pricing/recompute"),
   };
 }

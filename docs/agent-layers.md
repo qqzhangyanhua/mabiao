@@ -233,7 +233,7 @@ React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnp
 
 1. 响应类型在 `src/api/types.ts`，与 `server/src/api.rs` 一一对应；改了服务端响应就同步改它。
 2. 登录后 token 只放 `sessionStorage`。401 一律退回登录页；登录请求自己的 401 不算。
-3. hash 路由（`#/overview`、`#/members`、`#/member/:id`、`#/projects`、`#/project/:id`、`#/session/:id`），所以服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面（项目页与会话页成员也能进，数据范围由服务端判定），真正的拦截仍在服务端。
+3. hash 路由（`#/overview`、`#/members`、`#/member/:id`、`#/projects`、`#/project/:id`、`#/session/:id`、`#/pricing`），可带 `?range=&mode=` 查询串。服务端静态托管不做「未知路径回退 index.html」。成员越权的路由被 `lib/route.ts::allowedRoute` 拉回自己页面（项目页与会话页成员也能进，数据范围由服务端判定；价目只给管理员），真正的拦截仍在服务端。
 4. 费用口径（统一价 / 客户端快照）只改展示，不重新请求。导出 CSV 两种费用都带；`lib/csv.ts` 会给以 `= + - @` 开头的文本加 `'`，防公式注入。
 5. 会话详情的上下文清单按证据层级分组（`lib/context.ts::tierOf`）：只有 `injected` 层且清单不是来自缓存、有注入快照、条目带原文才写「已注入（原文）」；磁盘可能生效、来自缓存无原文、按磁盘重建都各用自己的说法，不得写成已注入。改说法要同步 `context.test.ts`。项目改名与合并只在项目页对管理员显示，成员不请求 `/admin/` 接口。
 6. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。

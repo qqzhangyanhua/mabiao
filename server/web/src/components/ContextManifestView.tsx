@@ -1,6 +1,6 @@
 import type { ContextItem, ContextManifest } from "../api/types";
 import { groupByTier, TIER_LABEL, type ContextTier } from "../lib/context";
-import { formatTokens } from "../lib/format";
+import { formatChars } from "../lib/format";
 import { Badge } from "./ui/badge";
 
 const TIER_VARIANT: Record<
@@ -22,7 +22,7 @@ function ItemRow({ item, tier }: { item: ContextItem; tier: ContextTier }) {
         <span className="font-medium">{item.label}</span>
         <span className="text-xs text-muted-foreground">{item.kind}</span>
         {item.char_count !== undefined && (
-          <span className="text-xs text-muted-foreground">{formatTokens(item.char_count)} 字符</span>
+          <span className="text-xs text-muted-foreground">{formatChars(item.char_count)}</span>
         )}
         {item.is_noise && <span className="text-xs text-muted-foreground">噪声</span>}
         {item.is_unused_install && <span className="text-xs text-muted-foreground">已安装未用</span>}

@@ -14,7 +14,7 @@ export function Segmented<T extends string>({
   return (
     <div
       className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1"
-      role="group"
+      role="radiogroup"
       aria-label={label}
     >
       {options.map((option) => {
@@ -23,12 +23,13 @@ export function Segmented<T extends string>({
           <button
             key={option.id}
             type="button"
-            aria-pressed={active}
+            role="radio"
+            aria-checked={active}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-md px-3 py-1 text-sm",
+              "rounded-md px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               active
-                ? "bg-primary text-primary-foreground"
+                ? "bg-card font-medium text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
