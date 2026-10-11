@@ -1,0 +1,42 @@
+server/web/src/pages/MemberPage.tsx
+  s_d5cad2c4aba112::t_cfa20bc3f2cb39 122
+server/web/index.html
+  s_d5cad2c4aba112::t_b6ad0b543f5822 7-14
+server/web/src/components/SummaryView.tsx
+  s_d5cad2c4aba112::t_079a08ef710b8b 7,11,13-27,29-41,46-55,59-60,73,81-88,91-101,106-112,117-120,122,126-129
+server/web/src/App.tsx
+  s_d5cad2c4aba112::t_145171192eac2a 12,33-37
+server/web/src/pages/OverviewPage.tsx
+  s_d5cad2c4aba112::t_7e347292f1f12f 44-50
+server/web/package.json
+  s_d5cad2c4aba112::t_243bcd41d68f85 15-18,20-21
+server/web/src/lib/range.ts
+  s_d5cad2c4aba112::t_2c88b6a95f2d37 55-67
+server/web/src/components/TrendChart.tsx
+  s_d5cad2c4aba112::t_fc8ab2a2094bc4 22,24-25,27,30-34,39-42
+server/web/src/lib/range.test.ts
+  s_d5cad2c4aba112::t_45cd414c38a4b6 2,35-41
+  s_d5cad2c4aba112::t_9ded92e0ea7bf3 42-43
+server/web/src/components/RangeBar.tsx
+  s_d5cad2c4aba112::t_20c0bb26e10fa0 38-39,51
+server/web/src/pages/ProjectPage.tsx
+  s_d5cad2c4aba112::t_f2d5d91c7c214d 69
+server/web/pnpm-lock.yaml
+  s_d5cad2c4aba112::t_41cdf2edc4d87b 11-22,29-31,483-500,932-938,1358-1366,1515-1517,2055-2067,2479-2484,2883-2888,3031-3032
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "7650b85fed231cece81234a47798eb218746c488",
+  "prompts": {},
+  "sessions": {
+    "s_d5cad2c4aba112": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a128a3-6900-7340-b19f-b3cdfef98cbe",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
