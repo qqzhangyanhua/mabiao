@@ -212,6 +212,11 @@ describe("会话详情", () => {
     signIn();
 
     expect(await screen.findByRole("heading", { name: "修一个 bug" })).toBeTruthy();
+    const strip = screen.getByRole("slider", { name: "事件时间线" });
+    expect(strip).toBeTruthy();
+    strip.focus();
+    fireEvent.keyDown(strip, { key: "ArrowRight" });
+    expect(screen.getAllByText("ls -la").length).toBeGreaterThan(0);
     expect(screen.getAllByText("请帮我改一下").length).toBeGreaterThan(0);
     expect(screen.getByText("已注入（原文）")).toBeTruthy();
     expect(screen.getByText("磁盘可能生效（非当时注入）")).toBeTruthy();

@@ -111,7 +111,13 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
         </dl>
       </section>
 
-      <EventList events={detail.data.events} usage={usage} mode={mode} />
+      <EventList
+        events={detail.data.events}
+        usage={usage}
+        mode={mode}
+        startedAt={session.started_at}
+        endedAt={session.ended_at}
+      />
 
       <section className={cn(panelClass, "p-4")}>
         <h2 className="mb-3 text-sm font-medium">上下文清单</h2>

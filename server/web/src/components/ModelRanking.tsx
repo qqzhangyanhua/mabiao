@@ -1,5 +1,4 @@
 import type { Breakdown } from "../api/types";
-import { sliceColor } from "../lib/chart";
 import { costOf, type CostMode } from "../lib/cost";
 import { formatCost, formatTokens } from "../lib/format";
 import { TokenComposition } from "./TokenComposition";
@@ -21,7 +20,6 @@ export function ModelRanking({
   splits?: Map<string, TokenSplit>;
   labelOf?: (row: Breakdown) => string;
 }) {
-  const maxTokens = Math.max(0, ...rows.map((row) => row.total_tokens));
   return (
     <section className={cn(panelClass, "p-4")}>
       <h3 className="mb-3 text-sm font-medium">{title}</h3>
@@ -29,7 +27,7 @@ export function ModelRanking({
         <p className="py-4 text-center text-sm text-muted-foreground">这段时间没有数据</p>
       ) : (
         <ol className="space-y-3">
-          {rows.slice(0, 8).map((row, index) => {
+          {rows.slice(0, 8).map((row) => {
             const split = splitForRow(splits, row);
             const label = labelOf?.(row) ?? row.label;
             return (
@@ -40,16 +38,11 @@ export function ModelRanking({
                     {formatTokens(row.total_tokens)} · {formatCost(costOf(row, mode))}
                   </span>
                 </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-2 rounded-full"
-                    style={{
-                      width: `${maxTokens > 0 ? (row.total_tokens / maxTokens) * 100 : 0}%`,
-                      background: sliceColor(row.key, index),
-                    }}
-                  />
-                </div>
-                {split && <div className="mt-2"><TokenComposition split={split} /></div>}
+                {split && (
+                  <div className="mt-1.5">
+                    <TokenComposition split={split} />
+                  </div>
+                )}
               </li>
             );
           })}

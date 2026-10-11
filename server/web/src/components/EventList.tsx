@@ -9,6 +9,7 @@ import {
 import { COST_MODE_LABEL, costOf, type CostMode } from "../lib/cost";
 import { formatCost, formatDateTime, formatTokens } from "../lib/format";
 import { cn } from "../lib/cn";
+import { EventTimeline } from "./EventTimeline";
 import { panelClass } from "./ui/card";
 import { Segmented } from "./ui/segmented";
 
@@ -36,10 +37,14 @@ export function EventList({
   events,
   usage,
   mode,
+  startedAt,
+  endedAt,
 }: {
   events: SessionEvent[];
   usage: SessionUsage;
   mode: CostMode;
+  startedAt?: string | null;
+  endedAt?: string | null;
 }) {
   const [filter, setFilter] = useState<EventFilter>("all");
   const shown = filterEvents(events, filter);
@@ -52,33 +57,14 @@ export function EventList({
 
   return (
     <div className="space-y-3">
-      <div
-        className={cn(panelClass, "flex gap-1 overflow-x-auto p-2")}
-        role="list"
-        aria-label="事件时间线"
-      >
-        {shown.map((event, index) => (
-          <div key={event.event_id} role="listitem">
-            <button
-              type="button"
-              title={headingOf(event)}
-              onClick={() => setPickedId(event.event_id)}
-              aria-pressed={event.event_id === selectedId}
-              className={cn(
-                "h-8 min-w-8 shrink-0 rounded-md px-2 text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                event.event_id === selectedId
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {index + 1}
-            </button>
-          </div>
-        ))}
-        {shown.length === 0 && (
-          <span className="px-2 py-1 text-sm text-muted-foreground">没有这一类事件</span>
-        )}
-      </div>
+      <EventTimeline
+        events={shown}
+        selectedId={selectedId}
+        onSelect={setPickedId}
+        startedAt={startedAt}
+        endedAt={endedAt}
+        headingOf={headingOf}
+      />
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[18rem_1fr]">
         <section className={cn(panelClass, "p-3")}>
