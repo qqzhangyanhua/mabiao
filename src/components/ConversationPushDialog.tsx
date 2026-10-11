@@ -77,18 +77,26 @@ export function ConversationPushDialog({
   const [outcome, setOutcome] = useState<PushOutcome | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<PushHistoryEntry[]>([]);
+  const [force, setForce] = useState(false);
   const loggedIn = server?.state === "logged_in";
-  // 区间只在换预设时重算，预览与真推用同一份。
+  // 区间只在换预设或筛选内容真的变了才重算（父组件每次刷新 filter 引用都可能是新的，
+  // 按引用重算会带着新的 now 反复触发预览），预览与真推用同一份。
+  const filterKey = JSON.stringify(filter);
   const range = useMemo(
-    () => pushRangeFor(preset, filter, new Date()),
-    [preset, filter],
+    () => pushRangeFor(preset, JSON.parse(filterKey) as Filter, new Date()),
+    [preset, filterKey],
   );
   const rangeKey = JSON.stringify(range);
   const currentPreview = previewResult?.key === rangeKey ? previewResult : null;
   const preview = currentPreview?.data ?? null;
   const previewing = loggedIn && phase === "pick" && currentPreview === null;
   const needsLoginAgain = outcome?.login_required === true;
-  const canSend = loggedIn && !previewing && preview !== null && preview.sessions + preview.usage_records > 0;
+  const nothingNew = preview !== null && preview.sessions + preview.usage_records === 0;
+  const hasPushedBefore =
+    preview !== null && preview.unchanged_sessions + preview.usage_already_pushed > 0;
+  // 没有新内容时，只有勾了「强制重推」且以前推过东西才有得发。
+  const canSend =
+    loggedIn && !previewing && preview !== null && (!nothingNew || (force && hasPushedBefore));
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -170,7 +178,7 @@ export function ConversationPushDialog({
   }
 
   function send() {
-    run({ range, only: [], include_usage: true });
+    run({ range, only: [], include_usage: true, force });
   }
 
   function retry() {
@@ -179,6 +187,7 @@ export function ConversationPushDialog({
       range,
       only: issueKeys(outcome.failed),
       include_usage: outcome.usage_error !== null,
+      force: false,
     });
   }
 
@@ -293,6 +302,15 @@ export function ConversationPushDialog({
                 : "推全部来源。"}
               与区间有重叠的会话整场推送，不切开。
             </p>
+            <label className="conversation-summary-hint">
+              <input
+                type="checkbox"
+                checked={force}
+                disabled={running}
+                onChange={(event) => setForce(event.target.checked)}
+              />{" "}
+              强制重推（忽略已推送记录，比如服务端删过会话）
+            </label>
             {previewing ? (
               <p className="conversation-summary-hint" role="status">
                 正在统计要推的内容…
@@ -322,6 +340,16 @@ export function ConversationPushDialog({
                     <dd>{preview.redactions} 处</dd>
                   </div>
                 </dl>
+                {hasPushedBefore ? (
+                  <p className="conversation-summary-hint">
+                    另有 {preview.unchanged_sessions} 场会话、{preview.usage_already_pushed} 条消耗记录
+                    以前已推送且没有变化，
+                    {force ? "已勾选强制重推，会再推一遍" : "这次不会重复推送"}。
+                  </p>
+                ) : null}
+                {nothingNew && !force ? (
+                  <p className="conversation-summary-hint">没有新内容需要推送。</p>
+                ) : null}
                 <p className="conversation-push-notice" role="note">
                   {preview.notice}。打码只认常见密钥格式，没被规则命中的内容仍会推出去。
                 </p>

@@ -11,6 +11,7 @@ use push_protocol::{
     DeviceInfo, EventPayload, PushSessionRequest, SessionPayload, UsageRecordPayload, UsageTokens,
     PROTOCOL_VERSION,
 };
+use sha2::{Digest, Sha256};
 
 use super::git_remote::git_remote_url;
 use super::redact::redact;
@@ -28,6 +29,18 @@ pub struct BuiltSession {
     pub redactions: u32,
     /// 请求体序列化后的字节数，预览里的「预计大小」。
     pub bytes: u64,
+}
+
+impl BuiltSession {
+    /// 打码之后、会话本身（不含设备信息）的内容指纹。打码规则改了、会话多了一行、标题变了，
+    /// 指纹都会变，于是下次会重推；一模一样才会被台账判为「没变化」。
+    pub fn content_fingerprint(&self) -> String {
+        let body = serde_json::to_vec(&self.request.session).unwrap_or_default();
+        Sha256::digest(&body)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
 }
 
 pub fn build_session(source: PushSessionSource, device: &DeviceInfo) -> BuiltSession {

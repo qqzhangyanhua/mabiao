@@ -9,6 +9,7 @@
 pub mod auto;
 pub mod git_remote;
 pub mod history;
+pub mod ledger;
 pub mod payload;
 pub mod redact;
 mod usage;
@@ -17,7 +18,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, Utc};
-use push_protocol::{DeviceInfo, PushUsageRequest, PROTOCOL_VERSION};
+use push_protocol::{DeviceInfo, PushUsageRequest, UsageRecordPayload, PROTOCOL_VERSION};
 use serde::{Deserialize, Serialize};
 
 use crate::conversation;
@@ -85,9 +86,17 @@ impl PushSessionIssue {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PushPreviewDto {
+    /// 这次会真正发送的会话数（不含「没变化」的）。
     pub sessions: u32,
     pub events: u32,
+    /// 上次已推成功且内容没变、这次会跳过的会话数。
+    #[serde(default)]
+    pub unchanged_sessions: u32,
+    /// 这次会真正发送的消耗记录数（不含已推过的）。
     pub usage_records: u32,
+    /// 本机台账里已推过、这次会跳过的消耗记录数。
+    #[serde(default)]
+    pub usage_already_pushed: u32,
     /// `occurred_at` 不是合法时间而不会推的消耗记录数。
     pub usage_skipped_invalid_time: u32,
     pub estimated_bytes: u64,
@@ -106,6 +115,9 @@ pub struct PushRunInput {
     /// 重试时可以只补会话，不再发消耗记录。
     #[serde(default = "default_true")]
     pub include_usage: bool,
+    /// 忽略本机台账，没变化的会话也重推（比如服务端那边删过）。
+    #[serde(default)]
+    pub force: bool,
 }
 
 fn default_true() -> bool {
@@ -115,10 +127,16 @@ fn default_true() -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PushOutcome {
     pub sessions_succeeded: u32,
+    /// 与上次推成功时内容一致而没有重复发送的会话数。
+    #[serde(default)]
+    pub sessions_unchanged: u32,
     pub failed: Vec<PushSessionIssue>,
     pub skipped: Vec<PushSessionIssue>,
     pub usage_inserted: u32,
     pub usage_duplicates: u32,
+    /// 本机台账里已推过而没有重复发送的消耗记录数。
+    #[serde(default)]
+    pub usage_unchanged: u32,
     pub usage_skipped_invalid_time: u32,
     pub usage_error: Option<String>,
     /// 途中服务端不再认这次登录：剩下的会话都记成失败，设置页会提示重新登录。
@@ -149,8 +167,8 @@ enum ReadError {
     Fatal(String),
 }
 
-/// 同一时刻只允许一次预览或推送：两次并发会重复读整个区间，进度也对不上。由命令层持有；
-/// `preview` / `run` 自己不碰它，测试才能并行。
+/// 同一时刻只允许一次推送（含自动推送）：两次并发会重复读整个区间，进度也对不上。预览只读
+/// 本机，不占它。由命令层持有；`preview` / `run` 自己不碰它，测试才能并行。
 pub struct RunGuard;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -214,10 +232,13 @@ pub fn preview(env: &PushEnv<'_>, range: &PushRange) -> Result<PushPreviewDto, S
         device_id: config.device_id,
         device_name: config.device_name,
     };
+    let ledger = open_ledger(env);
     let mut dto = PushPreviewDto {
         sessions: 0,
         events: 0,
+        unchanged_sessions: 0,
         usage_records: 0,
+        usage_already_pushed: 0,
         usage_skipped_invalid_time: 0,
         estimated_bytes: 0,
         redactions: 0,
@@ -226,6 +247,13 @@ pub fn preview(env: &PushEnv<'_>, range: &PushRange) -> Result<PushPreviewDto, S
     };
     for row in list_sessions(env, range)? {
         match read_session(env, &row, &device) {
+            Ok(built)
+                if ledger.as_ref().is_some_and(|ledger| {
+                    ledger.is_current(&row.source, &row.session_id, &built.content_fingerprint())
+                }) =>
+            {
+                dto.unchanged_sessions += 1;
+            }
             Ok(built) => {
                 dto.sessions += 1;
                 dto.events += built.event_count;
@@ -237,9 +265,12 @@ pub fn preview(env: &PushEnv<'_>, range: &PushRange) -> Result<PushPreviewDto, S
         }
     }
     let usage = build_usage(env, range)?;
-    dto.usage_records = usage.records.len() as u32;
+    let (fresh, already_pushed) =
+        split_pushed_usage(open_usage_ledger(env).as_ref(), usage.records, false);
+    dto.usage_records = fresh.len() as u32;
+    dto.usage_already_pushed = already_pushed;
     dto.usage_skipped_invalid_time = usage.skipped_invalid_time;
-    dto.estimated_bytes += serde_json::to_vec(&usage.records).map_or(0, |body| body.len() as u64);
+    dto.estimated_bytes += serde_json::to_vec(&fresh).map_or(0, |body| body.len() as u64);
     Ok(dto)
 }
 
@@ -271,12 +302,15 @@ pub fn run_with(
         });
     }
     let total = rows.len() as u32;
+    let mut ledger = open_ledger(env);
     let mut outcome = PushOutcome {
         sessions_succeeded: 0,
+        sessions_unchanged: 0,
         failed: Vec::new(),
         skipped: Vec::new(),
         usage_inserted: 0,
         usage_duplicates: 0,
+        usage_unchanged: 0,
         usage_skipped_invalid_time: 0,
         usage_error: None,
         login_required: false,
@@ -298,10 +332,27 @@ pub fn run_with(
             Err(ReadError::Skip(reason)) => {
                 outcome.skipped.push(PushSessionIssue::new(row, reason))
             }
-            Err(ReadError::Fatal(error)) => return Err(error),
-            Ok(built) => push_one(env, &credentials, row, &built, &mut outcome),
+            Err(ReadError::Fatal(error)) => {
+                save_ledger(&ledger);
+                return Err(error);
+            }
+            Ok(built) => {
+                let fingerprint = built.content_fingerprint();
+                let unchanged = !input.force
+                    && ledger.as_ref().is_some_and(|ledger| {
+                        ledger.is_current(&row.source, &row.session_id, &fingerprint)
+                    });
+                if unchanged {
+                    outcome.sessions_unchanged += 1;
+                } else if push_one(env, &credentials, row, &built, &mut outcome) {
+                    if let Some(ledger) = ledger.as_mut() {
+                        ledger.record(&row.source, &row.session_id, fingerprint);
+                    }
+                }
+            }
         }
     }
+    save_ledger(&ledger);
     progress(PushProgress {
         done: total,
         total,
@@ -309,7 +360,7 @@ pub fn run_with(
     });
 
     if input.include_usage && !outcome.login_required {
-        push_usage(env, &credentials, &input.range, &mut outcome)?;
+        push_usage(env, &credentials, input, &mut outcome)?;
     }
 
     // 历史是回看用的，写不进去不该把已经成功的推送报成失败。
@@ -329,30 +380,74 @@ fn push_one(
     row: &ConversationSessionRow,
     built: &payload::BuiltSession,
     outcome: &mut PushOutcome,
-) {
+) -> bool {
     match client::push_session(&credentials.base_url, &credentials.token, &built.request) {
-        Ok(_) => outcome.sessions_succeeded += 1,
+        Ok(_) => {
+            outcome.sessions_succeeded += 1;
+            true
+        }
         Err(RemoteError::TokenRejected) => {
             token_rejected(env, outcome);
             outcome
                 .failed
                 .push(PushSessionIssue::new(row, client::TOKEN_REJECTED));
+            false
         }
-        Err(other) => outcome
-            .failed
-            .push(PushSessionIssue::new(row, other.into_message())),
+        Err(other) => {
+            outcome
+                .failed
+                .push(PushSessionIssue::new(row, other.into_message()));
+            false
+        }
+    }
+}
+
+/// 台账的范围：服务地址 + 账号 + 设备。没登录、读不到配置就没有台账，全部照常推。
+fn ledger_scope(env: &PushEnv<'_>) -> Option<(String, String, String)> {
+    let credentials = remote_server::push_credentials(env.remote, env.now).ok()?;
+    let account = store::load_config(&env.remote.config).account;
+    Some((credentials.base_url, account, credentials.device.device_id))
+}
+
+fn open_ledger(env: &PushEnv<'_>) -> Option<ledger::Ledger> {
+    let (base_url, account, device_id) = ledger_scope(env)?;
+    Some(ledger::Ledger::load(
+        &ledger::path_beside(env.history),
+        &base_url,
+        &account,
+        &device_id,
+    ))
+}
+
+fn open_usage_ledger(env: &PushEnv<'_>) -> Option<ledger::UsageLedger> {
+    let (base_url, account, device_id) = ledger_scope(env)?;
+    Some(ledger::UsageLedger::load(
+        &ledger::usage_path_beside(env.history),
+        &base_url,
+        &account,
+        &device_id,
+    ))
+}
+
+/// 台账写不进去不该把已经成功的推送报成失败，最坏是下次多推一遍。
+fn save_ledger(ledger: &Option<ledger::Ledger>) {
+    if let Some(ledger) = ledger {
+        let _ = ledger.save();
     }
 }
 
 fn push_usage(
     env: &PushEnv<'_>,
     credentials: &PushCredentials,
-    range: &PushRange,
+    input: &PushRunInput,
     outcome: &mut PushOutcome,
 ) -> Result<(), String> {
-    let usage = build_usage(env, range)?;
+    let usage = build_usage(env, &input.range)?;
     outcome.usage_skipped_invalid_time = usage.skipped_invalid_time;
-    for batch in usage.records.chunks(USAGE_BATCH) {
+    let mut ledger = open_usage_ledger(env);
+    let (fresh, already_pushed) = split_pushed_usage(ledger.as_ref(), usage.records, input.force);
+    outcome.usage_unchanged = already_pushed;
+    for batch in fresh.chunks(USAGE_BATCH) {
         let request = PushUsageRequest {
             protocol_version: PROTOCOL_VERSION,
             device: credentials.device.clone(),
@@ -362,6 +457,9 @@ fn push_usage(
             Ok(response) => {
                 outcome.usage_inserted += response.inserted;
                 outcome.usage_duplicates += response.duplicates;
+                if let Some(ledger) = ledger.as_mut() {
+                    ledger.record(batch.iter().map(|record| record.fingerprint.as_str()));
+                }
             }
             Err(RemoteError::TokenRejected) => {
                 token_rejected(env, outcome);
@@ -374,7 +472,29 @@ fn push_usage(
             }
         }
     }
+    // 台账写不进去不该把已经成功的推送报成失败，最坏是下次多推一遍。
+    if let Some(ledger) = &ledger {
+        let _ = ledger.save();
+    }
     Ok(())
+}
+
+/// 把本机台账里已推过的消耗记录分出去：返回（要发的，已推过的条数）。`force` 或没有台账时全发。
+fn split_pushed_usage(
+    ledger: Option<&ledger::UsageLedger>,
+    records: Vec<UsageRecordPayload>,
+    force: bool,
+) -> (Vec<UsageRecordPayload>, u32) {
+    let Some(ledger) = ledger.filter(|_| !force) else {
+        return (records, 0);
+    };
+    let total = records.len();
+    let fresh: Vec<_> = records
+        .into_iter()
+        .filter(|record| !ledger.contains(&record.fingerprint))
+        .collect();
+    let already_pushed = (total - fresh.len()) as u32;
+    (fresh, already_pushed)
 }
 
 fn history_entry(

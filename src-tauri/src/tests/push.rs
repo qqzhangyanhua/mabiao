@@ -20,7 +20,7 @@ use crate::remote_server::{self, LoginInput};
 use crate::test_support::http_stub::{api_error, json_reply, serve, Reply, Stub};
 use crate::test_support::*;
 
-fn now() -> DateTime<Utc> {
+pub(super) fn now() -> DateTime<Utc> {
     "2026-10-10T00:00:00Z".parse().unwrap()
 }
 
@@ -61,7 +61,7 @@ pub(super) fn refreshed(home: &Path) -> rusqlite::Connection {
     conn
 }
 
-fn range(from: Option<&str>, to: Option<&str>) -> PushRange {
+pub(super) fn range(from: Option<&str>, to: Option<&str>) -> PushRange {
     PushRange {
         from: from.map(str::to_string),
         to: to.map(str::to_string),
@@ -100,7 +100,7 @@ fn device() -> push_protocol::DeviceInfo {
 
 // ---- 区间：按重叠整场选 ----
 
-fn seed_three_sessions(home: &Path) {
+pub(super) fn seed_three_sessions(home: &Path) {
     seed_codex(
         home,
         "a",
@@ -819,7 +819,7 @@ impl Harness {
         }
     }
 
-    fn env(&self) -> PushEnv<'_> {
+    pub(super) fn env(&self) -> PushEnv<'_> {
         PushEnv {
             conns: &self.conns,
             home: &self.home,
@@ -882,7 +882,7 @@ pub(super) fn usage_ok(inserted: u32, duplicates: u32) -> Reply {
     )
 }
 
-fn pushed_requests(stub: &Stub) -> Vec<PushSessionRequest> {
+pub(super) fn pushed_requests(stub: &Stub) -> Vec<PushSessionRequest> {
     stub.captured
         .lock()
         .unwrap()
@@ -892,7 +892,7 @@ fn pushed_requests(stub: &Stub) -> Vec<PushSessionRequest> {
         .collect()
 }
 
-fn no_progress(_: push::PushProgress) {}
+pub(super) fn no_progress(_: push::PushProgress) {}
 
 #[test]
 fn run_sends_one_request_per_session_then_usage_and_records_history() {
@@ -948,6 +948,7 @@ fn run_sends_one_request_per_session_then_usage_and_records_history() {
             range: range(None, None),
             only: Vec::new(),
             include_usage: true,
+            force: false,
         },
         &|p| progress.lock().unwrap().push(p),
     )
@@ -1019,6 +1020,7 @@ fn failed_session_is_listed_and_retry_sends_only_that_session() {
             range: range(None, None),
             only: Vec::new(),
             include_usage: true,
+            force: false,
         },
         &no_progress,
     )
@@ -1038,6 +1040,7 @@ fn failed_session_is_listed_and_retry_sends_only_that_session() {
                 session_id: "b".into(),
             }],
             include_usage: false,
+            force: false,
         },
         &no_progress,
     )
@@ -1079,6 +1082,7 @@ fn unreadable_session_is_skipped_not_sent_and_not_retryable_failure() {
             range: range(None, None),
             only: Vec::new(),
             include_usage: true,
+            force: false,
         },
         &no_progress,
     )
@@ -1110,6 +1114,7 @@ fn rejected_token_stops_the_run_and_marks_login_required() {
             range: range(None, None),
             only: Vec::new(),
             include_usage: true,
+            force: false,
         },
         &no_progress,
     )

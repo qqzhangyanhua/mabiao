@@ -23,10 +23,12 @@ const EMPTY: Filter = {
 function outcome(patch: Partial<PushOutcome> = {}): PushOutcome {
   return {
     sessions_succeeded: 3,
+    sessions_unchanged: 0,
     failed: [],
     skipped: [],
     usage_inserted: 10,
     usage_duplicates: 2,
+    usage_unchanged: 0,
     usage_skipped_invalid_time: 0,
     usage_error: null,
     login_required: false,
@@ -83,6 +85,18 @@ describe("push summaries", () => {
   it("summarises a clean run", () => {
     expect(pushOutcomeSummary(outcome())).toBe(
       "已推送 3 场会话，消耗记录新增 10 条，已存在 2 条",
+    );
+  });
+
+  it("mentions sessions skipped because nothing changed", () => {
+    expect(pushOutcomeSummary(outcome({ sessions_succeeded: 1, sessions_unchanged: 4 }))).toBe(
+      "已推送 1 场会话，4 场无变化未重复推送，消耗记录新增 10 条，已存在 2 条",
+    );
+  });
+
+  it("mentions usage records that were not sent again", () => {
+    expect(pushOutcomeSummary(outcome({ usage_inserted: 0, usage_duplicates: 0, usage_unchanged: 7 }))).toBe(
+      "已推送 3 场会话，消耗记录新增 0 条，已存在 0 条，7 条已推过未重复发送",
     );
   });
 

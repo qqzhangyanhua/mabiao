@@ -69,6 +69,9 @@ export function formatBytes(bytes: number): string {
 /** 推完后的一句话总结。 */
 export function pushOutcomeSummary(outcome: PushOutcome): string {
   const parts = [`已推送 ${outcome.sessions_succeeded} 场会话`];
+  if (outcome.sessions_unchanged > 0) {
+    parts.push(`${outcome.sessions_unchanged} 场无变化未重复推送`);
+  }
   if (outcome.failed.length > 0) {
     parts.push(`${outcome.failed.length} 场失败`);
   }
@@ -79,6 +82,9 @@ export function pushOutcomeSummary(outcome: PushOutcome): string {
     parts.push("消耗记录失败");
   } else {
     parts.push(`消耗记录新增 ${outcome.usage_inserted} 条，已存在 ${outcome.usage_duplicates} 条`);
+    if (outcome.usage_unchanged > 0) {
+      parts.push(`${outcome.usage_unchanged} 条已推过未重复发送`);
+    }
   }
   return parts.join("，");
 }

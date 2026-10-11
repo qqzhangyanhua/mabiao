@@ -192,6 +192,7 @@ pub fn run_due<Tz: TimeZone>(
         range: range_for_days(tz, first, last),
         only: Vec::new(),
         include_usage: true,
+        force: false,
     };
     match push::run_with(env, &input, true, &|_| {}) {
         Ok(outcome) => {

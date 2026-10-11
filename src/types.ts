@@ -1229,9 +1229,15 @@ export type PushSessionIssue = PushSessionKey & {
 };
 
 export type PushPreviewDto = {
+  /** 这次会真正发送的会话数（不含没变化的）。 */
   sessions: number;
   events: number;
+  /** 上次已推成功且内容没变、这次会跳过的会话数。 */
+  unchanged_sessions: number;
+  /** 这次会真正发送的消耗记录数（不含已推过的）。 */
   usage_records: number;
+  /** 本机台账里已推过、这次会跳过的消耗记录数。 */
+  usage_already_pushed: number;
   usage_skipped_invalid_time: number;
   estimated_bytes: number;
   /** 正文与注入原文被打码的处数。 */
@@ -1245,14 +1251,20 @@ export type PushRunInput = {
   range: PushRange;
   only: PushSessionKey[];
   include_usage: boolean;
+  /** 忽略本机台账，没变化的会话也重推。 */
+  force: boolean;
 };
 
 export type PushOutcome = {
   sessions_succeeded: number;
+  /** 与上次推成功时内容一致而没有重复发送的会话数。 */
+  sessions_unchanged: number;
   failed: PushSessionIssue[];
   skipped: PushSessionIssue[];
   usage_inserted: number;
   usage_duplicates: number;
+  /** 本机台账里已推过而没有重复发送的消耗记录数。 */
+  usage_unchanged: number;
   usage_skipped_invalid_time: number;
   usage_error: string | null;
   /** 途中服务端不再认这次登录。 */

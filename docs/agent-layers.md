@@ -148,8 +148,9 @@
 3. 打码只在 `push/redact.rs` 一处（标题、事件正文、注入原文都过它）；路径与项目名不打码。加规则必须同时补「该打」与「不该打」两类用例，并保持幂等。
 4. git remote 只读 `<项目>/.git/config`（`push/git_remote.rs`），不跑 git；URL 里的凭据推送前剥掉。
 5. 协议转换只在 `push/payload.rs`；`occurred_at` 不是 RFC 3339 的消耗记录本机挡掉（服务端会整批拒收）。
-6. 一场会话一个请求；失败（可重试）与跳过（本机读不全）分开列。`token_expired` 立即停，剩下的记为失败并提示重登。同一时刻只允许一次预览或推送（命令层的 `RunGuard`）。本机历史只记数字，不记正文。
-7. 测试：`cargo test push`（桩服务器在 `test_support/http_stub.rs`，与 `remote_server` 共用）；前端纯函数在 `src/lib/pushRange.ts`。
+6. 一场会话一个请求；失败（可重试）与跳过（本机读不全）分开列。`token_expired` 立即停，剩下的记为失败并提示重登。同一时刻只允许一次推送（命令层的 `RunGuard`），预览只读本机、不占它。本机历史只记数字，不记正文。
+7. 本机推送台账（`push/ledger.rs`）：按「服务地址 + 账号 + 设备」记每场会话上次推成功时的内容指纹（`BuiltSession::content_fingerprint`，打码后、不含设备信息），没变化就不重复发送；失败的不记账。台账只是省流量的优化，缺了、坏了按「没推过」处理（服务端本来就整场覆盖），只记指纹不记正文；`force` 忽略台账。消耗记录另有 `UsageLedger`（`push_usage_ledger.json`，同一范围划分，只存指纹前 24 位）：整批推成功才记账，已推过的不再发送，失败批次下次重发；服务端仍按指纹去重兜底。
+8. 测试：`cargo test push`（桩服务器在 `test_support/http_stub.rs`，与 `remote_server` 共用）；前端纯函数在 `src/lib/pushRange.ts`。
 
 ### 每日自动推送（`src-tauri/src/push/auto.rs`、`commands/push.rs::spawn_auto_push`）
 
@@ -159,7 +160,7 @@
 2. 编排只在 `auto::run_due`：算出该补的日历日 → 检查凭证 → `prepare`（先把本机摄取跑到最新）→ `push::run_with(.., automatic = true, ..)`。筛选、打码、整场跳过、推送历史全是手动推送那一套，不另写；自动推送不按来源筛，推全部来源，不弹预览。
 3. 进度是单个游标 `pushed_through`（本机日历日，含）。只有「没有失败的会话、消耗记录没出错、登录没被拒」才推进；本机读不全而跳过的会话不挡进度。游标落后就一次补齐（最多 `MAX_CATCH_UP_DAYS` 天）。重新打开开关时游标清零，从昨天算起，关着的那些天不补。
 4. 未登录、过期、被拒：不联网、不记历史，设置页从 `auto::panel` 读到 `login_notice`。
-5. 与手动推送、预览共用 `RunGuard`：正在推就让路，下个小时再看。
+5. 与手动推送共用 `RunGuard`：正在推就让路，下个小时再看。
 6. `push_auto.json` 与 `push_history.json` 一样不在备份白名单里。
 7. 测试：`cargo test push_auto`（补推区间、默认关、凭证门、失败不推进游标）；文案纯函数在 `src/lib/pushRange.ts`。
 

@@ -22,8 +22,9 @@ pub async fn preview_push(
     app: tauri::AppHandle,
     range: PushRange,
 ) -> Result<PushPreviewDto, String> {
+    // 预览只读本机、不联网，不占 `RunGuard`：弹窗里换区间、重开弹窗都会留下还没跑完的旧预览，
+    // 它们不该挡住用户真正点下的推送。
     tauri::async_runtime::spawn_blocking(move || {
-        let _guard = push::RunGuard::acquire()?;
         let state = app.state::<AppState>();
         let prices = state.effective_prices();
         let remote = RemoteServerPaths::app_data();
