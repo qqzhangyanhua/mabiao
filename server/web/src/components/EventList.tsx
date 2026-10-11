@@ -86,7 +86,9 @@ export function EventList({
                     aria-current={event.event_id === selectedId ? "step" : undefined}
                     className={cn(
                       "w-full rounded-md px-2 py-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      event.event_id === selectedId ? "bg-accent" : "hover:bg-muted",
+                      event.event_id === selectedId
+                        ? "border-l-2 border-primary bg-accent text-accent-foreground"
+                        : "border-l-2 border-transparent hover:bg-muted",
                     )}
                   >
                     <div className="truncate font-medium">{headingOf(event)}</div>
@@ -133,7 +135,7 @@ export function EventList({
               )}
               <div className="mt-4 border-t border-border pt-3 text-sm">
                 <div className="text-xs text-muted-foreground">本场消耗（{COST_MODE_LABEL[mode]}）</div>
-                <p className="mt-1">
+                <p className="mt-1 tabular-nums">
                   {totals.record_count} 条记录 · {formatTokens(totals.total_tokens)} token ·{" "}
                   <span className="font-medium">{formatCost(cost)}</span>
                 </p>

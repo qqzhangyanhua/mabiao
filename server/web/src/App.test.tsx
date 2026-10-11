@@ -143,7 +143,7 @@ describe("登录", () => {
     expect(
       requests.some((r) => r.startsWith("GET /api/v1/usage/summary?") && !r.includes("account_id")),
     ).toBe(true);
-    expect(await screen.findByText(/未计入/)).toBeTruthy();
+    expect(await screen.findByText("1 条未计入")).toBeTruthy();
   });
 
   it("a member lands on their own page and sees no team navigation", async () => {

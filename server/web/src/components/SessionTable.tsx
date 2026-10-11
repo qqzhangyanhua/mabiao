@@ -1,8 +1,9 @@
 import type { SessionListItem } from "../api/types";
 import { formatDateTime } from "../lib/format";
-import { sourceLabel } from "../lib/source";
 import { useHref } from "../view";
+import { SourceBadge } from "./SourceBadge";
 import { Badge } from "./ui/badge";
+import { numCellClass, tableClass, thClass, theadRowClass, trClass } from "./ui/table";
 
 export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
   const href = useHref();
@@ -11,36 +12,36 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
   }
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className={tableClass}>
         <caption className="sr-only">会话目录</caption>
         <thead>
-          <tr className="border-b border-border text-left text-xs text-muted-foreground">
-            <th scope="col" className="py-1 font-normal">
+          <tr className={theadRowClass}>
+            <th scope="col" className={`py-1 ${thClass}`}>
               标题
             </th>
-            <th scope="col" className="py-1 font-normal">
+            <th scope="col" className={`py-1 ${thClass}`}>
               来源
             </th>
-            <th scope="col" className="py-1 font-normal">
+            <th scope="col" className={`py-1 ${thClass}`}>
               项目
             </th>
-            <th scope="col" className="py-1 font-normal">
+            <th scope="col" className={`py-1 ${thClass}`}>
               模型
             </th>
-            <th scope="col" className="py-1 font-normal">
+            <th scope="col" className={`py-1 ${thClass}`}>
               设备
             </th>
-            <th scope="col" className="py-1 font-normal">
+            <th scope="col" className={`py-1 ${thClass}`}>
               结束时间
             </th>
-            <th scope="col" className="py-1 text-right font-normal">
+            <th scope="col" className={`py-1 ${numCellClass} ${thClass}`}>
               事件
             </th>
           </tr>
         </thead>
         <tbody>
           {sessions.map((s) => (
-            <tr key={s.id} className="border-b border-border/70 last:border-0">
+            <tr key={s.id} className={trClass}>
               <td className="max-w-72 truncate py-1.5 pr-2" title={s.title}>
                 <a
                   href={href({ page: "session", sessionId: s.id })}
@@ -54,7 +55,9 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
                   </Badge>
                 )}
               </td>
-              <td className="py-1.5 pr-2">{sourceLabel(s.source)}</td>
+              <td className="py-1.5 pr-2">
+                <SourceBadge source={s.source} />
+              </td>
               <td className="max-w-40 truncate py-1.5 pr-2" title={s.project}>
                 {s.project_name ?? s.project}
               </td>
@@ -62,8 +65,8 @@ export function SessionTable({ sessions }: { sessions: SessionListItem[] }) {
                 {s.model}
               </td>
               <td className="py-1.5 pr-2">{s.device_name}</td>
-              <td className="whitespace-nowrap py-1.5 pr-2">{formatDateTime(s.ended_at)}</td>
-              <td className="py-1.5 text-right tabular-nums">{s.event_count}</td>
+              <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums">{formatDateTime(s.ended_at)}</td>
+              <td className={`py-1.5 ${numCellClass}`}>{s.event_count}</td>
             </tr>
           ))}
         </tbody>

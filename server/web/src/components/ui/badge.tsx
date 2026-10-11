@@ -2,7 +2,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { ComponentProps } from "react";
 import { cn } from "../../lib/cn";
 
-const badgeVariants = cva("inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium", {
+const badgeVariants = cva("inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium", {
   variants: {
     variant: {
       default: "bg-primary/15 text-accent-foreground",

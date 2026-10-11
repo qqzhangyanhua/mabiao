@@ -1,9 +1,11 @@
 import { useCallback, useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/ui/button";
 import { Card, panelClass } from "../components/ui/card";
 import { Input } from "../components/ui/input";
+import { numCellClass, tableClass, thClass, theadRowClass, trClass } from "../components/ui/table";
 import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
 import { formatDateTime, formatUnitPrice } from "../lib/format";
@@ -76,16 +78,15 @@ export function PricingPage() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">团队价目</h1>
-        <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void recompute()}>
-          全量重算
-        </Button>
-      </div>
-      <p className="text-sm text-muted-foreground">
-        跨人对比费用看统一价：来源自带费用优先，其次团队价目，再是内置 LiteLLM 快照。单价是每
-        token 的价格，不要填「每百万 token」。
-      </p>
+      <PageHeader
+        title="团队价目"
+        subtitle="跨人对比费用看统一价：来源自带费用优先，其次团队价目，再是内置 LiteLLM 快照。单价是每 token 的价格，不要填「每百万 token」。"
+        extra={
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => void recompute()}>
+            全量重算
+          </Button>
+        }
+      />
       {notice && (
         <p role="status" className="text-sm text-success">
           {notice}
@@ -142,29 +143,29 @@ export function PricingPage() {
             <Empty>还没有团队价目，统一费用会走内置快照</Empty>
           ) : (
             <div className={cn(panelClass, "overflow-x-auto")}>
-              <table className="w-full text-sm">
+              <table className={tableClass}>
                 <caption className="sr-only">团队价目</caption>
                 <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th scope="col" className="px-4 py-2 font-normal">
+                  <tr className={theadRowClass}>
+                    <th scope="col" className={`px-4 py-2 ${thClass}`}>
                       模型
                     </th>
-                    <th scope="col" className="px-4 py-2 font-normal">
+                    <th scope="col" className={`px-4 py-2 ${thClass}`}>
                       提供商
                     </th>
-                    <th scope="col" className="px-4 py-2 text-right font-normal">
+                    <th scope="col" className={`px-4 py-2 ${numCellClass} ${thClass}`}>
                       输入
                     </th>
-                    <th scope="col" className="px-4 py-2 text-right font-normal">
+                    <th scope="col" className={`px-4 py-2 ${numCellClass} ${thClass}`}>
                       输出
                     </th>
-                    <th scope="col" className="px-4 py-2 text-right font-normal">
+                    <th scope="col" className={`px-4 py-2 ${numCellClass} ${thClass}`}>
                       缓存读
                     </th>
-                    <th scope="col" className="px-4 py-2 text-right font-normal">
+                    <th scope="col" className={`px-4 py-2 ${numCellClass} ${thClass}`}>
                       缓存写
                     </th>
-                    <th scope="col" className="px-4 py-2 font-normal">
+                    <th scope="col" className={`px-4 py-2 ${thClass}`}>
                       更新
                     </th>
                     <th scope="col" className="px-4 py-2" />
@@ -172,15 +173,15 @@ export function PricingPage() {
                 </thead>
                 <tbody>
                   {data.prices.map((price) => (
-                    <tr key={price.id} className="border-b border-border/70 last:border-0">
+                    <tr key={price.id} className={trClass}>
                       <th scope="row" className="px-4 py-2 font-normal">
                         {price.model}
                       </th>
                       <td className="px-4 py-2">{price.provider ?? "—"}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.input)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.output)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.cache_read)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{formatUnitPrice(price.cache_creation)}</td>
+                      <td className={`px-4 py-2 ${numCellClass}`}>{formatUnitPrice(price.input)}</td>
+                      <td className={`px-4 py-2 ${numCellClass}`}>{formatUnitPrice(price.output)}</td>
+                      <td className={`px-4 py-2 ${numCellClass}`}>{formatUnitPrice(price.cache_read)}</td>
+                      <td className={`px-4 py-2 ${numCellClass}`}>{formatUnitPrice(price.cache_creation)}</td>
                       <td className="px-4 py-2">{formatDateTime(price.updated_at)}</td>
                       <td className="px-4 py-2 text-right">
                         <button

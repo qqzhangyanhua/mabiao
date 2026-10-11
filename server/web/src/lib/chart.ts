@@ -18,8 +18,26 @@ const SOURCE_COLOR: Record<string, string> = {
   gemini: "var(--tone-gemini)",
   grok: "var(--tone-grok)",
   qwen: "var(--tone-qwen)",
+  cursor: "var(--tone-cursor)",
   cursor_agent: "var(--tone-cursor)",
+  factory: "var(--tone-codex)",
+  droid: "var(--tone-codex)",
+  dsh: "var(--tone-open)",
+  copilot: "var(--tone-cursor)",
+  hermes: "var(--tone-pi)",
+  agy: "var(--tone-gemini)",
+  antigravity: "var(--tone-gemini)",
+  qoder: "var(--tone-qwen)",
+  qoder_cn: "var(--tone-qwen)",
+  cline: "var(--tone-open)",
+  workbuddy: "var(--tone-kimi)",
+  zcode: "var(--tone-omp)",
+  alma: "var(--tone-grok)",
 };
+
+export function sourceTone(source: string): string {
+  return SOURCE_COLOR[source] ?? "var(--tone-cursor)";
+}
 
 export function sliceColor(key: string, index: number): string {
   return SOURCE_COLOR[key] ?? PALETTE[index % PALETTE.length] ?? "var(--chart-1)";

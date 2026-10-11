@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import { SummaryView } from "../components/SummaryView";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
@@ -49,7 +50,7 @@ export function OverviewPage() {
 
   return (
     <>
-      <h1 className="text-lg font-semibold">团队总览</h1>
+      <PageHeader title="团队总览" subtitle="已推送消耗记录的费用、Token 与拆分" />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (

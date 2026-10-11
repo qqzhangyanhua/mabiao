@@ -96,7 +96,7 @@ function DayRow({
           {day.day}
           <span className="ml-2 text-xs font-normal text-muted-foreground">周{weekdayLabel(day.day)}</span>
         </h2>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground tabular-nums">
           {day.segment_count} 个片段 · {formatTokens(day.total_tokens)} token · {formatCost(cost)}
         </p>
       </div>

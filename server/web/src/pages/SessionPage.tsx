@@ -1,8 +1,10 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { ContextManifestView } from "../components/ContextManifestView";
 import { ErrorNote, Loading } from "../components/Feedback";
 import { EventList } from "../components/EventList";
+import { PageHeader } from "../components/PageHeader";
+import { MetaPill, SourceBadge } from "../components/SourceBadge";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { panelClass } from "../components/ui/card";
@@ -11,22 +13,12 @@ import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
 import { COST_MODE_LABEL, type CostMode } from "../lib/cost";
 import { formatDateTime } from "../lib/format";
-import { sourceLabel } from "../lib/source";
 import { useHref } from "../view";
 
 const COST_OPTIONS = (Object.keys(COST_MODE_LABEL) as CostMode[]).map((id) => ({
   id,
   label: COST_MODE_LABEL[id],
 }));
-
-function Meta({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="break-all">{children}</dd>
-    </div>
-  );
-}
 
 export function SessionPage({ sessionId }: { sessionId: number }) {
   const { api } = useAuth();
@@ -54,61 +46,66 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
     }
   }
 
+  const projectLabel = session.project_name ?? session.project ?? "—";
+
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h1 className="text-lg font-semibold">
-          {session.title || "（无标题）"}
-          {session.generated_by_work_notes && (
-            <Badge variant="secondary" className="ml-2 align-middle font-normal">
-              码表生成
-            </Badge>
-          )}
-        </h1>
-        <div className="flex items-center gap-2">
-          <Segmented label="费用口径" value={mode} onChange={setMode} options={COST_OPTIONS} />
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            disabled={deleting}
-            onClick={() => void remove()}
-          >
-            删除会话
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={
+          <>
+            {session.title || "（无标题）"}
+            {session.generated_by_work_notes && (
+              <Badge variant="secondary" className="ml-2 align-middle font-normal">
+                码表生成
+              </Badge>
+            )}
+          </>
+        }
+        subtitle={
+          <span className="tabular-nums">
+            {formatDateTime(session.started_at)} – {formatDateTime(session.ended_at)} ·{" "}
+            {session.event_count} 轮 · 打码 {detail.data.redaction_count} 处
+          </span>
+        }
+        extra={
+          <div className="flex items-center gap-2">
+            <Segmented
+              label="费用口径"
+              value={mode}
+              onChange={setMode}
+              options={COST_OPTIONS}
+              size="compact"
+            />
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              删除会话
+            </Button>
+          </div>
+        }
+      />
       {deleteError && <ErrorNote error={deleteError} />}
 
       <section className={cn(panelClass, "p-4")}>
-        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
-          <Meta label="成员">
-            <a
-              href={href({ page: "member", accountId: session.account_id })}
-              className="text-primary hover:underline"
-            >
-              {session.account}
-            </a>
-          </Meta>
-          <Meta label="设备">{session.device_name}</Meta>
-          <Meta label="来源">{sourceLabel(session.source)}</Meta>
-          <Meta label="模型">{session.model}</Meta>
-          <Meta label="项目">
-            {session.project_id !== null ? (
-              <a
-                href={href({ page: "project", projectId: session.project_id })}
-                className="text-primary hover:underline"
-              >
-                {session.project_name ?? session.project}
-              </a>
-            ) : (
-              session.project || "—"
-            )}
-          </Meta>
-          <Meta label="开始">{formatDateTime(session.started_at)}</Meta>
-          <Meta label="结束">{formatDateTime(session.ended_at)}</Meta>
-          <Meta label="打码处数">{detail.data.redaction_count}</Meta>
-        </dl>
+        <div className="flex flex-wrap items-center gap-2">
+          <MetaPill href={href({ page: "member", accountId: session.account_id })}>
+            {session.account}
+          </MetaPill>
+          <SourceBadge source={session.source} />
+          <MetaPill>{session.model}</MetaPill>
+          {session.project_id !== null ? (
+            <MetaPill href={href({ page: "project", projectId: session.project_id })}>
+              {projectLabel}
+            </MetaPill>
+          ) : (
+            <MetaPill>{projectLabel}</MetaPill>
+          )}
+          <MetaPill>{session.device_name}</MetaPill>
+        </div>
       </section>
 
       <EventList

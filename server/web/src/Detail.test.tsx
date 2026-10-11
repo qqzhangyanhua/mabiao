@@ -212,6 +212,8 @@ describe("会话详情", () => {
     signIn();
 
     expect(await screen.findByRole("heading", { name: "修一个 bug" })).toBeTruthy();
+    expect(screen.getByText("Codex")).toBeTruthy();
+    expect(screen.getByText(/2 轮/)).toBeTruthy();
     const strip = screen.getByRole("slider", { name: "事件时间线" });
     expect(strip).toBeTruthy();
     strip.focus();

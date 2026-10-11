@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useAuth } from "../auth";
 import { DimensionCards } from "../components/DimensionCards";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
@@ -41,7 +42,7 @@ export function ProjectsPage() {
 
   return (
     <>
-      <h1 className="text-lg font-semibold">项目</h1>
+      <PageHeader title="项目" subtitle="按项目汇总已推送用量" />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (

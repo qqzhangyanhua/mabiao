@@ -1,7 +1,50 @@
 @import "tailwindcss";
 
+/* 自宿：Inter 可变（拉丁）+ Noto Sans SC 简体 400/500。不走第三方 CDN，CSP font-src 'self'。 */
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/inter/files/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/noto-sans-sc/files/noto-sans-sc-chinese-simplified-400-normal.woff2")
+    format("woff2");
+  unicode-range: U+3000-303F, U+3040-30FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/noto-sans-sc/files/noto-sans-sc-chinese-simplified-500-normal.woff2")
+    format("woff2");
+  unicode-range: U+3000-303F, U+3040-30FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
+}
+
 @theme inline {
-  --font-sans: "SF Pro Text", "PingFang SC", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+  --radius-lg: 0.625rem;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -31,7 +74,7 @@
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --background: #f6f7f9;
+  --background: #f4f5f7;
   --foreground: #111827;
   --card: #ffffff;
   --card-foreground: #111827;
@@ -43,8 +86,8 @@
   --secondary-foreground: #111827;
   --muted: #f3f4f6;
   --muted-foreground: #6b7280;
-  --accent: #efeaff;
-  --accent-foreground: #5b21b6;
+  --accent: #f3efff;
+  --accent-foreground: #4c1d95;
   --destructive: #dc2626;
   --success: #15803d;
   --warning: #b45309;
@@ -52,11 +95,16 @@
   --input: #d1d5db;
   --ring: #6d28d9;
   --sidebar: #ffffff;
-  --sidebar-foreground: #374151;
-  --sidebar-accent: #efeaff;
-  --sidebar-accent-foreground: #5b21b6;
-  --sidebar-border: #e5e7eb;
+  --sidebar-foreground: #4b5563;
+  --sidebar-accent: #f3f4f6;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #eceef2;
   --shadow-soft: rgb(15 23 42 / 6%);
+  --shadow-card: 0 1px 2px 0 var(--shadow-soft);
+  --radius: 0.625rem;
+  --card-pad: 1rem;
+  --stack-gap: 1rem;
+  --duration: 150ms;
   --chart-1: #6d28d9;
   --chart-2: #0891b2;
   --chart-3: #d97706;
@@ -82,45 +130,46 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #070b16;
-  --foreground: #e8eef7;
-  --card: #10182a;
-  --card-foreground: #e8eef7;
-  --panel-grad-1: #10182a;
-  --panel-grad-2: #10182a;
-  --primary: #8b6cff;
+  --background: #070a12;
+  --foreground: #eef2f8;
+  --card: #151c2d;
+  --card-foreground: #eef2f8;
+  --panel-grad-1: #151c2d;
+  --panel-grad-2: #151c2d;
+  --primary: #9d82ff;
   --primary-foreground: #160b33;
-  --secondary: #1a2236;
-  --secondary-foreground: #e8eef7;
-  --muted: #151c2e;
-  --muted-foreground: #8b97ab;
+  --secondary: #1c2438;
+  --secondary-foreground: #eef2f8;
+  --muted: #1a2234;
+  --muted-foreground: #a3aec2;
   --accent: #2a2148;
-  --accent-foreground: #c4b5fd;
+  --accent-foreground: #ddd6fe;
   --destructive: #fb7185;
   --success: #34d399;
   --warning: #fbbf24;
-  --border: #243044;
-  --input: #314056;
-  --ring: #8b6cff;
-  --sidebar: #080c18;
-  --sidebar-foreground: #b7c2d4;
-  --sidebar-accent: #2a2148;
-  --sidebar-accent-foreground: #c4b5fd;
-  --sidebar-border: #1c2638;
-  --shadow-soft: rgb(0 0 0 / 35%);
-  --chart-1: #8b6cff;
+  --border: #3a4a63;
+  --input: #3d4d66;
+  --ring: #9d82ff;
+  --sidebar: #0c101c;
+  --sidebar-foreground: #c5cedc;
+  --sidebar-accent: #1a2234;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: #2a364c;
+  --shadow-soft: rgb(0 0 0 / 40%);
+  --shadow-card: 0 1px 2px 0 var(--shadow-soft);
+  --chart-1: #9d82ff;
   --chart-2: #22d3ee;
   --chart-3: #f59e0b;
   --chart-4: #60a5fa;
   --chart-5: #34d399;
   --chart-6: #f472b6;
-  --token-input: #8b6cff;
+  --token-input: #9d82ff;
   --token-output: #22d3ee;
   --token-cache-read: #60a5fa;
   --token-cache-write: #34d399;
   --token-reasoning: #f59e0b;
   --tone-claude: #fb923c;
-  --tone-codex: #8b6cff;
+  --tone-codex: #9d82ff;
   --tone-pi: #22d3ee;
   --tone-omp: #e879f9;
   --tone-open: #60a5fa;
@@ -137,9 +186,38 @@ body {
   color: var(--foreground);
   background-color: var(--background);
   font-family: var(--font-sans);
+  font-feature-settings: "kern" 1, "liga" 1;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
   min-height: 100vh;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "kern" 1, "liga" 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  a,
+  button,
+  [role="radio"],
+  [role="slider"] {
+    transition-property: background-color, color, border-color, box-shadow, opacity;
+    transition-duration: var(--duration);
+    transition-timing-function: ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
