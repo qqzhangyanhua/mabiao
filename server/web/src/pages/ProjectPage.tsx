@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import {
   generatedParam,
   GeneratedFilterSelect,
@@ -64,15 +65,16 @@ export function ProjectPage({ projectId }: { projectId: number }) {
 
   return (
     <>
-      <div>
-        <h1 className="text-lg font-semibold">{detail?.project.name ?? "项目"}</h1>
-        {detail && (
-          <p className="text-xs text-muted-foreground">
-            {detail.project.git_remote ?? "没有 git remote（按目录名归并）"}
-            {!isAdmin && " · 只统计你自己的用量"}
-          </p>
-        )}
-      </div>
+      <PageHeader
+        title={detail?.project.name ?? "项目"}
+        subtitle={
+          detail
+            ? `${detail.project.git_remote ?? "没有 git remote（按目录名归并）"}${
+                !isAdmin ? " · 只统计你自己的用量" : ""
+              }`
+            : undefined
+        }
+      />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : project.error ? (

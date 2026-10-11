@@ -5,6 +5,7 @@ import { cn } from "../lib/cn";
 import { costOf, type CostMode } from "../lib/cost";
 import { formatCost, formatPercent, formatTokens } from "../lib/format";
 import { panelClass } from "./ui/card";
+import { numCellClass, tableClass, thClass, theadRowClass, trClass } from "./ui/table";
 
 const COLLAPSED_ROWS = 10;
 
@@ -86,23 +87,23 @@ export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
         <>
           <Composition rows={sorted} weight={weight} colorOf={colorOf} />
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={tableClass}>
               <caption className="sr-only">{title}</caption>
               <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th scope="col" className="py-1 font-normal">
+                <tr className={theadRowClass}>
+                  <th scope="col" className={`py-1 ${thClass}`}>
                     名称
                   </th>
-                  <th scope="col" className="py-1 text-right font-normal">
+                  <th scope="col" className={`py-1 ${numCellClass} ${thClass}`}>
                     记录
                   </th>
-                  <th scope="col" className="py-1 text-right font-normal">
+                  <th scope="col" className={`py-1 ${numCellClass} ${thClass}`}>
                     Token
                   </th>
-                  <th scope="col" className="py-1 text-right font-normal">
+                  <th scope="col" className={`py-1 ${numCellClass} ${thClass}`}>
                     费用
                   </th>
-                  <th scope="col" className="w-28 py-1 pl-3 font-normal">
+                  <th scope="col" className={`w-28 py-1 pl-3 ${thClass}`}>
                     占比
                   </th>
                 </tr>
@@ -113,7 +114,7 @@ export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
                   const href = linkOf?.(row);
                   const label = nameOf(row);
                   return (
-                    <tr key={row.key} className="border-b border-border/70 last:border-0">
+                    <tr key={row.key} className={trClass}>
                       <th scope="row" className="max-w-56 truncate py-1.5 pr-2 font-normal" title={label}>
                         {href ? (
                           <a href={href} className="text-primary hover:underline">
@@ -123,9 +124,9 @@ export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
                           label
                         )}
                       </th>
-                      <td className="py-1.5 text-right tabular-nums">{row.record_count}</td>
-                      <td className="py-1.5 text-right tabular-nums">{formatTokens(row.total_tokens)}</td>
-                      <td className="py-1.5 text-right tabular-nums">
+                      <td className={`py-1.5 ${numCellClass}`}>{row.record_count}</td>
+                      <td className={`py-1.5 ${numCellClass}`}>{formatTokens(row.total_tokens)}</td>
+                      <td className={`py-1.5 ${numCellClass}`}>
                         {formatCost(costOf(row, mode))}
                         {mode === "unified" && row.unpriced_count > 0 && (
                           <span className="ml-1 text-warning" title={`${row.unpriced_count} 条未定价，费用偏低`}>

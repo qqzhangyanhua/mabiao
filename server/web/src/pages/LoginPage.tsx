@@ -32,8 +32,8 @@ export function LoginPage() {
               码
             </span>
             <div>
-              <h1 className="text-lg font-semibold">码表 · 团队</h1>
-              <p className="text-xs text-muted-foreground">远程服务管理网页</p>
+              <h1 className="text-xl font-normal tracking-tight">码表 · 团队</h1>
+              <p className="text-sm text-muted-foreground">远程服务管理网页</p>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">

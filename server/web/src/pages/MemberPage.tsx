@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import {
   generatedParam,
   GeneratedFilterSelect,
@@ -94,12 +95,17 @@ export function MemberPage({ accountId }: { accountId: number }) {
 
   return (
     <>
-      <h1 className="text-lg font-semibold">
-        {title}
-        {accountId === profile.id && (
-          <span className="ml-2 text-sm font-normal text-muted-foreground">（我）</span>
-        )}
-      </h1>
+      <PageHeader
+        title={
+          <>
+            {title}
+            {accountId === profile.id && (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">（我）</span>
+            )}
+          </>
+        }
+        subtitle="该成员已推送的消耗记录与会话"
+      />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (

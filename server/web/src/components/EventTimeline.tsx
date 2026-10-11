@@ -30,7 +30,6 @@ export function EventTimeline({
   const span = timelineSpan(events, startedAt, endedAt);
   const ticks = timelineTicks(events, span);
   const selected = events.find((event) => event.event_id === selectedId);
-  const selectedTick = ticks.find((tick) => tick.event_id === selectedId);
   const index = Math.max(0, events.findIndex((event) => event.event_id === selectedId));
 
   function pickAt(clientX: number) {
@@ -70,7 +69,7 @@ export function EventTimeline({
     null;
 
   return (
-    <div className={cn(panelClass, "p-3")}>
+    <div className={cn(panelClass, "p-4")}>
       <div className="mb-2 flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
         <span className="tabular-nums">{from ? formatDateTime(from) : "没有时间"}</span>
         <span className="min-w-0 truncate text-center">
@@ -94,33 +93,41 @@ export function EventTimeline({
           onKeyDown={onKeyDown}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          className="relative h-11 cursor-ew-resize touch-none rounded-md bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="relative h-12 cursor-ew-resize touch-none rounded-md bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="pointer-events-none absolute inset-x-3 top-1/2 h-px -translate-y-1/2 bg-border" />
-          {selectedTick && (
-            <div
-              aria-hidden
-              className="pointer-events-none absolute top-1 bottom-1 w-px bg-primary"
-              style={{ left: `clamp(6px, ${selectedTick.left}%, calc(100% - 6px))` }}
-            />
-          )}
           {ticks.map((tick) => {
             const event = events.find((item) => item.event_id === tick.event_id);
             const active = tick.event_id === selectedId;
+            const time = event?.occurred_at ? formatDateTime(event.occurred_at) : "";
             return (
               <div
                 key={tick.event_id}
-                aria-hidden
-                title={event ? headingOf(event) : tick.kind}
-                className={cn(
-                  "pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-sm",
-                  active ? "z-10 h-6 w-1.5" : "h-4 w-1",
+                className="group pointer-events-auto absolute top-1/2 z-[1] -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `clamp(6px, ${tick.left}%, calc(100% - 6px))` }}
+              >
+                <div
+                  aria-hidden
+                  title={time || (event ? headingOf(event) : tick.kind)}
+                  className={cn(
+                    "relative rounded-sm",
+                    active ? "z-10 h-7 w-0.5 bg-primary" : "h-3 w-px",
+                  )}
+                  style={active ? undefined : { background: EVENT_KIND_TONE[tick.kind] }}
+                >
+                  {active && (
+                    <span
+                      aria-hidden
+                      className="absolute -top-1 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-primary"
+                    />
+                  )}
+                </div>
+                {time && (
+                  <span className="pointer-events-none absolute -top-6 left-1/2 z-20 -translate-x-1/2 rounded-md bg-card px-1.5 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground opacity-0 shadow-[var(--shadow-card)] ring-1 ring-border group-hover:opacity-100">
+                    {time}
+                  </span>
                 )}
-                style={{
-                  left: `clamp(6px, ${tick.left}%, calc(100% - 6px))`,
-                  background: EVENT_KIND_TONE[tick.kind],
-                }}
-              />
+              </div>
             );
           })}
         </div>

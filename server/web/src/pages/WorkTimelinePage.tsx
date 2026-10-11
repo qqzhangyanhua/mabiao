@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
+import { PageHeader } from "../components/PageHeader";
 import { WorkTimelineBoard } from "../components/WorkTimelineBoard";
 import { NativeSelect } from "../components/ui/input";
 import { usePageExports } from "../export-action";
@@ -77,11 +78,10 @@ export function WorkTimelinePage() {
 
   return (
     <>
-      <h1 className="text-lg font-semibold">工作时间线</h1>
-      <p className="text-sm text-muted-foreground">
-        按本地日历日铺已推送会话的起止区间。Token 与费用只统计该场落在当天的消耗记录，不进本机
-        token KPI，也不画账号用量或代码量。
-      </p>
+      <PageHeader
+        title="工作时间线"
+        subtitle="按本地日历日铺已推送会话的起止区间。Token 与费用只统计该场落在当天的消耗记录，不进本机 token KPI，也不画账号用量或代码量。"
+      />
       <div className="flex flex-wrap items-center gap-3">
         {profile.role === "admin" && (
           <label className="flex items-center gap-2 text-sm">
@@ -148,7 +148,7 @@ export function WorkTimelinePage() {
         <Loading />
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground tabular-nums">
             {data.segment_count} 个片段 · {formatTokens(data.total_tokens)} token · {formatCost(cost)}
             {data.truncated ? " · 会话过多，只展示最早的 2000 场" : ""}
           </p>

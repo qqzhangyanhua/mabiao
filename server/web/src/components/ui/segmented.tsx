@@ -5,15 +5,18 @@ export function Segmented<T extends string>({
   value,
   onChange,
   options,
+  size = "default",
 }: {
   label: string;
   value: T;
   onChange: (value: T) => void;
   options: { id: T; label: string }[];
+  size?: "default" | "compact";
 }) {
+  const compact = size === "compact";
   return (
     <div
-      className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1"
+      className={cn("inline-flex flex-wrap rounded-md bg-muted", compact ? "gap-0.5 p-0.5" : "gap-1 p-1")}
       role="radiogroup"
       aria-label={label}
     >
@@ -27,10 +30,11 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-md px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              compact ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm",
               active
                 ? "bg-card font-medium text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+                : "font-normal text-muted-foreground hover:text-foreground",
             )}
           >
             {option.label}

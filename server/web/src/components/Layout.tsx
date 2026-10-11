@@ -8,6 +8,7 @@ import type { Route } from "../lib/route";
 import type { RangePreset } from "../lib/range";
 import { useTheme } from "../theme";
 import { useHref, useView } from "../view";
+import { OverflowMenu } from "./OverflowMenu";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Segmented } from "./ui/segmented";
@@ -86,20 +87,20 @@ function Sidebar({ route }: { route: Route }) {
   const groups = navGroups(route, profile.id, profile.role);
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-b border-sidebar-border bg-sidebar md:sticky md:top-0 md:h-screen md:w-60 md:border-r md:border-b-0">
+    <aside className="flex w-full shrink-0 flex-col border-b border-sidebar-border bg-sidebar md:sticky md:top-0 md:h-screen md:w-56 md:border-r md:border-b-0">
       <div className="flex items-center gap-2.5 px-4 py-4">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground">
+        <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary text-xs font-medium text-primary-foreground">
           码
         </span>
         <div>
-          <div className="text-sm font-semibold tracking-wide text-foreground">码表</div>
-          <div className="text-xs text-muted-foreground">团队</div>
+          <div className="text-sm font-medium text-foreground">码表</div>
+          <div className="text-[11px] text-muted-foreground">团队</div>
         </div>
       </div>
       <nav className="flex gap-3 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-y-auto md:overflow-x-hidden">
         {groups.map((group) => (
-          <div key={group.title} className="flex shrink-0 flex-col gap-1">
-            <div className="hidden px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase md:block">
+          <div key={group.title} className="flex shrink-0 flex-col gap-0.5">
+            <div className="hidden px-3 pt-4 pb-1 text-[10px] font-medium tracking-[0.08em] text-muted-foreground/70 uppercase md:block">
               {group.title}
             </div>
             <div className="flex gap-1 md:flex-col">
@@ -109,10 +110,10 @@ function Sidebar({ route }: { route: Route }) {
                   href={href(item.route)}
                   aria-current={item.active ? "page" : undefined}
                   className={cn(
-                    "shrink-0 rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "relative shrink-0 rounded-md px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     item.active
-                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                      : "text-sidebar-foreground hover:bg-accent hover:text-foreground",
+                      ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:top-1.5 before:bottom-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary"
+                      : "font-normal text-sidebar-foreground hover:bg-muted/70 hover:text-foreground",
                   )}
                 >
                   {item.label}
@@ -149,19 +150,26 @@ function Sidebar({ route }: { route: Route }) {
 function TopBar({ hideRange }: { hideRange: boolean }) {
   const view = useView();
   const { actions } = useExportBar();
+  const [primary, ...secondary] = actions;
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-3 md:px-8">
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-card/80 px-4 py-2 md:px-8">
       {!hideRange && (
         <>
-          <Segmented label="时间范围" value={view.preset} onChange={view.setPreset} options={PRESETS} />
+          <Segmented
+            label="时间范围"
+            value={view.preset}
+            onChange={view.setPreset}
+            options={PRESETS}
+            size="compact"
+          />
           {view.preset === "custom" && (
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-xs">
               <Input
                 type="date"
                 aria-label="开始日期"
                 value={view.custom.fromDay}
                 onChange={(e) => view.setCustom({ ...view.custom, fromDay: e.target.value })}
-                className="w-auto"
+                className="h-7 w-auto text-xs"
               />
               <span className="text-muted-foreground">至</span>
               <Input
@@ -169,26 +177,32 @@ function TopBar({ hideRange }: { hideRange: boolean }) {
                 aria-label="结束日期"
                 value={view.custom.toDay}
                 onChange={(e) => view.setCustom({ ...view.custom, toDay: e.target.value })}
-                className="w-auto"
+                className="h-7 w-auto text-xs"
               />
             </div>
           )}
-          <Segmented label="费用口径" value={view.mode} onChange={view.setMode} options={COST_OPTIONS} />
+          <Segmented
+            label="费用口径"
+            value={view.mode}
+            onChange={view.setMode}
+            options={COST_OPTIONS}
+            size="compact"
+          />
         </>
       )}
-      <div className="ml-auto flex flex-wrap gap-2">
-        {actions.map((action) => (
+      <div className="ml-auto flex items-center gap-2">
+        {primary && (
           <Button
-            key={action.label}
             type="button"
-            variant="outline"
+            variant="default"
             size="sm"
-            disabled={action.disabled}
-            onClick={action.onClick}
+            disabled={primary.disabled}
+            onClick={primary.onClick}
           >
-            {action.label}
+            {primary.label}
           </Button>
-        ))}
+        )}
+        {secondary.length > 0 && <OverflowMenu actions={secondary} />}
       </div>
     </div>
   );
@@ -202,7 +216,7 @@ export function Layout({ route, children }: { route: Route; children: ReactNode 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar hideRange={hideRange} />
         <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
-          <div className="mx-auto flex max-w-6xl flex-col gap-6">{children}</div>
+          <div className="mx-auto flex max-w-6xl flex-col gap-4">{children}</div>
         </main>
       </div>
     </div>
