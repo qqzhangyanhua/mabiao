@@ -41,7 +41,7 @@ export function OverflowMenu({ actions }: { actions: ExportAction[] }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-1 min-w-40 rounded-lg border border-border bg-card py-1 shadow-[var(--shadow-card)]"
+          className="absolute right-0 z-20 mt-1 min-w-40 rounded-xl border border-border bg-popover py-1 shadow-[0_12px_32px_-12px_var(--shadow-soft)]"
         >
           {actions.map((action) => (
             <button
@@ -53,7 +53,7 @@ export function OverflowMenu({ actions }: { actions: ExportAction[] }) {
                 action.onClick();
                 setOpen(false);
               }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-muted disabled:opacity-50"
+              className="block w-full px-3 py-1.5 text-left text-sm text-foreground hover:bg-accent disabled:opacity-50"
             >
               {action.label}
             </button>

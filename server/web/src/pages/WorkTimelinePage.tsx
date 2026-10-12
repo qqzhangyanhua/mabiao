@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -80,6 +81,7 @@ export function WorkTimelinePage() {
   return (
     <>
       <PageHeader
+        icon={<Clock size={22} strokeWidth={1.8} />}
         title="工作时间线"
         subtitle="按本地日历日铺已推送会话的起止区间。Token 与费用只统计该场落在当天的消耗记录，不进本机 token KPI，也不画账号用量或代码量。"
       />

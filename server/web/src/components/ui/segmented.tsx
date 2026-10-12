@@ -16,7 +16,10 @@ export function Segmented<T extends string>({
   const compact = size === "compact";
   return (
     <div
-      className={cn("inline-flex flex-wrap rounded-md bg-muted", compact ? "gap-0.5 p-0.5" : "gap-1 p-1")}
+      className={cn(
+        "inline-flex flex-wrap rounded-xl bg-muted/80",
+        compact ? "gap-0.5 p-0.5" : "gap-1 p-1",
+      )}
       role="radiogroup"
       aria-label={label}
     >
@@ -30,10 +33,10 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(option.id)}
             className={cn(
-              "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              compact ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm",
+              "rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              compact ? "px-2.5 py-1 text-xs" : "px-3.5 py-1 text-sm",
               active
-                ? "bg-card font-medium text-foreground shadow-sm"
+                ? "bg-brand font-medium text-primary-foreground shadow-[0_4px_12px_-6px_var(--primary)]"
                 : "font-normal text-muted-foreground hover:text-foreground",
             )}
           >

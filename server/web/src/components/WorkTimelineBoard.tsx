@@ -170,7 +170,7 @@ function SegmentTooltip({
   return (
     <div
       role="tooltip"
-      className="pointer-events-none fixed z-50 rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-[0_8px_24px_var(--shadow-soft)]"
+      className="pointer-events-none fixed z-50 rounded-xl border border-border bg-popover px-3 py-2 text-xs shadow-[0_8px_24px_var(--shadow-soft)]"
       style={{
         width: TOOLTIP_WIDTH,
         left: flipX ? pos.x - TOOLTIP_MARGIN - TOOLTIP_WIDTH : pos.x + TOOLTIP_MARGIN,

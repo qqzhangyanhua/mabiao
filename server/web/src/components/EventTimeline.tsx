@@ -123,7 +123,7 @@ export function EventTimeline({
                   )}
                 </div>
                 {time && (
-                  <span className="pointer-events-none absolute -top-6 left-1/2 z-20 -translate-x-1/2 rounded-md bg-card px-1.5 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground opacity-0 shadow-[var(--shadow-card)] ring-1 ring-border group-hover:opacity-100">
+                  <span className="pointer-events-none absolute -top-6 left-1/2 z-20 -translate-x-1/2 rounded-md bg-popover px-1.5 py-0.5 text-[10px] whitespace-nowrap text-muted-foreground opacity-0 shadow-[var(--shadow-card)] ring-1 ring-border group-hover:opacity-100">
                     {time}
                   </span>
                 )}

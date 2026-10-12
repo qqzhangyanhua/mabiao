@@ -1,3 +1,4 @@
+import { ChartColumn } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -96,6 +97,7 @@ export function MemberPage({ accountId }: { accountId: number }) {
   return (
     <>
       <PageHeader
+        icon={<ChartColumn size={22} strokeWidth={1.8} />}
         title={
           <>
             {title}

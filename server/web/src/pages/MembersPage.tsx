@@ -1,3 +1,4 @@
+import { Activity, UserRound, Users, Wallet } from "lucide-react";
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import type { AccountView, CoverageView } from "../api/types";
 import { useAuth } from "../auth";
@@ -170,15 +171,31 @@ export function MembersPage() {
 
   return (
     <>
-      <PageHeader title="成员" subtitle="远程账号、推送覆盖与近 7 天费用" />
+      <PageHeader
+        icon={<UserRound size={22} strokeWidth={1.8} />}
+        title="成员"
+        subtitle="远程账号、推送覆盖与近 7 天费用"
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MetricCard value={data ? String(data.accounts.length) : "…"} label="成员" />
+        <MetricCard
+          value={data ? String(data.accounts.length) : "…"}
+          label="成员"
+          icon={<Users size={18} />}
+          tone="violet"
+        />
         <MetricCard
           value={data ? String(activeThisWeek) : "…"}
           label="本周活跃"
           hint="近 7 天有推送"
+          icon={<Activity size={18} />}
+          tone="emerald"
         />
-        <MetricCard value={week.data ? formatCost(weekSpend) : "…"} label="本周费用" />
+        <MetricCard
+          value={week.data ? formatCost(weekSpend) : "…"}
+          label="本周费用"
+          icon={<Wallet size={18} />}
+          tone="amber"
+        />
       </div>
       <CreateMemberForm onCreated={reload} />
       {actionError && <ErrorNote error={new Error(actionError)} />}
@@ -242,7 +259,7 @@ export function MembersPage() {
                 const coverage = coverageById.get(account.id);
                 return (
                   <tr key={account.id} className={trClass}>
-                    <th scope="row" className="px-4 py-2 font-normal">
+                    <th scope="row" className="px-4 py-2 text-left font-normal">
                       <a
                         href={href({ page: "member", accountId: account.id })}
                         className="text-primary hover:underline"

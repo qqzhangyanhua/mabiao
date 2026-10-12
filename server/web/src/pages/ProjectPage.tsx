@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -66,6 +67,7 @@ export function ProjectPage({ projectId }: { projectId: number }) {
   return (
     <>
       <PageHeader
+        icon={<Folder size={22} strokeWidth={1.8} />}
         title={detail?.project.name ?? "项目"}
         subtitle={
           detail

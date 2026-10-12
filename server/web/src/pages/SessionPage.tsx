@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessagesSquare } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { ContextManifestView } from "../components/ContextManifestView";
@@ -53,6 +53,7 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
   return (
     <>
       <PageHeader
+        icon={<MessagesSquare size={22} strokeWidth={1.8} />}
         title={
           <>
             {session.title || "（无标题）"}

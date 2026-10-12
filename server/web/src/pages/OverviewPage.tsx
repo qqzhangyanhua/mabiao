@@ -1,3 +1,4 @@
+import { Users } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -50,7 +51,11 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader title="团队总览" subtitle="已推送消耗记录的费用、Token 与拆分" />
+      <PageHeader
+        icon={<Users size={22} strokeWidth={1.8} />}
+        title="团队总览"
+        subtitle="已推送消耗记录的费用、Token 与拆分"
+      />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (

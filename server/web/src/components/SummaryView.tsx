@@ -115,6 +115,14 @@ export function SummaryView({
           unpriced={unpriced}
           mode={mode}
           recordCount={totals.record_count}
+          costTrend={dailyPoints(
+            summary.by_day.map((d) => ({ key: d.key, value: costOf(d, mode) })),
+            range,
+          ).map((p) => p.value)}
+          tokenTrend={dailyPoints(
+            summary.by_day.map((d) => ({ key: d.key, value: d.total_tokens })),
+            range,
+          ).map((p) => p.value)}
         />
       </div>
 
@@ -126,6 +134,7 @@ export function SummaryView({
             rows={summary.by_project}
             mode={mode}
             splits={projectSplits}
+            moreHref={href({ page: "projects" })}
             hrefOf={(row) =>
               row.id === null ? undefined : href({ page: "project", projectId: row.id })
             }
@@ -134,11 +143,13 @@ export function SummaryView({
         {!showProjects && showAccounts && (
           <DimensionCards
             title="按成员"
+            kind="member"
             rows={summary.by_account}
             mode={mode}
             hrefOf={
               linkAccounts
-                ? (row) => (row.id === null ? undefined : href({ page: "member", accountId: row.id }))
+                ? (row) =>
+                    row.id === null ? undefined : href({ page: "member", accountId: row.id })
                 : undefined
             }
           />
@@ -161,7 +172,8 @@ export function SummaryView({
             dimension === "account" && linkAccounts
               ? (row) => (row.id === null ? undefined : href({ page: "member", accountId: row.id }))
               : dimension === "project"
-                ? (row) => (row.id === null ? undefined : href({ page: "project", projectId: row.id }))
+                ? (row) =>
+                    row.id === null ? undefined : href({ page: "project", projectId: row.id })
                 : undefined
           }
         />

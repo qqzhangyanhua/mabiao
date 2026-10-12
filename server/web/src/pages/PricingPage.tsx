@@ -1,3 +1,4 @@
+import { Settings } from "lucide-react";
 import { useCallback, useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -79,6 +80,7 @@ export function PricingPage() {
   return (
     <>
       <PageHeader
+        icon={<Settings size={22} strokeWidth={1.8} />}
         title="团队价目"
         subtitle="跨人对比费用看统一价：来源自带费用优先，其次团队价目，再是内置 LiteLLM 快照。单价是每 token 的价格，不要填「每百万 token」。"
         extra={
@@ -174,7 +176,7 @@ export function PricingPage() {
                 <tbody>
                   {data.prices.map((price) => (
                     <tr key={price.id} className={trClass}>
-                      <th scope="row" className="px-4 py-2 font-normal">
+                      <th scope="row" className="px-4 py-2 text-left font-normal">
                         {price.model}
                       </th>
                       <td className="px-4 py-2">{price.provider ?? "—"}</td>
