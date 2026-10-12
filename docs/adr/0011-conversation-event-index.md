@@ -36,3 +36,7 @@
 ## 对话记录适配来源（2026-09）
 
 `conversation::CONVERSATION_ADAPTERS` 覆盖 **21 个** Usage Source（与 `Source::ALL` 一致）：codex、claude、cursor_agent、dsh、factory、kimi、grok、pi、omp、gemini、opencode、qwen、copilot、qoder、qoder_cn、cline、workbuddy、zcode、alma、hermes、agy。新增 hermes 与 agy 是新来源首次索引，不递增版本号。agy 的 `step_payload` 字段号来自本机真实库的结构探测，不是官方 schema；工具结果未解析。索引版本哨兵为 **`CONVERSATION_ADAPTER_VERSION` = 18**（独立于 `store::ADAPTER_VERSION`）；本代补 OpenCode 2 / Gemini `session-*.jsonl` / Codex `.jsonl.zst`，并把 Droid `callingSessionId` 子代理挂到父会话；dsh v4 的 `session/end-seed` 是写盘时刻而非会话活动，不再计入会话起止时间（只改 dsh 的 `revision`，不递增版本号，避免全部来源整库重索引）；纯重构不得改动，改动意味着事件归一化输出变了。
+
+## 修订：启动摄取不再同步写事件（ADR 0027）
+
+摄取拆成用量阶段与对话目录阶段后，启动摄取、托盘刷新、自动推送的本机刷新都不再同步写事件。对话目录阶段遇到需要整份解析的会话，只写会话行与会话文件清单，并置 `event_index_dirty = 1`；事件由后台补建重建，用户打开过的会话优先。就绪定义因此加一条：`event_index_dirty = 0`。代次语义、回退路径和「重建缓存」一次性写事件不变。备份产物把该列置 0。详见 ADR 0027。
