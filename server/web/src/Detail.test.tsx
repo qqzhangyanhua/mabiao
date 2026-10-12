@@ -230,27 +230,38 @@ describe("会话详情", () => {
     expect(within(injected).queryByText("CLAUDE.md")).toBeNull();
   });
 
-  it("deletes the session after confirmation and goes back to the owner's page", async () => {
+  it("deletes the session only after the in-page confirmation and goes back to the owner's page", async () => {
     const requests = stubServer("member");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const native = vi.spyOn(window, "confirm");
     window.location.hash = "#/session/31";
     render(<App />);
     signIn();
 
     fireEvent.click(await screen.findByRole("button", { name: "删除会话" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "删除这场会话？" });
+    expect(requests.some((r) => r.startsWith("DELETE"))).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认删除" }));
 
     await waitFor(() => expect(requests).toContain("DELETE /api/v1/sessions/31"));
     await waitFor(() => expect(window.location.hash).toMatch(/^#\/member\/2/));
+    expect(native).not.toHaveBeenCalled();
   });
 
-  it("does not delete when the confirmation is declined", async () => {
+  it("does not delete when the confirmation is cancelled or dismissed with Escape", async () => {
     const requests = stubServer("member");
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     window.location.hash = "#/session/31";
     render(<App />);
     signIn();
 
     fireEvent.click(await screen.findByRole("button", { name: "删除会话" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "删除会话" }));
+    fireEvent.keyDown(await screen.findByRole("alertdialog"), { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     expect(requests.some((r) => r.startsWith("DELETE"))).toBe(false);
   });

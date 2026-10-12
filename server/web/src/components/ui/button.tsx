@@ -15,6 +15,8 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         destructive:
           "border border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10",
+        danger:
+          "bg-red-600 text-white shadow-[0_6px_16px_-8px_rgb(220_38_38)] hover:bg-red-500",
       },
       size: {
         default: "h-9 px-3",
