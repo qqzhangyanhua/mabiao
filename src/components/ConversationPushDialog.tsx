@@ -52,6 +52,39 @@ function IssueList({ title, issues }: { title: string; issues: PushSessionIssue[
   );
 }
 
+const SLOW_PREVIEW_SECONDS = 3;
+
+// 挂载即开始计时，卸载即归零：每次重新统计都会重新挂载。
+function PreviewingStatus() {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    const startedAt = Date.now();
+    const timer = window.setInterval(
+      () => setSeconds(Math.floor((Date.now() - startedAt) / 1000)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, []);
+  return (
+    <div className="conversation-push-previewing" role="status">
+      <div className="conversation-push-previewing-line">
+        <span className="spinner" style={{ width: 14, height: 14 }} aria-hidden="true" />
+        <span>
+          正在统计要推的内容…
+          {seconds >= 1 ? <span className="muted">（已用 {seconds} 秒）</span> : null}
+        </span>
+      </div>
+      <progress aria-label="统计进度" />
+      {seconds >= SLOW_PREVIEW_SECONDS ? (
+        <span className="muted conversation-summary-hint">
+          会话较多或时间范围较大时需要读取本机全部会话文件，可能要等一会儿，没有卡住。
+          也可以换个更短的时间范围。
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ConversationPushDialog({
   filter,
   onClose,
@@ -311,11 +344,7 @@ export function ConversationPushDialog({
               />{" "}
               强制重推（忽略已推送记录，比如服务端删过会话）
             </label>
-            {previewing ? (
-              <p className="conversation-summary-hint" role="status">
-                正在统计要推的内容…
-              </p>
-            ) : null}
+            {previewing ? <PreviewingStatus /> : null}
             {preview ? (
               <div className="conversation-push-preview">
                 <dl>
@@ -367,8 +396,8 @@ export function ConversationPushDialog({
         {running ? (
           <div className="conversation-push-progress" role="status">
             <progress
-              value={progress?.done ?? 0}
-              max={Math.max(progress?.total ?? 1, 1)}
+              value={progress ? progress.done : undefined}
+              max={progress ? Math.max(progress.total, 1) : undefined}
               aria-label="推送进度"
             />
             <span className="muted">

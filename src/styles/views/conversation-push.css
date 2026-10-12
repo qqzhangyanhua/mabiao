@@ -90,13 +90,22 @@
   white-space: nowrap;
 }
 
-.conversation-push-progress {
+.conversation-push-progress,
+.conversation-push-previewing {
   display: grid;
   gap: 6px;
 }
 
-.conversation-push-progress progress {
+.conversation-push-progress progress,
+.conversation-push-previewing progress {
   width: 100%;
+}
+
+.conversation-push-previewing-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .conversation-push-history summary {
