@@ -71,6 +71,7 @@ mod rollup;
 mod rollup_source;
 mod rollup_split;
 mod scan_paths;
+mod staged;
 mod store;
 mod tray;
 mod tray_popup;

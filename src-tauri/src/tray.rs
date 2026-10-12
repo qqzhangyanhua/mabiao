@@ -9,7 +9,8 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::domain::{Filter, OfficialQuotaDto, OverviewDto};
-use crate::{ingest, official_quota, query, tray_popup, AppState};
+use crate::ingest::CatalogMode;
+use crate::{ingest, official_quota, query, staged, tray_popup, AppState};
 
 const TRAY_ID: &str = "today-cost";
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
@@ -167,34 +168,54 @@ pub fn refresh(app: &AppHandle) -> Result<(), String> {
 
 /// 源文件元数据没变时只重算今日菜单栏，避免关闭主窗口后每 5 分钟全量扫盘。
 pub fn refresh_if_stale(app: &AppHandle) -> Result<(), String> {
+    refresh_if_stale_with(app, refresh_with_ingest)
+}
+
+/// 自动推送的本机刷新：用量与对话目录两段都同步跑完再返回，但目录走待补建，不等事件补建。
+pub fn refresh_for_auto_push(app: &AppHandle) -> Result<(), String> {
+    refresh_if_stale_with(app, refresh_with_ingest_blocking)
+}
+
+fn refresh_if_stale_with(
+    app: &AppHandle,
+    ingest_now: fn(&AppHandle) -> Result<(), String>,
+) -> Result<(), String> {
     let cache = {
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         ingest::load_scan_cache(&conn)?
     };
     if ingest::scan_is_stale_from_cache(&cache, &ingest::default_home())? {
-        refresh_with_ingest(app)
+        ingest_now(app)
     } else {
         let _ = sync_official_quota(app);
         refresh(app)
     }
 }
 
+/// 用量阶段同步，对话目录阶段交给后台，不让托盘线程等逐源提交。
 pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
     {
         let state = app.state::<AppState>();
         let conn = state.lock_write()?;
-        ingest::ingest_all(&conn, &ingest::default_home())?;
-        let prices = state.effective_prices();
-        let _ = crate::budget::check_and_notify(
-            app,
-            &conn,
-            &prices,
-            &state.budget_path,
-            &state.budget_notify_path,
-        );
-        crate::release_idle_memory(&state, &conn);
+        ingest::ingest_usage(&conn, &ingest::default_home())?;
+        staged::after_usage_stage(app, &state, &conn);
     }
+    staged::trigger_deferred_startup(app);
+    staged::start_catalog_stage(app);
+    let _ = sync_official_quota(app);
+    refresh(app)
+}
+
+fn refresh_with_ingest_blocking(app: &AppHandle) -> Result<(), String> {
+    {
+        let state = app.state::<AppState>();
+        let conn = state.lock_write()?;
+        ingest::ingest_all_with_mode(&conn, &ingest::default_home(), CatalogMode::Deferred)?;
+        staged::after_usage_stage(app, &state, &conn);
+    }
+    staged::trigger_deferred_startup(app);
+    staged::ensure_event_backfill(app);
     crate::spawn_conversation_fts_maintenance(app);
     let _ = sync_official_quota(app);
     refresh(app)
