@@ -267,6 +267,53 @@ describe("会话详情", () => {
   });
 });
 
+describe("详情页返回", () => {
+  it("falls back to the parent list when a detail page is opened directly", async () => {
+    stubServer("admin");
+    window.location.hash = "#/project/11";
+    render(<App />);
+    signIn();
+
+    const back = await screen.findByRole("link", { name: "返回项目" });
+    expect(back.getAttribute("href")).toMatch(/^#\/projects(\?|$)/);
+  });
+
+  it("goes back to the page the user came from, keeping the date range", async () => {
+    stubServer("admin");
+    window.location.hash = "#/project/11?range=7d&mode=snapshot";
+    render(<App />);
+    signIn();
+    await screen.findByRole("heading", { name: "alpha" });
+
+    window.location.hash = "#/session/31?range=7d&mode=snapshot";
+    const back = await screen.findByRole("link", { name: "返回项目页" });
+    const href = back.getAttribute("href") ?? "";
+    expect(href).toMatch(/^#\/project\/11\?/);
+    expect(href).toContain("range=7d");
+    expect(href).toContain("mode=snapshot");
+  });
+
+  it("session opened directly falls back to its owner's page", async () => {
+    stubServer("admin");
+    window.location.hash = "#/session/31";
+    render(<App />);
+    signIn();
+
+    const back = await screen.findByRole("link", { name: "返回成员页" });
+    expect(back.getAttribute("href")).toMatch(/^#\/member\/2(\?|$)/);
+  });
+
+  it("is not shown on a member's own home page", async () => {
+    stubServer("member");
+    window.location.hash = "#/member/2";
+    render(<App />);
+    signIn();
+
+    await screen.findByRole("heading", { name: /alice/ });
+    expect(screen.queryByRole("link", { name: /^返回/ })).toBeNull();
+  });
+});
+
 describe("项目页", () => {
   it("shows who spent what on the project, with member links for admins", async () => {
     stubServer("admin");

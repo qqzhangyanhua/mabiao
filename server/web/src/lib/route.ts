@@ -87,3 +87,29 @@ export function allowedRoute(route: Route | null, role: Role, accountId: number)
       return home;
   }
 }
+
+/** 「返回 xxx」里的 xxx：用目标页的名字，让人知道会回到哪。 */
+export function routeLabel(route: Route): string {
+  switch (route.page) {
+    case "overview":
+      return "团队总览";
+    case "members":
+      return "成员";
+    case "member":
+      return "成员页";
+    case "projects":
+      return "项目";
+    case "project":
+      return "项目页";
+    case "session":
+      return "会话";
+    case "pricing":
+      return "价目";
+    case "timeline":
+      return "工作时间线";
+  }
+}
+
+export function sameRoute(a: Route, b: Route): boolean {
+  return routeHash(a) === routeHash(b);
+}

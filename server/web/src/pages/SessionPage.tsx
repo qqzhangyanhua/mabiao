@@ -1,6 +1,7 @@
 import { ChevronRight, MessagesSquare } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
+import { BackLink } from "../components/BackLink";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { ContextManifestView } from "../components/ContextManifestView";
 import { ErrorNote, Loading } from "../components/Feedback";
@@ -15,6 +16,7 @@ import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
 import { COST_MODE_LABEL, type CostMode } from "../lib/cost";
 import { formatDateTime } from "../lib/format";
+import { homeRoute } from "../lib/route";
 import { useHref } from "../view";
 
 const COST_OPTIONS = (Object.keys(COST_MODE_LABEL) as CostMode[]).map((id) => ({
@@ -28,7 +30,7 @@ function shortTitle(title: string): string {
 }
 
 export function SessionPage({ sessionId }: { sessionId: number }) {
-  const { api } = useAuth();
+  const { api, profile } = useAuth();
   const href = useHref();
   const [mode, setMode] = useState<CostMode>("unified");
   const [manifestOpen, setManifestOpen] = useState(false);
@@ -38,8 +40,22 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
   const load = useCallback(() => api.sessionDetail(sessionId), [api, sessionId]);
   const detail = useAsync(load);
 
-  if (detail.error) return <ErrorNote error={detail.error} onRetry={detail.reload} />;
-  if (detail.loading || !detail.data) return <Loading />;
+  const current = { page: "session", sessionId } as const;
+  const home = homeRoute(profile.role, profile.id);
+  if (detail.error)
+    return (
+      <>
+        <BackLink current={current} fallback={home} />
+        <ErrorNote error={detail.error} onRetry={detail.reload} />
+      </>
+    );
+  if (detail.loading || !detail.data)
+    return (
+      <>
+        <BackLink current={current} fallback={home} />
+        <Loading />
+      </>
+    );
   const { session, usage, context_manifest: manifest } = detail.data;
 
   async function remove() {
@@ -59,6 +75,10 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
 
   return (
     <>
+      <BackLink
+        current={current}
+        fallback={{ page: "member", accountId: session.account_id }}
+      />
       <PageHeader
         icon={<MessagesSquare size={22} strokeWidth={1.8} />}
         title={

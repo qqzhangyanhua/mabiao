@@ -19,6 +19,7 @@ import type { Route } from "../lib/route";
 import type { RangePreset } from "../lib/range";
 import { useTheme } from "../theme";
 import { useHref, useView } from "../view";
+import { BackTrail } from "./BackLink";
 import { OverflowMenu } from "./OverflowMenu";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -270,14 +271,16 @@ function TopBar({ hideRange }: { hideRange: boolean }) {
 export function Layout({ route, children }: { route: Route; children: ReactNode }) {
   const hideRange = route.page === "session" || route.page === "pricing";
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <Sidebar route={route} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar hideRange={hideRange} />
-        <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
-          <div className="mx-auto flex max-w-6xl flex-col gap-5">{children}</div>
-        </main>
+    <BackTrail route={route}>
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <Sidebar route={route} />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <TopBar hideRange={hideRange} />
+          <main className="min-w-0 flex-1 px-4 py-6 md:px-8">
+            <div className="mx-auto flex max-w-6xl flex-col gap-5">{children}</div>
+          </main>
+        </div>
       </div>
-    </div>
+    </BackTrail>
   );
 }
