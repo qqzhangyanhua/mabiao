@@ -1,0 +1,26 @@
+docs/agent-layers.md
+  s_cb1802f074c898::t_c27008b3cee845 78-80
+  s_cb1802f074c898::t_22bc03e71af764 39-42
+docs/adr/0027-staged-ingestion.md
+  s_cb1802f074c898::t_9ce65ecc431427 1-52
+CONTEXT.md
+  s_cb1802f074c898::t_abfd0ec3d2da2b 36
+docs/adr/0011-conversation-event-index.md
+  s_cb1802f074c898::t_bb0b79674de2b7 39-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "ff158198d2af27a61129e7427e5759f507be148f",
+  "prompts": {},
+  "sessions": {
+    "s_cb1802f074c898": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2e26d271-a672-4216-a5ea-745489f50197",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
