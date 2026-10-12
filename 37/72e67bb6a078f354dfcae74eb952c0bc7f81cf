@@ -1,0 +1,31 @@
+server/web/src/components/BackLink.tsx
+  s_c0188c0935fcdc::t_666e7638cc9ba9 1-42
+server/web/src/lib/route.ts
+  s_c0188c0935fcdc::t_666e7638cc9ba9 90-115
+server/web/src/pages/SessionPage.tsx
+  s_c0188c0935fcdc::t_62a57b9c385ca8 4,19,33,43-58,78-81
+server/web/src/Detail.test.tsx
+  s_c0188c0935fcdc::t_6b6bc119ff633a 270-316
+server/web/src/pages/MemberPage.tsx
+  s_c0188c0935fcdc::t_62a57b9c385ca8 4,100-102
+server/web/src/components/Layout.tsx
+  s_c0188c0935fcdc::t_56ad727e240a3e 22,274-282,284
+server/web/src/pages/ProjectPage.tsx
+  s_c0188c0935fcdc::t_62a57b9c385ca8 4,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "3772e67bb6a078f354dfcae74eb952c0bc7f81cf",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
