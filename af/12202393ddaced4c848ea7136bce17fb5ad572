@@ -1,0 +1,37 @@
+src-tauri/src/conversation/refresh.rs
+  s_8c029df2835efb::t_e087530ebafd56 65-67,73-78
+src-tauri/src/commands/ingestion.rs
+  s_8c029df2835efb::t_f01765d10244ae 12
+src-tauri/src/commands/io.rs
+  s_8c029df2835efb::t_ec40efe02462e5 73
+src-tauri/src/commands/push.rs
+  s_8c029df2835efb::t_bff7c8f796c40d 143
+src-tauri/src/lib.rs
+  s_8c029df2835efb::t_ee0fc67f39ed54 148-149,151-160,165-169,292
+src-tauri/src/staged.rs
+  s_8c029df2835efb::t_0553cf460fa4bb 8-10,15,30-33,63-158,201-204,213,220-223,225,229,274-303,306-308,312-317,321-335,342-348,375-379,400,420,431,478,486,498,506-514
+src-tauri/src/tests/conversation_catalog_deferred.rs
+  s_8c029df2835efb::t_a47428840b3b1b 381-457
+src-tauri/src/tests/opencode_conversation.rs
+  s_8c029df2835efb::t_9bf66040a96959 351-372
+src-tauri/src/tests/staged.rs
+  s_8c029df2835efb::t_7310fb9b89a45f 4-5,8-10,156-234
+src-tauri/src/tray.rs
+  s_8c029df2835efb::t_ff0759f8b1bcff 98-101,172,175-177,198-199,204-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "af12202393ddaced4c848ea7136bce17fb5ad572",
+  "prompts": {},
+  "sessions": {
+    "s_8c029df2835efb": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f6328ff7-f15f-436e-822d-f4830ca5254f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
