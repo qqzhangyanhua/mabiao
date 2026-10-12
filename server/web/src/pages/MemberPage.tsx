@@ -1,5 +1,7 @@
+import { ChartColumn } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
+import { BackLink } from "../components/BackLink";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -95,7 +97,11 @@ export function MemberPage({ accountId }: { accountId: number }) {
 
   return (
     <>
+      {profile.role === "admin" && accountId !== profile.id && (
+        <BackLink current={{ page: "member", accountId }} fallback={{ page: "members" }} />
+      )}
       <PageHeader
+        icon={<ChartColumn size={22} strokeWidth={1.8} />}
         title={
           <>
             {title}

@@ -4,16 +4,19 @@ import type { ComponentProps } from "react";
 import { cn } from "../../lib/cn";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        outline: "border border-border bg-transparent hover:bg-accent hover:text-accent-foreground",
+        default:
+          "bg-brand text-primary-foreground shadow-[0_6px_16px_-8px_var(--primary)] hover:brightness-110",
+        outline: "border border-border bg-card/60 hover:bg-accent hover:text-accent-foreground",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         destructive:
           "border border-destructive/40 bg-transparent text-destructive hover:bg-destructive/10",
+        danger:
+          "bg-red-600 text-white shadow-[0_6px_16px_-8px_rgb(220_38_38)] hover:bg-red-500",
       },
       size: {
         default: "h-9 px-3",

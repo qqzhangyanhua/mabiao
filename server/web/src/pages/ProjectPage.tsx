@@ -1,5 +1,7 @@
+import { Folder } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
+import { BackLink } from "../components/BackLink";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -65,7 +67,9 @@ export function ProjectPage({ projectId }: { projectId: number }) {
 
   return (
     <>
+      <BackLink current={{ page: "project", projectId }} fallback={{ page: "projects" }} />
       <PageHeader
+        icon={<Folder size={22} strokeWidth={1.8} />}
         title={detail?.project.name ?? "项目"}
         subtitle={
           detail

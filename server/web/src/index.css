@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* 自宿：Inter 可变（拉丁）+ Noto Sans SC 简体 400/500。不走第三方 CDN，CSP font-src 'self'。 */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* 自宿：Inter 可变（拉丁）+ Noto Sans SC 简体 400/500/600。不走第三方 CDN，CSP font-src 'self'。 */
 @font-face {
   font-family: "Inter Variable";
   font-style: normal;
@@ -42,6 +44,16 @@
   unicode-range: U+3000-303F, U+3040-30FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
 }
 
+@font-face {
+  font-family: "Noto Sans SC";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/noto-sans-sc/files/noto-sans-sc-chinese-simplified-600-normal.woff2")
+    format("woff2");
+  unicode-range: U+3000-303F, U+3040-30FF, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF, U+FF00-FFEF;
+}
+
 @theme inline {
   --font-sans: "Inter Variable", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   --radius-lg: 0.625rem;
@@ -49,7 +61,9 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
   --color-primary: var(--primary);
+  --color-primary-2: var(--primary-2);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -63,54 +77,71 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
 }
 
-/* 浅色是控制台默认；深色沿用码表配色。 */
+/* 浅色是控制台默认：雾蓝山景上的半透明玻璃。侧栏两种主题都是深色玻璃。 */
 :root,
 [data-theme="light"] {
   color-scheme: light;
-  --background: #f4f5f7;
-  --foreground: #111827;
-  --card: #ffffff;
-  --card-foreground: #111827;
-  --panel-grad-1: #ffffff;
-  --panel-grad-2: #ffffff;
-  --primary: #6d28d9;
+  --background: #e6eaf5;
+  --foreground: #0f172a;
+  --card: rgb(255 255 255 / 84%);
+  --card-foreground: #0f172a;
+  --glass: rgb(255 255 255 / 62%);
+  --glass-border: rgb(255 255 255 / 75%);
+  --popover: #ffffff;
+  --primary: #5b5bf6;
+  --primary-2: #8b5cf6;
   --primary-foreground: #ffffff;
-  --secondary: #eef1f6;
-  --secondary-foreground: #111827;
-  --muted: #f3f4f6;
-  --muted-foreground: #6b7280;
-  --accent: #f3efff;
-  --accent-foreground: #4c1d95;
+  --secondary: rgb(236 240 250 / 85%);
+  --secondary-foreground: #0f172a;
+  --muted: rgb(220 226 242 / 65%);
+  --muted-foreground: #556079;
+  --accent: rgb(91 91 246 / 9%);
+  --accent-foreground: #3c3cd6;
   --destructive: #dc2626;
   --success: #15803d;
   --warning: #b45309;
-  --border: #e5e7eb;
-  --input: #d1d5db;
-  --ring: #6d28d9;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #4b5563;
-  --sidebar-accent: #f3f4f6;
-  --sidebar-accent-foreground: #111827;
-  --sidebar-border: #eceef2;
-  --shadow-soft: rgb(15 23 42 / 6%);
-  --shadow-card: 0 1px 2px 0 var(--shadow-soft);
+  --border: rgb(196 205 230 / 70%);
+  --input: rgb(190 199 225);
+  --ring: #5b5bf6;
+  --sidebar: rgb(20 26 54 / 80%);
+  --sidebar-foreground: rgb(232 236 255 / 82%);
+  --sidebar-muted: rgb(220 226 255 / 62%);
+  --sidebar-accent: rgb(255 255 255 / 9%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --shadow-soft: rgb(30 41 90 / 10%);
+  --shadow-card: 0 1px 2px 0 rgb(30 41 90 / 6%), 0 8px 24px -12px rgb(30 41 90 / 18%);
+  --backdrop-veil: linear-gradient(
+    180deg,
+    rgb(240 243 251 / 58%) 0%,
+    rgb(240 243 251 / 40%) 45%,
+    rgb(240 243 251 / 62%) 100%
+  );
   --radius: 0.625rem;
   --card-pad: 1rem;
   --stack-gap: 1rem;
   --duration: 150ms;
-  --chart-1: #6d28d9;
+  --chart-1: #6d5ef6;
   --chart-2: #0891b2;
   --chart-3: #d97706;
-  --chart-4: #2563eb;
+  --chart-4: #3b82f6;
   --chart-5: #059669;
   --chart-6: #db2777;
+  --bar-base: #7cc4fa;
+  --seg-top-keep: 82%;
+  --seg-top-with: white;
+  --seg-bottom-keep: 100%;
   --token-input: #6d28d9;
   --token-output: #0891b2;
   --token-cache-read: #2563eb;
@@ -130,39 +161,52 @@
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --background: #070a12;
-  --foreground: #eef2f8;
-  --card: #151c2d;
-  --card-foreground: #eef2f8;
-  --panel-grad-1: #151c2d;
-  --panel-grad-2: #151c2d;
-  --primary: #9d82ff;
-  --primary-foreground: #160b33;
-  --secondary: #1c2438;
-  --secondary-foreground: #eef2f8;
-  --muted: #1a2234;
-  --muted-foreground: #a3aec2;
-  --accent: #2a2148;
-  --accent-foreground: #ddd6fe;
+  --background: #080b16;
+  --foreground: #eef2fb;
+  --card: rgb(20 26 46 / 86%);
+  --card-foreground: #eef2fb;
+  --glass: rgb(22 29 52 / 62%);
+  --glass-border: rgb(255 255 255 / 9%);
+  --popover: #161d33;
+  --primary: #8b8cff;
+  --primary-2: #a78bfa;
+  --primary-foreground: #ffffff;
+  --secondary: rgb(32 40 66 / 85%);
+  --secondary-foreground: #eef2fb;
+  --muted: rgb(46 56 88 / 55%);
+  --muted-foreground: #a8b3cc;
+  --accent: rgb(139 140 255 / 14%);
+  --accent-foreground: #d4d6ff;
   --destructive: #fb7185;
   --success: #34d399;
   --warning: #fbbf24;
-  --border: #3a4a63;
-  --input: #3d4d66;
-  --ring: #9d82ff;
-  --sidebar: #0c101c;
-  --sidebar-foreground: #c5cedc;
-  --sidebar-accent: #1a2234;
-  --sidebar-accent-foreground: #f8fafc;
-  --sidebar-border: #2a364c;
-  --shadow-soft: rgb(0 0 0 / 40%);
-  --shadow-card: 0 1px 2px 0 var(--shadow-soft);
-  --chart-1: #9d82ff;
+  --border: rgb(120 136 180 / 28%);
+  --input: rgb(110 126 170 / 45%);
+  --ring: #8b8cff;
+  --sidebar: rgb(8 11 24 / 62%);
+  --sidebar-foreground: rgb(226 232 252 / 80%);
+  --sidebar-muted: rgb(210 218 245 / 45%);
+  --sidebar-accent: rgb(255 255 255 / 7%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --shadow-soft: rgb(0 0 0 / 45%);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 30%), 0 10px 28px -14px rgb(0 0 0 / 60%);
+  --backdrop-veil: linear-gradient(
+    180deg,
+    rgb(8 11 22 / 78%) 0%,
+    rgb(8 11 22 / 70%) 45%,
+    rgb(8 11 22 / 84%) 100%
+  );
+  --chart-1: #9d8cff;
   --chart-2: #22d3ee;
   --chart-3: #f59e0b;
   --chart-4: #60a5fa;
   --chart-5: #34d399;
   --chart-6: #f472b6;
+  --bar-base: #4f8fe8;
+  --seg-top-keep: 66%;
+  --seg-top-with: black;
+  --seg-bottom-keep: 54%;
   --token-input: #9d82ff;
   --token-output: #22d3ee;
   --token-cache-read: #60a5fa;
@@ -180,6 +224,26 @@
   --tone-cursor: #94a3b8;
 }
 
+/* 长表格、长列表所在的卡片：较不透明，不做模糊，滚动不掉帧。 */
+@utility panel {
+  border: 1px solid var(--glass-border);
+  background-color: var(--card);
+  box-shadow: var(--shadow-card);
+}
+
+/* 侧栏、工具栏、指标卡、图表卡：真毛玻璃。 */
+@utility glass {
+  border: 1px solid var(--glass-border);
+  background-color: var(--glass);
+  box-shadow: var(--shadow-card);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+@utility bg-brand {
+  background-image: linear-gradient(135deg, var(--primary), var(--primary-2));
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -191,8 +255,41 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 图片加载前（或加载失败）由 --backdrop-base 渐变兜底；fixed 伪元素代替 background-attachment: fixed，iOS 上也不随滚动跳。 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    var(--backdrop-veil),
+    url("./assets/backdrop.webp") center / cover no-repeat,
+    var(--backdrop-base);
+}
+
+:root,
+[data-theme="light"] {
+  --backdrop-base: linear-gradient(165deg, #eef1fa 0%, #c9d2ee 55%, #7d89b6 100%);
+}
+
+[data-theme="dark"] {
+  --backdrop-base: linear-gradient(165deg, #141a33 0%, #0c1124 55%, #05070f 100%);
+}
+
 #root {
   min-height: 100vh;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .tabular-nums {

@@ -1,4 +1,4 @@
-import { SourceGlyph, sourceMarkPlate } from "../../../../src/components/sourceGlyph";
+import { SourceGlyph, sourceMarkPlate } from "./sourceGlyph";
 import { sourceTone } from "../lib/chart";
 
 export function SourceIcon({ source, size = 16 }: { source: string; size?: number }) {

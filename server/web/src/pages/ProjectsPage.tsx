@@ -1,3 +1,4 @@
+import { Folder } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { useAuth } from "../auth";
 import { DimensionCards } from "../components/DimensionCards";
@@ -42,7 +43,11 @@ export function ProjectsPage() {
 
   return (
     <>
-      <PageHeader title="项目" subtitle="按项目汇总已推送用量" />
+      <PageHeader
+        icon={<Folder size={22} strokeWidth={1.8} />}
+        title="项目"
+        subtitle="按项目汇总已推送用量"
+      />
       {!bounds ? (
         <Empty>请选择完整的起止日期（结束不早于开始）</Empty>
       ) : summary.error ? (

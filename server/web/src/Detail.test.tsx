@@ -230,29 +230,87 @@ describe("会话详情", () => {
     expect(within(injected).queryByText("CLAUDE.md")).toBeNull();
   });
 
-  it("deletes the session after confirmation and goes back to the owner's page", async () => {
+  it("deletes the session only after the in-page confirmation and goes back to the owner's page", async () => {
     const requests = stubServer("member");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const native = vi.spyOn(window, "confirm");
     window.location.hash = "#/session/31";
     render(<App />);
     signIn();
 
     fireEvent.click(await screen.findByRole("button", { name: "删除会话" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "删除这场会话？" });
+    expect(requests.some((r) => r.startsWith("DELETE"))).toBe(false);
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认删除" }));
 
     await waitFor(() => expect(requests).toContain("DELETE /api/v1/sessions/31"));
     await waitFor(() => expect(window.location.hash).toMatch(/^#\/member\/2/));
+    expect(native).not.toHaveBeenCalled();
   });
 
-  it("does not delete when the confirmation is declined", async () => {
+  it("does not delete when the confirmation is cancelled or dismissed with Escape", async () => {
     const requests = stubServer("member");
-    vi.spyOn(window, "confirm").mockReturnValue(false);
     window.location.hash = "#/session/31";
     render(<App />);
     signIn();
 
     fireEvent.click(await screen.findByRole("button", { name: "删除会话" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "取消" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "删除会话" }));
+    fireEvent.keyDown(await screen.findByRole("alertdialog"), { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     expect(requests.some((r) => r.startsWith("DELETE"))).toBe(false);
+  });
+});
+
+describe("详情页返回", () => {
+  it("falls back to the parent list when a detail page is opened directly", async () => {
+    stubServer("admin");
+    window.location.hash = "#/project/11";
+    render(<App />);
+    signIn();
+
+    const back = await screen.findByRole("link", { name: "返回项目" });
+    expect(back.getAttribute("href")).toMatch(/^#\/projects(\?|$)/);
+  });
+
+  it("goes back to the page the user came from, keeping the date range", async () => {
+    stubServer("admin");
+    window.location.hash = "#/project/11?range=7d&mode=snapshot";
+    render(<App />);
+    signIn();
+    await screen.findByRole("heading", { name: "alpha" });
+
+    window.location.hash = "#/session/31?range=7d&mode=snapshot";
+    const back = await screen.findByRole("link", { name: "返回项目页" });
+    const href = back.getAttribute("href") ?? "";
+    expect(href).toMatch(/^#\/project\/11\?/);
+    expect(href).toContain("range=7d");
+    expect(href).toContain("mode=snapshot");
+  });
+
+  it("session opened directly falls back to its owner's page", async () => {
+    stubServer("admin");
+    window.location.hash = "#/session/31";
+    render(<App />);
+    signIn();
+
+    const back = await screen.findByRole("link", { name: "返回成员页" });
+    expect(back.getAttribute("href")).toMatch(/^#\/member\/2(\?|$)/);
+  });
+
+  it("is not shown on a member's own home page", async () => {
+    stubServer("member");
+    window.location.hash = "#/member/2";
+    render(<App />);
+    signIn();
+
+    await screen.findByRole("heading", { name: /alice/ });
+    expect(screen.queryByRole("link", { name: /^返回/ })).toBeNull();
   });
 });
 
@@ -270,7 +328,7 @@ describe("项目页", () => {
 
   it("offers rename and merge to admins and calls the admin API", async () => {
     const requests = stubServer("admin");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const native = vi.spyOn(window, "confirm");
     window.location.hash = "#/project/11";
     render(<App />);
     signIn();
@@ -284,7 +342,11 @@ describe("项目页", () => {
     await screen.findByRole("option", { name: /alpha-copy/ });
     fireEvent.change(select, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "合并" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "合并这两个项目？" });
+    expect(requests).not.toContain("POST /api/v1/admin/projects/11/merge");
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认合并" }));
     await waitFor(() => expect(requests).toContain("POST /api/v1/admin/projects/11/merge"));
+    expect(native).not.toHaveBeenCalled();
     await waitFor(() => expect(window.location.hash).toMatch(/^#\/project\/12/));
   });
 

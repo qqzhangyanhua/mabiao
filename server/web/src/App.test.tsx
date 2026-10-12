@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import type { AccountView, CoverageView, SummaryResponse } from "./api/types";
@@ -61,7 +61,7 @@ function json(status: number, body: unknown): Response {
 }
 
 /** 按路径回桩；记录下所有请求，供断言「发了什么」。 */
-function stubServer(role: "admin" | "member") {
+function stubServer(role: "admin" | "member", withPrice = false) {
   const requests: string[] = [];
   const me = role === "admin" ? ACCOUNTS[0] : ACCOUNTS[1];
   vi.stubGlobal(
@@ -97,9 +97,29 @@ function stubServer(role: "admin" | "member") {
         );
       if (url === "/api/v1/admin/accounts") return Promise.resolve(json(200, ACCOUNTS));
       if (url === "/api/v1/admin/coverage") return Promise.resolve(json(200, COVERAGE));
+      if (url === "/api/v1/admin/accounts/3/deactivate")
+        return Promise.resolve(json(200, { ...ACCOUNTS[2], active: false }));
+      if (url === "/api/v1/admin/pricing/prices/7")
+        return Promise.resolve(json(200, { recomputed: 4 }));
       if (url === "/api/v1/admin/pricing")
         return Promise.resolve(
-          json(200, { prices: [], snapshot: { as_of: "2026-03-01", source: "litellm", count: 12 } }),
+          json(200, {
+            prices: withPrice
+              ? [
+                  {
+                    id: 7,
+                    model: "gpt-x",
+                    provider: null,
+                    input: 0.000001,
+                    output: 0.000002,
+                    cache_read: 0,
+                    cache_creation: 0,
+                    updated_at: "2026-03-01T10:00:00Z",
+                  },
+                ]
+              : [],
+            snapshot: { as_of: "2026-03-01", source: "litellm", count: 12 },
+          }),
         );
       return Promise.resolve(json(404, { code: "not_found", message: "没有这个接口" }));
     }),
@@ -259,5 +279,50 @@ describe("成员管理", () => {
     await waitFor(() =>
       expect(requests.filter((r) => r === "GET /api/v1/admin/accounts").length).toBeGreaterThan(1),
     );
+  });
+
+  it("deactivates a member only after the in-page confirmation", async () => {
+    const requests = stubServer("admin");
+    const native = vi.spyOn(window, "confirm");
+    window.location.hash = "#/members";
+    render(<App />);
+    signIn();
+    await screen.findByText(TODAY);
+
+    const row = screen.getByRole("link", { name: "carol" }).closest("tr")!;
+    fireEvent.click(within(row).getByRole("button", { name: "停用" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "停用 carol？" });
+    expect(requests.some((r) => r.includes("/deactivate"))).toBe(false);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(requests.some((r) => r.includes("/deactivate"))).toBe(false);
+
+    fireEvent.click(within(row).getByRole("button", { name: "停用" }));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "确认停用" }),
+    );
+    await waitFor(() => expect(requests).toContain("POST /api/v1/admin/accounts/3/deactivate"));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(native).not.toHaveBeenCalled();
+  });
+});
+
+describe("团队价目删除", () => {
+  it("deletes a price only after the in-page confirmation", async () => {
+    const requests = stubServer("admin", true);
+    const native = vi.spyOn(window, "confirm");
+    window.location.hash = "#/pricing";
+    render(<App />);
+    signIn();
+    fireEvent.click(await screen.findByRole("button", { name: "删除" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "删除这条团队价目？" });
+    expect(dialog.textContent).toContain("gpt-x");
+    expect(requests.some((r) => r.startsWith("DELETE"))).toBe(false);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认删除" }));
+    await waitFor(() => expect(requests).toContain("DELETE /api/v1/admin/pricing/prices/7"));
+    expect((await screen.findByRole("status")).textContent).toContain("重算了 4 条");
+    expect(native).not.toHaveBeenCalled();
   });
 });

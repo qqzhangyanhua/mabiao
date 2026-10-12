@@ -1,6 +1,8 @@
+import { Activity, UserRound, Users, Wallet } from "lucide-react";
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import type { AccountView, CoverageView } from "../api/types";
 import { useAuth } from "../auth";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { MetricCard } from "../components/KpiColumn";
 import { PageHeader } from "../components/PageHeader";
@@ -122,16 +124,20 @@ export function MembersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
+  const [pendingDeactivate, setPendingDeactivate] = useState<AccountView | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   async function deactivate(account: AccountView) {
-    if (!window.confirm(`停用 ${account.account}？停用后立即退出登录、不能再推送，已有数据保留。`))
-      return;
+    setDeactivating(true);
     setActionError(null);
     try {
       await api.deactivate(account.id);
       reload();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "停用失败");
+    } finally {
+      setDeactivating(false);
+      setPendingDeactivate(null);
     }
   }
 
@@ -170,18 +176,44 @@ export function MembersPage() {
 
   return (
     <>
-      <PageHeader title="成员" subtitle="远程账号、推送覆盖与近 7 天费用" />
+      <PageHeader
+        icon={<UserRound size={22} strokeWidth={1.8} />}
+        title="成员"
+        subtitle="远程账号、推送覆盖与近 7 天费用"
+      />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <MetricCard value={data ? String(data.accounts.length) : "…"} label="成员" />
+        <MetricCard
+          value={data ? String(data.accounts.length) : "…"}
+          label="成员"
+          icon={<Users size={18} />}
+          tone="violet"
+        />
         <MetricCard
           value={data ? String(activeThisWeek) : "…"}
           label="本周活跃"
           hint="近 7 天有推送"
+          icon={<Activity size={18} />}
+          tone="emerald"
         />
-        <MetricCard value={week.data ? formatCost(weekSpend) : "…"} label="本周费用" />
+        <MetricCard
+          value={week.data ? formatCost(weekSpend) : "…"}
+          label="本周费用"
+          icon={<Wallet size={18} />}
+          tone="amber"
+        />
       </div>
       <CreateMemberForm onCreated={reload} />
       {actionError && <ErrorNote error={new Error(actionError)} />}
+      <ConfirmDialog
+        open={pendingDeactivate !== null}
+        title={`停用 ${pendingDeactivate?.account ?? ""}？`}
+        description="停用后立即退出登录、不能再推送，已有数据保留。"
+        confirmLabel="确认停用"
+        busyLabel="停用中…"
+        busy={deactivating}
+        onConfirm={() => pendingDeactivate && void deactivate(pendingDeactivate)}
+        onCancel={() => setPendingDeactivate(null)}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
           label="角色"
@@ -242,7 +274,7 @@ export function MembersPage() {
                 const coverage = coverageById.get(account.id);
                 return (
                   <tr key={account.id} className={trClass}>
-                    <th scope="row" className="px-4 py-2 font-normal">
+                    <th scope="row" className="px-4 py-2 text-left font-normal">
                       <a
                         href={href({ page: "member", accountId: account.id })}
                         className="text-primary hover:underline"
@@ -266,7 +298,7 @@ export function MembersPage() {
                       {account.active && account.id !== profile.id && (
                         <button
                           type="button"
-                          onClick={() => void deactivate(account)}
+                          onClick={() => setPendingDeactivate(account)}
                           className="text-destructive hover:underline"
                         >
                           停用
