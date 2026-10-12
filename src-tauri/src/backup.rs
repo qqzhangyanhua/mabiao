@@ -85,7 +85,7 @@ fn table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
     .map_err(|e| e.to_string())
 }
 
-fn conversation_sessions_has_generation(conn: &Connection) -> Result<bool, String> {
+fn conversation_sessions_columns(conn: &Connection) -> Result<Vec<String>, String> {
     let mut statement = conn
         .prepare("PRAGMA table_info(conversation_sessions)")
         .map_err(|e| e.to_string())?;
@@ -94,7 +94,7 @@ fn conversation_sessions_has_generation(conn: &Connection) -> Result<bool, Strin
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    Ok(names.iter().any(|name| name == "event_index_generation"))
+    Ok(names)
 }
 
 /// 事件索引与上下文清单度量都是派生缓存。备份只留目录元数据，恢复后走回退路径再渐进补建。
@@ -126,12 +126,21 @@ fn strip_conversation_event_index(conn: &Connection) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
     }
-    if table_exists(conn, "conversation_sessions")? && conversation_sessions_has_generation(conn)? {
-        conn.execute(
-            "UPDATE conversation_sessions SET event_index_generation = NULL",
-            [],
-        )
-        .map_err(|e| e.to_string())?;
+    if table_exists(conn, "conversation_sessions")? {
+        // 没有事件可补的代次，「待补建」标记也就无从谈起；恢复后统一按未索引进补建。
+        let columns = conversation_sessions_columns(conn)?;
+        for (column, value) in [
+            ("event_index_generation", "NULL"),
+            ("event_index_dirty", "0"),
+        ] {
+            if columns.iter().any(|name| name == column) {
+                conn.execute(
+                    &format!("UPDATE conversation_sessions SET {column} = {value}"),
+                    [],
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
     }
     conn.execute("VACUUM", []).map_err(|e| e.to_string())?;
     Ok(())

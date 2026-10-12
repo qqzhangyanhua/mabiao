@@ -424,3 +424,111 @@ fn restore_accepts_legacy_backup_without_conversation_events_table() {
     let restored = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
     assert_eq!(store::load_all(&restored).unwrap()[0].total_tokens, 42);
 }
+
+#[test]
+fn backup_resets_pending_backfill_marks_and_restore_backfills_every_session() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("home");
+    let live = root.path().join("live");
+    let dest = root.path().join("backup");
+    std::fs::create_dir_all(&live).unwrap();
+    let rewritten = write_home_fixture(
+        &home,
+        ".codex/sessions/2026/08/rollout-conv-1.jsonl",
+        "codex-conversation.jsonl",
+    );
+    std::fs::write(
+        home.join(".codex/sessions/2026/08/rollout-conv-2.jsonl"),
+        fixture("codex-conversation.jsonl").replace("conv-1", "conv-2"),
+    )
+    .unwrap();
+    let paths = backup_paths(&live);
+    let conn = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    crate::conversation::refresh_codex(&conn, &home).unwrap();
+    let shorter = std::fs::read_to_string(&rewritten)
+        .unwrap()
+        .replace("已完成提交。", "改完了。");
+    std::fs::write(&rewritten, shorter).unwrap();
+    let roots = ingest::source_scan_dirs(&home, Source::Codex);
+    crate::conversation::refresh_catalog(&conn, Source::Codex, &roots).unwrap();
+    assert!(crate::conversation::session_needs_event_backfill(&conn, "codex", "conv-1").unwrap());
+    assert!(!crate::conversation::session_needs_event_backfill(&conn, "codex", "conv-2").unwrap());
+
+    backup::backup_to(&conn, &dest, &paths).unwrap();
+    drop(conn);
+
+    let backup_db = rusqlite::Connection::open(dest.join(backup::DB_NAME)).unwrap();
+    let dirty: i64 = backup_db
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_sessions WHERE event_index_dirty != 0",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(dirty, 0, "备份产物不得带待补建标记");
+    drop(backup_db);
+
+    std::fs::remove_file(&paths.db_path).unwrap();
+    let _ = std::fs::remove_file(live.join("usage.sqlite-wal"));
+    let _ = std::fs::remove_file(live.join("usage.sqlite-shm"));
+    backup::restore_from(&dest, &paths).unwrap();
+    let restored = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    let progress = crate::conversation::event_index_progress(&restored).unwrap();
+    assert_eq!(
+        (progress.indexed, progress.total),
+        (0, 2),
+        "恢复后全部会话进补建"
+    );
+
+    assert_eq!(
+        crate::conversation::backfill_event_index(&restored, &home).unwrap(),
+        2
+    );
+    for session_id in ["conv-1", "conv-2"] {
+        assert!(
+            !crate::conversation::session_needs_event_backfill(&restored, "codex", session_id)
+                .unwrap()
+        );
+        assert_conversation_index_matches_parse(&restored, &home, "codex", session_id);
+    }
+}
+
+#[test]
+fn restore_adds_the_pending_backfill_column_to_backups_from_older_versions() {
+    let root = tempfile::tempdir().unwrap();
+    let home = root.path().join("home");
+    let live = root.path().join("live");
+    let dest = root.path().join("backup");
+    std::fs::create_dir_all(&live).unwrap();
+    write_home_fixture(
+        &home,
+        ".codex/sessions/2026/08/rollout-conv-1.jsonl",
+        "codex-conversation.jsonl",
+    );
+    let paths = backup_paths(&live);
+    let conn = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+    crate::conversation::refresh_codex(&conn, &home).unwrap();
+    backup::backup_to(&conn, &dest, &paths).unwrap();
+    drop(conn);
+    let backup_db = rusqlite::Connection::open(dest.join(backup::DB_NAME)).unwrap();
+    backup_db
+        .execute_batch("ALTER TABLE conversation_sessions DROP COLUMN event_index_dirty;")
+        .unwrap();
+    drop(backup_db);
+
+    backup::validate_restore(&dest).unwrap();
+    std::fs::remove_file(&paths.db_path).unwrap();
+    let _ = std::fs::remove_file(live.join("usage.sqlite-wal"));
+    let _ = std::fs::remove_file(live.join("usage.sqlite-shm"));
+    backup::restore_from(&dest, &paths).unwrap();
+    let restored = store::open_db(paths.db_path.to_str().unwrap()).unwrap();
+
+    assert!(
+        crate::conversation::session_needs_event_backfill(&restored, "codex", "conv-1").unwrap()
+    );
+    crate::conversation::backfill_event_index(&restored, &home).unwrap();
+    assert!(
+        !crate::conversation::session_needs_event_backfill(&restored, "codex", "conv-1").unwrap()
+    );
+    assert_conversation_index_matches_parse(&restored, &home, "codex", "conv-1");
+}

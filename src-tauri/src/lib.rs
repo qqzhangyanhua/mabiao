@@ -30,6 +30,7 @@ pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
 pub mod scan_paths;
+pub(crate) mod staged;
 pub mod store;
 pub mod tray;
 pub mod tray_popup;
@@ -130,6 +131,7 @@ pub struct AppState {
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
     pub work_notes: work_notes::WorkNotesJob,
+    pub(crate) staged: staged::StagedState,
 }
 
 impl AppState {
@@ -143,13 +145,28 @@ impl AppState {
         }
     }
 
+    /// 持锁线程 panic 只会毒化锁：事务在 unwind 时会回滚，连接本身仍然可用，
+    /// 所以照常交出连接，不让一次 panic 把之后所有写入都挡死。
     pub(crate) fn lock_write(&self) -> Result<MutexGuard<'_, Connection>, String> {
-        self.conn.lock().map_err(|e| e.to_string())
+        Ok(self
+            .conn
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()))
+    }
+
+    /// 与 `lock_write` 相同，但等锁期间登记为「等待者」，目录阶段会在来源之间让它先拿。
+    pub(crate) fn lock_write_priority(&self) -> Result<MutexGuard<'_, Connection>, String> {
+        let _waiting = self.staged.write_waiters().enter();
+        self.lock_write()
     }
 
     /// 写锁此刻被占（多半是摄取）就返回 `None`，给那些可以晚一轮再做的顺手写入用。
     pub(crate) fn try_lock_write(&self) -> Option<MutexGuard<'_, Connection>> {
-        self.conn.try_lock().ok()
+        match self.conn.try_lock() {
+            Ok(conn) => Some(conn),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => None,
+        }
     }
 
     pub(crate) fn lock_read(&self) -> Result<MutexGuard<'_, Connection>, String> {
@@ -230,60 +247,6 @@ fn spawn_rollup_backfill(app: &tauri::AppHandle) {
     });
 }
 
-/// 升级后按会话渐进补建事件索引，最近结束的先做。
-///
-/// 不在 `setup` 里同步跑：整库重解析会让启动像卡死。补建期间未就绪的会话走整份解析回退。
-/// 每次只拿写锁处理一条，避免长时间挡住摄取。
-///
-/// 每条会话之间故意 sleep 一下：这条路径和首屏的 `ingest_all` 都要整份读会话源文件，
-/// 若同时全速跑，遇到大文件（真实观测到 Codex 单个 rollout 日志有 114MB）会让两条路径
-/// 的临时内存峰值叠在一起。让一步不影响正确性——补建本身就是"渐进"的，晚一点做完没关系。
-fn spawn_event_index_backfill(app: &tauri::AppHandle) {
-    const STEP_DELAY: std::time::Duration = std::time::Duration::from_millis(30);
-    let app = app.clone();
-    std::thread::spawn(move || {
-        let home = ingest::default_home();
-        let mut skipped = std::collections::BTreeSet::<(String, String)>::new();
-        let mut processed_any = false;
-        loop {
-            let state = app.state::<AppState>();
-            let progressed = {
-                let Ok(conn) = state.lock_write() else {
-                    return;
-                };
-                match conversation::backfill_event_index_step_skipping(&conn, &home, &skipped) {
-                    Ok(progressed) => {
-                        if progressed {
-                            processed_any = true;
-                        }
-                        progressed
-                    }
-                    Err((key, error)) => {
-                        eprintln!("对话事件索引补建失败 {}/{}：{error}", key.0, key.1);
-                        skipped.insert(key);
-                        true
-                    }
-                }
-            };
-            if !progressed {
-                break;
-            }
-            std::thread::sleep(STEP_DELAY);
-        }
-        // 补建结束：小步合并补建期间产生的小段，再触发全量整理兜底（ADR 0024）。
-        if processed_any {
-            if let Ok(conn) = app.state::<AppState>().lock_write() {
-                if let Err(error) = store::merge_conversation_fts_step(&conn) {
-                    eprintln!("对话正文索引补建后小步合并失败：{error}");
-                }
-                let bytes = store::measure_conversation_index_bytes(&conn);
-                let _ = store::store_conversation_index_bytes(&conn, bytes);
-            }
-            spawn_conversation_fts_maintenance(&app);
-        }
-    });
-}
-
 /// 对话派生缓存的两处形态迁移，都只做一次：
 ///
 /// - 事件表原先每行存整条源文件绝对路径、并且靠一条宽索引回答「用过哪个工具」。换成
@@ -326,8 +289,7 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
         }
         drop(conn);
         // 迁移把一批会话标成了待补建，启动时那轮补建可能已经跑完退出了。
-        spawn_event_index_backfill(&app);
-        spawn_conversation_fts_maintenance(&app);
+        staged::resume_conversation_maintenance(&app);
     });
 }
 
@@ -421,12 +383,11 @@ pub fn run() {
                 read_pool,
                 snapshot: Mutex::new(snapshot),
                 work_notes: work_notes::WorkNotesJob::new(),
+                staged: staged::StagedState::default(),
             });
             tray::setup(app.handle()).map_err(std::io::Error::other)?;
             spawn_rollup_backfill(app.handle());
-            spawn_event_index_backfill(app.handle());
-            spawn_conversation_cache_migration(app.handle());
-            spawn_conversation_fts_maintenance(app.handle());
+            staged::spawn_startup_fallback(app.handle());
             commands::spawn_auto_push(app.handle());
             #[cfg(desktop)]
             {
@@ -494,6 +455,7 @@ pub fn run() {
             commands::refresh_price_snapshot,
             commands::reset_price_snapshot,
             commands::get_source_diagnostics,
+            commands::get_conversation_catalog_issues,
             commands::get_remote_server,
             commands::validate_remote_server_url,
             commands::remote_server_login,

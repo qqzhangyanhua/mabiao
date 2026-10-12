@@ -6,6 +6,7 @@ import type { SettingsTabId } from "../lib/type";
 import { Icon } from "../icons";
 import type {
   BudgetStatusDto,
+  IngestIssue,
   IngestReport,
   OfficialQuotaDto,
   PriceTable,
@@ -42,6 +43,7 @@ export function Settings({
   prices,
   diagnostics,
   ingestReport,
+  conversationIssues,
   rebuilding,
   purging,
   operationBusy,
@@ -70,6 +72,7 @@ export function Settings({
   prices: PriceTable;
   diagnostics: SourceDiagnostic[];
   ingestReport: IngestReport | null;
+  conversationIssues: IngestIssue[];
   rebuilding: string | null;
   purging: string | null;
   operationBusy: boolean;
@@ -208,6 +211,7 @@ export function Settings({
             <SourceDiagnosticsPanel
               diagnostics={diagnostics}
               ingestReport={ingestReport}
+              conversationIssues={conversationIssues}
               rebuilding={rebuilding}
               purging={purging}
               operationBusy={operationBusy}

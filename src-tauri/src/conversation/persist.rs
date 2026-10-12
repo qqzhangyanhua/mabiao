@@ -57,6 +57,17 @@ pub(crate) fn record_full_parse(
     Ok(())
 }
 
+/// 只留会话摘要，不写事件，也不记事件游标。
+pub(crate) fn record_catalog_parse(
+    parsed: ParsedConversation,
+    grouped: &mut BTreeMap<String, Vec<IndexedFile>>,
+) {
+    grouped
+        .entry(parsed.session.session_id.clone())
+        .or_default()
+        .push(summarize_for_index(parsed));
+}
+
 pub(crate) fn prepare_incremental(
     conn: &Connection,
     source: Source,

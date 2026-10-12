@@ -24,4 +24,4 @@ alwaysApply: false
 ## 边界
 
 - `usage.sqlite` 是纯缓存，可以随时删除重建；`prices.json` 是用户配置，任何清理/重建逻辑都不能触及它
-- 启动摄取（`ingest_all`）和「重建全部」都会先 `remove_unknown_sources` 清理未知 Source 残留；已知列表必须从 `Source::ALL` 推导，不要再手写一份 `KNOWN`
+- 启动摄取（用量阶段 `ingest_usage`，ADR 0027）、`ingest_all` 和「重建全部」都会先 `remove_unknown_sources` 清理未知 Source 残留；已知列表必须从 `Source::ALL` 推导，不要再手写一份 `KNOWN`

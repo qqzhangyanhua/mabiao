@@ -9,8 +9,8 @@ use crate::domain::{
 
 use super::event_storage::{referenced_text, restore_event_id, ReferencedLine, TextRef};
 use super::hydrate;
-use super::session_store::row_from_sql;
-use super::{CONVERSATION_ADAPTER_VERSION, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
+use super::session_store::{event_index_ready_sql, row_from_sql};
+use super::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 const TITLE_LIKE_FIELDS: usize = 7;
 const SNIPPET_RADIUS: usize = 48;
@@ -129,12 +129,6 @@ fn ranked_with_sql(predicate: &str, include_body: bool) -> String {
             GROUP BY source, session_id
         )
         "#
-    )
-}
-
-pub(super) fn event_index_ready_sql(alias: &str) -> String {
-    format!(
-        "CASE WHEN {alias}.adapter_version = {CONVERSATION_ADAPTER_VERSION} AND {alias}.event_index_generation IS NOT NULL THEN 1 ELSE 0 END"
     )
 }
 

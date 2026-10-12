@@ -46,23 +46,26 @@ fn run_verify_stuck() -> Result<(), String> {
     let after_version = store::cached_adapter_version(&conn, &target.path)?;
     let after_count = store::record_count_for_file(&conn, &target.path)?;
     println!(
-        "ingest parsed={} failed={} skipped={} written={} usage_ms={} total_ms={}",
+        "ingest parsed={} failed={} skipped={} written={} usage_phase_ms={} records_ms={} catalog_phase_ms={} total_ms={}",
         report.files_parsed,
         report.files_failed,
         report.files_skipped,
         report.records_written,
-        timings.usage_ms,
+        timings.usage.total_ms,
+        timings.usage.records_ms,
+        timings.catalog.total_ms,
         timings.total_ms
     );
     println!("after version={after_version:?} records={after_count}");
 
     let (report2, timings2) = ingest::ingest_all_timed(&conn, &home)?;
     println!(
-        "second parsed={} failed={} skipped={} usage_ms={} total_ms={}",
+        "second parsed={} failed={} skipped={} usage_phase_ms={} catalog_phase_ms={} total_ms={}",
         report2.files_parsed,
         report2.files_failed,
         report2.files_skipped,
-        timings2.usage_ms,
+        timings2.usage.total_ms,
+        timings2.catalog.total_ms,
         timings2.total_ms
     );
     cleanup_db(&db);
@@ -223,10 +226,10 @@ fn run() -> Result<(), String> {
             let (report, timings) = ingest::ingest_all_timed(&conn, &home)?;
             let after = adapter_version_stats(&conn)?;
             println!(
-                "  round{round}: total={}ms usage={} conversation={} parsed={} skipped={} failed={} issues={}",
+                "  round{round}: total={}ms usage_phase={} catalog_phase={} parsed={} skipped={} failed={} issues={}",
                 timings.total_ms,
-                timings.usage_ms,
-                timings.conversation_ms,
+                timings.usage.total_ms,
+                timings.catalog.total_ms,
                 report.files_parsed,
                 report.files_skipped,
                 report.files_failed,
@@ -487,16 +490,31 @@ fn print_result(
     rss: Option<u64>,
 ) {
     println!("## {label}");
+    let usage = &timings.usage;
+    let catalog = &timings.catalog;
+    println!("  total={}  (ms)", timings.total_ms);
     println!(
-        "  total={}  remove_unknown={}  usage={}  cursor={}  conversation={}  rollup={}  commit={}  (ms)",
-        timings.total_ms,
-        timings.remove_unknown_ms,
-        timings.usage_ms,
-        timings.cursor_ms,
-        timings.conversation_ms,
-        timings.rollup_ms,
-        timings.commit_ms
+        "  usage_phase: total={}  remove_unknown={}  records={}  cursor={}  rollup={}  commit={}  (ms)",
+        usage.total_ms,
+        usage.remove_unknown_ms,
+        usage.records_ms,
+        usage.cursor_ms,
+        usage.rollup_ms,
+        usage.commit_ms
     );
+    println!(
+        "  catalog_phase: total={}  refresh={}  commit={}  fts_merge={}  (ms)",
+        catalog.total_ms, catalog.refresh_ms, catalog.commit_ms, catalog.fts_merge_ms
+    );
+    let per_source = catalog
+        .per_source_ms
+        .iter()
+        .filter(|(_, ms)| *ms > 0)
+        .map(|(source, ms)| format!("{}={ms}", source.as_str()))
+        .collect::<Vec<_>>();
+    if !per_source.is_empty() {
+        println!("  catalog_per_source: {}  (ms)", per_source.join("  "));
+    }
     println!(
         "  files_seen={}  files_parsed={}  files_skipped={}  files_failed={}  records_written={}  conversation_issues={}",
         report.files_seen,

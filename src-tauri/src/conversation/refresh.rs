@@ -12,12 +12,12 @@ use super::cursor_bridge::{sync_cursor_hash_models, sync_cursor_usage_only_sessi
 use super::event_index;
 use super::merge::{merge_indexed_files, summarize_for_index, IndexedFile};
 use super::persist::{
-    apply_incremental, persist_session_file_cursors, prepare_incremental, record_full_parse,
-    write_session_file_events, IncrementalPrepare, PendingIncremental,
+    apply_incremental, persist_session_file_cursors, prepare_incremental, record_catalog_parse,
+    record_full_parse, write_session_file_events, IncrementalPrepare, PendingIncremental,
 };
 use super::session_store::{
-    failed_session_paths, load_cached_fingerprints, load_session_files, mark_session_unavailable,
-    tombstone_missing_sessions, update_session_files, upsert_session,
+    failed_session_paths, load_cached_fingerprints, load_session_files, mark_session_events_dirty,
+    mark_session_unavailable, tombstone_missing_sessions, update_session_files, upsert_session,
 };
 use super::toolbox::FileIndexCursor;
 use super::trusted_path::modified_nanos;
@@ -42,10 +42,47 @@ pub fn refresh_claude(
     refresh(conn, Source::Claude, &roots)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RefreshMode {
+    /// 需要整份解析的会话连事件、正文倒排一起重写。
+    Full,
+    /// 需要整份解析的会话只更新会话行与会话文件清单，事件留给补建。
+    CatalogOnly,
+}
+
 pub(crate) fn refresh(
     conn: &Connection,
     source: Source,
     roots: &[PathBuf],
+) -> Result<Vec<ConversationIndexIssue>, String> {
+    refresh_with_mode(conn, source, roots, RefreshMode::Full)
+}
+
+/// 与 `refresh` 同一套发现、指纹与对账，但需要整份解析的会话不写事件、不写正文倒排、
+/// 不换 `event_index_generation`：旧一代事件原样保留，会话标成待补建。会话文件的指纹照常
+/// 推进，源文件不再变化时下一轮直接跳过；事件游标不推进，待补建会话也不走增量，
+/// 要等补建整份重写。未待补建的可追加会话照常增量。
+///
+/// 不复用旧索引的来源（OpenCode 整库快照）没有「源文件不变就跳过」这一步，每轮都会整份解析，
+/// 若也标待补建就会每轮全部会话变脏、补建反复重跑，所以这类来源仍按整份写事件。
+pub(crate) fn refresh_catalog(
+    conn: &Connection,
+    source: Source,
+    roots: &[PathBuf],
+) -> Result<Vec<ConversationIndexIssue>, String> {
+    let mode = if conversation_adapter(source)?.reuse_unchanged_index {
+        RefreshMode::CatalogOnly
+    } else {
+        RefreshMode::Full
+    };
+    refresh_with_mode(conn, source, roots, mode)
+}
+
+fn refresh_with_mode(
+    conn: &Connection,
+    source: Source,
+    roots: &[PathBuf],
+    mode: RefreshMode,
 ) -> Result<Vec<ConversationIndexIssue>, String> {
     let adapter = conversation_adapter(source)?;
     let mut issues = Vec::new();
@@ -169,14 +206,17 @@ pub(crate) fn refresh(
             Ok(batch) => {
                 issues.extend(batch.diagnostics);
                 for parsed in batch.conversations {
-                    record_full_parse(
-                        conn,
-                        source,
-                        parsed,
-                        &mut event_generations,
-                        &mut grouped,
-                        &mut file_cursors,
-                    )?;
+                    match mode {
+                        RefreshMode::Full => record_full_parse(
+                            conn,
+                            source,
+                            parsed,
+                            &mut event_generations,
+                            &mut grouped,
+                            &mut file_cursors,
+                        )?,
+                        RefreshMode::CatalogOnly => record_catalog_parse(parsed, &mut grouped),
+                    }
                 }
             }
             Err(issue) => {
@@ -247,18 +287,20 @@ pub(crate) fn refresh(
                             if parsed.session.session_id != session_id {
                                 continue;
                             }
-                            if let Some(cursor) = parsed.index_cursor {
-                                file_cursors.insert(
-                                    (session_id.clone(), parsed.session.source_file.clone()),
-                                    cursor,
-                                );
+                            if mode == RefreshMode::Full {
+                                if let Some(cursor) = parsed.index_cursor {
+                                    file_cursors.insert(
+                                        (session_id.clone(), parsed.session.source_file.clone()),
+                                        cursor,
+                                    );
+                                }
+                                write_session_file_events(
+                                    conn,
+                                    source,
+                                    &parsed,
+                                    &mut event_generations,
+                                )?;
                             }
-                            write_session_file_events(
-                                conn,
-                                source,
-                                &parsed,
-                                &mut event_generations,
-                            )?;
                             grouped
                                 .entry(session_id.clone())
                                 .or_default()
@@ -340,6 +382,9 @@ pub(crate) fn refresh(
             &source_files,
             blocking_issues.is_empty(),
         )?;
+        if mode == RefreshMode::CatalogOnly {
+            mark_session_events_dirty(conn, source, &session_id)?;
+        }
         if let Some(&generation) = event_generations.get(&session_id) {
             let publish = !has_unmapped_failures
                 || event_index::has_live_generation(conn, source, &session_id)?;

@@ -46,6 +46,7 @@ function liveDotClass(tone: ConnTone): string {
 export function Sidebar({
   view,
   busy,
+  catalogSyncing = false,
   connected,
   partial,
   status,
@@ -53,13 +54,14 @@ export function Sidebar({
 }: {
   view: View;
   busy: boolean;
+  catalogSyncing?: boolean;
   connected: boolean;
   partial: boolean;
   status: string;
   onNavigate: (view: View) => void;
 }) {
   const [collapsed, setCollapsed] = useState(loadCollapsed);
-  const tone = connTone(connected, busy, partial);
+  const tone = connTone(connected, busy || catalogSyncing, partial);
   const toneTitle = CONN_TITLE[tone];
 
   useEffect(() => {

@@ -226,6 +226,7 @@ fn identity_occurrences(
     Ok(rows)
 }
 
+/// 发布一代整份写完的事件。新一代覆盖了源文件全部内容，会话的待补建标记随之清掉。
 pub fn finalize_session_events(
     conn: &Connection,
     source: Source,
@@ -296,7 +297,7 @@ pub fn finalize_session_events(
     conn.execute(
         r#"
         UPDATE conversation_sessions
-        SET event_index_generation = ?3
+        SET event_index_generation = ?3, event_index_dirty = 0
         WHERE source = ?1 AND session_id = ?2
         "#,
         params![source.as_str(), session_id, generation],

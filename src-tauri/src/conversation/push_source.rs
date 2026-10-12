@@ -16,7 +16,7 @@ use crate::domain::{
 };
 
 use super::catalog::catalog_filter_sql;
-use super::catalog_search::event_index_ready_sql;
+use super::session_store::event_index_ready_sql;
 use super::session_store::row_from_sql;
 use super::toolbox::compare_event_order;
 use super::{

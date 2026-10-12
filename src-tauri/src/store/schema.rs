@@ -167,6 +167,8 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             -- Reconstructable relationship IDs only; event bodies live in conversation_events (ADR 0011).
             agent_metadata_json TEXT NOT NULL DEFAULT '{}',
             event_index_generation INTEGER,
+            -- 目录已更新、事件仍是旧一代：未就绪，等补建重写（ADR 0011）。
+            event_index_dirty INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(source, session_id)
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_sessions_ended
@@ -281,6 +283,12 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         "conversation_sessions",
         "event_index_generation",
         "INTEGER",
+    )?;
+    ensure_column(
+        conn,
+        "conversation_sessions",
+        "event_index_dirty",
+        "INTEGER NOT NULL DEFAULT 0",
     )?;
     ensure_column(
         conn,
