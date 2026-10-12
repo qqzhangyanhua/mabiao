@@ -1,0 +1,49 @@
+server/web/src/components/DimensionCards.tsx
+  s_f45a1013bc4ccb::t_c9e9a8668c88a3 27-28,41-43,53,74
+  s_f45a1013bc4ccb::t_6e159b969b77dc 45
+  s_f45a1013bc4ccb::t_aa5878355745d2 47-51
+  s_f45a1013bc4ccb::t_f4e112662bb9df 1-2,23,26,36,38-40,46,75,79,83-87
+server/web/src/components/Layout.tsx
+  s_f45a1013bc4ccb::t_f3476bb5b5e8a7 2,100-104
+  s_f45a1013bc4ccb::t_6daa49783ea6f2 105
+server/web/src/pages/OverviewPage.tsx
+  s_f45a1013bc4ccb::t_299f44ed5f4faf 75
+server/web/src/pages/ProjectPage.tsx
+  s_f45a1013bc4ccb::t_62f1e8b6e8e594 97
+server/web/src/pages/MemberPage.tsx
+  s_f45a1013bc4ccb::t_842983d134a53b 129
+server/web/src/lib/export.test.ts
+  s_f45a1013bc4ccb::t_61b9b958da1560 28,42
+server/web/src/components/ModelRanking.tsx
+  s_f45a1013bc4ccb::t_c48657b4919bde 26
+server/web/src/lib/route.ts
+  s_f45a1013bc4ccb::t_84f8bb88ce63a3 9,27,49-50,76,87,107-108
+docs/agent-layers.md
+  s_f45a1013bc4ccb::t_4a04b2c8b4a999 237
+server/web/src/components/SummaryView.tsx
+  s_f45a1013bc4ccb::t_b3315c2bb39f02 32,48,62,135-148,155-156,169-170
+server/web/src/pages/SourcesPage.tsx
+  s_f45a1013bc4ccb::t_4b1b2536dc3a79 1-80
+server/web/src/App.tsx
+  s_f45a1013bc4ccb::t_d691352b85bcc8 13,31
+server/web/src/lib/route.test.ts
+  s_f45a1013bc4ccb::t_12f593ea0191be 13,40,83
+server/web/src/lib/export.ts
+  s_f45a1013bc4ccb::t_ee89168cfe8472 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0fd13dfd8e1e7309c94b1b6057448a05311b4366",
+  "prompts": {},
+  "sessions": {
+    "s_f45a1013bc4ccb": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a12f82-e8cd-7af1-8fd2-6d5b423b804a",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
