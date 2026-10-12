@@ -1,0 +1,28 @@
+server/web/src/components/ConfirmDialog.tsx
+  s_c0188c0935fcdc::t_93df8717bee27b 1-129
+server/web/src/components/ui/button.tsx
+  s_c0188c0935fcdc::t_c7dea4cca79805 19
+  s_c0188c0935fcdc::t_d4d68842864555 18
+server/web/src/index.css
+  s_c0188c0935fcdc::t_9cc39e68a318f3 284-294
+server/web/src/pages/SessionPage.tsx
+  s_c0188c0935fcdc::t_e88d358d1de566 4,25-29,35,54,94,102-111
+server/web/src/Detail.test.tsx
+  s_c0188c0935fcdc::t_342b749f7be707 233,235,241-243,247,250,257-264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "cb5cf37beaf29f172206fc7b6bc80b08155b73c4",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
