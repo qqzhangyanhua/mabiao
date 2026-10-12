@@ -83,19 +83,21 @@ export function SummaryView({
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="mb-2 flex justify-end">
-            <Segmented
-              label="趋势指标"
-              value={metric}
-              onChange={setMetric}
-              options={[
-                { id: "tokens", label: "Token" },
-                { id: "cost", label: "费用" },
-              ]}
-            />
-          </div>
           <TrendChart
+            className="h-full"
             title={metric === "tokens" ? "每天 Token" : "每天费用"}
+            action={
+              <Segmented
+                label="趋势指标"
+                value={metric}
+                onChange={setMetric}
+                options={[
+                  { id: "tokens", label: "Token" },
+                  { id: "cost", label: "费用" },
+                ]}
+                size="compact"
+              />
+            }
             points={dailyPoints(
               summary.by_day.map((d) => ({
                 key: d.key,

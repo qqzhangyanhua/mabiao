@@ -1,8 +1,8 @@
 import { useId } from "react";
 import { sparkPoints } from "../lib/chart";
 
-const W = 88;
-const H = 30;
+const W = 120;
+const H = 32;
 
 /** 装饰性小趋势线；数值已在卡片正文里，读屏跳过。少于 2 个点不画。 */
 export function Sparkline({ values, color }: { values: number[]; color: string }) {
@@ -12,10 +12,11 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
   return (
     <svg
       aria-hidden="true"
-      width={W}
+      width="100%"
       height={H}
       viewBox={`0 0 ${W} ${H}`}
-      className="pointer-events-none overflow-visible"
+      preserveAspectRatio="none"
+      className="pointer-events-none block"
     >
       <defs>
         <linearGradient id={gradient} x1="0" x2="0" y1="0" y2="1">
@@ -31,6 +32,7 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
         strokeWidth={1.75}
         strokeLinejoin="round"
         strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );

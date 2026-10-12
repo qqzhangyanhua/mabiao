@@ -28,22 +28,26 @@ export function MetricCard({
   trendColor?: string;
 }) {
   return (
-    <div className={cn(glassClass, "relative flex flex-col p-4")}>
-      <div className="flex items-center gap-3">
-        {icon ? (
-          <IconChip tone={tone} size="md">
-            {icon}
-          </IconChip>
-        ) : null}
-        <div className="min-w-0">
-          <div className="text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
-          <div className="text-sm text-foreground">{label}</div>
-        </div>
+    <div className={cn(glassClass, "flex h-full min-w-0 flex-col p-4")}>
+      {icon ? (
+        <IconChip tone={tone} size="md">
+          {icon}
+        </IconChip>
+      ) : null}
+      <div
+        title={value}
+        className={cn(
+          "truncate text-2xl font-semibold tracking-tight tabular-nums",
+          icon ? "mt-3" : "",
+        )}
+      >
+        {value}
       </div>
+      <div className="mt-0.5 text-sm text-foreground">{label}</div>
       {badge ? <div className="mt-2">{badge}</div> : null}
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
       {trend ? (
-        <div className="mt-1 flex justify-end">
+        <div className="mt-auto pt-3">
           <Sparkline values={trend} color={trendColor} />
         </div>
       ) : null}

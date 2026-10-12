@@ -1,4 +1,5 @@
 import { TrendingUp } from "lucide-react";
+import type { ReactNode } from "react";
 import { niceCeil } from "../lib/chart";
 import { cn } from "../lib/cn";
 import { glassClass } from "./ui/card";
@@ -17,38 +18,45 @@ export function TrendChart({
   points,
   format,
   color = "var(--chart-1)",
+  action,
+  className,
 }: {
   title: string;
   points: TrendPoint[];
   format: (value: number) => string;
   color?: string;
+  action?: ReactNode;
+  className?: string;
 }) {
   const max = Math.max(0, ...points.map((p) => p.value));
   const ceiling = niceCeil(max);
   const sparse = points.length <= 3;
   const dense = points.length > 60;
   return (
-    <section className={cn(glassClass, "p-5")}>
-      <div className="mb-4 flex items-center gap-2.5">
-        <IconChip tone="violet" size="sm">
-          <TrendingUp size={15} />
-        </IconChip>
-        <h3 className="text-[15px] font-semibold">{title}</h3>
+    <section className={cn(glassClass, "flex flex-col p-5", className)}>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <IconChip tone="violet" size="sm">
+            <TrendingUp size={15} />
+          </IconChip>
+          <h3 className="text-[15px] font-semibold">{title}</h3>
+        </div>
+        {action}
       </div>
       {points.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">这段时间没有数据</p>
       ) : (
         <>
-          <div className="flex gap-2">
+          <div className="flex min-h-48 flex-1 gap-2">
             <div
               aria-hidden="true"
-              className="flex h-48 w-11 shrink-0 flex-col justify-between text-right text-[10px] leading-none text-muted-foreground tabular-nums"
+              className="flex w-11 shrink-0 flex-col justify-between text-right text-[10px] leading-none text-muted-foreground tabular-nums"
             >
               {TICKS.map((tick) => (
                 <span key={tick}>{ceiling > 0 || tick === 0 ? format(ceiling * tick) : ""}</span>
               ))}
             </div>
-            <div className="relative h-48 min-w-0 flex-1">
+            <div className="relative min-w-0 flex-1">
               <div aria-hidden="true" className="absolute inset-0 flex flex-col justify-between">
                 {TICKS.map((tick) => (
                   <div
