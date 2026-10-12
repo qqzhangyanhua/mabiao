@@ -1,0 +1,30 @@
+src-tauri/src/tests/ingest_stages.rs
+  s_00054c56bb5764::t_39f12ac6eaa3cb 1-154,159,162-275
+  s_00054c56bb5764::t_3bc7d1f4847a7d 155-158,160-161
+  s_00054c56bb5764::t_f3d4ee751b400c 276-279
+src-tauri/src/ingest.rs
+  s_00054c56bb5764::t_f4e9e935c05714 724,727-730
+  s_00054c56bb5764::t_c4a50369d4a0ef 9,11,16
+  s_00054c56bb5764::t_19b1609cb54b3b 517-518,525,527-552,555,559-567,571,573,577
+  s_00054c56bb5764::t_886d6bba796ba3 110,112,115-124,126,128,135-153,158-384
+src-tauri/src/bin/bench_ingest.rs
+  s_00054c56bb5764::t_e0442cd62bb75d 49,54-56,63,67-68,229,231-232,493-495,497-503,505-517
+src-tauri/src/tests/mod.rs
+  s_00054c56bb5764::t_1123bcb2a922d1 45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "0f7c5a1537823afb464de0fd0c01aa943c6edd6e",
+  "prompts": {},
+  "sessions": {
+    "s_00054c56bb5764": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "371d5219-6ef7-4440-95c5-8f6685a81cda",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
