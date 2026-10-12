@@ -8,6 +8,7 @@ import type {
   BudgetStatusDto,
   Filter,
   Grain,
+  IngestIssue,
   IngestReport,
   View,
   ConversationFocus,
@@ -35,6 +36,7 @@ import {
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
+import { useCatalogProgress } from "./usage/useCatalogProgress";
 import { useIngestOperations } from "./usage/useIngestOperations";
 import { useRangeHistory } from "./usage/useRangeHistory";
 import { useUsageViewState } from "./usage/useUsageViewState";
@@ -78,6 +80,7 @@ export function useUsageData() {
   );
   const [savingBudget, setSavingBudget] = useState(false);
   const [lastIngestReport, setLastIngestReport] = useState<IngestReport | null>(null);
+  const [conversationIssues, setConversationIssues] = useState<IngestIssue[]>([]);
   const [status, setStatus] = useState("正在连接…");
   const [connected, setConnected] = useState(false);
 
@@ -133,12 +136,21 @@ export function useUsageData() {
     apply,
   });
 
+  const { catalogSyncing, beginUsageStage, publishUsageStatus } = useCatalogProgress({
+    setSessionsRevision,
+    setStatus,
+    setConversationIssues,
+  });
+
   const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived } =
     useIngestOperations({
       refreshViews,
       dataEpochRef: dataEpoch,
       requestGenerationRef: requestGeneration,
       setSessionsRevision,
+      setConversationIssues,
+      beginUsageStage,
+      publishUsageStatus,
       setLastIngestReport,
       setStatus,
       setLoading,
@@ -375,12 +387,14 @@ export function useUsageData() {
     savingBudget,
     saveBudget,
     lastIngestReport,
+    conversationIssues,
     rebuilding,
     purging,
     status,
     setStatus,
     connected,
     busy,
+    catalogSyncing,
     viewHasData: hydratedViews.has(view),
     autoRefresh,
     setAutoRefresh,

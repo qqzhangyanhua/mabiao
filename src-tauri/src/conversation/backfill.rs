@@ -1,12 +1,13 @@
 //! 事件索引回填与回填进度。
 //!
-//! 按 `ended_at` 倒序补建未就绪会话的事件索引。打开对话详情不经过这里。
+//! 按 `ended_at` 倒序补建未就绪（含待补建）会话的事件索引，调用方可以指定先补哪些会话。
+//! 打开对话详情不经过这里。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::domain::{ConversationIndexProgressDto, Source};
 
@@ -14,26 +15,28 @@ use super::conversation_adapter;
 use super::event_index;
 use super::merge::{merge_indexed_files, summarize_for_index};
 use super::persist::{persist_session_file_cursors, write_session_file_events};
-use super::session_store::{load_session, update_session_files, upsert_session};
+use super::session_store::{
+    event_index_ready_sql, load_session, update_session_files, upsert_session,
+};
 use super::trusted_path::{modified_nanos, trusted_paths_for_session};
-use super::{CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES};
+use super::CONVERSATION_SOURCES;
+
+/// 补建只管有源文件、有对话内容的会话；只有消耗记录的 Cursor 会话没有事件可建。
+const BACKFILL_CANDIDATE_SQL: &str =
+    "sessions.file_available = 1 AND sessions.source_revision != 'usage-only'";
 
 pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgressDto, String> {
+    let ready_sql = event_index_ready_sql("sessions");
     let (total, indexed) = conn
         .query_row(
-            r#"
-            SELECT
-                COUNT(*) AS total,
-                COALESCE(SUM(
-                    CASE
-                        WHEN adapter_version = ?1 AND event_index_generation IS NOT NULL THEN 1
-                        ELSE 0
-                    END
-                ), 0) AS indexed
-            FROM conversation_sessions
-            WHERE file_available = 1 AND source_revision != 'usage-only'
-            "#,
-            params![CONVERSATION_ADAPTER_VERSION],
+            &format!(
+                r#"
+                SELECT COUNT(*) AS total, COALESCE(SUM({ready_sql}), 0) AS indexed
+                FROM conversation_sessions AS sessions
+                WHERE {BACKFILL_CANDIDATE_SQL}
+                "#
+            ),
+            [],
             |row| Ok((row.get::<_, i64>(0)? as u32, row.get::<_, i64>(1)? as u32)),
         )
         .map_err(|error| error.to_string())?;
@@ -44,6 +47,32 @@ pub fn event_index_progress(conn: &Connection) -> Result<ConversationIndexProgre
     })
 }
 
+/// 会话在补建范围内且事件未就绪（含待补建）时为 `true`；会话不存在、已就绪、
+/// 源文件已不在或只有消耗记录时为 `false`。
+pub fn session_needs_event_backfill(
+    conn: &Connection,
+    source: &str,
+    session_id: &str,
+) -> Result<bool, String> {
+    let ready_sql = event_index_ready_sql("sessions");
+    let ready = conn
+        .query_row(
+            &format!(
+                r#"
+                SELECT {ready_sql}
+                FROM conversation_sessions AS sessions
+                WHERE sessions.source = ?1 AND sessions.session_id = ?2
+                  AND {BACKFILL_CANDIDATE_SQL}
+                "#
+            ),
+            params![source, session_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok(ready == Some(0))
+}
+
 pub fn backfill_event_index_step(conn: &Connection, home: &Path) -> Result<bool, String> {
     match backfill_event_index_step_skipping(conn, home, &BTreeSet::new()) {
         Ok(progressed) => Ok(progressed),
@@ -51,12 +80,23 @@ pub fn backfill_event_index_step(conn: &Connection, home: &Path) -> Result<bool,
     }
 }
 
-pub(crate) fn backfill_event_index_step_skipping(
+fn backfill_event_index_step_skipping(
     conn: &Connection,
     home: &Path,
     skipped: &BTreeSet<(String, String)>,
 ) -> Result<bool, ((String, String), String)> {
-    let next = next_unready_session(conn, skipped)
+    backfill_event_index_step_prioritized(conn, home, skipped, &[])
+}
+
+/// 补建一个会话：先取 `priority` 里第一个仍需补建且不在 `skipped` 的会话，
+/// 都没有再按 `ended_at` 倒序取。没有可补的会话时返回 `Ok(false)`。
+pub fn backfill_event_index_step_prioritized(
+    conn: &Connection,
+    home: &Path,
+    skipped: &BTreeSet<(String, String)>,
+    priority: &[(String, String)],
+) -> Result<bool, ((String, String), String)> {
+    let next = next_backfill_session(conn, skipped, priority)
         .map_err(|error| ((String::new(), String::new()), error))?;
     let Some((source, session_id)) = next else {
         return Ok(false);
@@ -70,7 +110,7 @@ pub(crate) fn backfill_event_index_step_skipping(
 pub fn backfill_event_index(conn: &Connection, home: &Path) -> Result<u32, String> {
     let mut completed = 0;
     let mut skipped = BTreeSet::new();
-    while let Some((source, session_id)) = next_unready_session(conn, &skipped)? {
+    while let Some((source, session_id)) = next_backfill_session(conn, &skipped, &[])? {
         match reindex_session_events(conn, home, &source, &session_id) {
             Ok(()) => completed += 1,
             Err(_) => {
@@ -81,24 +121,36 @@ pub fn backfill_event_index(conn: &Connection, home: &Path) -> Result<u32, Strin
     Ok(completed)
 }
 
+fn next_backfill_session(
+    conn: &Connection,
+    skipped: &BTreeSet<(String, String)>,
+    priority: &[(String, String)],
+) -> Result<Option<(String, String)>, String> {
+    for key in priority {
+        if !skipped.contains(key) && session_needs_event_backfill(conn, &key.0, &key.1)? {
+            return Ok(Some(key.clone()));
+        }
+    }
+    next_unready_session(conn, skipped)
+}
+
 fn next_unready_session(
     conn: &Connection,
     skipped: &BTreeSet<(String, String)>,
 ) -> Result<Option<(String, String)>, String> {
+    let ready_sql = event_index_ready_sql("sessions");
     let mut statement = conn
-        .prepare(
+        .prepare(&format!(
             r#"
-            SELECT source, session_id
-            FROM conversation_sessions
-            WHERE file_available = 1
-              AND source_revision != 'usage-only'
-              AND (adapter_version != ?1 OR event_index_generation IS NULL)
-            ORDER BY ended_at DESC, source ASC, session_id ASC
-            "#,
-        )
+            SELECT sessions.source, sessions.session_id
+            FROM conversation_sessions AS sessions
+            WHERE {BACKFILL_CANDIDATE_SQL} AND {ready_sql} = 0
+            ORDER BY sessions.ended_at DESC, sessions.source ASC, sessions.session_id ASC
+            "#
+        ))
         .map_err(|error| error.to_string())?;
     let rows = statement
-        .query_map(params![CONVERSATION_ADAPTER_VERSION], |row| {
+        .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })
         .map_err(|error| error.to_string())?

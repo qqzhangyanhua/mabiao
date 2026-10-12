@@ -1,30 +1,24 @@
-use crate::{budget, ingest, store};
+use crate::{ingest, staged, store};
 use tauri::Manager;
 
-use crate::domain::{IngestReport, Source, SourceDiagnostic};
+use crate::domain::{IngestIssue, IngestReport, Source, SourceDiagnostic};
 use crate::{release_idle_memory, AppState};
 
+/// 只覆盖用量阶段：返回时消耗记录与预聚合已提交。对话目录阶段在后台跑，进度走
+/// `conversation-catalog-progress` 事件（ADR 0027）。
 #[tauri::command]
 pub async fn ingest(app: tauri::AppHandle) -> Result<IngestReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        let conn = state.lock_write()?;
-        let report = ingest::ingest_all(&conn, &ingest::default_home())?;
-        let prices = state.effective_prices();
-        let _ = budget::check_and_notify(
-            &app,
-            &conn,
-            &prices,
-            &state.budget_path,
-            &state.budget_notify_path,
-        );
-        release_idle_memory(&state, &conn);
-        drop(conn);
-        crate::spawn_conversation_fts_maintenance(&app);
-        Ok(report)
+        staged::run_usage_then_catalog(&app, staged::CatalogRun::Background)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// 最近一轮对话目录阶段的问题列表；还没跑过时为空。
+#[tauri::command]
+pub fn get_conversation_catalog_issues(app: tauri::AppHandle) -> Vec<IngestIssue> {
+    app.state::<AppState>().staged.catalog_issues()
 }
 
 #[tauri::command]

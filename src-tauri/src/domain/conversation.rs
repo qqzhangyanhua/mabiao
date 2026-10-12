@@ -492,6 +492,17 @@ pub struct ConversationDetailStateDto {
     pub file_available: bool,
 }
 
+/// 对话目录阶段的进度事件（`conversation-catalog-progress`）。`done` 为已处理完的来源数，
+/// `source` 为即将处理的来源；`finished` 为真时整轮结束，`issue_count` 才是本轮问题数。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConversationCatalogProgressDto {
+    pub done: u32,
+    pub total: u32,
+    pub source: Option<String>,
+    pub finished: bool,
+    pub issue_count: u32,
+}
+
 /// 对话事件索引补建进度：已就绪会话数 / 应索引会话数。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConversationIndexProgressDto {

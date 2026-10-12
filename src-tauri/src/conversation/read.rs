@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 
 use crate::domain::{
     ConversationAgentRelations, ConversationContextItem, ConversationDetailDto,
@@ -20,7 +20,8 @@ use crate::domain::{
 use super::agent_graph::load_agent_relations;
 use super::scan_roots::conversation_source_roots;
 use super::session_store::{
-    ensure_matching_session, load_session, load_usage_records, usage_record_identity,
+    ensure_matching_session, load_session, load_usage_records, session_events_ready,
+    usage_record_identity,
 };
 use super::toolbox::{compare_event_order, semantic_event, ParsedConversation};
 use super::trusted_path::{
@@ -29,8 +30,8 @@ use super::trusted_path::{
 };
 use super::{
     context_cache, context_first_use, context_manifest, conversation_adapter, cursor, event_index,
-    parse_conversation_files, PreparedConversationDetail, PreparedDetailRead,
-    CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
+    parse_conversation_files, PreparedConversationDetail, PreparedDetailRead, CONVERSATION_SOURCES,
+    DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(
@@ -223,22 +224,7 @@ pub(crate) fn event_index_ready(
     home: &Path,
     prepared: &PreparedConversationDetail,
 ) -> Result<bool, String> {
-    let row = conn
-        .query_row(
-            r#"
-            SELECT adapter_version, event_index_generation
-            FROM conversation_sessions
-            WHERE source = ?1 AND session_id = ?2
-            "#,
-            params![prepared.source.as_str(), prepared.session.session_id],
-            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Option<i64>>(1)?)),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some((adapter_version, Some(_))) = row else {
-        return Ok(false);
-    };
-    if adapter_version != CONVERSATION_ADAPTER_VERSION {
+    if !session_events_ready(conn, prepared.source.as_str(), &prepared.session.session_id)? {
         return Ok(false);
     }
     let Ok(paths) = trusted_paths_for_session(home, prepared.source, &prepared.session) else {

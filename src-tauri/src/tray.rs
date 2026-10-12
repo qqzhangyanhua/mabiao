@@ -9,7 +9,7 @@ use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 use crate::domain::{Filter, OfficialQuotaDto, OverviewDto};
-use crate::{ingest, official_quota, query, tray_popup, AppState};
+use crate::{ingest, official_quota, query, staged, tray_popup, AppState};
 
 const TRAY_ID: &str = "today-cost";
 const REFRESH_INTERVAL: Duration = Duration::from_secs(300);
@@ -95,8 +95,10 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
             "refresh" => {
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = tauri::async_runtime::spawn_blocking(move || refresh_with_ingest(&app))
-                        .await;
+                    let _ = tauri::async_runtime::spawn_blocking(move || {
+                        refresh_usage_with_background_catalog(&app)
+                    })
+                    .await;
                 });
             }
             "quit" => app.exit(0),
@@ -167,35 +169,42 @@ pub fn refresh(app: &AppHandle) -> Result<(), String> {
 
 /// 源文件元数据没变时只重算今日菜单栏，避免关闭主窗口后每 5 分钟全量扫盘。
 pub fn refresh_if_stale(app: &AppHandle) -> Result<(), String> {
+    refresh_if_stale_with(app, refresh_usage_with_background_catalog)
+}
+
+/// 自动推送的本机刷新：用量与对话目录两段都跑完再返回，但目录走待补建，不等事件补建。
+pub fn refresh_awaiting_deferred_catalog(app: &AppHandle) -> Result<(), String> {
+    refresh_if_stale_with(app, refresh_usage_and_await_deferred_catalog)
+}
+
+fn refresh_if_stale_with(
+    app: &AppHandle,
+    ingest_now: fn(&AppHandle) -> Result<(), String>,
+) -> Result<(), String> {
     let cache = {
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         ingest::load_scan_cache(&conn)?
     };
     if ingest::scan_is_stale_from_cache(&cache, &ingest::default_home())? {
-        refresh_with_ingest(app)
+        ingest_now(app)
     } else {
         let _ = sync_official_quota(app);
         refresh(app)
     }
 }
 
-pub fn refresh_with_ingest(app: &AppHandle) -> Result<(), String> {
-    {
-        let state = app.state::<AppState>();
-        let conn = state.lock_write()?;
-        ingest::ingest_all(&conn, &ingest::default_home())?;
-        let prices = state.effective_prices();
-        let _ = crate::budget::check_and_notify(
-            app,
-            &conn,
-            &prices,
-            &state.budget_path,
-            &state.budget_notify_path,
-        );
-        crate::release_idle_memory(&state, &conn);
-    }
-    crate::spawn_conversation_fts_maintenance(app);
+/// 用量阶段同步，对话目录阶段交给后台，不让托盘线程等逐源提交。
+pub fn refresh_usage_with_background_catalog(app: &AppHandle) -> Result<(), String> {
+    staged::run_usage_then_catalog(app, staged::CatalogRun::Background)?;
+    let _ = sync_official_quota(app);
+    refresh(app)
+}
+
+/// 用量阶段之后在本线程把对话目录阶段也跑完（已有一轮在跑就等它），但目录走待补建，
+/// 不等事件补建。
+fn refresh_usage_and_await_deferred_catalog(app: &AppHandle) -> Result<(), String> {
+    staged::run_usage_then_catalog(app, staged::CatalogRun::Await)?;
     let _ = sync_official_quota(app);
     refresh(app)
 }

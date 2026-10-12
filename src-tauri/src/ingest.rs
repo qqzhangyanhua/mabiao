@@ -6,12 +6,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::time::UNIX_EPOCH;
+use std::time::{Instant, UNIX_EPOCH};
 
 use rusqlite::Connection;
 
 use crate::adapters::{usage_adapter, UsageAdapter};
+use crate::conversation::ConversationIndexIssue;
 use crate::cursor_session;
 use crate::domain::{
     IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport, UsageRecord,
@@ -105,19 +107,47 @@ pub(crate) fn source_scan_dirs_with(
     (usage_adapter(source).scan_dirs)(overrides, home)
 }
 
+/// 用量阶段与对话目录阶段串行同步跑完，结果与一次完整摄取相同。
 pub fn ingest_all(conn: &Connection, home: &Path) -> Result<IngestReport, String> {
-    ingest_all_timed(conn, home).map(|(report, _)| report)
+    ingest_all_with_mode(conn, home, CatalogMode::Full)
 }
 
-/// 本机性能探测用：与 [`ingest_all`] 同路径，额外回报各阶段耗时。
+/// 与 [`ingest_all`] 相同，但对话目录阶段按 `mode` 刷新。
+pub fn ingest_all_with_mode(
+    conn: &Connection,
+    home: &Path,
+    mode: CatalogMode,
+) -> Result<IngestReport, String> {
+    ingest_all_with_overrides_timed(conn, home, &path_overrides(), mode).map(|(report, _)| report)
+}
+
+/// 用量阶段各步耗时。
 #[derive(Debug, Default, Clone)]
-pub struct IngestPhaseTimings {
+pub struct UsagePhaseTimings {
     pub remove_unknown_ms: u128,
-    pub usage_ms: u128,
+    pub records_ms: u128,
     pub cursor_ms: u128,
-    pub conversation_ms: u128,
     pub rollup_ms: u128,
     pub commit_ms: u128,
+    pub total_ms: u128,
+}
+
+/// 对话目录阶段耗时：各来源的刷新与提交累加，外加收尾的一次正文倒排合并。
+#[derive(Debug, Default, Clone)]
+pub struct CatalogPhaseTimings {
+    pub refresh_ms: u128,
+    pub commit_ms: u128,
+    pub fts_merge_ms: u128,
+    pub total_ms: u128,
+    /// 每个来源从拿到连接到提交结束的耗时，按处理顺序。
+    pub per_source_ms: Vec<(Source, u128)>,
+}
+
+/// 本机性能探测用：与 [`ingest_all`] 同路径，分别回报两个阶段的耗时。
+#[derive(Debug, Default, Clone)]
+pub struct IngestPhaseTimings {
+    pub usage: UsagePhaseTimings,
+    pub catalog: CatalogPhaseTimings,
     pub total_ms: u128,
 }
 
@@ -125,7 +155,233 @@ pub fn ingest_all_timed(
     conn: &Connection,
     home: &Path,
 ) -> Result<(IngestReport, IngestPhaseTimings), String> {
-    ingest_all_with_overrides_timed(conn, home, &path_overrides())
+    ingest_all_with_overrides_timed(conn, home, &path_overrides(), CatalogMode::Full)
+}
+
+/// 用量阶段：清理未知来源、全部来源的消耗记录、Cursor 会话、预聚合，一个事务提交。
+///
+/// 不碰对话记录，所以报告里 `conversation_issues` 恒为空，`partial_success` 只看消耗记录。
+pub fn ingest_usage(conn: &Connection, home: &Path) -> Result<IngestReport, String> {
+    ingest_usage_timed(conn, home).map(|(report, _)| report)
+}
+
+pub fn ingest_usage_timed(
+    conn: &Connection,
+    home: &Path,
+) -> Result<(IngestReport, UsagePhaseTimings), String> {
+    ingest_usage_with_overrides_timed(conn, home, &path_overrides())
+}
+
+/// 供测试直接注入路径覆盖表。
+#[cfg(test)]
+pub(crate) fn ingest_usage_with_overrides(
+    conn: &Connection,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<IngestReport, String> {
+    ingest_usage_with_overrides_timed(conn, home, overrides).map(|(report, _)| report)
+}
+
+/// 对话目录阶段怎样对待需要整份解析的会话。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogMode {
+    /// 整份解析时同时写事件与正文倒排。
+    Full,
+    /// 只保证会话行与会话文件清单是新的，事件重建交给事件补建。
+    Deferred,
+}
+
+/// 对话目录阶段的进度。开始处理每个来源前回报一次（`done` 为已完成的来源数，
+/// `source` 为即将处理的来源），全部结束后再回报一次 `finished = true`、`source = None`。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogProgress {
+    pub done: usize,
+    pub total: usize,
+    pub source: Option<Source>,
+    pub finished: bool,
+}
+
+/// 对话目录阶段：按 `CONVERSATION_SOURCES` 逐个来源刷新对话记录目录。
+///
+/// 每个来源单独 `acquire` 一次连接、开一个事务、刷新、提交，然后释放连接再处理下一个，
+/// 这样别处等写锁最多等一个来源。某个来源失败只回滚它自己，记一条问题后继续。
+/// 全部来源结束后做一次正文倒排小步合并（ADR 0024）。只有 `acquire` 失败才整体返回错误。
+pub fn refresh_conversation_catalogs<C, A, P>(
+    acquire: A,
+    home: &Path,
+    mode: CatalogMode,
+    on_progress: P,
+) -> Result<Vec<IngestIssue>, String>
+where
+    C: Deref<Target = Connection>,
+    A: FnMut() -> Result<C, String>,
+    P: FnMut(CatalogProgress),
+{
+    refresh_conversation_catalogs_timed(acquire, home, &path_overrides(), mode, on_progress)
+        .map(|(issues, _)| issues)
+}
+
+/// 供测试直接注入路径覆盖表。
+#[cfg(test)]
+pub(crate) fn refresh_conversation_catalogs_with_overrides<C, A, P>(
+    acquire: A,
+    home: &Path,
+    overrides: &PathOverrides,
+    mode: CatalogMode,
+    on_progress: P,
+) -> Result<Vec<IngestIssue>, String>
+where
+    C: Deref<Target = Connection>,
+    A: FnMut() -> Result<C, String>,
+    P: FnMut(CatalogProgress),
+{
+    refresh_conversation_catalogs_timed(acquire, home, overrides, mode, on_progress)
+        .map(|(issues, _)| issues)
+}
+
+fn refresh_conversation_catalogs_timed<C, A, P>(
+    mut acquire: A,
+    home: &Path,
+    overrides: &PathOverrides,
+    mode: CatalogMode,
+    mut on_progress: P,
+) -> Result<(Vec<IngestIssue>, CatalogPhaseTimings), String>
+where
+    C: Deref<Target = Connection>,
+    A: FnMut() -> Result<C, String>,
+    P: FnMut(CatalogProgress),
+{
+    let total_started = Instant::now();
+    let mut timings = CatalogPhaseTimings::default();
+    let sources = crate::conversation::CONVERSATION_SOURCES;
+    let total = sources.len();
+    let mut issues = Vec::new();
+    for (done, &source) in sources.iter().enumerate() {
+        on_progress(CatalogProgress {
+            done,
+            total,
+            source: Some(source),
+            finished: false,
+        });
+        let conn = acquire()?;
+        let started = Instant::now();
+        refresh_source_catalog_committed(
+            &conn,
+            home,
+            overrides,
+            source,
+            mode,
+            &mut issues,
+            &mut timings,
+        );
+        drop(conn);
+        timings
+            .per_source_ms
+            .push((source, started.elapsed().as_millis()));
+    }
+
+    let started = Instant::now();
+    match acquire() {
+        Ok(conn) => merge_conversation_fts_after_commit(&conn),
+        Err(error) => eprintln!("对话正文索引小步合并取连接失败：{error}"),
+    }
+    timings.fts_merge_ms = started.elapsed().as_millis();
+
+    on_progress(CatalogProgress {
+        done: total,
+        total,
+        source: None,
+        finished: true,
+    });
+    timings.total_ms = total_started.elapsed().as_millis();
+    Ok((issues, timings))
+}
+
+/// 一个来源一个事务：刷新出错或提交失败都整体回滚，库里留的是上一次的目录。
+fn refresh_source_catalog_committed(
+    conn: &Connection,
+    home: &Path,
+    overrides: &PathOverrides,
+    source: Source,
+    mode: CatalogMode,
+    issues: &mut Vec<IngestIssue>,
+    timings: &mut CatalogPhaseTimings,
+) {
+    let dirs = crate::conversation::catalog_roots(overrides, home, source);
+    let transaction = match conn.unchecked_transaction() {
+        Ok(transaction) => transaction,
+        Err(error) => {
+            issues.push(catalog_source_failure(
+                source,
+                &dirs,
+                format!("开启对话目录事务失败：{error}"),
+            ));
+            return;
+        }
+    };
+
+    let started = Instant::now();
+    let refreshed = refresh_catalog_with_mode(&transaction, source, &dirs, mode);
+    timings.refresh_ms += started.elapsed().as_millis();
+    let found = match refreshed {
+        Ok(found) => found,
+        Err(message) => {
+            drop(transaction);
+            issues.push(catalog_source_failure(source, &dirs, message));
+            return;
+        }
+    };
+
+    let started = Instant::now();
+    let committed = transaction.commit();
+    timings.commit_ms += started.elapsed().as_millis();
+    match committed {
+        Ok(()) => issues.extend(catalog_issues(source, found)),
+        Err(error) => issues.push(catalog_source_failure(
+            source,
+            &dirs,
+            format!("提交对话目录失败：{error}"),
+        )),
+    }
+}
+
+fn refresh_catalog_with_mode(
+    conn: &Connection,
+    source: Source,
+    dirs: &[PathBuf],
+    mode: CatalogMode,
+) -> Result<Vec<ConversationIndexIssue>, String> {
+    match mode {
+        CatalogMode::Full => crate::conversation::refresh(conn, source, dirs),
+        CatalogMode::Deferred => crate::conversation::refresh_catalog(conn, source, dirs),
+    }
+}
+
+fn catalog_issues(
+    source: Source,
+    issues: Vec<ConversationIndexIssue>,
+) -> impl Iterator<Item = IngestIssue> {
+    issues.into_iter().map(move |issue| IngestIssue {
+        source: source.as_str().to_string(),
+        path: issue.path,
+        message: issue.message,
+        event_type: issue.event_type,
+        line: issue.line,
+    })
+}
+
+fn catalog_source_failure(source: Source, dirs: &[PathBuf], message: String) -> IngestIssue {
+    IngestIssue {
+        source: source.as_str().to_string(),
+        path: dirs
+            .iter()
+            .map(|path| path.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(", "),
+        message,
+        event_type: None,
+        line: None,
+    }
 }
 
 /// 与 ingest 使用同一套 cache fingerprint（主文件 metadata + sidecar）。
@@ -258,38 +514,69 @@ pub(crate) fn ingest_all_with_overrides(
     home: &Path,
     overrides: &PathOverrides,
 ) -> Result<IngestReport, String> {
-    ingest_all_with_overrides_timed(conn, home, overrides).map(|(report, _)| report)
+    ingest_all_with_overrides_timed(conn, home, overrides, CatalogMode::Full)
+        .map(|(report, _)| report)
 }
 
 fn ingest_all_with_overrides_timed(
     conn: &Connection,
     home: &Path,
     overrides: &PathOverrides,
+    mode: CatalogMode,
 ) -> Result<(IngestReport, IngestPhaseTimings), String> {
-    let total_started = std::time::Instant::now();
-    let mut timings = IngestPhaseTimings::default();
+    let total_started = Instant::now();
+    let (mut report, usage) = ingest_usage_with_overrides_timed(conn, home, overrides)?;
+    let (conversation_issues, catalog) = refresh_conversation_catalogs_timed(
+        || Ok::<_, String>(conn),
+        home,
+        overrides,
+        mode,
+        |_| {},
+    )?;
+    report.conversation_issues = conversation_issues;
+    report.partial_success = report.partial_success || !report.conversation_issues.is_empty();
+    let timings = IngestPhaseTimings {
+        usage,
+        catalog,
+        total_ms: total_started.elapsed().as_millis(),
+    };
+    Ok((report, timings))
+}
+
+fn ingest_usage_with_overrides_timed(
+    conn: &Connection,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<(IngestReport, UsagePhaseTimings), String> {
+    let total_started = Instant::now();
+    let mut timings = UsagePhaseTimings::default();
     let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
 
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     let removed_unknown = store::remove_unknown_sources(&transaction)?;
     timings.remove_unknown_ms = started.elapsed().as_millis();
 
-    let mut report = ingest_all_inner(&transaction, home, overrides, &mut timings)?;
+    let mut report = IngestReport::default();
+    let started = Instant::now();
+    ingest_all_sources(&transaction, home, overrides, &mut report)?;
+    timings.records_ms = started.elapsed().as_millis();
+
+    let started = Instant::now();
+    cursor_session::ingest(&transaction, home, &mut report);
+    timings.cursor_ms = started.elapsed().as_millis();
+
     report.records_removed += removed_unknown;
     // 清理未知来源是整表 DELETE，定位不到具体是哪几天，只能整张重来。罕见路径。
     report.rollup_full_rebuild = removed_unknown > 0;
-    report.partial_success = report.files_failed > 0
-        || !report.issues.is_empty()
-        || !report.conversation_issues.is_empty();
+    report.partial_success = report.files_failed > 0 || !report.issues.is_empty();
 
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     sync_rollup(&transaction, &report)?;
     timings.rollup_ms = started.elapsed().as_millis();
 
-    let started = std::time::Instant::now();
+    let started = Instant::now();
     transaction.commit().map_err(|e| e.to_string())?;
     timings.commit_ms = started.elapsed().as_millis();
-    merge_conversation_fts_after_commit(conn);
     timings.total_ms = total_started.elapsed().as_millis();
     Ok((report, timings))
 }
@@ -434,59 +721,15 @@ fn refresh_conversation_catalog(
             continue;
         }
         let dirs = crate::conversation::catalog_roots(overrides, home, source);
-        match crate::conversation::refresh(conn, source, &dirs) {
+        match refresh_catalog_with_mode(conn, source, &dirs, CatalogMode::Full) {
             Ok(issues) => report
                 .conversation_issues
-                .extend(issues.into_iter().map(|issue| IngestIssue {
-                    source: source.as_str().to_string(),
-                    path: issue.path,
-                    message: issue.message,
-                    event_type: issue.event_type,
-                    line: issue.line,
-                })),
-            Err(message) => report.conversation_issues.push(IngestIssue {
-                source: source.as_str().to_string(),
-                path: dirs
-                    .iter()
-                    .map(|path| path.to_string_lossy().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                message,
-                event_type: None,
-                line: None,
-            }),
+                .extend(catalog_issues(source, issues)),
+            Err(message) => report
+                .conversation_issues
+                .push(catalog_source_failure(source, &dirs, message)),
         }
     }
-}
-
-fn ingest_all_inner(
-    conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
-    timings: &mut IngestPhaseTimings,
-) -> Result<IngestReport, String> {
-    let mut report = IngestReport::default();
-
-    let started = std::time::Instant::now();
-    ingest_all_sources(conn, home, overrides, &mut report)?;
-    timings.usage_ms = started.elapsed().as_millis();
-
-    let started = std::time::Instant::now();
-    cursor_session::ingest(conn, home, &mut report);
-    timings.cursor_ms = started.elapsed().as_millis();
-
-    let started = std::time::Instant::now();
-    refresh_conversation_catalog(
-        conn,
-        home,
-        overrides,
-        crate::conversation::CONVERSATION_SOURCES,
-        &mut report,
-    );
-    timings.conversation_ms = started.elapsed().as_millis();
-
-    report.partial_success = report.partial_success || !report.conversation_issues.is_empty();
-    Ok(report)
 }
 
 fn ingest_all_sources(

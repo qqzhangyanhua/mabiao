@@ -1,4 +1,4 @@
-use crate::{conversation, ingest, user_files};
+use crate::{conversation, ingest, staged, user_files};
 use tauri::Manager;
 
 use crate::domain::{
@@ -49,6 +49,7 @@ pub async fn get_conversation_detail(
         let state = app.state::<AppState>();
         let conn = state.lock_read()?;
         let read = conversation::prepare_detail_read(&conn, &home, &source, &session_id)?;
+        staged::prioritize_event_backfill(&app, &conn, &source, &session_id);
         drop(conn);
         conversation::finish_prepared_detail(&home, read)
     })
@@ -71,6 +72,7 @@ pub async fn get_conversation_events(
         let conn = state.lock_read()?;
         let read =
             conversation::prepare_events_read(&conn, &home, &source, &session_id, &anchor, limit)?;
+        staged::prioritize_event_backfill(&app, &conn, &source, &session_id);
         drop(conn);
         conversation::finish_prepared_events(&home, read, &anchor, limit)
     })
