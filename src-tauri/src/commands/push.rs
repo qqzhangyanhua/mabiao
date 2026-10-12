@@ -140,6 +140,6 @@ fn run_auto_push_once(app: &tauri::AppHandle) {
         &auto_state_path(),
         &Local,
         // 应用刚启动时昨天的会话可能还没摄取进库：先让本机数据跟上再读。
-        &|| crate::tray::refresh_for_auto_push(app),
+        &|| crate::tray::refresh_awaiting_deferred_catalog(app),
     );
 }

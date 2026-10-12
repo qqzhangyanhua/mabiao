@@ -8,6 +8,7 @@ import type {
   BudgetStatusDto,
   Filter,
   Grain,
+  IngestIssue,
   IngestReport,
   View,
   ConversationFocus,
@@ -79,6 +80,7 @@ export function useUsageData() {
   );
   const [savingBudget, setSavingBudget] = useState(false);
   const [lastIngestReport, setLastIngestReport] = useState<IngestReport | null>(null);
+  const [conversationIssues, setConversationIssues] = useState<IngestIssue[]>([]);
   const [status, setStatus] = useState("正在连接…");
   const [connected, setConnected] = useState(false);
 
@@ -134,22 +136,25 @@ export function useUsageData() {
     apply,
   });
 
-  const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, usageStatusRef } =
+  const { catalogSyncing, beginUsageStage, publishUsageStatus } = useCatalogProgress({
+    setSessionsRevision,
+    setStatus,
+    setConversationIssues,
+  });
+
+  const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived } =
     useIngestOperations({
       refreshViews,
       dataEpochRef: dataEpoch,
       requestGenerationRef: requestGeneration,
       setSessionsRevision,
+      setConversationIssues,
+      beginUsageStage,
+      publishUsageStatus,
       setLastIngestReport,
       setStatus,
       setLoading,
     });
-
-  const { catalogProgress, catalogSyncing } = useCatalogProgress({
-    setSessionsRevision,
-    setStatus,
-    usageStatusRef,
-  });
 
   const runIngestWithCacheClear = useCallback(
     async (label: string) => {
@@ -382,13 +387,13 @@ export function useUsageData() {
     savingBudget,
     saveBudget,
     lastIngestReport,
+    conversationIssues,
     rebuilding,
     purging,
     status,
     setStatus,
     connected,
     busy,
-    catalogProgress,
     catalogSyncing,
     viewHasData: hydratedViews.has(view),
     autoRefresh,

@@ -5,14 +5,14 @@
 
 use std::collections::BTreeSet;
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex, MutexGuard};
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::domain::{ConversationCatalogProgressDto, IngestIssue};
+use crate::domain::{ConversationCatalogProgressDto, IngestIssue, IngestReport};
 use crate::ingest::{self, CatalogMode, CatalogProgress};
 use crate::{conversation, store, AppState};
 
@@ -26,6 +26,10 @@ const BACKFILL_STEP_DELAY: Duration = Duration::from_millis(30);
 
 /// 优先队列最多记住的会话数；用户来回翻阅时丢最旧的。
 const PRIORITY_CAPACITY: usize = 32;
+
+/// 目录阶段在两个来源之间最多为等锁的用量阶段让出多久。
+const WAITER_YIELD_MAX: Duration = Duration::from_millis(500);
+const WAITER_POLL: Duration = Duration::from_millis(5);
 
 /// 全局单飞加一次补跑：运行中再请求只记一个「补跑」标记，不管请求多少次。
 #[derive(Debug, Default)]
@@ -55,6 +59,102 @@ impl SingleFlight {
             self.running = false;
             false
         }
+    }
+
+    /// 执行线程异常退出：直接回到空闲，否则 `running` 永远为真，之后再也启动不了。
+    fn abort(&mut self) {
+        self.running = false;
+        self.rerun = false;
+    }
+}
+
+/// [`SingleFlight`] 加上「等到空闲」：托盘的阻塞刷新要等已在跑的那一轮结束。
+#[derive(Default)]
+pub(crate) struct Flight {
+    state: Mutex<SingleFlight>,
+    idle: Condvar,
+}
+
+/// 执行线程不论怎样离开（包括 panic）都要放开单飞位并唤醒等待者。
+struct AbortOnDrop<'a> {
+    flight: &'a Flight,
+    armed: bool,
+}
+
+impl Drop for AbortOnDrop<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            lock_ignoring_poison(&self.flight.state).abort();
+            self.flight.idle.notify_all();
+        }
+    }
+}
+
+impl Flight {
+    /// 见 [`SingleFlight::request`]。
+    pub(crate) fn request(&self) -> bool {
+        lock_ignoring_poison(&self.state).request()
+    }
+
+    fn finish(&self) -> bool {
+        let again = lock_ignoring_poison(&self.state).finish();
+        if !again {
+            self.idle.notify_all();
+        }
+        again
+    }
+
+    /// 调用方刚拿到 `request() == true`：在当前线程反复跑 `round`，直到没有补跑为止。
+    pub(crate) fn run_rounds(&self, mut round: impl FnMut()) {
+        let mut release = AbortOnDrop {
+            flight: self,
+            armed: true,
+        };
+        loop {
+            round();
+            if !self.finish() {
+                release.armed = false;
+                return;
+            }
+        }
+    }
+
+    /// 阻塞到当前没有任何一轮在跑。
+    pub(crate) fn wait_idle(&self) {
+        let guard = lock_ignoring_poison(&self.state);
+        drop(
+            self.idle
+                .wait_while(guard, |flight| flight.running)
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+        );
+    }
+}
+
+/// 正在等写锁、不能被饿着的调用方数。目录阶段是逐源释放再抢锁的，普通互斥锁不保证
+/// 等得最久的先拿到，所以每个来源之前先看一眼这里。
+#[derive(Debug, Default)]
+pub(crate) struct WriteWaiters(AtomicUsize);
+
+pub(crate) struct WaitingForWrite<'a>(&'a WriteWaiters);
+
+impl WriteWaiters {
+    pub(crate) fn enter(&self) -> WaitingForWrite<'_> {
+        self.0.fetch_add(1, Ordering::SeqCst);
+        WaitingForWrite(self)
+    }
+
+    /// 有人在等就让出，最多等 `max`；返回时没人等或已超时。
+    pub(crate) fn yield_to_waiters(&self, poll: Duration, max: Duration) {
+        let started = Instant::now();
+        while self.0.load(Ordering::SeqCst) > 0 && started.elapsed() < max {
+            std::thread::sleep(poll);
+        }
+    }
+}
+
+impl Drop for WaitingForWrite<'_> {
+    fn drop(&mut self) {
+        self.0 .0.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -98,7 +198,10 @@ impl OneShot {
 /// 分段摄取挂在 `AppState` 上的全部可变状态。
 #[derive(Default)]
 pub(crate) struct StagedState {
-    catalog_flight: Mutex<SingleFlight>,
+    catalog_flight: Flight,
+    /// 本进程里是否已经请求过对话目录阶段；启动兜底据此决定要不要补一轮。
+    catalog_requested: AtomicBool,
+    write_waiters: WriteWaiters,
     backfill_running: AtomicBool,
     backfill_queue: Mutex<PriorityQueue>,
     /// 最近一轮对话目录阶段的问题，供设置页诊断读取。
@@ -107,19 +210,23 @@ pub(crate) struct StagedState {
 }
 
 /// 持锁的临界区都只改几个字段，毒化后数据仍然可用。
-fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+fn lock_ignoring_poison<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 impl StagedState {
+    pub(crate) fn write_waiters(&self) -> &WriteWaiters {
+        &self.write_waiters
+    }
+
     pub(crate) fn catalog_issues(&self) -> Vec<IngestIssue> {
-        locked(&self.catalog_issues).clone()
+        lock_ignoring_poison(&self.catalog_issues).clone()
     }
 
     fn store_catalog_issues(&self, issues: Vec<IngestIssue>) {
-        *locked(&self.catalog_issues) = issues;
+        *lock_ignoring_poison(&self.catalog_issues) = issues;
     }
 }
 
@@ -164,18 +271,66 @@ pub(crate) fn after_usage_stage(app: &AppHandle, state: &AppState, conn: &Connec
     crate::release_idle_memory(state, conn);
 }
 
+/// 用量阶段之后，对话目录阶段怎么接。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CatalogRun {
+    /// 交给后台线程，立刻返回。
+    Background,
+    /// 在当前线程跑完（或等已在跑的那一轮跑完）再返回，但不等事件补建。
+    Await,
+}
+
+/// 命令与托盘共用的一次摄取：用量阶段在一个事务里提交并收尾，写锁放开之后再接目录阶段。
+/// 两个阶段不共用一次持锁，目录阶段逐源拿锁，别处最多等一个来源。
+pub(crate) fn run_usage_then_catalog(
+    app: &AppHandle,
+    catalog: CatalogRun,
+) -> Result<IngestReport, String> {
+    let state = app.state::<AppState>();
+    let report = {
+        let conn = state.lock_write_priority()?;
+        let report = ingest::ingest_usage(&conn, &ingest::default_home())?;
+        after_usage_stage(app, &state, &conn);
+        report
+    };
+    trigger_deferred_startup(app);
+    match catalog {
+        CatalogRun::Background => start_catalog_stage(app),
+        CatalogRun::Await => run_catalog_stage_blocking(app),
+    }
+    Ok(report)
+}
+
 /// 后台启动对话目录阶段。已有一轮在跑时只记「补跑」，本轮结束后再跑一轮。
 pub(crate) fn start_catalog_stage(app: &AppHandle) {
-    if !locked(&app.state::<AppState>().staged.catalog_flight).request() {
+    let staged = &app.state::<AppState>().staged;
+    staged.catalog_requested.store(true, Ordering::SeqCst);
+    if !staged.catalog_flight.request() {
         return;
     }
     let app = app.clone();
-    std::thread::spawn(move || loop {
-        run_catalog_stage(&app);
-        if !locked(&app.state::<AppState>().staged.catalog_flight).finish() {
-            break;
-        }
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        state
+            .staged
+            .catalog_flight
+            .run_rounds(|| run_catalog_stage(&app));
     });
+}
+
+/// 同步版本：没有在跑的就在当前线程跑；已有一轮在跑时，请求已折成它的补跑，等它空闲即可，
+/// 不并行再跑一份。返回时目录至少反映了调用时刻的源文件。
+fn run_catalog_stage_blocking(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    state.staged.catalog_requested.store(true, Ordering::SeqCst);
+    if state.staged.catalog_flight.request() {
+        state
+            .staged
+            .catalog_flight
+            .run_rounds(|| run_catalog_stage(app));
+    } else {
+        state.staged.catalog_flight.wait_idle();
+    }
 }
 
 fn run_catalog_stage(app: &AppHandle) {
@@ -184,7 +339,13 @@ fn run_catalog_stage(app: &AppHandle) {
     let home = ingest::default_home();
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         ingest::refresh_conversation_catalogs(
-            || state.lock_write(),
+            || {
+                state
+                    .staged
+                    .write_waiters
+                    .yield_to_waiters(WAITER_POLL, WAITER_YIELD_MAX);
+                state.lock_write()
+            },
             &home,
             CatalogMode::Deferred,
             |step| {
@@ -211,6 +372,11 @@ fn run_catalog_stage(app: &AppHandle) {
     state.staged.store_catalog_issues(issues);
     emit_progress(app, &dto);
 
+    resume_conversation_maintenance(app);
+}
+
+/// 事件补建与正文倒排维护成对拉起：补建把待补建会话建回就绪，维护整理它留下的小段。
+pub(crate) fn resume_conversation_maintenance(app: &AppHandle) {
     ensure_event_backfill(app);
     crate::spawn_conversation_fts_maintenance(app);
 }
@@ -231,7 +397,7 @@ pub(crate) fn ensure_event_backfill(app: &AppHandle) {
         let staged = &app.state::<AppState>().staged;
         staged.backfill_running.store(false, Ordering::SeqCst);
         // 线程正准备退出时可能有会话刚入队，先放开单飞位再看一眼队列，不丢请求。
-        if outcome.is_ok() && !locked(&staged.backfill_queue).is_empty() {
+        if outcome.is_ok() && !lock_ignoring_poison(&staged.backfill_queue).is_empty() {
             ensure_event_backfill(&app);
         }
     });
@@ -251,7 +417,7 @@ pub(crate) fn prioritize_event_backfill(
     ) {
         return;
     }
-    locked(&app.state::<AppState>().staged.backfill_queue)
+    lock_ignoring_poison(&app.state::<AppState>().staged.backfill_queue)
         .push_front((source.to_string(), session_id.to_string()));
     ensure_event_backfill(app);
 }
@@ -262,7 +428,7 @@ fn run_event_backfill(app: &AppHandle) {
     let mut skipped = BTreeSet::<(String, String)>::new();
     let mut processed_any = false;
     loop {
-        let priority = locked(&state.staged.backfill_queue).snapshot();
+        let priority = lock_ignoring_poison(&state.staged.backfill_queue).snapshot();
         let progressed = {
             let Ok(conn) = state.lock_write() else {
                 return;
@@ -309,7 +475,7 @@ fn run_event_backfill(app: &AppHandle) {
 
 /// 已就绪或补建失败的会话不再留在队列里，否则队列永远不空，线程会反复重启。
 fn prune_priority_queue(state: &AppState, conn: &Connection, skipped: &BTreeSet<(String, String)>) {
-    let queued = locked(&state.staged.backfill_queue).snapshot();
+    let queued = lock_ignoring_poison(&state.staged.backfill_queue).snapshot();
     for key in queued {
         let pending = !skipped.contains(&key)
             && matches!(
@@ -317,7 +483,7 @@ fn prune_priority_queue(state: &AppState, conn: &Connection, skipped: &BTreeSet<
                 Ok(true)
             );
         if !pending {
-            locked(&state.staged.backfill_queue).remove(&key);
+            lock_ignoring_poison(&state.staged.backfill_queue).remove(&key);
         }
     }
 }
@@ -328,9 +494,8 @@ pub(crate) fn trigger_deferred_startup(app: &AppHandle) {
     if !app.state::<AppState>().staged.deferred_startup.try_fire() {
         return;
     }
-    ensure_event_backfill(app);
     crate::spawn_conversation_cache_migration(app);
-    crate::spawn_conversation_fts_maintenance(app);
+    resume_conversation_maintenance(app);
 }
 
 pub(crate) fn spawn_startup_fallback(app: &AppHandle) {
@@ -338,5 +503,14 @@ pub(crate) fn spawn_startup_fallback(app: &AppHandle) {
     std::thread::spawn(move || {
         std::thread::sleep(STARTUP_FALLBACK);
         trigger_deferred_startup(&app);
+        // 只开托盘时可能一直没有用量阶段；上次退出时没跑完的对话目录要在这里接着补。
+        if !app
+            .state::<AppState>()
+            .staged
+            .catalog_requested
+            .load(Ordering::SeqCst)
+        {
+            start_catalog_stage(&app);
+        }
     });
 }

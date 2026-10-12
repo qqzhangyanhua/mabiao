@@ -145,13 +145,28 @@ impl AppState {
         }
     }
 
+    /// 持锁线程 panic 只会毒化锁：事务在 unwind 时会回滚，连接本身仍然可用，
+    /// 所以照常交出连接，不让一次 panic 把之后所有写入都挡死。
     pub(crate) fn lock_write(&self) -> Result<MutexGuard<'_, Connection>, String> {
-        self.conn.lock().map_err(|e| e.to_string())
+        Ok(self
+            .conn
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()))
+    }
+
+    /// 与 `lock_write` 相同，但等锁期间登记为「等待者」，目录阶段会在来源之间让它先拿。
+    pub(crate) fn lock_write_priority(&self) -> Result<MutexGuard<'_, Connection>, String> {
+        let _waiting = self.staged.write_waiters().enter();
+        self.lock_write()
     }
 
     /// 写锁此刻被占（多半是摄取）就返回 `None`，给那些可以晚一轮再做的顺手写入用。
     pub(crate) fn try_lock_write(&self) -> Option<MutexGuard<'_, Connection>> {
-        self.conn.try_lock().ok()
+        match self.conn.try_lock() {
+            Ok(conn) => Some(conn),
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) => None,
+        }
     }
 
     pub(crate) fn lock_read(&self) -> Result<MutexGuard<'_, Connection>, String> {
@@ -274,8 +289,7 @@ fn spawn_conversation_cache_migration(app: &tauri::AppHandle) {
         }
         drop(conn);
         // 迁移把一批会话标成了待补建，启动时那轮补建可能已经跑完退出了。
-        staged::ensure_event_backfill(&app);
-        spawn_conversation_fts_maintenance(&app);
+        staged::resume_conversation_maintenance(&app);
     });
 }
 

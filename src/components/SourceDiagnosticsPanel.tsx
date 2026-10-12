@@ -26,6 +26,7 @@ function IngestIssueList({ title, issues }: { title: string; issues: IngestIssue
 export function SourceDiagnosticsPanel({
   diagnostics,
   ingestReport,
+  conversationIssues,
   rebuilding,
   purging,
   operationBusy,
@@ -34,6 +35,7 @@ export function SourceDiagnosticsPanel({
 }: {
   diagnostics: SourceDiagnostic[];
   ingestReport: IngestReport | null;
+  conversationIssues: IngestIssue[];
   rebuilding: string | null;
   purging: string | null;
   operationBusy: boolean;
@@ -150,17 +152,15 @@ export function SourceDiagnosticsPanel({
         </table>
       </div>
       {ingestReport ? (
-        <>
-          <IngestIssueList
-            title={`本次摄取有 ${ingestReport.issues.length} 个文件保留了上次正确缓存`}
-            issues={ingestReport.issues}
-          />
-          <IngestIssueList
-            title={`对话索引有 ${ingestReport.conversation_issues.length} 个文件保留了上次正确元数据`}
-            issues={ingestReport.conversation_issues}
-          />
-        </>
+        <IngestIssueList
+          title={`本次摄取有 ${ingestReport.issues.length} 个文件保留了上次正确缓存`}
+          issues={ingestReport.issues}
+        />
       ) : null}
+      <IngestIssueList
+        title={`对话索引有 ${conversationIssues.length} 个文件保留了上次正确元数据`}
+        issues={conversationIssues}
+      />
     </section>
   );
 }

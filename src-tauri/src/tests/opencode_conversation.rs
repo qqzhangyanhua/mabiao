@@ -348,3 +348,25 @@ fn opencode_schema_degrades_optional_parts_and_preserves_last_good_sessions_on_f
     assert!(!diagnostics.contains("manifest contents"));
     assert!(!diagnostics.contains("Read the manifest"));
 }
+
+#[test]
+fn opencode_catalog_refresh_never_marks_sessions_for_backfill() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let (_db_path, _source_db) = create_opencode_database(home);
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Opencode);
+
+    for _ in 0..2 {
+        conversation::refresh_catalog(&conn, Source::Opencode, &roots).unwrap();
+        for session_id in ["ses-usage", "ses-no-usage"] {
+            assert!(
+                !conversation::session_needs_event_backfill(&conn, "opencode", session_id).unwrap(),
+                "{session_id} must stay ready after a catalog-only pass"
+            );
+        }
+    }
+    let progress = conversation::event_index_progress(&conn).unwrap();
+    assert_eq!(progress.indexed, progress.total);
+    assert_eq!(progress.total, 2);
+}

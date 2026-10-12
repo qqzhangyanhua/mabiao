@@ -4,7 +4,9 @@ import {
   catalogFinishedStatus,
   catalogProgressStatus,
   catalogStatus,
+  composeStatus,
   ingestFailureStatus,
+  isCatalogManagedStatus,
   isCatalogSyncing,
   usageStageStatus,
 } from "./ingestStatus";
@@ -74,5 +76,30 @@ describe("ingestStatus", () => {
 
   it("formats failure", () => {
     expect(ingestFailureStatus("启动摄取", "boom")).toBe("启动摄取失败：boom");
+  });
+
+  it("composes the usage status with the latest catalog state in either arrival order", () => {
+    const usage = "启动摄取完成：解析 3";
+    expect(composeStatus(usage, null)).toBe(usage);
+    expect(composeStatus(usage, progress({ done: 3, total: 21 }))).toBe("对话目录同步中 3/21");
+    expect(composeStatus(usage, progress({ finished: true, issue_count: 0 }))).toBe(usage);
+    expect(composeStatus(usage, progress({ finished: true, issue_count: 2 }))).toBe(
+      `${usage}，对话目录保留 2 项问题`,
+    );
+    expect(composeStatus("", progress({ finished: true, issue_count: 2 }))).toBe(
+      "对话目录保留 2 项问题",
+    );
+  });
+
+  it("recognises status text the catalog stage owns and leaves newer unrelated text alone", () => {
+    const usage = "启动摄取完成：解析 3";
+    expect(isCatalogManagedStatus(usage, usage)).toBe(true);
+    expect(isCatalogManagedStatus("对话目录同步中 2/21", usage)).toBe(true);
+    expect(isCatalogManagedStatus(`${usage}，对话目录保留 1 项问题`, usage)).toBe(true);
+    expect(isCatalogManagedStatus("对话目录保留 1 项问题", "")).toBe(true);
+    expect(isCatalogManagedStatus("全部缓存重建中…", usage)).toBe(false);
+    expect(isCatalogManagedStatus("启动摄取中…", "")).toBe(false);
+    expect(isCatalogManagedStatus("单价已保存", usage)).toBe(false);
+    expect(isCatalogManagedStatus("", "")).toBe(false);
   });
 });

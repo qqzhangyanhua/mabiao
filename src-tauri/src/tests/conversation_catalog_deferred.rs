@@ -378,3 +378,80 @@ fn backfill_without_priority_goes_newest_first_over_dirty_sessions() {
     assert!(!needs_backfill(&conn, "conv-2"), "结束更晚的会话先补");
     assert!(needs_backfill(&conn, "conv-1"));
 }
+
+fn claude_events(
+    conn: &rusqlite::Connection,
+    home: &std::path::Path,
+    session_id: &str,
+) -> Vec<crate::domain::ConversationEvent> {
+    crate::conversation::load_events(
+        conn,
+        home,
+        "claude",
+        session_id,
+        ConversationEventAnchor::First,
+        200,
+    )
+    .unwrap()
+    .events
+}
+
+/// 目录阶段建出的待补建会话，补建前走整份解析回退，补建后走索引，两条路逐条一致。
+fn assert_claude_backfill_matches_fallback(home: &std::path::Path, session_id: &str) {
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Claude);
+    let issues = crate::conversation::refresh_catalog(&conn, Source::Claude, &roots).unwrap();
+    assert!(issues.is_empty(), "{issues:?}");
+    assert!(
+        crate::conversation::session_needs_event_backfill(&conn, "claude", session_id).unwrap()
+    );
+
+    let fallback = claude_events(&conn, home, session_id);
+    assert!(!fallback.is_empty());
+    assert!(fallback.iter().any(|event| !event.details.is_null()));
+    let fallback_detail =
+        crate::conversation::load_detail(&conn, home, "claude", session_id).unwrap();
+
+    crate::conversation::backfill_event_index(&conn, home).unwrap();
+    assert!(
+        !crate::conversation::session_needs_event_backfill(&conn, "claude", session_id).unwrap()
+    );
+    let indexed = claude_events(&conn, home, session_id);
+    assert!(indexed.iter().all(|event| event.details.is_null()));
+    assert_eq!(indexed, strip_details(fallback));
+    let indexed_detail =
+        crate::conversation::load_detail(&conn, home, "claude", session_id).unwrap();
+    assert_eq!(indexed_detail.revision, fallback_detail.revision);
+    assert_eq!(indexed_detail.session, fallback_detail.session);
+    assert_eq!(indexed_detail.event_count, fallback_detail.event_count);
+    assert_conversation_index_matches_parse(&conn, home, "claude", session_id);
+}
+
+#[test]
+fn claude_backfilled_events_match_the_fallback_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".claude/projects/-workspace-claude-app/claude-parent-1.jsonl",
+        "claude-conversation.jsonl",
+    );
+    assert_claude_backfill_matches_fallback(home, "claude-parent-1");
+}
+
+#[test]
+fn claude_backfilled_events_match_the_fallback_parse_across_split_files() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".claude/projects/-workspace-split/claude-split-a.jsonl",
+        "claude-split-session-a.jsonl",
+    );
+    write_home_fixture(
+        home,
+        ".claude/projects/-workspace-split/claude-split-b.jsonl",
+        "claude-split-session-b.jsonl",
+    );
+    assert_claude_backfill_matches_fallback(home, "claude-split-1");
+}

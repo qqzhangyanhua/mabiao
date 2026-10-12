@@ -70,8 +70,7 @@ pub async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
         let (snapshot, _) = litellm::load_snapshot(&paths.snapshot_path);
         *state.snapshot.lock().map_err(|e| e.to_string())? = snapshot;
         let _ = tray::refresh(&app);
-        crate::staged::ensure_event_backfill(&app);
-        crate::spawn_conversation_fts_maintenance(&app);
+        crate::staged::resume_conversation_maintenance(&app);
         Ok(true)
     })
     .await
