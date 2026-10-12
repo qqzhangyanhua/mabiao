@@ -36,8 +36,10 @@
 
 1. 对账路径：`ingest.rs` → `store::records::reconcile_source` → `archive_records_for_file`。`files_failed > 0` 或目录读取失败则跳过对账。
 2. 归档只打 `archived_at`，源文件留在原地。
-3. 读 ADR 0003、0004。
-4. `cargo test ingest` 与 `cargo test backup` 绿。
+3. 摄取分两段（ADR 0027）。用量阶段 `ingest_usage`：清理未知来源、消耗记录、Cursor 会话、`sync_rollup`，一个事务，报告不含对话记录问题。对话目录阶段 `refresh_conversation_catalogs`：每个来源单独拿锁、单独事务、提交即释放，全部结束后合并一次倒排。新调用方按这两段接，不要再把对话记录塞回用量事务。
+4. `ingest_all` 是两段串行的组合入口（目录走 `CatalogMode::Full`），结果须与拆分前一致；自动推送用 `ingest_all_with_mode(Deferred)`。`rebuild_cache` 不分段。阶段耗时看 `IngestPhaseTimings`，`bench_ingest` 分两组输出。
+5. 读 ADR 0003、0004、0027。
+6. `cargo test ingest` 与 `cargo test backup` 绿。
 
 ## 扫描路径
 
@@ -73,7 +75,9 @@
 1. 事件 `text`/`name` 进 `conversation_events`（ADR 0011）；目录搜索走 FTS 派生表（ADR 0014）。Codex / pi / omp 能按行重建的消息、工具结果、计划只存 `line_offset` + `text_hash`，读时回源文件取，对不上就整份解析；库内 `event_id` 存推导形态，直接读列要过 `restore_event_id`；倒排不存原文，写入方显式插入（ADR 0025）。`details` 按需读原文件。正文留在本机索引，备份与上传不含正文。上下文清单度量写入 `conversation_context_metrics`（条目名与数字，不含正文），备份时剔除，与 FTS 同等待遇。
 2. Cursor Agent transcript 走 `conversation/cursor.rs`，`source=cursor_agent`，与 `cursor_sessions`（ADR 0007）分区。
 3. 会话行注水只有 `conversation/hydrate.rs` 一条：源文件清单、消耗记录汇总、Cursor 会话补模型、工作纪要打标。目录页、正文搜索、单条详情共用它，别在某一条路上单独补一项。没有价目表时传 `None` 跳过消耗记录汇总。
-4. `cargo test conversation` 绿（含增量、回填、正文搜索）。
+4. 目录刷新有两种：`refresh` 整份写事件（重建缓存、`ingest_all`）；`refresh_catalog` 只写会话行与文件清单，需整份解析的会话置 `event_index_dirty = 1`，不写事件、不动 `event_index_generation`，事件游标不推进、目录已见指纹照常推进（ADR 0027）。两者共用一套实现，别复制。
+5. 就绪只有一条：`adapter_version` 匹配、`event_index_generation` 非空、`event_index_dirty = 0`。详情、推送、补建进度、目录行标志都按它判断，新增判断处别另写一份。正文搜索与工具筛选仍按 `event_index_generation` 连接事件。补建走 `backfill_event_index_step_prioritized`（优先队列，再 `ended_at` 倒序），成功后清标记；备份把标记置 0。
+6. `cargo test conversation` 与 `cargo test backup` 绿（含增量、回填、待补建、正文搜索）。
 
 ## 全局指令
 
