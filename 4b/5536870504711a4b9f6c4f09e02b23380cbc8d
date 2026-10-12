@@ -1,0 +1,60 @@
+CONTEXT.md
+  s_976afb068b2419::t_21d9480120c7d1 36
+docs/adr/0011-conversation-event-index.md
+  s_976afb068b2419::t_21d9480120c7d1 38
+src-tauri/src/adapters/hermes.rs
+  s_976afb068b2419::t_5d6dd8ba11ef94 216
+src-tauri/src/tests/hermes_conversation.rs
+  s_976afb068b2419::t_31943388074a5d 1-8,35-85,125,127-130,140-227,229-240
+  s_976afb068b2419::t_980f975dc4a548 228
+  s_976afb068b2419::t_37efc63fffdcaf 9-34,86-124,126,131-139
+src-tauri/src/conversation/mod.rs
+  s_976afb068b2419::t_a59129767bbc53 124
+  s_976afb068b2419::t_5f887fecea163d 38
+  s_976afb068b2419::t_c073e78f15f262 10
+  s_976afb068b2419::t_abfb91c85b5747 373-382
+  s_976afb068b2419::t_5ea76852e34cc3 383-392
+  s_976afb068b2419::t_c55ec41df8b36a 123
+src-tauri/src/tests/mod.rs
+  s_976afb068b2419::t_7fa3943b7a3326 5
+  s_976afb068b2419::t_980f975dc4a548 43
+src-tauri/src/conversation/discover.rs
+  s_976afb068b2419::t_dc0b98bba13209 103,106-110,112-114
+  s_976afb068b2419::t_d80fcb210c0a9c 104-105,111
+src-tauri/src/test_support/agy_fixture.rs
+  s_976afb068b2419::t_49951cb747e511 126-240
+src-tauri/src/adapters/agy.rs
+  s_976afb068b2419::t_703b5cc855c9e0 311
+  s_976afb068b2419::t_3d61de1004bf6b 185
+  s_976afb068b2419::t_f1e1fccae702c9 199
+src-tauri/src/tests/agy_conversation.rs
+  s_976afb068b2419::t_a36ac4482c22bb 1-135
+docs/probe/agy-conversation.md
+  s_976afb068b2419::t_a1cc57de77a24e 1-23
+src-tauri/src/conversation/hermes.rs
+  s_976afb068b2419::t_4284241edea1bb 40
+  s_976afb068b2419::t_980f975dc4a548 86
+  s_976afb068b2419::t_bd6beb65c791e4 1-39,41-85,87-313,315-344
+  s_976afb068b2419::t_d6ec2445b4b57e 314
+src-tauri/src/conversation/agy.rs
+  s_976afb068b2419::t_494267788a566e 80
+  s_976afb068b2419::t_4d06f43898e62e 1-50,52-56,58,60-79,81-97,104-249
+  s_976afb068b2419::t_d0e409e1938c77 51,57,59
+  s_976afb068b2419::t_37efc63fffdcaf 98-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4b5536870504711a4b9f6c4f09e02b23380cbc8d",
+  "prompts": {},
+  "sessions": {
+    "s_976afb068b2419": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "0294309f-b16c-47f5-85fb-4d7f75b739d7",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
