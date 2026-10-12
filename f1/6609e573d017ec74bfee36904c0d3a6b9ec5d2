@@ -1,0 +1,24 @@
+server/web/src/components/Sparkline.tsx
+  s_c0188c0935fcdc::t_1da32ea40b4d55 8-16,24
+server/web/src/components/TrendChart.tsx
+  s_c0188c0935fcdc::t_1da32ea40b4d55 50
+server/web/src/components/KpiColumn.tsx
+  s_c0188c0935fcdc::t_1da32ea40b4d55 31,33,35-47,49-58
+  s_c0188c0935fcdc::t_daeb35a69a8ceb 32,34,90,106,115,123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "f16609e573d017ec74bfee36904c0d3a6b9ec5d2",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
