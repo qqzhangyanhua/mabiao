@@ -1,0 +1,22 @@
+server/Dockerfile
+  s_c0188c0935fcdc::t_b551e100daa7ef 13-14
+  s_c0188c0935fcdc::t_1d30b9edae0631 32
+  s_c0188c0935fcdc::t_ca0348e06dec3f 10-12
+  s_c0188c0935fcdc::t_3141729c076a9c 6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "fdcc4d0b2c4251ba765626df0e1bd59055341640",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
