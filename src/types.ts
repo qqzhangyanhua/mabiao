@@ -994,6 +994,14 @@ export type SourceIngestReport = {
   records_archived: number;
 };
 
+export type ConversationCatalogProgressDto = {
+  done: number;
+  total: number;
+  source: string | null;
+  finished: boolean;
+  issue_count: number;
+};
+
 export type IngestReport = {
   files_seen: number;
   files_parsed: number;
