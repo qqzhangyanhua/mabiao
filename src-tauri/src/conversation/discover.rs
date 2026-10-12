@@ -100,6 +100,18 @@ pub(crate) fn regular_source_revision(path: &Path) -> Result<String, String> {
         .map_err(|error| format!("读取原始文件元数据失败：{error}"))
 }
 
+/// WAL 模式的 SQLite 源：新写入先落 `-wal`，主文件的大小与 mtime 可能不动，
+/// 所以修订号要算上 `-wal`。不能算 `-shm`：每次只读打开都会刷新它的 mtime，
+/// 详情读取前后的修订号就永远对不上。
+pub(crate) fn wal_source_revision(path: &Path, label: &str) -> Result<String, String> {
+    fs::metadata(path).map_err(|error| format!("读取 {label} 数据库元数据失败：{error}"))?;
+    Ok(format!(
+        "{}|{}",
+        ingest::metadata_fingerprint(path),
+        ingest::metadata_fingerprint(&ingest::sqlite_sidecar_path(path, "-wal"))
+    ))
+}
+
 pub(crate) fn single_index(
     path: &Path,
     parse: fn(&Path, bool) -> Result<ParsedConversation, String>,

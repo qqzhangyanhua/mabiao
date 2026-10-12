@@ -7,6 +7,7 @@ use crate::domain::{
 };
 
 mod agent_graph;
+mod agy;
 mod alma;
 pub(crate) mod attachments;
 mod backfill;
@@ -34,6 +35,7 @@ mod export;
 mod gemini;
 mod grok;
 mod grok_inject;
+mod hermes;
 mod hydrate;
 mod incremental;
 mod kimi;
@@ -118,6 +120,8 @@ pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
     Source::WorkBuddy,
     Source::Zcode,
     Source::Alma,
+    Source::Hermes,
+    Source::Agy,
 ];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 18;
@@ -363,6 +367,26 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: alma::detail,
         revision: alma::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Hermes,
+        discover: hermes::discover,
+        index: hermes::index,
+        index_suffix: None,
+        detail: hermes::detail,
+        revision: hermes::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Agy,
+        discover: agy::discover,
+        index: agy::index,
+        index_suffix: None,
+        detail: agy::detail,
+        revision: agy::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },

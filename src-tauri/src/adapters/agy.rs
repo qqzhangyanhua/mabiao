@@ -182,7 +182,7 @@ fn load_step_blobs(conn: &rusqlite::Connection) -> Result<Vec<Vec<u8>>, String> 
     Ok(rows.filter_map(Result::ok).collect())
 }
 
-fn load_model_names(conn: &rusqlite::Connection) -> HashMap<String, String> {
+pub(crate) fn load_model_names(conn: &rusqlite::Connection) -> HashMap<String, String> {
     let Ok(mut stmt) = conn.prepare("SELECT data FROM gen_metadata WHERE data IS NOT NULL") else {
         return HashMap::new();
     };
@@ -196,7 +196,7 @@ fn load_model_names(conn: &rusqlite::Connection) -> HashMap<String, String> {
     models
 }
 
-fn load_project(conn: &rusqlite::Connection) -> String {
+pub(crate) fn load_project(conn: &rusqlite::Connection) -> String {
     let Ok(mut stmt) =
         conn.prepare("SELECT data FROM trajectory_metadata_blob WHERE data IS NOT NULL")
     else {
@@ -308,7 +308,7 @@ fn token(value: Option<u64>) -> i64 {
     value.and_then(|n| i64::try_from(n).ok()).unwrap_or(0)
 }
 
-fn timestamp_at(blob: &[u8], path: &[u32]) -> String {
+pub(crate) fn timestamp_at(blob: &[u8], path: &[u32]) -> String {
     let Some(raw) = proto_wire::bytes_at_path(blob, path) else {
         return String::new();
     };

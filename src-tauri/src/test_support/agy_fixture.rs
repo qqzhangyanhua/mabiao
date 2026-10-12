@@ -123,6 +123,121 @@ fn encode_bytes_field(field: u32, payload: &[u8]) -> Vec<u8> {
     out
 }
 
+fn encode_varint_field(field: u32, value: u64) -> Vec<u8> {
+    let mut out = encode_varint(u64::from(field) << 3);
+    out.extend(encode_varint(value));
+    out
+}
+
+/// `step_payload`（`CortexStep`）的公共头：字段 1 步骤类型，字段 5 元数据
+/// （1 → Timestamp.seconds，可选 9 → 11 request id）。
+fn step_payload_head(step_type: u64, seconds: u64, request_id: Option<&str>) -> Vec<u8> {
+    let mut metadata = encode_bytes_field(1, &encode_varint_field(1, seconds));
+    if let Some(request_id) = request_id {
+        metadata.extend(encode_bytes_field(
+            9,
+            &encode_bytes_field(11, request_id.as_bytes()),
+        ));
+    }
+    let mut out = encode_varint_field(1, step_type);
+    out.extend(encode_bytes_field(5, &metadata));
+    out
+}
+
+/// `step_type = 14`：字段 19 → 字段 2 是用户原文。
+pub fn user_input_step_payload(text: &str, seconds: u64) -> Vec<u8> {
+    let mut out = step_payload_head(14, seconds, None);
+    out.extend(encode_bytes_field(
+        19,
+        &encode_bytes_field(2, text.as_bytes()),
+    ));
+    out
+}
+
+/// `step_type = 15`：字段 20 → 1 回复、3 思考、7（重复）工具调用 `{1 id, 2 name, 3 参数}`。
+pub fn planner_step_payload(
+    response: Option<&str>,
+    thinking: Option<&str>,
+    tool_calls: &[(&str, &str, &str)],
+    seconds: u64,
+    request_id: Option<&str>,
+) -> Vec<u8> {
+    let mut planner = Vec::new();
+    if let Some(response) = response {
+        planner.extend(encode_bytes_field(1, response.as_bytes()));
+    }
+    if let Some(thinking) = thinking {
+        planner.extend(encode_bytes_field(3, thinking.as_bytes()));
+    }
+    for (id, name, arguments) in tool_calls {
+        let mut call = encode_bytes_field(1, id.as_bytes());
+        call.extend(encode_bytes_field(2, name.as_bytes()));
+        call.extend(encode_bytes_field(3, arguments.as_bytes()));
+        planner.extend(encode_bytes_field(7, &call));
+    }
+    let mut out = step_payload_head(15, seconds, request_id);
+    out.extend(encode_bytes_field(20, &planner));
+    out
+}
+
+/// 工具执行步骤：本适配器不解析，只用来证明它被忽略。
+pub fn opaque_tool_step_payload(seconds: u64) -> Vec<u8> {
+    let mut out = step_payload_head(132, seconds, None);
+    out.extend(encode_bytes_field(
+        140,
+        &encode_bytes_field(1, b"tool output must stay ignored"),
+    ));
+    out
+}
+
+/// 带 `step_type` / `step_payload` 列的会话库（真实 agy 库的形状），供对话记录测试用。
+pub fn write_agy_payload_db(
+    path: &Path,
+    steps: &[(i64, Vec<u8>)],
+    generations: &[&str],
+    trajectory: Option<&str>,
+) -> PathBuf {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("create agy fixture dir");
+    }
+    let db = rusqlite::Connection::open(path).expect("open agy fixture db");
+    db.execute_batch(
+        r#"
+        CREATE TABLE steps (
+            idx INTEGER PRIMARY KEY,
+            step_type INTEGER NOT NULL DEFAULT 0,
+            metadata BLOB,
+            step_payload BLOB
+        );
+        CREATE TABLE gen_metadata (idx INTEGER PRIMARY KEY, data BLOB);
+        CREATE TABLE trajectory_metadata_blob (id TEXT DEFAULT 'main' PRIMARY KEY, data BLOB);
+        "#,
+    )
+    .expect("create agy payload fixture tables");
+    for (idx, (step_type, payload)) in steps.iter().enumerate() {
+        db.execute(
+            "INSERT INTO steps (idx, step_type, step_payload) VALUES (?1, ?2, ?3)",
+            rusqlite::params![idx as i64, step_type, payload],
+        )
+        .expect("insert agy payload step");
+    }
+    for (idx, hex) in generations.iter().enumerate() {
+        db.execute(
+            "INSERT INTO gen_metadata (idx, data) VALUES (?1, ?2)",
+            rusqlite::params![idx as i64, decode_hex(hex)],
+        )
+        .expect("insert agy generation");
+    }
+    if let Some(hex) = trajectory {
+        db.execute(
+            "INSERT INTO trajectory_metadata_blob (id, data) VALUES ('main', ?1)",
+            rusqlite::params![decode_hex(hex)],
+        )
+        .expect("insert agy trajectory");
+    }
+    path.to_path_buf()
+}
+
 fn to_hex(bytes: &[u8]) -> String {
     bytes
         .iter()

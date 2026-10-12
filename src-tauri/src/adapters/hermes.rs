@@ -213,7 +213,7 @@ fn native_cost(cost_source: Option<&str>, actual_cost_usd: f64) -> Option<f64> {
     }
 }
 
-fn unix_seconds_to_rfc3339(started_at: f64) -> String {
+pub(crate) fn unix_seconds_to_rfc3339(started_at: f64) -> String {
     if !started_at.is_finite() || started_at <= 0.0 {
         return String::new();
     }

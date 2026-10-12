@@ -2,6 +2,7 @@
 
 mod adapters;
 mod aggregate_boundary;
+mod agy_conversation;
 mod alma_conversation;
 mod antigravity_quota;
 mod backup;
@@ -39,6 +40,7 @@ mod devin_quota;
 mod droid_quota;
 mod dsh_droid_conversation;
 mod grok_quota;
+mod hermes_conversation;
 mod ingest;
 mod instructions;
 mod kimi_grok_conversation;
