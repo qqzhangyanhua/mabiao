@@ -28,28 +28,34 @@ export function MetricCard({
   trendColor?: string;
 }) {
   return (
-    <div className={cn(glassClass, "flex h-full min-w-0 flex-col p-4")}>
-      {icon ? (
-        <IconChip tone={tone} size="md">
-          {icon}
-        </IconChip>
-      ) : null}
-      <div
-        title={value}
-        className={cn(
-          "truncate text-2xl font-semibold tracking-tight tabular-nums",
-          icon ? "mt-3" : "",
-        )}
-      >
-        {value}
-      </div>
-      <div className="mt-0.5 text-sm text-foreground">{label}</div>
-      {badge ? <div className="mt-2">{badge}</div> : null}
-      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
-      {trend ? (
-        <div className="mt-auto pt-3">
-          <Sparkline values={trend} color={trendColor} />
+    <div className={cn(glassClass, "flex h-full min-w-0 flex-col justify-center gap-1.5 px-3.5 py-3")}>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {icon ? (
+          <IconChip tone={tone} size="sm">
+            {icon}
+          </IconChip>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs text-muted-foreground" title={label}>
+            {label}
+          </div>
+          <div
+            title={value}
+            className="truncate text-xl leading-tight font-semibold tracking-tight tabular-nums"
+          >
+            {value}
+          </div>
         </div>
+      </div>
+      {trend ? <Sparkline values={trend} color={trendColor} height={20} /> : null}
+      {badge ? <div>{badge}</div> : null}
+      {hint ? (
+        <p
+          className="line-clamp-1 text-xs text-muted-foreground"
+          title={typeof hint === "string" ? hint : undefined}
+        >
+          {hint}
+        </p>
       ) : null}
     </div>
   );
@@ -81,7 +87,7 @@ export function KpiColumn({
       <MetricCard
         value={formatCost(cost)}
         label={`费用（${COST_MODE_LABEL[mode]}）`}
-        icon={<Wallet size={18} />}
+        icon={<Wallet size={16} />}
         tone="amber"
         trend={costTrend}
         trendColor="var(--chart-3)"
@@ -97,7 +103,7 @@ export function KpiColumn({
         value={formatTokens(tokens)}
         label="Token"
         hint={`${recordCount} 条消耗记录`}
-        icon={<Coins size={18} />}
+        icon={<Coins size={16} />}
         tone="blue"
         trend={tokenTrend}
         trendColor="var(--chart-4)"
@@ -106,7 +112,7 @@ export function KpiColumn({
         value={sessions === undefined ? "…" : String(sessions)}
         label="会话"
         hint="与当前区间重叠的已推送会话"
-        icon={<MessagesSquare size={18} />}
+        icon={<MessagesSquare size={16} />}
         tone="violet"
       />
       {cacheHit !== null && (
@@ -114,7 +120,7 @@ export function KpiColumn({
           value={formatPercent(cacheHit)}
           label="缓存命中率"
           hint="缓存读 ÷（输入 + 缓存读）；来自当前区间已取回的消耗记录"
-          icon={<ShieldCheck size={18} />}
+          icon={<ShieldCheck size={16} />}
           tone="emerald"
         />
       )}

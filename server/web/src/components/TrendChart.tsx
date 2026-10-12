@@ -47,7 +47,7 @@ export function TrendChart({
         <p className="py-6 text-center text-sm text-muted-foreground">这段时间没有数据</p>
       ) : (
         <>
-          <div className="flex min-h-48 flex-1 gap-2">
+          <div className="flex min-h-32 flex-1 gap-2">
             <div
               aria-hidden="true"
               className="flex w-11 shrink-0 flex-col justify-between text-right text-[10px] leading-none text-muted-foreground tabular-nums"

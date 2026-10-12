@@ -5,7 +5,15 @@ const W = 120;
 const H = 32;
 
 /** 装饰性小趋势线；数值已在卡片正文里，读屏跳过。少于 2 个点不画。 */
-export function Sparkline({ values, color }: { values: number[]; color: string }) {
+export function Sparkline({
+  values,
+  color,
+  height = H,
+}: {
+  values: number[];
+  color: string;
+  height?: number;
+}) {
   const gradient = `spark-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   if (values.length < 2) return null;
   const line = sparkPoints(values, W, H);
@@ -13,7 +21,7 @@ export function Sparkline({ values, color }: { values: number[]; color: string }
     <svg
       aria-hidden="true"
       width="100%"
-      height={H}
+      height={height}
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
       className="pointer-events-none block"
