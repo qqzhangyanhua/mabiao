@@ -6,8 +6,8 @@ import { useHref } from "../view";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorNote } from "./Feedback";
 import { Button } from "./ui/button";
-import { panelClass } from "./ui/card";
-import { Input, NativeSelect } from "./ui/input";
+import { glassClass } from "./ui/card";
+import { FieldLabel, Input, NativeSelect } from "./ui/input";
 import { cn } from "../lib/cn";
 
 /**
@@ -54,7 +54,7 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
     });
 
   return (
-    <section className={cn(panelClass, "space-y-4 p-4")}>
+    <section className={cn(glassClass, "space-y-4 p-4")}>
       <h2 className="text-sm font-medium">项目管理（管理员）</h2>
       <p className="text-xs text-muted-foreground">
         自动归并的依据：
@@ -64,7 +64,7 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
       {error && <ErrorNote error={error} />}
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">项目名</span>
+          <FieldLabel>项目名</FieldLabel>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -83,7 +83,7 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
       </div>
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">合并进</span>
+          <FieldLabel>合并进</FieldLabel>
           <NativeSelect
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}

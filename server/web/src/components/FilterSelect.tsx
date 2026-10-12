@@ -1,6 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../lib/cn";
+import { nativeSelectClass } from "./ui/input";
 
 /** 玻璃工具栏里的下拉：左侧图标 + 标签，右侧自绘箭头，原生 select 保证键盘与读屏行为。 */
 export function FilterSelect({
@@ -19,10 +20,7 @@ export function FilterSelect({
       <span className="relative">
         <select
           aria-label={label}
-          className={cn(
-            "h-8 max-w-48 appearance-none rounded-lg border border-border bg-card pr-8 pl-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            className,
-          )}
+          className={cn("h-8 max-w-48", nativeSelectClass, className)}
           {...props}
         >
           {children}

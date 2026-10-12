@@ -5,8 +5,8 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/ui/button";
-import { Card, panelClass } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { glassClass, panelClass } from "../components/ui/card";
+import { FieldLabel, Input } from "../components/ui/input";
 import { numCellClass, tableClass, thClass, theadRowClass, trClass } from "../components/ui/table";
 import { useAsync } from "../hooks";
 import { cn } from "../lib/cn";
@@ -113,34 +113,33 @@ export function PricingPage() {
         onConfirm={() => pendingId !== null && void remove(pendingId)}
         onCancel={() => setPendingId(null)}
       />
-      <Card className="p-4">
+      <div className={cn(glassClass, "p-4")}>
         <form onSubmit={save} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm">
-            模型
-            <Input value={model} onChange={(e) => setModel(e.target.value)} required className="mt-1" />
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>模型</FieldLabel>
+            <Input value={model} onChange={(e) => setModel(e.target.value)} required />
           </label>
-          <label className="text-sm">
-            提供商（可空）
-            <Input value={provider} onChange={(e) => setProvider(e.target.value)} className="mt-1" />
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>提供商（可空）</FieldLabel>
+            <Input value={provider} onChange={(e) => setProvider(e.target.value)} />
           </label>
-          <label className="text-sm">
-            输入单价
-            <Input value={input} onChange={(e) => setInput(e.target.value)} required className="mt-1" />
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>输入单价</FieldLabel>
+            <Input value={input} onChange={(e) => setInput(e.target.value)} required />
           </label>
-          <label className="text-sm">
-            输出单价
-            <Input value={output} onChange={(e) => setOutput(e.target.value)} required className="mt-1" />
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>输出单价</FieldLabel>
+            <Input value={output} onChange={(e) => setOutput(e.target.value)} required />
           </label>
-          <label className="text-sm">
-            缓存读单价
-            <Input value={cacheRead} onChange={(e) => setCacheRead(e.target.value)} className="mt-1" />
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>缓存读单价</FieldLabel>
+            <Input value={cacheRead} onChange={(e) => setCacheRead(e.target.value)} />
           </label>
-          <label className="text-sm">
-            缓存写单价
+          <label className="flex flex-col gap-1 text-sm">
+            <FieldLabel>缓存写单价</FieldLabel>
             <Input
               value={cacheCreation}
               onChange={(e) => setCacheCreation(e.target.value)}
-              className="mt-1"
             />
           </label>
           <div className="flex items-end">
@@ -149,7 +148,7 @@ export function PricingPage() {
             </Button>
           </div>
         </form>
-      </Card>
+      </div>
       {error ? (
         <ErrorNote error={error} onRetry={reload} />
       ) : loading || !data ? (

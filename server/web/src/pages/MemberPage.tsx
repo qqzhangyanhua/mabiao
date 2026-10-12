@@ -6,16 +6,14 @@ import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import {
   generatedParam,
-  GeneratedFilterSelect,
   type GeneratedFilter,
 } from "../components/GeneratedFilter";
+import { SessionListSection } from "../components/SessionListSection";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
-import { Button } from "../components/ui/button";
-import { panelClass } from "../components/ui/card";
+import { TablePager } from "../components/TablePager";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
-import { cn } from "../lib/cn";
 import { downloadCsv } from "../lib/csv";
 import { sessionRows, summaryRows } from "../lib/export";
 import { cacheHitRate } from "../lib/tokens";
@@ -135,54 +133,27 @@ export function MemberPage({ accountId }: { accountId: number }) {
       )}
 
       {bounds && (
-        <section className={cn(panelClass, "p-4")}>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-medium">
-              会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}
-            </h2>
-            <GeneratedFilterSelect
-              value={generated}
-              onChange={(value) => {
-                setPage(0);
-                setGenerated(value);
-              }}
-            />
-          </div>
+        <SessionListSection
+          title={<>会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}</>}
+          generated={generated}
+          onGeneratedChange={(value) => {
+            setPage(0);
+            setGenerated(value);
+          }}
+          footer={
+            sessions.data ? (
+              <TablePager page={page} pageCount={pageCount} onPageChange={setPage} />
+            ) : null
+          }
+        >
           {sessions.error ? (
             <ErrorNote error={sessions.error} onRetry={sessions.reload} />
           ) : sessions.loading || !sessions.data ? (
             <Loading />
           ) : (
-            <>
-              <SessionTable sessions={sessions.data.sessions} />
-              {pageCount > 1 && (
-                <div className="mt-3 flex items-center justify-end gap-3 text-sm">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page === 0}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <span>
-                    {page + 1} / {pageCount}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={page + 1 >= pageCount}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              )}
-            </>
+            <SessionTable sessions={sessions.data.sessions} />
           )}
-        </section>
+        </SessionListSection>
       )}
     </>
   );

@@ -8,8 +8,8 @@ import { MetricCard } from "../components/KpiColumn";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Card, panelClass } from "../components/ui/card";
-import { Input } from "../components/ui/input";
+import { glassClass, panelClass } from "../components/ui/card";
+import { FieldLabel, Input } from "../components/ui/input";
 import { Segmented } from "../components/ui/segmented";
 import { numCellClass, tableClass, thClass, theadRowClass, trClass } from "../components/ui/table";
 import { usePageExports } from "../export-action";
@@ -47,26 +47,26 @@ function CreateMemberForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <Card className="p-4">
+    <div className={cn(glassClass, "p-4")}>
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3 text-sm">
-        <label>
-          <span className="block text-muted-foreground">新成员账号</span>
+        <label className="flex flex-col gap-1">
+          <FieldLabel>新成员账号</FieldLabel>
           <Input
             value={account}
             onChange={(e) => setAccount(e.target.value)}
             required
-            className="mt-1 w-52"
+            className="w-52"
           />
         </label>
-        <label>
-          <span className="block text-muted-foreground">初始密码</span>
+        <label className="flex flex-col gap-1">
+          <FieldLabel>初始密码</FieldLabel>
           <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
             required
-            className="mt-1 w-52"
+            className="w-52"
           />
         </label>
         <Button type="submit" disabled={busy}>
@@ -78,7 +78,7 @@ function CreateMemberForm({ onCreated }: { onCreated: () => void }) {
           </p>
         )}
       </form>
-    </Card>
+    </div>
   );
 }
 
@@ -214,11 +214,12 @@ export function MembersPage() {
         onConfirm={() => pendingDeactivate && void deactivate(pendingDeactivate)}
         onCancel={() => setPendingDeactivate(null)}
       />
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="glass flex w-fit max-w-full flex-wrap items-center gap-2 rounded-2xl p-1.5">
         <Segmented
           label="角色"
           value={roleFilter}
           onChange={setRoleFilter}
+          size="compact"
           options={[
             { id: "all", label: "全部" },
             { id: "admin", label: "管理员" },
@@ -230,7 +231,7 @@ export function MembersPage() {
           placeholder="搜索账号"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+          className="h-8 max-w-xs text-sm"
         />
       </div>
       {error ? (

@@ -1,4 +1,5 @@
-import { NativeSelect } from "./ui/input";
+import { Sparkles } from "lucide-react";
+import { FilterSelect } from "./FilterSelect";
 
 export type GeneratedFilter = "all" | "only" | "hide";
 
@@ -22,17 +23,18 @@ export function GeneratedFilterSelect({
   onChange: (value: GeneratedFilter) => void;
 }) {
   return (
-    <NativeSelect
-      aria-label="码表生成过滤"
+    <FilterSelect
+      icon={<Sparkles size={15} />}
+      label="码表生成"
       value={value}
       onChange={(e) => onChange(e.target.value as GeneratedFilter)}
-      className="w-auto"
+      className="max-w-none min-w-[9.5rem]"
     >
       {OPTIONS.map((o) => (
         <option key={o.id} value={o.id}>
           {o.label}
         </option>
       ))}
-    </NativeSelect>
+    </FilterSelect>
   );
 }
