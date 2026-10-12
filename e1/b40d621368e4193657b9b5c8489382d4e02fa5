@@ -1,0 +1,27 @@
+server/web/src/components/ProjectAdmin.tsx
+  s_c0188c0935fcdc::t_1b657973cef99e 6,23,100,104-113
+server/web/src/pages/MembersPage.tsx
+  s_c0188c0935fcdc::t_1b657973cef99e 5,127-128,131,138-140,207-216,301
+server/web/src/pages/PricingPage.tsx
+  s_c0188c0935fcdc::t_1b657973cef99e 4,28-29,59,67-69,104-115,209
+server/web/src/App.test.tsx
+  s_c0188c0935fcdc::t_3d4e93b1f2c1dd 1,64,100-103,106-122,283-327
+server/web/src/Detail.test.tsx
+  s_c0188c0935fcdc::t_3d4e93b1f2c1dd 284,298-300,302
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e1b40d621368e4193657b9b5c8489382d4e02fa5",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
