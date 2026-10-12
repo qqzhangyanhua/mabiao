@@ -11,7 +11,7 @@ use super::catalog_search;
 use super::conversation_adapter;
 use super::event_index;
 use super::hydrate;
-use super::session_store::{load_session, load_usage_records, row_from_sql};
+use super::session_store::{event_index_ready_sql, load_session, load_usage_records, row_from_sql};
 use super::toolbox::compare_event_order;
 use super::trusted_path::session_source_paths;
 use super::{parse_conversation_files, CONVERSATION_SOURCES};
@@ -273,7 +273,7 @@ pub fn sessions_page_with_prices(
 
     params.push(rusqlite::types::Value::Integer(i64::from(page_size)));
     params.push(rusqlite::types::Value::Integer(offset));
-    let ready_sql = catalog_search::event_index_ready_sql("sessions");
+    let ready_sql = event_index_ready_sql("sessions");
     let sql = format!(
         r#"
         SELECT sessions.source, sessions.session_id, sessions.title, sessions.project, sessions.model,
