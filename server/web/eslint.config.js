@@ -28,6 +28,18 @@ export default tseslint.config(
       ],
       // 单组件 ≤ 400 行。
       "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
+      // 独立前端包，禁止引用桌面端 src/（Docker 与 vitest 都解析不到）。
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../../../../src/**", "../../../../../src/**"],
+              message: "server/web 不得引用桌面端 src/，组件请放在本包内。",
+            },
+          ],
+        },
+      ],
     },
   },
   eslintConfigPrettier,

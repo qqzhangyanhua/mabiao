@@ -13,7 +13,7 @@ import { sourceLabel } from "../lib/source";
 import { EventTimeline } from "./EventTimeline";
 import { SourceIcon } from "./SourceIcon";
 import { panelClass } from "./ui/card";
-import { UserAvatar } from "../../../../src/components/UserAvatar";
+import { UserAvatar } from "./UserAvatar";
 
 const ACTOR_LABEL = { user: "用户", assistant: "助手", tool: "工具" } as const;
 

@@ -3,15 +3,9 @@
 FROM node:22-bookworm-slim AS web
 # pnpm 版本由 server/web/package.json 的 packageManager 钉住。
 RUN corepack enable
-# 网页用 ../../../../src 引用桌面端的来源标组件，目录层级要和仓库一致。
-WORKDIR /repo/server/web
+WORKDIR /web
 COPY server/web/package.json server/web/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY src/components/UserAvatar.tsx src/components/sourceGlyph.tsx /repo/src/components/
-COPY src/lib/sourceIcon.ts /repo/src/lib/sourceIcon.ts
-COPY src/assets/source-icons /repo/src/assets/source-icons
-# 仓库级 src 里的 react 要能解析到网页自己的依赖。
-RUN ln -s /repo/server/web/node_modules /repo/node_modules
 COPY server/web ./
 RUN pnpm build
 
@@ -29,7 +23,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 mabiao
 COPY --from=build /src/server/target/release/mabiao-server /usr/local/bin/mabiao-server
-COPY --from=web /repo/server/web/dist /usr/share/mabiao/web
+COPY --from=web /web/dist /usr/share/mabiao/web
 ENV MABIAO_WEB_DIR=/usr/share/mabiao/web
 USER mabiao
 EXPOSE 8080
