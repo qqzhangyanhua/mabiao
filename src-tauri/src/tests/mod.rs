@@ -42,6 +42,7 @@ mod dsh_droid_conversation;
 mod grok_quota;
 mod hermes_conversation;
 mod ingest;
+mod ingest_stages;
 mod instructions;
 mod kimi_grok_conversation;
 mod litellm;
