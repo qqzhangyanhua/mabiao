@@ -281,7 +281,7 @@ describe("项目页", () => {
 
   it("offers rename and merge to admins and calls the admin API", async () => {
     const requests = stubServer("admin");
-    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const native = vi.spyOn(window, "confirm");
     window.location.hash = "#/project/11";
     render(<App />);
     signIn();
@@ -295,7 +295,11 @@ describe("项目页", () => {
     await screen.findByRole("option", { name: /alpha-copy/ });
     fireEvent.change(select, { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "合并" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "合并这两个项目？" });
+    expect(requests).not.toContain("POST /api/v1/admin/projects/11/merge");
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认合并" }));
     await waitFor(() => expect(requests).toContain("POST /api/v1/admin/projects/11/merge"));
+    expect(native).not.toHaveBeenCalled();
     await waitFor(() => expect(window.location.hash).toMatch(/^#\/project\/12/));
   });
 

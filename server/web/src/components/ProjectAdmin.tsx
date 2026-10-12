@@ -3,6 +3,7 @@ import type { Project } from "../api/types";
 import { useAuth } from "../auth";
 import { useAsync } from "../hooks";
 import { useHref } from "../view";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { ErrorNote } from "./Feedback";
 import { Button } from "./ui/button";
 import { panelClass } from "./ui/card";
@@ -19,6 +20,7 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
   const [name, setName] = useState(project.name);
   const [targetId, setTargetId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmMerge, setConfirmMerge] = useState(false);
   const [error, setError] = useState<Error | undefined>();
   const loadProjects = useCallback(() => api.adminProjects(), [api]);
   const projects = useAsync(loadProjects);
@@ -47,10 +49,6 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
   const merge = () =>
     run(async () => {
       if (!target) return;
-      const ok = window.confirm(
-        `把「${project.name}」合并进「${target.name}」？\n历史会话与消耗记录都会改挂到「${target.name}」，不能撤销。`,
-      );
-      if (!ok) return;
       const result = await api.mergeProject(project.id, target.id);
       window.location.hash = href({ page: "project", projectId: result.project.id });
     });
@@ -99,10 +97,20 @@ export function ProjectAdmin({ project, onRenamed }: { project: Project; onRenam
             ))}
           </NativeSelect>
         </label>
-        <Button type="button" variant="destructive" disabled={busy || !target} onClick={() => void merge()}>
+        <Button type="button" variant="destructive" disabled={busy || !target} onClick={() => setConfirmMerge(true)}>
           合并
         </Button>
       </div>
+      <ConfirmDialog
+        open={confirmMerge && !!target}
+        title="合并这两个项目？"
+        description={`把「${project.name}」合并进「${target?.name ?? ""}」：历史会话与消耗记录都会改挂到「${target?.name ?? ""}」，不能撤销。`}
+        confirmLabel="确认合并"
+        busyLabel="合并中…"
+        busy={busy}
+        onConfirm={() => void merge().finally(() => setConfirmMerge(false))}
+        onCancel={() => setConfirmMerge(false)}
+      />
     </section>
   );
 }

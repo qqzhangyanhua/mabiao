@@ -2,6 +2,7 @@ import { Activity, UserRound, Users, Wallet } from "lucide-react";
 import { useCallback, useMemo, useState, type FormEvent } from "react";
 import type { AccountView, CoverageView } from "../api/types";
 import { useAuth } from "../auth";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { MetricCard } from "../components/KpiColumn";
 import { PageHeader } from "../components/PageHeader";
@@ -123,16 +124,20 @@ export function MembersPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [search, setSearch] = useState("");
+  const [pendingDeactivate, setPendingDeactivate] = useState<AccountView | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   async function deactivate(account: AccountView) {
-    if (!window.confirm(`停用 ${account.account}？停用后立即退出登录、不能再推送，已有数据保留。`))
-      return;
+    setDeactivating(true);
     setActionError(null);
     try {
       await api.deactivate(account.id);
       reload();
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "停用失败");
+    } finally {
+      setDeactivating(false);
+      setPendingDeactivate(null);
     }
   }
 
@@ -199,6 +204,16 @@ export function MembersPage() {
       </div>
       <CreateMemberForm onCreated={reload} />
       {actionError && <ErrorNote error={new Error(actionError)} />}
+      <ConfirmDialog
+        open={pendingDeactivate !== null}
+        title={`停用 ${pendingDeactivate?.account ?? ""}？`}
+        description="停用后立即退出登录、不能再推送，已有数据保留。"
+        confirmLabel="确认停用"
+        busyLabel="停用中…"
+        busy={deactivating}
+        onConfirm={() => pendingDeactivate && void deactivate(pendingDeactivate)}
+        onCancel={() => setPendingDeactivate(null)}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <Segmented
           label="角色"
@@ -283,7 +298,7 @@ export function MembersPage() {
                       {account.active && account.id !== profile.id && (
                         <button
                           type="button"
-                          onClick={() => void deactivate(account)}
+                          onClick={() => setPendingDeactivate(account)}
                           className="text-destructive hover:underline"
                         >
                           停用

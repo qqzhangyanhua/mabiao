@@ -1,6 +1,7 @@
 import { Settings } from "lucide-react";
 import { useCallback, useState, type FormEvent } from "react";
 import { useAuth } from "../auth";
+import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/ui/button";
@@ -24,6 +25,8 @@ export function PricingPage() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<number | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -53,7 +56,7 @@ export function PricingPage() {
   }
 
   async function remove(id: number) {
-    if (!window.confirm("删除这条团队价目？同名模型会回落到内置快照。")) return;
+    setRemoving(true);
     setFormError(null);
     try {
       const result = await api.deletePrice(id);
@@ -61,6 +64,9 @@ export function PricingPage() {
       reload();
     } catch (e) {
       setFormError(e instanceof Error ? e.message : "删除失败");
+    } finally {
+      setRemoving(false);
+      setPendingId(null);
     }
   }
 
@@ -95,6 +101,18 @@ export function PricingPage() {
         </p>
       )}
       {formError && <ErrorNote error={new Error(formError)} />}
+      <ConfirmDialog
+        open={pendingId !== null}
+        title="删除这条团队价目？"
+        description={`${
+          data?.prices.find((price) => price.id === pendingId)?.model ?? "该模型"
+        } 的团队价目会被删除，同名模型回落到内置快照，并重算相关消耗记录。`}
+        confirmLabel="确认删除"
+        busyLabel="删除中…"
+        busy={removing}
+        onConfirm={() => pendingId !== null && void remove(pendingId)}
+        onCancel={() => setPendingId(null)}
+      />
       <Card className="p-4">
         <form onSubmit={save} className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-sm">
@@ -188,7 +206,7 @@ export function PricingPage() {
                       <td className="px-4 py-2 text-right">
                         <button
                           type="button"
-                          onClick={() => void remove(price.id)}
+                          onClick={() => setPendingId(price.id)}
                           className="text-destructive hover:underline"
                         >
                           删除
