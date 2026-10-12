@@ -250,6 +250,7 @@ export default function App() {
                     prices={data.prices}
                     diagnostics={data.diagnostics}
                     ingestReport={data.lastIngestReport}
+                    conversationIssues={data.conversationIssues}
                     rebuilding={data.rebuilding}
                     purging={data.purging}
                     operationBusy={data.busy}

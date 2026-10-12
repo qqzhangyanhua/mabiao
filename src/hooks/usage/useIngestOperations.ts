@@ -2,13 +2,16 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { humanStatus } from "../../lib/format";
 import { ingestFailureStatus, usageStageStatus } from "../../lib/ingestStatus";
-import type { IngestReport } from "../../types";
+import type { IngestIssue, IngestReport } from "../../types";
 
 type IngestOpsConfig = {
   refreshViews: () => Promise<void>;
   dataEpochRef: MutableRefObject<number>;
   requestGenerationRef: MutableRefObject<number>;
   setSessionsRevision: Dispatch<SetStateAction<number>>;
+  setConversationIssues: Dispatch<SetStateAction<IngestIssue[]>>;
+  beginUsageStage: () => void;
+  publishUsageStatus: (text: string) => void;
   setLastIngestReport: Dispatch<SetStateAction<IngestReport | null>>;
   setStatus: Dispatch<SetStateAction<string>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
@@ -19,12 +22,14 @@ export function useIngestOperations({
   dataEpochRef,
   requestGenerationRef,
   setSessionsRevision,
+  setConversationIssues,
+  beginUsageStage,
+  publishUsageStatus,
   setLastIngestReport,
   setStatus,
   setLoading,
 }: IngestOpsConfig) {
   const ingestOperation = useRef(false);
-  const usageStatusRef = useRef("");
   const [busy, setBusy] = useState(false);
   const [rebuilding, setRebuilding] = useState<string | null>(null);
   const [purging, setPurging] = useState<string | null>(null);
@@ -37,15 +42,14 @@ export function useIngestOperations({
       ingestOperation.current = true;
       requestGenerationRef.current += 1;
       setBusy(true);
+      beginUsageStage();
       setStatus(`${label}中…`);
       try {
         const report = await invoke<IngestReport>("ingest");
         dataEpochRef.current += 1;
         setSessionsRevision((n) => n + 1);
         setLastIngestReport(report);
-        const text = usageStageStatus(label, report);
-        usageStatusRef.current = text;
-        setStatus(text);
+        publishUsageStatus(usageStageStatus(label, report));
         await refreshViews();
         try {
           await invoke("refresh_tray");
@@ -65,6 +69,8 @@ export function useIngestOperations({
       dataEpochRef,
       requestGenerationRef,
       setSessionsRevision,
+      beginUsageStage,
+      publishUsageStatus,
       setLastIngestReport,
       setStatus,
       setLoading,
@@ -87,6 +93,7 @@ export function useIngestOperations({
         dataEpochRef.current += 1;
         setSessionsRevision((n) => n + 1);
         setLastIngestReport(report);
+        setConversationIssues(report.conversation_issues);
         const archived = report.records_archived > 0 ? `，归档 ${report.records_archived}` : "";
         setStatus(
           `缓存重建${report.partial_success ? "部分完成" : "完成"}：写入 ${report.records_written}${archived}，清理 ${report.records_removed}，失败 ${report.files_failed}`,
@@ -111,6 +118,7 @@ export function useIngestOperations({
       dataEpochRef,
       requestGenerationRef,
       setSessionsRevision,
+      setConversationIssues,
       setLastIngestReport,
       setStatus,
       setLoading,
@@ -144,5 +152,5 @@ export function useIngestOperations({
     [refreshViews, dataEpochRef, setSessionsRevision, setStatus],
   );
 
-  return { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, ingestOperation, usageStatusRef };
+  return { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, ingestOperation };
 }
