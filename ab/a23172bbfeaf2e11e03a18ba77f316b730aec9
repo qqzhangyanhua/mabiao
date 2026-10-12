@@ -1,0 +1,51 @@
+src-tauri/src/staged.rs
+  s_78e2327cf578a3::t_ba28f9dec83557 1-342
+docs/adr/0027-staged-ingestion.md
+  s_78e2327cf578a3::t_065805030cad45 28-30
+docs/agent-layers.md
+  s_78e2327cf578a3::t_7f0656730a9312 39
+src-tauri/src/commands/conversations.rs
+  s_78e2327cf578a3::t_c9085a1e8a18eb 1,52,75
+src-tauri/src/commands/ingestion.rs
+  s_78e2327cf578a3::t_639881a33300cd 1,4,7-8,13-20,27-32
+src-tauri/src/commands/io.rs
+  s_78e2327cf578a3::t_0646e2fee091d3 73
+src-tauri/src/commands/push.rs
+  s_78e2327cf578a3::t_504cdced02d0e9 143
+src-tauri/src/conversation/backfill.rs
+  s_78e2327cf578a3::t_d7099939f3b520 83
+src-tauri/src/conversation/mod.rs
+  s_78e2327cf578a3::t_524d845d3ed084 465
+src-tauri/src/conversation/refresh.rs
+  s_78e2327cf578a3::t_d2e2410ba6fbd8 65
+src-tauri/src/domain/conversation.rs
+  s_78e2327cf578a3::t_183c95d0c72897 495-505
+src-tauri/src/ingest.rs
+  s_78e2327cf578a3::t_d74192d4a2f87c 356
+src-tauri/src/lib.rs
+  s_78e2327cf578a3::t_7d257c35aaf41a 33,134,277,372,376,444
+src-tauri/src/tests/ingest_stages.rs
+  s_78e2327cf578a3::t_00447a119812af 256,270-279,288
+src-tauri/src/tests/mod.rs
+  s_78e2327cf578a3::t_b3ece908fcd0e1 74
+src-tauri/src/tests/staged.rs
+  s_78e2327cf578a3::t_1788447cade80a 1-151
+src-tauri/src/tray.rs
+  s_78e2327cf578a3::t_49044a3e5eb760 12-13,171-182,189,196,201-215,217-218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "aba23172bbfeaf2e11e03a18ba77f316b730aec9",
+  "prompts": {},
+  "sessions": {
+    "s_78e2327cf578a3": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "b45bac49-f073-4655-8495-ddf65ecaef7b",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
