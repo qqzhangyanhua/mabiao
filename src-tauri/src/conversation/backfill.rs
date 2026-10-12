@@ -80,7 +80,7 @@ pub fn backfill_event_index_step(conn: &Connection, home: &Path) -> Result<bool,
     }
 }
 
-pub(crate) fn backfill_event_index_step_skipping(
+fn backfill_event_index_step_skipping(
     conn: &Connection,
     home: &Path,
     skipped: &BTreeSet<(String, String)>,

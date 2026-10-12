@@ -36,7 +36,7 @@
 
 1. 对账路径：`ingest.rs` → `store::records::reconcile_source` → `archive_records_for_file`。`files_failed > 0` 或目录读取失败则跳过对账。
 2. 归档只打 `archived_at`，源文件留在原地。
-3. 摄取分两段（ADR 0027）。用量阶段 `ingest_usage`：清理未知来源、消耗记录、Cursor 会话、`sync_rollup`，一个事务，报告不含对话记录问题。对话目录阶段 `refresh_conversation_catalogs`：每个来源单独拿锁、单独事务、提交即释放，全部结束后合并一次倒排。新调用方按这两段接，不要再把对话记录塞回用量事务。
+3. 摄取分两段（ADR 0027）。用量阶段 `ingest_usage`：清理未知来源、消耗记录、Cursor 会话、`sync_rollup`，一个事务，报告不含对话记录问题。对话目录阶段 `refresh_conversation_catalogs`：每个来源单独拿锁、单独事务、提交即释放，全部结束后合并一次倒排。新调用方按这两段接，不要再把对话记录塞回用量事务。后台编排（单飞加补跑、补建优先队列、启动只触发一次）在 `staged.rs`，可测的状态是其中的纯类型，测试放 `tests/staged.rs`；进度事件 `conversation-catalog-progress` 的 DTO 是 `ConversationCatalogProgressDto`，与 `src/types.ts` 同步。
 4. `ingest_all` 是两段串行的组合入口（目录走 `CatalogMode::Full`），结果须与拆分前一致；自动推送用 `ingest_all_with_mode(Deferred)`。`rebuild_cache` 不分段。阶段耗时看 `IngestPhaseTimings`，`bench_ingest` 分两组输出。
 5. 读 ADR 0003、0004、0027。
 6. `cargo test ingest` 与 `cargo test backup` 绿。

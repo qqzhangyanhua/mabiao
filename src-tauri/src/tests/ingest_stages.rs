@@ -253,7 +253,7 @@ fn ingest_all_matches_usage_phase_followed_by_catalog_phase() {
 }
 
 #[test]
-fn deferred_catalog_mode_publishes_the_same_catalog_rows() {
+fn deferred_catalog_mode_publishes_the_same_catalog_rows_but_leaves_events_unready() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     write_all_source_fixtures(home);
@@ -267,6 +267,16 @@ fn deferred_catalog_mode_publishes_the_same_catalog_rows() {
     let (deferred_issues, _) = refresh_catalogs(&deferred, home, CatalogMode::Deferred);
 
     assert_eq!(full_issues, deferred_issues);
+    let full_rows = catalog(&full);
+    let deferred_rows = catalog(&deferred);
+    assert!(
+        full_rows.iter().any(|row| row.event_index_ready),
+        "前提：完整模式下会话事件已就绪"
+    );
+    assert!(
+        deferred_rows.iter().all(|row| !row.event_index_ready),
+        "延后模式不写事件，新会话都等补建"
+    );
     let strip = |rows: Vec<ConversationSessionRow>| -> Vec<ConversationSessionRow> {
         rows.into_iter()
             .map(|row| ConversationSessionRow {
@@ -275,5 +285,5 @@ fn deferred_catalog_mode_publishes_the_same_catalog_rows() {
             })
             .collect()
     };
-    assert_eq!(strip(catalog(&full)), strip(catalog(&deferred)));
+    assert_eq!(strip(full_rows), strip(deferred_rows));
 }

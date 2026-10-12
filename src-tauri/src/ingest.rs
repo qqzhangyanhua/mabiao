@@ -353,7 +353,7 @@ fn refresh_catalog_with_mode(
 ) -> Result<Vec<ConversationIndexIssue>, String> {
     match mode {
         CatalogMode::Full => crate::conversation::refresh(conn, source, dirs),
-        CatalogMode::Deferred => crate::conversation::refresh(conn, source, dirs),
+        CatalogMode::Deferred => crate::conversation::refresh_catalog(conn, source, dirs),
     }
 }
 

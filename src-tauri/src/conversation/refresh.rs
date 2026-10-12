@@ -62,7 +62,7 @@ pub(crate) fn refresh(
 /// 不换 `event_index_generation`：旧一代事件原样保留，会话标成待补建。会话文件的指纹照常
 /// 推进，源文件不再变化时下一轮直接跳过；事件游标不推进，待补建会话也不走增量，
 /// 要等补建整份重写。未待补建的可追加会话照常增量。
-pub fn refresh_catalog(
+pub(crate) fn refresh_catalog(
     conn: &Connection,
     source: Source,
     roots: &[PathBuf],

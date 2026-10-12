@@ -60,7 +60,6 @@ mod zcode;
 use merge::merge_parsed_conversations;
 use toolbox::{FileIndexCursor, ParsedConversation};
 
-pub(crate) use backfill::backfill_event_index_step_skipping;
 pub use backfill::{
     backfill_event_index, backfill_event_index_step, backfill_event_index_step_prioritized,
     event_index_progress, session_needs_event_backfill,
@@ -463,7 +462,7 @@ pub(crate) use incremental::{
     plan_conversation_file_index, ConversationFileFingerprint, ConversationFileIndexPlan,
 };
 pub(crate) use refresh::refresh;
-pub use refresh::refresh_catalog;
+pub(crate) use refresh::refresh_catalog;
 pub use refresh::refresh_claude;
 pub use refresh::refresh_codex;
 
