@@ -1,0 +1,41 @@
+.cursor/rules/ingestion-cache.mdc
+  s_8c029df2835efb::t_6d94a5eaf17350 27
+docs/adr/0024-conversation-cache-maintenance.md
+  s_8c029df2835efb::t_433a427943b23d 42-45
+docs/adr/0027-staged-ingestion.md
+  s_8c029df2835efb::t_f6ef9e9d016197 30-34,37
+docs/agent-layers.md
+  s_8c029df2835efb::t_63662b6b077a85 39-40,78
+src/App.tsx
+  s_8c029df2835efb::t_c035bd54a1d44f 253
+src/components/Settings.tsx
+  s_8c029df2835efb::t_ef1772d8acf32e 9,46,75,214
+src/components/SourceDiagnosticsPanel.tsx
+  s_8c029df2835efb::t_fcbcc636bd7588 29,38,155-158,160-163
+src/hooks/usage/useCatalogProgress.ts
+  s_8c029df2835efb::t_48ff4407adfc40 1,4,11-12,14,19,25,28-32,34-35,40-51,55,57-60,63,82-102
+src/hooks/usage/useIngestOperations.ts
+  s_8c029df2835efb::t_ff8a02b8c69840 5,12-14,25-27,45,52,72-73,96,121,155
+src/hooks/useUsageData.ts
+  s_8c029df2835efb::t_dcd3b4a5dcd622 11,83,139-145,151-153,390
+src/lib/ingestStatus.test.ts
+  s_8c029df2835efb::t_7e0c8f10874136 7,9,80-104
+src/lib/ingestStatus.ts
+  s_8c029df2835efb::t_f3af08ec55d082 18-20,22,29,41-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "4630cf1cd29a98ba094874c1558095fed0cfd7cc",
+  "prompts": {},
+  "sessions": {
+    "s_8c029df2835efb": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "f6328ff7-f15f-436e-822d-f4830ca5254f",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
