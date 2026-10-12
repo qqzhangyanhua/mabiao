@@ -1,0 +1,61 @@
+server/web/src/components/ProjectAdmin.tsx
+  s_d2fb4cf613d54e::t_b197367a090021 57
+  s_d2fb4cf613d54e::t_9d315f7eca605c 67
+  s_d2fb4cf613d54e::t_5ddb916e40846d 9
+  s_d2fb4cf613d54e::t_74f7e3f8d8d8af 10
+  s_d2fb4cf613d54e::t_5236fa7ef0a3d0 86
+server/web/src/pages/MembersPage.tsx
+  s_d2fb4cf613d54e::t_8ea67ba059e6fc 81
+  s_d2fb4cf613d54e::t_6afa24dd7598d4 11
+  s_d2fb4cf613d54e::t_a267756d9c9d68 217,222,234
+  s_d2fb4cf613d54e::t_7fe9e82f4120db 12
+  s_d2fb4cf613d54e::t_0b090a13bbc226 50
+  s_d2fb4cf613d54e::t_454112c7dd63af 52-53,58,61-62,69
+server/web/src/components/ui/input.tsx
+  s_d2fb4cf613d54e::t_ed940b1218edf8 1,13-16,22-31
+  s_d2fb4cf613d54e::t_cb49759b6309ea 5-9
+server/web/src/pages/MemberPage.tsx
+  s_d2fb4cf613d54e::t_82dfb8e6c22536 11,14
+  s_d2fb4cf613d54e::t_f1fbbc5bff0fbe 136-148,154,156
+server/web/src/pages/LoginPage.tsx
+  s_d2fb4cf613d54e::t_07439e8d4f2443 4-6
+  s_d2fb4cf613d54e::t_998225c95eb15c 71
+  s_d2fb4cf613d54e::t_fc3d66b15b1935 52-53
+  s_d2fb4cf613d54e::t_7115a7eb0bea0f 43-44
+  s_d2fb4cf613d54e::t_34fcabbddffa6c 29
+server/web/src/components/FilterSelect.tsx
+  s_d2fb4cf613d54e::t_d98a91bf40d642 23
+  s_d2fb4cf613d54e::t_1758bde2a71d94 4
+server/web/src/components/GeneratedFilter.tsx
+  s_d2fb4cf613d54e::t_5d0eaf47bea3b1 26-28,31,38
+  s_d2fb4cf613d54e::t_c8f0d1138b4b99 1-2
+server/web/src/pages/PricingPage.tsx
+  s_d2fb4cf613d54e::t_7aa7ec25ed5a13 118-120,122-124,126-128,130-132,134-136,138-139
+  s_d2fb4cf613d54e::t_754b664162e43b 116
+  s_d2fb4cf613d54e::t_032bf949f6a69a 151
+  s_d2fb4cf613d54e::t_07f095968f9e30 8
+  s_d2fb4cf613d54e::t_d979e5b5944688 9
+server/web/src/components/TablePager.tsx
+  s_d2fb4cf613d54e::t_ee55c4a91a1230 1-39
+server/web/src/components/SessionListSection.tsx
+  s_d2fb4cf613d54e::t_94813ce5b95123 1-4,6-19,21-25,28-30
+server/web/src/pages/ProjectPage.tsx
+  s_d2fb4cf613d54e::t_2156d7053cf1ca 107-119,125,127
+  s_d2fb4cf613d54e::t_321261de7341f7 12,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "deb32f28e0f2f659cc9aae33d9bea14549b475e6",
+  "prompts": {},
+  "sessions": {
+    "s_d2fb4cf613d54e": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "005ce289-9e4d-4e15-9b3f-4f9a0c1e25a6",
+        "model": "composer-2.5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
