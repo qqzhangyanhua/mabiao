@@ -77,6 +77,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);
@@ -136,6 +139,9 @@
   --chart-5: #059669;
   --chart-6: #db2777;
   --bar-base: #7cc4fa;
+  --seg-top-keep: 82%;
+  --seg-top-with: white;
+  --seg-bottom-keep: 100%;
   --token-input: #6d28d9;
   --token-output: #0891b2;
   --token-cache-read: #2563eb;
@@ -198,6 +204,9 @@
   --chart-5: #34d399;
   --chart-6: #f472b6;
   --bar-base: #4f8fe8;
+  --seg-top-keep: 66%;
+  --seg-top-with: black;
+  --seg-bottom-keep: 54%;
   --token-input: #9d82ff;
   --token-output: #22d3ee;
   --token-cache-read: #60a5fa;
