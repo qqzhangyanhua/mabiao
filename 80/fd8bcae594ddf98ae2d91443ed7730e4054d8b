@@ -1,0 +1,73 @@
+src-tauri/src/conversation/read.rs
+  s_abf5b51f0fd7f8::t_6bdac7d9cc6a5b 227
+  s_abf5b51f0fd7f8::t_fdcd78dede97b3 23-24
+  s_abf5b51f0fd7f8::t_f11db78909c576 33-34
+  s_abf5b51f0fd7f8::t_c63f27e0f305ba 11
+src-tauri/src/conversation/backfill.rs
+  s_abf5b51f0fd7f8::t_7d26108aca4c42 24-26,29,32-39,50-75,88-99,113,124-136,141,143,145-150,153
+  s_abf5b51f0fd7f8::t_c098e22e1c879e 3-4,10,18-20,22
+  s_67c269eaa5dcdb::t_5fbf780f8d59f9 23
+src-tauri/src/conversation/session_store.rs
+  s_abf5b51f0fd7f8::t_f488e38f23f579 24-33,55-67
+  s_abf5b51f0fd7f8::t_c9318247983f24 34-54
+  s_abf5b51f0fd7f8::t_3c0ae71f8ec719 438-440
+src-tauri/src/conversation/persist.rs
+  s_abf5b51f0fd7f8::t_c872e7549f49ad 60-70
+src-tauri/src/conversation/mod.rs
+  s_abf5b51f0fd7f8::t_2f2f8d48a6397d 64-67
+  s_abf5b51f0fd7f8::t_13ad7b6eb5d420 466
+src-tauri/src/tests/conversation_catalog_deferred.rs
+  s_abf5b51f0fd7f8::t_41ebd1f66e4e7f 1-369
+  s_abf5b51f0fd7f8::t_232b33c445ec71 370-380
+src-tauri/src/conversation/refresh.rs
+  s_abf5b51f0fd7f8::t_bb44e97e78e868 63-64
+  s_abf5b51f0fd7f8::t_1e0f421e7ceb9d 60-62
+  s_abf5b51f0fd7f8::t_7ccfe774bbadab 65-67
+  s_abf5b51f0fd7f8::t_99012d03915966 15-16,19-20,45-52,57-59,68-77,201-211,282-294,377-379
+src-tauri/src/backup.rs
+  s_abf5b51f0fd7f8::t_8798939f070ef7 131,136
+  s_abf5b51f0fd7f8::t_52299ed1051f3b 88,97
+  s_abf5b51f0fd7f8::t_ee142a30c60e34 129-130,132-135,137-143
+src-tauri/src/conversation/push_source.rs
+  s_abf5b51f0fd7f8::t_51c82f224225bf 19
+src-tauri/src/conversation/event_index.rs
+  s_abf5b51f0fd7f8::t_68039cc86d5c5f 300
+  s_abf5b51f0fd7f8::t_7fc6f9b1ca1ccb 229
+src-tauri/src/store/schema.rs
+  s_abf5b51f0fd7f8::t_d6d35d0baa8d88 170-171
+  s_abf5b51f0fd7f8::t_cbdab611434854 289-292
+  s_abf5b51f0fd7f8::t_3ff9cc9c686fd1 287-288
+src-tauri/src/conversation/catalog_search.rs
+  s_abf5b51f0fd7f8::t_adb3426924452c 12-13
+src-tauri/src/conversation/catalog.rs
+  s_abf5b51f0fd7f8::t_f9d795f9ebf6f1 14
+  s_abf5b51f0fd7f8::t_1c61928b8e417b 276
+src-tauri/src/tests/backup.rs
+  s_abf5b51f0fd7f8::t_c146c2ba00bb34 427-534
+src-tauri/src/tests/mod.rs
+  s_abf5b51f0fd7f8::t_0763c414c906b4 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "80fd8bcae594ddf98ae2d91443ed7730e4054d8b",
+  "prompts": {},
+  "sessions": {
+    "s_67c269eaa5dcdb": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e8394ae1-c807-49c1-bb1d-4213820218ec",
+        "model": "composer-2.5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_abf5b51f0fd7f8": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "61f95cf4-fb3a-490d-a5b4-ff89570edee3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
