@@ -25,7 +25,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env \
 成员只能看到自己推送的数据，管理员看全员、建 / 停用成员、查看每个成员的最后推送时间与已覆盖到哪天。
 
 网页由 `MABIAO_WEB_DIR` 指向的构建产物目录托管（镜像里已设好）。不设这个变量，服务就只提供 API。
-本地开发：在 `server/` 起服务，再在 `server/web/` 里 `pnpm install && pnpm dev`，开发服务器会把 `/api` 代理到 `127.0.0.1:8080`。
+本地 `cargo run -- serve`（调试构建）会监视 `server/web` 并写进该目录，改完刷新浏览器即可，不用每次手动 `pnpm build`。`MABIAO_WEB_WATCH=0` 关掉监视。要热更新就不要设 `MABIAO_WEB_DIR`，另在 `server/web/` 里 `pnpm dev`（把 `/api` 代理到 `127.0.0.1:8080`）。
 
 ## TLS
 

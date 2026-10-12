@@ -66,6 +66,30 @@ export function isNearConversationBottom(
   return scrollHeight - scrollTop - clientHeight <= Math.max(0, threshold);
 }
 
+/** 滚到这一距离内就接着取下一页，不用点「加载更早 / 加载更新」。 */
+export const CONVERSATION_SCROLL_LOAD_THRESHOLD = 160;
+
+export type ConversationScrollLoadEdge = "earlier" | "later";
+
+export function conversationScrollLoadEdge(
+  metrics: ConversationScrollMetrics & {
+    hasMoreBefore: boolean;
+    hasMoreAfter: boolean;
+  },
+  threshold = CONVERSATION_SCROLL_LOAD_THRESHOLD,
+): ConversationScrollLoadEdge | null {
+  if (metrics.clientHeight <= 0) {
+    return null;
+  }
+  if (metrics.hasMoreBefore && isNearConversationTop(metrics, threshold)) {
+    return "earlier";
+  }
+  if (metrics.hasMoreAfter && isNearConversationBottom(metrics, threshold)) {
+    return "later";
+  }
+  return null;
+}
+
 export type ConversationJumpEdge = "top" | "bottom";
 
 export function conversationJumpScrollTop(

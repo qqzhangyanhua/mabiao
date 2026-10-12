@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { sourceTone } from "../lib/chart";
 import { sourceLabel } from "../lib/source";
+import { SourceIcon } from "./SourceIcon";
 
 const pillClass =
-  "inline-flex max-w-full items-center truncate rounded-full border px-2 py-0.5 text-xs font-medium";
+  "inline-flex max-w-full items-center gap-1 truncate rounded-full border px-2 py-0.5 text-xs font-medium";
 
 export function MetaPill({
   href,
@@ -42,7 +43,8 @@ export function SourceBadge({ source, className }: { source: string; className?:
         borderColor: `color-mix(in srgb, ${tone} 30%, transparent)`,
       }}
     >
-      {sourceLabel(source)}
+      <SourceIcon source={source} size={14} />
+      <span className="truncate">{sourceLabel(source)}</span>
     </span>
   );
 }

@@ -1,3 +1,5 @@
+mod web_watch;
+
 use std::io::{IsTerminal, Read};
 
 use clap::{Parser, Subcommand};
@@ -21,6 +23,8 @@ enum Command {
         #[arg(long, env = "MABIAO_BIND", default_value = "0.0.0.0:8080")]
         bind: String,
         /// 管理网页构建产物（`server/web/dist`）所在目录。不设则只提供 API。
+        /// 调试构建下，若该目录上一级是带 vite.config.ts 的网页项目，会执行
+        /// `vite build --watch`：保存源码后刷新浏览器即可。`MABIAO_WEB_WATCH=0` 关闭。
         #[arg(long, env = "MABIAO_WEB_DIR")]
         web_dir: Option<std::path::PathBuf>,
     },
@@ -96,19 +100,22 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 Err(error) => tracing::warn!(%error, "补算统一费用失败，可调用重算接口重试"),
             }
             tokio::spawn(purge_expired_tokens_hourly(pool.clone()));
-            let listener = tokio::net::TcpListener::bind(&bind).await?;
-            tracing::info!(%bind, "mabiao-server 已启动");
             let state = AppState { pool };
-            let app = match web_dir {
+            let (app, _watch) = match web_dir {
                 Some(dir) => {
+                    // 守到函数结束：服务退出时 Drop 停掉监视进程。构建完成后再监听，
+                    // 避免日志已经写「已启动」、浏览器拿到的还是上一次的页面。
+                    let watch = web_watch::start(&dir)?;
                     if !dir.join("index.html").is_file() {
                         return Err(format!("网页目录里没有 index.html：{}", dir.display()).into());
                     }
                     tracing::info!(dir = %dir.display(), "托管管理网页");
-                    router_with_web(state, dir)
+                    (router_with_web(state, dir), Some(watch))
                 }
-                None => router(state),
+                None => (router(state), None),
             };
+            let listener = tokio::net::TcpListener::bind(&bind).await?;
+            tracing::info!(%bind, "mabiao-server 已启动");
             axum::serve(listener, app)
                 .with_graceful_shutdown(shutdown_signal())
                 .await?;

@@ -1,4 +1,25 @@
-import type { SourceIconId } from "./type";
+export type SourceIconId =
+  | "claude"
+  | "codex"
+  | "grok"
+  | "gemini"
+  | "kimi"
+  | "qwen"
+  | "copilot"
+  | "opencode"
+  | "factory"
+  | "pi"
+  | "omp"
+  | "dsh"
+  | "cursor"
+  | "hermes"
+  | "agy"
+  | "qoder"
+  | "cline"
+  | "workbuddy"
+  | "zcode"
+  | "alma"
+  | "unknown";
 
 const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   claude: "claude",
@@ -11,8 +32,8 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   opencode: "opencode",
   factory: "factory",
   droid: "factory",
-  antigravity: "gemini",
-  agy: "gemini",
+  antigravity: "agy",
+  agy: "agy",
   pi: "pi",
   omp: "omp",
   dsh: "dsh",

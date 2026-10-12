@@ -36,6 +36,7 @@ export function ConversationEventItem({
   highlighted = false,
   highlightQuery = null,
   highlightSnippet = null,
+  chrome = "full",
   onEventContentLoaded,
 }: {
   event: ConversationEvent;
@@ -44,6 +45,7 @@ export function ConversationEventItem({
   highlighted?: boolean;
   highlightQuery?: string | null;
   highlightSnippet?: string | null;
+  chrome?: "full" | "body";
   onEventContentLoaded: (content: ConversationEventContentDto) => void;
 }) {
   const {
@@ -196,6 +198,7 @@ export function ConversationEventItem({
     "conversation-event",
     `event-${event.kind.replaceAll("_", "-")}`,
     highlighted ? "conversation-event-hit" : "",
+    chrome === "body" ? "is-body" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -203,14 +206,16 @@ export function ConversationEventItem({
   return (
     <>
       <article className={eventClass}>
-        <header className="conversation-event-meta">
-          <strong>{label}</strong>
-          {event.occurred_at ? (
-            <time dateTime={event.occurred_at}>{formatClock(event.occurred_at)}</time>
-          ) : (
-            <span className="conversation-event-missing-time">时间缺失</span>
-          )}
-        </header>
+        {chrome === "full" ? (
+          <header className="conversation-event-meta">
+            <strong>{label}</strong>
+            {event.occurred_at ? (
+              <time dateTime={event.occurred_at}>{formatClock(event.occurred_at)}</time>
+            ) : (
+              <span className="conversation-event-missing-time">时间缺失</span>
+            )}
+          </header>
+        ) : null}
         <div className="conversation-event-content">
           {highlighted && highlightSnippet ? (
             <p className="conversation-event-match-snippet">
@@ -225,7 +230,7 @@ export function ConversationEventItem({
               {capabilityStatusLabel(event.capability_status)}
             </span>
           ) : null}
-          {event.actor || event.name ? (
+          {chrome === "full" && (event.actor || event.name) ? (
             <div className="conversation-event-identity">
               {event.actor ? <span>{actorLabel(event.actor)}</span> : null}
               {event.name ? (

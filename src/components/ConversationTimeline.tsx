@@ -9,6 +9,7 @@ import {
   type RefObject,
   type UIEvent,
 } from "react";
+import { conversationScrollLoadEdge } from "../lib/conversationFollow";
 import { useConversationEventPages } from "../lib/useConversationEventPages";
 import {
   buildTimelineRows,
@@ -105,6 +106,7 @@ export function ConversationTimeline({
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const visibleAnchorRef = useRef<TimelineHeightAnchor | null>(null);
   const pendingJumpRef = useRef<"top" | "bottom" | null>(null);
+  const edgeRequestRef = useRef(false);
   const fallbackApiRef = useRef<ConversationTimelineHandle | null>(null);
   const measuredLiveRef = useRef(new Map<string, number>());
   const measureQueued = useRef(false);
@@ -242,7 +244,7 @@ export function ConversationTimeline({
     if (!node) {
       return;
     }
-    const index = timelineHighlightIndex(keys, highlightEventId);
+    const index = timelineHighlightIndex(rows, highlightEventId);
     if (index < 0) {
       return;
     }
@@ -250,7 +252,7 @@ export function ConversationTimeline({
     node.scrollTop = Math.max(0, top - 8);
     scrolledToHighlight.current = true;
     syncViewport();
-  }, [highlightEventId, keys, loading, syncViewport]);
+  }, [highlightEventId, keys, loading, rows, syncViewport]);
 
   useLayoutEffect(() => {
     const node = nodeRef.current;
@@ -288,27 +290,66 @@ export function ConversationTimeline({
     },
   }));
 
-  function revealAdjacent(direction: "earlier" | "later") {
-    const node = nodeRef.current;
-    const eligible = new Set(
-      rows.filter((row) => row.type === "event" || row.type === "unadapted").map((row) => row.key),
-    );
-    visibleAnchorRef.current = node
-      ? timelineAnchorAtOffset(
-          keys,
-          node.scrollTop,
-          measuredLiveRef.current,
-          TIMELINE_ROW_ESTIMATE,
-          eligible,
-        )
-      : null;
-    if (direction === "earlier") {
-      onCaptureScrollAnchor?.();
-      void loadEarlier();
-    } else {
-      void loadLater();
+  const revealAdjacent = useCallback(
+    (direction: "earlier" | "later") => {
+      if (edgeRequestRef.current || loadingEarlier || loadingLater) {
+        return;
+      }
+      const node = nodeRef.current;
+      const eligible = new Set(
+        rows
+          .filter((row) => row.type === "event" || row.type === "unadapted" || row.type === "chat")
+          .map((row) => row.key),
+      );
+      visibleAnchorRef.current = node
+        ? timelineAnchorAtOffset(
+            keys,
+            node.scrollTop,
+            measuredLiveRef.current,
+            TIMELINE_ROW_ESTIMATE,
+            eligible,
+          )
+        : null;
+      edgeRequestRef.current = true;
+      const task = direction === "earlier" ? loadEarlier() : loadLater();
+      if (direction === "earlier") {
+        onCaptureScrollAnchor?.();
+      }
+      void task.finally(() => {
+        edgeRequestRef.current = false;
+      });
+    },
+    [keys, loadEarlier, loadLater, loadingEarlier, loadingLater, onCaptureScrollAnchor, rows],
+  );
+
+  useEffect(() => {
+    if (loading || error || loadingEarlier || loadingLater || pendingJumpRef.current) {
+      return;
     }
-  }
+    const node = nodeRef.current;
+    if (!node) {
+      return;
+    }
+    const edge = conversationScrollLoadEdge({
+      scrollTop: node.scrollTop,
+      clientHeight: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+      hasMoreBefore: eventWindow.hasMoreBefore,
+      hasMoreAfter: eventWindow.hasMoreAfter,
+    });
+    if (edge) {
+      revealAdjacent(edge);
+    }
+  }, [
+    error,
+    eventWindow.hasMoreAfter,
+    eventWindow.hasMoreBefore,
+    loading,
+    loadingEarlier,
+    loadingLater,
+    revealAdjacent,
+    viewport,
+  ]);
 
   function handleScroll(event: UIEvent<HTMLDivElement>) {
     syncViewport();
@@ -362,6 +403,7 @@ export function ConversationTimeline({
                   depth={depth}
                   loadingEarlier={loadingEarlier}
                   loadingLater={loadingLater}
+                  pageError={Boolean(error)}
                   onToggleChild={onToggleChild}
                   onOpenChild={onOpenChild}
                   onEventContentLoaded={applyEventContent}

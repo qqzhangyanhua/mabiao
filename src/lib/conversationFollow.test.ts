@@ -5,6 +5,7 @@ import {
   conversationJumpScrollTop,
   conversationTimelineScrollTarget,
   isConversationResponseCurrent,
+  conversationScrollLoadEdge,
   isNearConversationBottom,
   isNearConversationTop,
   nextConversationRevisionPollState,
@@ -76,6 +77,56 @@ describe("isNearConversationTop", () => {
     expect(isNearConversationTop({ scrollTop: 0, clientHeight: 400, scrollHeight: 1000 })).toBe(
       true,
     );
+  });
+});
+
+describe("conversationScrollLoadEdge", () => {
+  const box = { scrollTop: 0, clientHeight: 400, scrollHeight: 2000 };
+
+  it("loads earlier when the top edge is within reach and more history exists", () => {
+    expect(
+      conversationScrollLoadEdge({ ...box, scrollTop: 160, hasMoreBefore: true, hasMoreAfter: true }),
+    ).toBe("earlier");
+  });
+
+  it("loads later when the bottom edge is within reach", () => {
+    expect(
+      conversationScrollLoadEdge({
+        ...box,
+        scrollTop: 1440,
+        hasMoreBefore: true,
+        hasMoreAfter: true,
+      }),
+    ).toBe("later");
+  });
+
+  it("prefers earlier when a short page shows both edges", () => {
+    expect(
+      conversationScrollLoadEdge({
+        scrollTop: 0,
+        clientHeight: 400,
+        scrollHeight: 300,
+        hasMoreBefore: true,
+        hasMoreAfter: true,
+      }),
+    ).toBe("earlier");
+  });
+
+  it("stays put in the middle, without a next page, or before layout", () => {
+    expect(
+      conversationScrollLoadEdge({ ...box, scrollTop: 800, hasMoreBefore: true, hasMoreAfter: true }),
+    ).toBeNull();
+    expect(
+      conversationScrollLoadEdge({ ...box, scrollTop: 0, hasMoreBefore: false, hasMoreAfter: false }),
+    ).toBeNull();
+    expect(
+      conversationScrollLoadEdge({
+        ...box,
+        clientHeight: 0,
+        hasMoreBefore: true,
+        hasMoreAfter: true,
+      }),
+    ).toBeNull();
   });
 });
 

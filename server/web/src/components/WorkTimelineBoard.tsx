@@ -16,6 +16,7 @@ import {
 import { costOf, type CostMode } from "../lib/cost";
 import { cn } from "../lib/cn";
 import { Empty } from "./Feedback";
+import { SourceIcon } from "./SourceIcon";
 import { panelClass } from "./ui/card";
 
 const AXIS_HOURS = [0, 3, 6, 9, 12, 15, 18, 21, 24];
@@ -183,7 +184,10 @@ function SegmentTooltip({
         <dt>项目</dt>
         <dd className="truncate text-foreground">{projectOf(segment)}</dd>
         <dt>来源</dt>
-        <dd className="text-foreground">{sourceLabel(segment.source)}</dd>
+        <dd className="flex items-center gap-1.5 text-foreground">
+          <SourceIcon source={segment.source} size={14} />
+          {sourceLabel(segment.source)}
+        </dd>
         <dt>开始</dt>
         <dd className="text-foreground">{formatClock(segment.start)}</dd>
         <dt>结束</dt>

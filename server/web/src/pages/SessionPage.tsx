@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useAuth } from "../auth";
 import { ContextManifestView } from "../components/ContextManifestView";
@@ -24,6 +25,7 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
   const { api } = useAuth();
   const href = useHref();
   const [mode, setMode] = useState<CostMode>("unified");
+  const [manifestOpen, setManifestOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<Error | undefined>();
   const load = useCallback(() => api.sessionDetail(sessionId), [api, sessionId]);
@@ -112,13 +114,30 @@ export function SessionPage({ sessionId }: { sessionId: number }) {
         events={detail.data.events}
         usage={usage}
         mode={mode}
+        source={session.source}
+        sessionId={String(sessionId)}
         startedAt={session.started_at}
         endedAt={session.ended_at}
       />
 
       <section className={cn(panelClass, "p-4")}>
-        <h2 className="mb-3 text-sm font-medium">上下文清单</h2>
-        <ContextManifestView manifest={manifest} />
+        <button
+          type="button"
+          className="flex w-full items-center gap-1.5 text-left text-sm font-medium"
+          aria-expanded={manifestOpen}
+          onClick={() => setManifestOpen((open) => !open)}
+        >
+          <ChevronRight
+            className={cn("size-4 shrink-0 text-muted-foreground", manifestOpen && "rotate-90")}
+            aria-hidden
+          />
+          上下文清单
+        </button>
+        {manifestOpen ? (
+          <div className="mt-3">
+            <ContextManifestView manifest={manifest} />
+          </div>
+        ) : null}
       </section>
     </>
   );

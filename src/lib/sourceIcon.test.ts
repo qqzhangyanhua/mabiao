@@ -65,9 +65,9 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
   });
 
-  it("uses the Gemini face for Antigravity official quota and agy usage", () => {
-    expect(resolveSourceIconId("antigravity")).toBe("gemini");
-    expect(resolveSourceIconId("agy")).toBe("gemini");
+  it("uses the Antigravity face for official quota and agy usage", () => {
+    expect(resolveSourceIconId("antigravity")).toBe("agy");
+    expect(resolveSourceIconId("agy")).toBe("agy");
   });
 
   it("falls back to the generic mark instead of a first letter", () => {

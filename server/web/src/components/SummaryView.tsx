@@ -7,6 +7,7 @@ import { sourceLabel } from "../lib/source";
 import type { TokenSplit } from "../lib/tokens";
 import { useHref } from "../view";
 import { BreakdownTable } from "./BreakdownTable";
+import { SourceIcon } from "./SourceIcon";
 import { DimensionCards } from "./DimensionCards";
 import { KpiColumn } from "./KpiColumn";
 import { ModelRanking } from "./ModelRanking";
@@ -153,6 +154,9 @@ export function SummaryView({
           rows={tableRows[dimension]}
           mode={mode}
           labelOf={dimension === "source" ? (row) => sourceLabel(row.label) : undefined}
+          markOf={
+            dimension === "source" ? (row) => <SourceIcon source={row.key} size={16} /> : undefined
+          }
           linkOf={
             dimension === "account" && linkAccounts
               ? (row) => (row.id === null ? undefined : href({ page: "member", accountId: row.id }))

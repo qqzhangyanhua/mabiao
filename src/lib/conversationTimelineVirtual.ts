@@ -2,7 +2,7 @@
  * 会话时间线视口虚拟化：窗口仍可持有最多 1000 条，DOM 只挂视口附近几十行。
  */
 
-import { groupTimelineEvents } from "./conversationEventDisplay";
+import { groupConversationTurns, type ChatTurn } from "./conversationChat";
 import type { ConversationAgentLink, ConversationContextFirstUse, ConversationEvent } from "../types";
 
 export const TIMELINE_ROW_ESTIMATE = 96;
@@ -179,6 +179,7 @@ export type TimelineRow =
   | { key: string; type: "gate"; edge: "before" | "after" }
   | { key: string; type: "error"; message: string }
   | { key: string; type: "event"; event: ConversationEvent }
+  | { key: string; type: "chat"; turn: ChatTurn }
   | { key: string; type: "unadapted"; events: ConversationEvent[] }
   | { key: string; type: "trailing"; links: ConversationAgentLink[] }
   | { key: string; type: "first_use"; marker: ConversationContextFirstUse };
@@ -212,19 +213,21 @@ export function buildTimelineRows({
   if (error) {
     rows.push({ key: "error", type: "error", message: error });
   }
-  for (const group of groupTimelineEvents([...events])) {
-    if (group.type === "unadapted") {
-      rows.push({ key: "unadapted", type: "unadapted", events: group.events });
-    } else {
-      for (const marker of markersByEvent.get(group.event.event_id) ?? []) {
+  const unadapted = events.filter((event) => event.kind === "unadapted");
+  for (const turn of groupConversationTurns(events)) {
+    for (const eventId of turn.eventIds) {
+      for (const marker of markersByEvent.get(eventId) ?? []) {
         rows.push({
           key: `first-use:${marker.event_id}:${marker.item_kind}:${marker.item_id}:${marker.label}`,
           type: "first_use",
           marker,
         });
       }
-      rows.push({ key: `event:${group.event.event_id}`, type: "event", event: group.event });
     }
+    rows.push({ key: `chat:${turn.id}`, type: "chat", turn });
+  }
+  if (unadapted.length > 0) {
+    rows.push({ key: "unadapted", type: "unadapted", events: unadapted });
   }
   if (hasMoreAfter) {
     rows.push({ key: "gate:after", type: "gate", edge: "after" });
@@ -239,17 +242,28 @@ export function buildTimelineRows({
 }
 
 export function timelineHighlightIndex(
-  keys: readonly string[],
+  rows: readonly TimelineRow[],
   highlightEventId: string | null,
 ): number {
   if (!highlightEventId) {
     return -1;
   }
-  const index = keys.indexOf(`event:${highlightEventId}`);
+  const index = rows.findIndex((row) => {
+    if (row.type === "chat") {
+      return row.turn.eventIds.includes(highlightEventId);
+    }
+    if (row.type === "event") {
+      return row.event.event_id === highlightEventId;
+    }
+    if (row.type === "unadapted") {
+      return row.events.some((event) => event.event_id === highlightEventId);
+    }
+    return false;
+  });
   if (index >= 0) {
     return index;
   }
-  return keys.indexOf("unadapted");
+  return rows.findIndex((row) => row.type === "unadapted");
 }
 
 export function timelineViewKind({

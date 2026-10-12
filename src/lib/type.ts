@@ -10,27 +10,7 @@ export type SettingsTab = {
 
 export type { OfficialQuotaProviderId } from "./overviewLayout";
 
-export type SourceIconId =
-  | "claude"
-  | "codex"
-  | "grok"
-  | "gemini"
-  | "kimi"
-  | "qwen"
-  | "copilot"
-  | "opencode"
-  | "factory"
-  | "pi"
-  | "omp"
-  | "dsh"
-  | "cursor"
-  | "hermes"
-  | "qoder"
-  | "cline"
-  | "workbuddy"
-  | "zcode"
-  | "alma"
-  | "unknown";
+export type { SourceIconId } from "./sourceIcon";
 
 export type TrendStats = {
   totalTokens: number;

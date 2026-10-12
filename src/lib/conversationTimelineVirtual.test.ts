@@ -201,7 +201,7 @@ describe("buildTimelineRows", () => {
     expect(rows.map((row) => row.key)).toEqual([
       "gate:before",
       "error",
-      "event:m1",
+      "chat:m1",
       "unadapted",
       "gate:after",
       "trailing",
@@ -231,19 +231,25 @@ describe("buildTimelineRows", () => {
       ],
     });
     expect(rows.map((row) => row.key)).toEqual([
-      "event:m1",
+      "chat:m1",
       "first-use:t1:mcp_server:docs:search_docs",
-      "event:t1",
+      "chat:t1",
     ]);
   });
 });
 
 describe("timelineHighlightIndex", () => {
-  it("命中事件行，否则回落到未适配组", () => {
-    const keys = ["gate:before", "event:m1", "unadapted"];
-    expect(timelineHighlightIndex(keys, "m1")).toBe(1);
-    expect(timelineHighlightIndex(keys, "missing")).toBe(2);
-    expect(timelineHighlightIndex(keys, null)).toBe(-1);
+  it("命中对话轮次里的事件，否则回落到未适配组", () => {
+    const rows = buildTimelineRows({
+      events: [event("m1"), event("u1", "unadapted")],
+      hasMoreBefore: true,
+      hasMoreAfter: false,
+      error: null,
+      agentLinks: [],
+    });
+    expect(timelineHighlightIndex(rows, "m1")).toBe(1);
+    expect(timelineHighlightIndex(rows, "missing")).toBe(2);
+    expect(timelineHighlightIndex(rows, null)).toBe(-1);
   });
 });
 

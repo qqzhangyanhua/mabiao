@@ -23,6 +23,7 @@
 @import "./styles/views/conversation-timeline.css";
 @import "./styles/views/conversation-markdown.css";
 @import "./styles/views/conversation-events.css";
+@import "./styles/views/conversation-chat.css";
 @import "./styles/views/conversation-context.css";
 @import "./styles/shared/feedback.css";
 @import "./styles/views/instruction.css";

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
+import { SourceIcon } from "../components/SourceIcon";
 import { WorkTimelineBoard } from "../components/WorkTimelineBoard";
 import { NativeSelect } from "../components/ui/input";
 import { usePageExports } from "../export-action";
@@ -125,6 +126,7 @@ export function WorkTimelinePage() {
         </label>
         <label className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground">来源</span>
+          {source ? <SourceIcon source={source} size={16} /> : null}
           <NativeSelect
             aria-label="来源"
             value={source}

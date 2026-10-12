@@ -7,6 +7,7 @@ import type {
   ConversationEventContentDto,
 } from "../types";
 import { ConversationAgentBranch } from "./ConversationAgentBranch";
+import { ConversationChatTurn } from "./ConversationChatTurn";
 import { ConversationEventItem } from "./ConversationEventItem";
 import { ConversationUnadaptedGroup } from "./ConversationUnadaptedGroup";
 import { Spinner } from "./Spinner";
@@ -52,6 +53,7 @@ export function TimelineRowView({
   depth,
   loadingEarlier,
   loadingLater,
+  pageError,
   onToggleChild,
   onOpenChild,
   onEventContentLoaded,
@@ -69,6 +71,7 @@ export function TimelineRowView({
   depth: number;
   loadingEarlier: boolean;
   loadingLater: boolean;
+  pageError: boolean;
   onToggleChild: (link: ConversationAgentLink) => void;
   onOpenChild: (link: ConversationAgentLink) => void;
   onEventContentLoaded: (content: ConversationEventContentDto) => void;
@@ -110,19 +113,45 @@ export function TimelineRowView({
     );
   }
 
+  if (row.type === "chat") {
+    return (
+      <ConversationChatTurn
+        turn={row.turn}
+        source={source}
+        sessionId={sessionId}
+        highlightEventId={highlightEventId}
+        highlightQuery={highlightQuery}
+        highlightSnippet={highlightSnippet}
+        onEventContentLoaded={onEventContentLoaded}
+        linksFor={linksForEvent}
+        renderLinks={renderAgentLinks}
+      />
+    );
+  }
   if (row.type === "gate") {
     const earlier = row.edge === "before";
+    const busy = earlier ? loadingEarlier : loadingLater;
     return (
-      <div className="conversation-timeline-page-gate">
-        <span className="muted">{earlier ? "上方还有更早事件" : "下方还有更新事件"}</span>
-        <Button
-          size="sm"
-          disabled={loadingEarlier || loadingLater}
-          onClick={() => onRevealAdjacent(earlier ? "earlier" : "later")}
-        >
-          {(earlier ? loadingEarlier : loadingLater) ? <Spinner size={12} /> : null}
-          {earlier ? "加载更早" : "加载更新"}
-        </Button>
+      <div className="conversation-timeline-page-gate" role="status">
+        {busy ? <Spinner size={12} /> : null}
+        <span className="muted">
+          {busy
+            ? earlier
+              ? "正在加载更早的事件"
+              : "正在加载更新的事件"
+            : earlier
+              ? "上滑继续看更早的事件"
+              : "下滑继续看更新的事件"}
+        </span>
+        {pageError ? (
+          <Button
+            size="sm"
+            disabled={loadingEarlier || loadingLater}
+            onClick={() => onRevealAdjacent(earlier ? "earlier" : "later")}
+          >
+            重试
+          </Button>
+        ) : null}
       </div>
     );
   }

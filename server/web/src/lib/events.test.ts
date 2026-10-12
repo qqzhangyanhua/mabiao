@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EventKind, SessionEvent } from "../api/types";
-import { filterEvents } from "./events";
+import { groupSessionTurns } from "./events";
 
 function event(kind: EventKind, n: number): SessionEvent {
   return {
@@ -16,22 +16,14 @@ function event(kind: EventKind, n: number): SessionEvent {
   };
 }
 
-describe("filterEvents", () => {
-  const events = [
-    event("message", 0),
-    event("tool_call", 1),
-    event("tool_result", 2),
-    event("plan", 3),
-    event("error", 4),
-  ];
-  const ids = (list: SessionEvent[]) => list.map((e) => e.sequence);
-
-  it("keeps everything for all", () => {
-    expect(ids(filterEvents(events, "all"))).toEqual([0, 1, 2, 3, 4]);
-  });
-  it("splits conversation, tool traffic and the rest without overlap", () => {
-    expect(ids(filterEvents(events, "messages"))).toEqual([0, 3]);
-    expect(ids(filterEvents(events, "tools"))).toEqual([1, 2]);
-    expect(ids(filterEvents(events, "other"))).toEqual([4]);
+describe("groupSessionTurns", () => {
+  it("folds a user line and the following tool run into two turns", () => {
+    const turns = groupSessionTurns([
+      { ...event("message", 0), actor: "user", text: "hi" },
+      { ...event("tool_call", 1), name: "shell" },
+      event("tool_result", 2),
+    ]);
+    expect(turns.map((turn) => turn.role)).toEqual(["user", "assistant"]);
+    expect(turns[1]?.parts[0]?.type).toBe("tools");
   });
 });

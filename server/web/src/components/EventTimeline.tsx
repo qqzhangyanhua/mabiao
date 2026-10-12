@@ -79,7 +79,7 @@ export function EventTimeline({
         <span className="tabular-nums">{to ? formatDateTime(to) : ""}</span>
       </div>
       {events.length === 0 ? (
-        <p className="py-3 text-sm text-muted-foreground">没有这一类事件</p>
+        <p className="py-3 text-sm text-muted-foreground">没有事件</p>
       ) : (
         <div
           ref={rail}

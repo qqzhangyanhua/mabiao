@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { Breakdown } from "../api/types";
 import { sliceColor } from "../lib/chart";
 import { cn } from "../lib/cn";
@@ -15,6 +15,7 @@ interface Props {
   mode: CostMode;
   linkOf?: (row: Breakdown) => string | undefined;
   labelOf?: (row: Breakdown) => string;
+  markOf?: (row: Breakdown) => ReactNode;
 }
 
 function Composition({
@@ -56,7 +57,7 @@ function Composition({
   );
 }
 
-export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
+export function BreakdownTable({ title, rows, mode, linkOf, labelOf, markOf }: Props) {
   const [expanded, setExpanded] = useState(false);
   const sorted = [...rows].sort(
     (a, b) => costOf(b, mode) - costOf(a, mode) || b.total_tokens - a.total_tokens,
@@ -115,14 +116,17 @@ export function BreakdownTable({ title, rows, mode, linkOf, labelOf }: Props) {
                   const label = nameOf(row);
                   return (
                     <tr key={row.key} className={trClass}>
-                      <th scope="row" className="max-w-56 truncate py-1.5 pr-2 font-normal" title={label}>
-                        {href ? (
-                          <a href={href} className="text-primary hover:underline">
-                            {label}
-                          </a>
-                        ) : (
-                          label
-                        )}
+                      <th scope="row" className="max-w-56 py-1.5 pr-2 font-normal" title={label}>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          {markOf?.(row)}
+                          {href ? (
+                            <a href={href} className="truncate text-primary hover:underline">
+                              {label}
+                            </a>
+                          ) : (
+                            <span className="truncate">{label}</span>
+                          )}
+                        </span>
                       </th>
                       <td className={`py-1.5 ${numCellClass}`}>{row.record_count}</td>
                       <td className={`py-1.5 ${numCellClass}`}>{formatTokens(row.total_tokens)}</td>

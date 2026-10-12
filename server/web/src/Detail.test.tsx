@@ -212,7 +212,7 @@ describe("会话详情", () => {
     signIn();
 
     expect(await screen.findByRole("heading", { name: "修一个 bug" })).toBeTruthy();
-    expect(screen.getByText("Codex")).toBeTruthy();
+    expect(screen.getAllByText("Codex").length).toBeGreaterThan(0);
     expect(screen.getByText(/2 轮/)).toBeTruthy();
     const strip = screen.getByRole("slider", { name: "事件时间线" });
     expect(strip).toBeTruthy();
@@ -220,25 +220,14 @@ describe("会话详情", () => {
     fireEvent.keyDown(strip, { key: "ArrowRight" });
     expect(screen.getAllByText("ls -la").length).toBeGreaterThan(0);
     expect(screen.getAllByText("请帮我改一下").length).toBeGreaterThan(0);
+    expect(screen.queryByText("已注入（原文）")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "上下文清单" }));
     expect(screen.getByText("已注入（原文）")).toBeTruthy();
     expect(screen.getByText("磁盘可能生效（非当时注入）")).toBeTruthy();
     // CLAUDE.md 只是磁盘现状，不能出现在「已注入」那一组里。
     const injected = screen.getByText("已注入（原文）").closest("section")!;
     expect(within(injected).getByText("AGENTS.md")).toBeTruthy();
     expect(within(injected).queryByText("CLAUDE.md")).toBeNull();
-  });
-
-  it("filters events down to tool calls", async () => {
-    stubServer("member");
-    window.location.hash = "#/session/31";
-    render(<App />);
-    signIn();
-    await screen.findAllByText("请帮我改一下");
-
-    fireEvent.click(screen.getByRole("radio", { name: "工具调用" }));
-
-    expect(screen.queryByText("请帮我改一下")).toBeNull();
-    expect(screen.getAllByText("ls -la").length).toBeGreaterThan(0);
   });
 
   it("deletes the session after confirmation and goes back to the owner's page", async () => {
