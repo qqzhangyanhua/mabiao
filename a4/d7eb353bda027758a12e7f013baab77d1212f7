@@ -1,0 +1,24 @@
+src/components/ConversationPushDialog.tsx
+  s_8de72eec4aa4dd::t_ddc54275ae093b 347
+  s_8de72eec4aa4dd::t_eca9a6e337be8e 399-400
+  s_8de72eec4aa4dd::t_6db8b625b0e11e 55-87
+src/styles/views/conversation-push.css
+  s_8de72eec4aa4dd::t_92437d974e4c04 93-94,99-100,104-108
+  s_8de72eec4aa4dd::t_29a060066fdd5d 109-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "a4d7eb353bda027758a12e7f013baab77d1212f7",
+  "prompts": {},
+  "sessions": {
+    "s_8de72eec4aa4dd": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "62e79f77-de9a-4955-8e3b-b5dee537f0d9",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
