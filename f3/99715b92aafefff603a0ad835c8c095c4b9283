@@ -1,0 +1,86 @@
+server/web/src/components/DimensionCards.tsx
+  s_c0188c0935fcdc::t_6c7b795048b65f 1,9-13,22-23,31-32,34,36-53,58,64-78,88,92
+server/web/src/components/KpiColumn.tsx
+  s_c0188c0935fcdc::t_67f3e6277d61ad 44-49
+  s_c0188c0935fcdc::t_1cbbaa54f3b4f1 1,6,8-9,16-19,25-28,31-42,62-63,72-73,80-83,92-100,105-106,113-114
+server/web/src/components/TrendChart.tsx
+  s_c0188c0935fcdc::t_074bfe9698ba70 1-2,4-5,12-13,27,29,31-37,42-62,64-92,94,96
+server/web/src/components/Layout.tsx
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 57-68,109-116
+  s_c0188c0935fcdc::t_3d435d25048d80 1-12,41,76-83,87,94,100,129-131,135-136,141-142,146-164,169-175,177-178,188,192-198,211,213,240,248,258,260,278
+server/web/src/components/Sparkline.tsx
+  s_c0188c0935fcdc::t_f28544cc9bfde7 1-37
+server/web/src/components/ui/button.tsx
+  s_c0188c0935fcdc::t_46b3e81fecd476 7,11-13
+server/web/src/components/TokenComposition.tsx
+  s_c0188c0935fcdc::t_d2b41c85e517e5 10,26
+server/web/src/components/SummaryView.tsx
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 118-125,137,146,151-152,175-176
+server/web/src/components/ui/icon-chip.tsx
+  s_c0188c0935fcdc::t_46b3e81fecd476 1-44
+server/web/src/lib/chart.test.ts
+  s_c0188c0935fcdc::t_a3dd789bc2f8c5 2,23-47
+server/web/src/pages/ProjectsPage.tsx
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 47-50
+  s_c0188c0935fcdc::t_0c5e1b3263ce17 1,46
+server/web/src/components/ui/input.tsx
+  s_c0188c0935fcdc::t_46b3e81fecd476 5
+server/web/src/components/ui/table.ts
+  s_c0188c0935fcdc::t_46b3e81fecd476 4,9
+server/web/src/pages/PricingPage.tsx
+  s_c0188c0935fcdc::t_e7c405215f96e3 179
+  s_c0188c0935fcdc::t_3d92f0f15a382f 1,83
+server/web/src/components/EventTimeline.tsx
+  s_c0188c0935fcdc::t_21a6eedd155fac 126
+server/web/src/components/ui/card.tsx
+  s_c0188c0935fcdc::t_46b3e81fecd476 4-8
+server/web/src/index.css
+  s_c0188c0935fcdc::t_a5486373512a46 5,47-56,64,66,82,88,92-100,102-107,111-113,115,117-127,132,135,138,158-173,177-194,200,218-237,249-269
+  s_c0188c0935fcdc::t_e04cef85fb4c0c 114,116
+  s_c0188c0935fcdc::t_8cf092c6fd25a7 3-4
+  s_c0188c0935fcdc::t_dac31afebad85d 270
+server/web/src/components/ui/segmented.tsx
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 19-22
+  s_c0188c0935fcdc::t_46b3e81fecd476 36-37,39
+server/web/src/components/OverflowMenu.tsx
+  s_c0188c0935fcdc::t_21a6eedd155fac 44,56
+server/web/src/components/WorkTimelineBoard.tsx
+  s_c0188c0935fcdc::t_21a6eedd155fac 173
+server/web/src/components/PageHeader.tsx
+  s_c0188c0935fcdc::t_2edc5a250b3dde 2,8,13,17-22
+server/web/src/pages/OverviewPage.tsx
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 55-58
+  s_c0188c0935fcdc::t_5dc1854b4dcc92 1,54
+server/web/src/components/ModelRanking.tsx
+  s_c0188c0935fcdc::t_7419a64916674c 1,9-10,26-32,36,43,49
+server/web/src/lib/chart.ts
+  s_c0188c0935fcdc::t_a3dd789bc2f8c5 45-68
+server/web/src/pages/MembersPage.tsx
+  s_c0188c0935fcdc::t_e7c405215f96e3 1,180-185,190-197,262
+  s_c0188c0935fcdc::t_866bff0e4c5d1f 175-178
+  s_c0188c0935fcdc::t_373722a4d460a5 174
+server/web/src/pages/MemberPage.tsx
+  s_c0188c0935fcdc::t_784c481f827e95 1,100
+server/web/src/pages/ProjectPage.tsx
+  s_c0188c0935fcdc::t_193efe713877b9 1,70
+server/web/src/pages/SessionPage.tsx
+  s_c0188c0935fcdc::t_261592ed4905b7 1,56
+server/web/src/pages/WorkTimelinePage.tsx
+  s_c0188c0935fcdc::t_275715d365e5d5 1,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "f399715b92aafefff603a0ad835c8c095c4b9283",
+  "prompts": {},
+  "sessions": {
+    "s_c0188c0935fcdc": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "2088c721-102e-4092-9edc-2119fef61dbd",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
