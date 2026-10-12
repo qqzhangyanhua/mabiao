@@ -94,6 +94,7 @@ export function ProjectPage({ projectId }: { projectId: number }) {
           sessions={sessions.data?.total}
           cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
           modelSplits={splitsBy(records, (row) => row.model)}
+          sourceSplits={splitsBy(records, (row) => row.source)}
         />
       )}
       {isAdmin && detail && (

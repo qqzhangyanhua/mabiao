@@ -72,6 +72,7 @@ export function OverviewPage() {
           sessions={sessions.data?.total}
           cacheHit={records.length > 0 ? cacheHitRate(split) : null}
           modelSplits={splitsBy(records, (row) => row.model)}
+          sourceSplits={splitsBy(records, (row) => row.source)}
           projectSplits={splitsBy(records, (row) =>
             row.project_id !== null ? String(row.project_id) : "",
           )}

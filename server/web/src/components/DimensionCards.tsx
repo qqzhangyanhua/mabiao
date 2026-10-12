@@ -1,4 +1,5 @@
-import { ArrowRight, FolderKanban, Users } from "lucide-react";
+import { ArrowRight, Bot, FolderKanban, Users } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Breakdown } from "../api/types";
 import { costOf, type CostMode } from "../lib/cost";
 import { formatCost, formatTokens } from "../lib/format";
@@ -19,8 +20,12 @@ export function DimensionCards({
   splits,
   hrefOf,
   labelOf,
+  markOf,
   moreHref,
   kind = "project",
+  limit = 6,
+  columns = 2,
+  className,
 }: {
   title: string;
   rows: Breakdown[];
@@ -28,12 +33,24 @@ export function DimensionCards({
   splits?: Map<string, TokenSplit>;
   hrefOf?: (row: Breakdown) => string | undefined;
   labelOf?: (row: Breakdown) => string;
+  markOf?: (row: Breakdown) => ReactNode;
   moreHref?: string;
-  kind?: "project" | "member";
+  kind?: "project" | "member" | "source";
+  /** 只展示前几条；`null` 表示全部。 */
+  limit?: number | null;
+  /** 卡片内部列数。宽卡用 3，避免一行只剩半张。 */
+  columns?: 1 | 2 | 3;
+  className?: string;
 }) {
-  const Icon = kind === "member" ? Users : FolderKanban;
+  const Icon = { member: Users, source: Bot, project: FolderKanban }[kind];
+  const shown = limit === null ? rows : rows.slice(0, limit);
+  const itemGrid = {
+    1: "grid-cols-1",
+    2: "grid-cols-1 sm:grid-cols-2",
+    3: "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3",
+  }[columns];
   return (
-    <section className={cn(glassClass, "p-5")}>
+    <section className={cn(glassClass, "h-full p-5", className)}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <IconChip tone="violet" size="sm">
@@ -54,17 +71,20 @@ export function DimensionCards({
       {rows.length === 0 ? (
         <p className="py-4 text-center text-sm text-muted-foreground">这段时间没有数据</p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {rows.slice(0, 6).map((row, index) => {
+        <div className={cn("grid gap-3", itemGrid)}>
+          {shown.map((row, index) => {
             const href = hrefOf?.(row);
             const label = labelOf?.(row) ?? row.label;
             const split = splitForRow(splits, row);
+            const mark = markOf?.(row);
             const inner = (
               <>
                 <div className="flex items-center gap-2.5">
-                  <IconChip tone={CHIP_CYCLE[index % CHIP_CYCLE.length]} size="sm">
-                    <Icon size={14} />
-                  </IconChip>
+                  {mark ?? (
+                    <IconChip tone={CHIP_CYCLE[index % CHIP_CYCLE.length]} size="sm">
+                      <Icon size={14} />
+                    </IconChip>
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{label}</span>

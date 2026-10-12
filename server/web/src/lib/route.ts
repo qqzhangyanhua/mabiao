@@ -6,6 +6,7 @@ export type Route =
   | { page: "members" }
   | { page: "member"; accountId: number }
   | { page: "projects" }
+  | { page: "sources" }
   | { page: "project"; projectId: number }
   | { page: "session"; sessionId: number }
   | { page: "pricing" }
@@ -23,6 +24,7 @@ export function parseRoute(hash: string): Route | null {
   if (path === "overview") return { page: "overview" };
   if (path === "members") return { page: "members" };
   if (path === "projects") return { page: "projects" };
+  if (path === "sources") return { page: "sources" };
   if (path === "pricing") return { page: "pricing" };
   if (path === "timeline") return { page: "timeline" };
   const member = parseId(/^member\/(\d+)$/.exec(path)?.[1]);
@@ -44,6 +46,8 @@ export function routeHash(route: Route): string {
       return `#/member/${route.accountId}`;
     case "projects":
       return "#/projects";
+    case "sources":
+      return "#/sources";
     case "project":
       return `#/project/${route.projectId}`;
     case "session":
@@ -69,7 +73,7 @@ export function homeRoute(role: Role, accountId: number): Route {
 
 /**
  * 成员不能进总览、成员管理与价目，也不能看别人；越界一律拉回自己的页面（服务端仍会 403）。
- * 项目页、会话页与工作时间线成员也能进：项目页与时间线只统计自己的用量，会话由服务端按归属放行。
+ * 项目页、来源页、会话页与工作时间线成员也能进：项目页、来源页与时间线只统计自己的用量，会话由服务端按归属放行。
  */
 export function allowedRoute(route: Route | null, role: Role, accountId: number): Route {
   const home = homeRoute(role, accountId);
@@ -80,6 +84,7 @@ export function allowedRoute(route: Route | null, role: Role, accountId: number)
       return route.accountId === accountId ? route : home;
     case "projects":
     case "project":
+    case "sources":
     case "session":
     case "timeline":
       return route;
@@ -99,6 +104,8 @@ export function routeLabel(route: Route): string {
       return "成员页";
     case "projects":
       return "项目";
+    case "sources":
+      return "Agent 工具";
     case "project":
       return "项目页";
     case "session":

@@ -11,7 +11,7 @@ import type { CsvCell } from "./csv";
 const DIMENSIONS: [string, (summary: SummaryResponse) => Breakdown[]][] = [
   ["按天", (s) => s.by_day],
   ["按成员", (s) => s.by_account],
-  ["按来源", (s) => s.by_source],
+  ["按 Agent 工具", (s) => s.by_source],
   ["按模型", (s) => s.by_model],
   ["按项目", (s) => s.by_project],
 ];

@@ -126,6 +126,7 @@ export function MemberPage({ accountId }: { accountId: number }) {
           sessions={sessions.data?.total}
           cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
           modelSplits={splitsBy(records, (row) => row.model)}
+          sourceSplits={splitsBy(records, (row) => row.source)}
           projectSplits={splitsBy(records, (row) =>
             row.project_id !== null ? String(row.project_id) : "",
           )}

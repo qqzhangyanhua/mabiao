@@ -10,6 +10,7 @@ import { OverviewPage } from "./pages/OverviewPage";
 import { PricingPage } from "./pages/PricingPage";
 import { ProjectPage } from "./pages/ProjectPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { SourcesPage } from "./pages/SourcesPage";
 import { SessionPage } from "./pages/SessionPage";
 import { WorkTimelinePage } from "./pages/WorkTimelinePage";
 import { ThemeProvider } from "./theme";
@@ -27,6 +28,7 @@ function Routed() {
           {route.page === "members" && <MembersPage />}
           {route.page === "member" && <MemberPage key={route.accountId} accountId={route.accountId} />}
           {route.page === "projects" && <ProjectsPage />}
+          {route.page === "sources" && <SourcesPage />}
           {route.page === "project" && <ProjectPage key={route.projectId} projectId={route.projectId} />}
           {route.page === "session" && <SessionPage key={route.sessionId} sessionId={route.sessionId} />}
           {route.page === "timeline" && <WorkTimelinePage />}

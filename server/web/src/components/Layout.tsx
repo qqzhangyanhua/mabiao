@@ -1,4 +1,5 @@
 import {
+  Bot,
   ChartColumn,
   Clock,
   Download,
@@ -95,6 +96,12 @@ function navGroups(route: Route, accountId: number, role: "admin" | "member"): N
         icon: Folder,
         route: { page: "projects" },
         active: route.page === "projects" || route.page === "project",
+      },
+      {
+        label: "Agent 工具",
+        icon: Bot,
+        route: { page: "sources" },
+        active: route.page === "sources",
       },
       {
         label: "我的数据",

@@ -10,6 +10,7 @@ describe("parseRoute", () => {
 
   it("parses the project, session and pricing pages", () => {
     expect(parseRoute("#/projects")).toEqual({ page: "projects" });
+    expect(parseRoute("#/sources")).toEqual({ page: "sources" });
     expect(parseRoute("#/project/4")).toEqual({ page: "project", projectId: 4 });
     expect(parseRoute("#/session/31/")).toEqual({ page: "session", sessionId: 31 });
     expect(parseRoute("#/pricing")).toEqual({ page: "pricing" });
@@ -36,6 +37,7 @@ describe("parseRoute", () => {
       { page: "members" },
       { page: "member", accountId: 7 },
       { page: "projects" },
+      { page: "sources" },
       { page: "project", projectId: 8 },
       { page: "session", sessionId: 9 },
       { page: "pricing" },
@@ -78,6 +80,7 @@ describe("allowedRoute", () => {
   it("lets members open project and session pages (the server scopes the data)", () => {
     for (const route of [
       { page: "projects" },
+      { page: "sources" },
       { page: "project", projectId: 3 },
       { page: "session", sessionId: 3 },
       { page: "timeline" },

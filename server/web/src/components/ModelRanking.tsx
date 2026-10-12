@@ -23,7 +23,7 @@ export function ModelRanking({
   labelOf?: (row: Breakdown) => string;
 }) {
   return (
-    <section className={cn(glassClass, "p-5")}>
+    <section className={cn(glassClass, "h-full p-5")}>
       <div className="mb-4 flex items-center gap-2.5">
         <IconChip tone="blue" size="sm">
           <Boxes size={15} />

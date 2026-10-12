@@ -29,7 +29,7 @@ type Dimension = "day" | "account" | "source" | "model" | "project";
 const DIMENSIONS: { id: Dimension; label: string }[] = [
   { id: "day", label: "按天" },
   { id: "account", label: "按成员" },
-  { id: "source", label: "按来源" },
+  { id: "source", label: "按 Agent 工具" },
   { id: "model", label: "按模型" },
   { id: "project", label: "按项目" },
 ];
@@ -45,6 +45,7 @@ interface Props {
   cacheHit?: number | null;
   modelSplits?: Map<string, TokenSplit>;
   projectSplits?: Map<string, TokenSplit>;
+  sourceSplits?: Map<string, TokenSplit>;
 }
 
 export function SummaryView({
@@ -58,6 +59,7 @@ export function SummaryView({
   cacheHit = null,
   modelSplits,
   projectSplits,
+  sourceSplits,
 }: Props) {
   const href = useHref();
   const { totals } = summary;
@@ -130,12 +132,28 @@ export function SummaryView({
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ModelRanking title="按模型" rows={summary.by_model} mode={mode} splits={modelSplits} />
+        <DimensionCards
+          title="按 Agent 工具"
+          kind="source"
+          rows={summary.by_source}
+          mode={mode}
+          splits={sourceSplits}
+          labelOf={(row) => sourceLabel(row.label)}
+          markOf={(row) => (
+            <span className="grid size-7 shrink-0 place-items-center">
+              <SourceIcon source={row.key} size={22} />
+            </span>
+          )}
+          moreHref={href({ page: "sources" })}
+        />
         {showProjects && (
           <DimensionCards
             title="按项目"
             rows={summary.by_project}
             mode={mode}
             splits={projectSplits}
+            columns={3}
+            className="lg:col-span-2"
             moreHref={href({ page: "projects" })}
             hrefOf={(row) =>
               row.id === null ? undefined : href({ page: "project", projectId: row.id })
@@ -148,6 +166,8 @@ export function SummaryView({
             kind="member"
             rows={summary.by_account}
             mode={mode}
+            columns={3}
+            className="lg:col-span-2"
             hrefOf={
               linkAccounts
                 ? (row) =>

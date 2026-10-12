@@ -25,7 +25,7 @@ describe("summaryRows", () => {
       },
       by_day: [row("2026-03-01", 1, 9)],
       by_account: [row("alice", 1, 9)],
-      by_source: [],
+      by_source: [row("codex", 1, 9)],
       by_model: [row("gpt-5", 1, 9)],
       by_project: [],
     };
@@ -39,7 +39,7 @@ describe("summaryRows", () => {
       "客户端快照费用",
       "统一价未定价记录数",
     ]);
-    expect(rows.slice(1).map((r) => r[0])).toEqual(["按天", "按成员", "按模型"]);
+    expect(rows.slice(1).map((r) => r[0])).toEqual(["按天", "按成员", "按 Agent 工具", "按模型"]);
     expect(rows[1]).toEqual(["按天", "2026-03-01", 2, 3000, 1, 9, 1]);
   });
 });
