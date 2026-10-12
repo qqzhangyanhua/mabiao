@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { humanStatus } from "../../lib/format";
+import { ingestFailureStatus, usageStageStatus } from "../../lib/ingestStatus";
 import type { IngestReport } from "../../types";
 
 type IngestOpsConfig = {
@@ -23,6 +24,7 @@ export function useIngestOperations({
   setLoading,
 }: IngestOpsConfig) {
   const ingestOperation = useRef(false);
+  const usageStatusRef = useRef("");
   const [busy, setBusy] = useState(false);
   const [rebuilding, setRebuilding] = useState<string | null>(null);
   const [purging, setPurging] = useState<string | null>(null);
@@ -41,16 +43,9 @@ export function useIngestOperations({
         dataEpochRef.current += 1;
         setSessionsRevision((n) => n + 1);
         setLastIngestReport(report);
-        const issue = report.files_failed > 0 ? `，失败 ${report.files_failed}` : "";
-        const conversationIssue =
-          report.conversation_issues.length > 0
-            ? `，对话索引保留 ${report.conversation_issues.length}`
-            : "";
-        const removed = report.records_removed > 0 ? `，清理 ${report.records_removed}` : "";
-        const archived = report.records_archived > 0 ? `，归档 ${report.records_archived}` : "";
-        setStatus(
-          `${label}${report.partial_success ? "部分完成" : "完成"}：解析 ${report.files_parsed}，跳过 ${report.files_skipped}，写入 ${report.records_written}${archived}${removed}${issue}${conversationIssue}`,
-        );
+        const text = usageStageStatus(label, report);
+        usageStatusRef.current = text;
+        setStatus(text);
         await refreshViews();
         try {
           await invoke("refresh_tray");
@@ -58,7 +53,7 @@ export function useIngestOperations({
           // 菜单栏刷新失败不阻断主界面
         }
       } catch (error) {
-        setStatus(`${label}失败：${humanStatus(error)}`);
+        setStatus(ingestFailureStatus(label, humanStatus(error)));
         setLoading(false);
       } finally {
         ingestOperation.current = false;
@@ -149,5 +144,5 @@ export function useIngestOperations({
     [refreshViews, dataEpochRef, setSessionsRevision, setStatus],
   );
 
-  return { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, ingestOperation };
+  return { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, ingestOperation, usageStatusRef };
 }

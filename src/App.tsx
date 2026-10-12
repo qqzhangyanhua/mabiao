@@ -80,6 +80,7 @@ export default function App() {
       <Sidebar
         view={view}
         busy={data.busy}
+        catalogSyncing={data.catalogSyncing}
         connected={data.connected}
         partial={Boolean(data.lastIngestReport?.partial_success)}
         status={data.status}

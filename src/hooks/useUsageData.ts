@@ -35,6 +35,7 @@ import {
 import { conversationFocusFromSession } from "../lib/sessionEntryCopy";
 import { useAutoRefresh } from "./usage/useAutoRefresh";
 import { useCursorAccountRefresh } from "./usage/useCursorAccountRefresh";
+import { useCatalogProgress } from "./usage/useCatalogProgress";
 import { useIngestOperations } from "./usage/useIngestOperations";
 import { useRangeHistory } from "./usage/useRangeHistory";
 import { useUsageViewState } from "./usage/useUsageViewState";
@@ -133,7 +134,7 @@ export function useUsageData() {
     apply,
   });
 
-  const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived } =
+  const { busy, rebuilding, purging, runIngest, runRebuild, runPurgeArchived, usageStatusRef } =
     useIngestOperations({
       refreshViews,
       dataEpochRef: dataEpoch,
@@ -143,6 +144,12 @@ export function useUsageData() {
       setStatus,
       setLoading,
     });
+
+  const { catalogProgress, catalogSyncing } = useCatalogProgress({
+    setSessionsRevision,
+    setStatus,
+    usageStatusRef,
+  });
 
   const runIngestWithCacheClear = useCallback(
     async (label: string) => {
@@ -381,6 +388,8 @@ export function useUsageData() {
     setStatus,
     connected,
     busy,
+    catalogProgress,
+    catalogSyncing,
     viewHasData: hydratedViews.has(view),
     autoRefresh,
     setAutoRefresh,
