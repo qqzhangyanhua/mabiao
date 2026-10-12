@@ -62,12 +62,20 @@ pub(crate) fn refresh(
 /// 不换 `event_index_generation`：旧一代事件原样保留，会话标成待补建。会话文件的指纹照常
 /// 推进，源文件不再变化时下一轮直接跳过；事件游标不推进，待补建会话也不走增量，
 /// 要等补建整份重写。未待补建的可追加会话照常增量。
+///
+/// 不复用旧索引的来源（OpenCode 整库快照）没有「源文件不变就跳过」这一步，每轮都会整份解析，
+/// 若也标待补建就会每轮全部会话变脏、补建反复重跑，所以这类来源仍按整份写事件。
 pub(crate) fn refresh_catalog(
     conn: &Connection,
     source: Source,
     roots: &[PathBuf],
 ) -> Result<Vec<ConversationIndexIssue>, String> {
-    refresh_with_mode(conn, source, roots, RefreshMode::CatalogOnly)
+    let mode = if conversation_adapter(source)?.reuse_unchanged_index {
+        RefreshMode::CatalogOnly
+    } else {
+        RefreshMode::Full
+    };
+    refresh_with_mode(conn, source, roots, mode)
 }
 
 fn refresh_with_mode(

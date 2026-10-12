@@ -9,16 +9,7 @@ use crate::{release_idle_memory, AppState};
 #[tauri::command]
 pub async fn ingest(app: tauri::AppHandle) -> Result<IngestReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        let report = {
-            let conn = state.lock_write()?;
-            let report = ingest::ingest_usage(&conn, &ingest::default_home())?;
-            staged::after_usage_stage(&app, &state, &conn);
-            report
-        };
-        staged::trigger_deferred_startup(&app);
-        staged::start_catalog_stage(&app);
-        Ok(report)
+        staged::run_usage_then_catalog(&app, staged::CatalogRun::Background)
     })
     .await
     .map_err(|e| e.to_string())?

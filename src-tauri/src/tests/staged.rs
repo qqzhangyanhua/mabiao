@@ -1,9 +1,13 @@
 use crate::domain::ConversationCatalogProgressDto;
 use crate::ingest::CatalogProgress;
 use crate::staged::{
-    catalog_progress_dto, catalog_stage_failure, OneShot, PriorityQueue, SingleFlight,
+    catalog_progress_dto, catalog_stage_failure, Flight, OneShot, PriorityQueue, SingleFlight,
+    WriteWaiters,
 };
 use crate::test_support::*;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 fn key(source: &str, id: &str) -> (String, String) {
     (source.to_string(), id.to_string())
@@ -148,4 +152,83 @@ fn stage_failure_is_reported_as_one_issue() {
     let issue = catalog_stage_failure("boom".to_string());
     assert_eq!(issue.message, "boom");
     assert!(issue.source.is_empty());
+}
+
+#[test]
+fn flight_runs_requested_rerun_in_the_same_loop() {
+    let flight = Flight::default();
+    assert!(flight.request());
+    let mut rounds = 0;
+    flight.run_rounds(|| {
+        rounds += 1;
+        if rounds == 1 {
+            assert!(!flight.request(), "运行中的请求折成补跑");
+        }
+    });
+    assert_eq!(rounds, 2);
+    assert!(flight.request(), "跑完后回到空闲");
+}
+
+#[test]
+fn flight_is_released_when_a_round_panics() {
+    let flight = Flight::default();
+    assert!(flight.request());
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        flight.run_rounds(|| panic!("boom"));
+    }));
+    assert!(outcome.is_err());
+    assert!(flight.request(), "panic 之后单飞位必须已放开");
+}
+
+#[test]
+fn wait_idle_blocks_until_the_running_round_finishes() {
+    let flight = Arc::new(Flight::default());
+    assert!(flight.request());
+    let waiter = {
+        let flight = Arc::clone(&flight);
+        std::thread::spawn(move || {
+            let started = Instant::now();
+            flight.wait_idle();
+            started.elapsed()
+        })
+    };
+    std::thread::sleep(Duration::from_millis(50));
+    flight.run_rounds(|| {});
+    assert!(waiter.join().unwrap() >= Duration::from_millis(40));
+}
+
+#[test]
+fn wait_idle_returns_at_once_when_nothing_runs() {
+    Flight::default().wait_idle();
+}
+
+#[test]
+fn waiters_make_the_catalog_yield_until_they_have_the_lock() {
+    let waiters = WriteWaiters::default();
+    let waiting = waiters.enter();
+    std::thread::scope(|scope| {
+        scope.spawn(move || {
+            std::thread::sleep(Duration::from_millis(30));
+            drop(waiting);
+        });
+        let started = Instant::now();
+        waiters.yield_to_waiters(Duration::from_millis(2), Duration::from_secs(5));
+        assert!(started.elapsed() >= Duration::from_millis(25));
+        assert!(started.elapsed() < Duration::from_secs(4));
+    });
+}
+
+#[test]
+fn yielding_to_a_stuck_waiter_is_bounded_and_free_without_waiters() {
+    let waiters = WriteWaiters::default();
+    let started = Instant::now();
+    waiters.yield_to_waiters(Duration::from_millis(2), Duration::from_secs(5));
+    assert!(started.elapsed() < Duration::from_millis(100));
+
+    let _stuck = waiters.enter();
+    let started = Instant::now();
+    waiters.yield_to_waiters(Duration::from_millis(2), Duration::from_millis(40));
+    let elapsed = started.elapsed();
+    assert!(elapsed >= Duration::from_millis(40));
+    assert!(elapsed < Duration::from_secs(2));
 }
