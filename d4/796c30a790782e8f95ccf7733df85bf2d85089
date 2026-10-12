@@ -1,0 +1,157 @@
+src/lib/sourceIcon.test.ts
+  s_65dd22ac134ab8::t_92b8953feac756 68-70
+server/web/src/components/SummaryView.tsx
+  s_65dd22ac134ab8::t_3d74d0c5c49dbe 10,157-159
+src/lib/conversationFollow.ts
+  s_55569e3f11a3cd::t_732b53edcfadbd 69-92
+src/components/ConversationEventItem.tsx
+  s_55569e3f11a3cd::t_128fac4775a514 233
+  s_55569e3f11a3cd::t_81dffbdd316875 39,48,201,209-218
+src/components/SourceIcon.tsx
+  s_65dd22ac134ab8::t_422a8a42d43317 4-5,10,13,18
+server/web/src/components/SourceIcon.tsx
+  s_65dd22ac134ab8::t_d4fdd5dd31c5c5 1
+  s_65dd22ac134ab8::t_75a40662cfad8e 2-21
+src/lib/conversationFollow.test.ts
+  s_55569e3f11a3cd::t_ea9d5d8bd7368b 8,83-130
+  s_55569e3f11a3cd::t_df859a0ae6e375 131-132
+src/styles/views/conversation-chat.css
+  s_55569e3f11a3cd::t_0f915ec65334f0 137
+  s_55569e3f11a3cd::t_fddbef2912c1bb 181-190,192
+  s_55569e3f11a3cd::t_62214a60f03593 1,12-13,52-53,60-64,70-71,76-136,138-167,198-216
+  s_55569e3f11a3cd::t_73e729443fb348 177
+  s_55569e3f11a3cd::t_0ce7b37e5cd8bf 14-16,48-49
+  s_55569e3f11a3cd::t_b5438fd0857b97 39
+  s_55569e3f11a3cd::t_528ff6248f28e0 191
+  s_55569e3f11a3cd::t_cdc435b46b04a3 2-4,7-11,17-38,40-47,50-51,54-56,58-59,65-69,72-75,168-176,178-180,193-197
+  s_55569e3f11a3cd::t_87102c03d3d482 5-6,57
+server/web/src/components/EventTimeline.tsx
+  s_55569e3f11a3cd::t_1743187b063a32 82
+src/lib/sourceIcon.ts
+  s_65dd22ac134ab8::t_f0f8620048c46c 35-36
+  s_65dd22ac134ab8::t_036d82a5587c89 1-22
+src/styles/views/sessions.css
+  s_65dd22ac134ab8::t_e0204071164473 147-158
+src/components/sourceGlyph.tsx
+  s_65dd22ac134ab8::t_890d9f60a698b5 166-171,173,178
+  s_65dd22ac134ab8::t_422a8a42d43317 1-165,172,174-177,179-196
+src/styles.css
+  s_55569e3f11a3cd::t_8a60c7c7148683 26
+server/web/src/lib/events.test.ts
+  s_55569e3f11a3cd::t_8e6b46f4d215fc 3
+  s_55569e3f11a3cd::t_1f89abbaa1e6d5 19-27
+server/web/vite.config.ts
+  s_65dd22ac134ab8::t_98798117a806c9 6,10
+server/web/src/Detail.test.tsx
+  s_55569e3f11a3cd::t_c1a4a048db664e 223-224
+  s_55569e3f11a3cd::t_b267fc6854bb45 215
+src/lib/conversationChat.ts
+  s_55569e3f11a3cd::t_6b7e8d9c77e712 22
+  s_55569e3f11a3cd::t_1aadb09d40bf86 1-21,23-115
+server/web/src/components/EventList.tsx
+  s_55569e3f11a3cd::t_8dad5ecd76f3d3 30-32,55,62,82,92,103,105,121,136,181,211,215
+  s_55569e3f11a3cd::t_ce34c7e868f179 122,124-128
+  s_55569e3f11a3cd::t_46b9800c1dfebf 166-167,203,212-213,216
+  s_55569e3f11a3cd::t_ddbbaea6291cd3 12,14,16,35-36,40-41,46,56-57,59-61,63-81,83-91,93-102,104,106-113,115-120,123,129-135,137-140,142-143,199,226
+  s_55569e3f11a3cd::t_3e92bdc9c0276a 153-154,161-162,217-223
+  s_55569e3f11a3cd::t_197058cc0f6025 174-177
+  s_55569e3f11a3cd::t_4a1b9bbc843fac 5-7,28-29,33-34,37-39,42-45,47-54,58,114,141,144-146
+  s_55569e3f11a3cd::t_23348eb1f01c82 26-27
+  s_55569e3f11a3cd::t_eb77466a888c20 172-173
+  s_55569e3f11a3cd::t_ce273103e7366b 178-179
+  s_55569e3f11a3cd::t_a67aece1a93236 182-184,196-198
+  s_55569e3f11a3cd::t_82e75a8a37f67a 200-201
+  s_55569e3f11a3cd::t_1b746d4c972820 214
+  s_55569e3f11a3cd::t_79c848f3e42311 224-225
+  s_55569e3f11a3cd::t_9db8b9cd6d6827 227
+server/src/web_watch.rs
+  s_4360c456e8f3d4::t_8b2f5673541ad5 66-68,76-79
+  s_4360c456e8f3d4::t_42349aebbbc73b 1-2,5-10,26-55,57-65,69-75,80-83,88-105,111-112,117-121,123-138,157,163-171,177-180,233
+  s_4360c456e8f3d4::t_62909339078b99 143-156,158-162
+  s_4360c456e8f3d4::t_721604819b9586 3-4,11-25,56,84-87,106-110,113-116,122,139-142,172-176,181-232
+server/web/src/components/WorkTimelineBoard.tsx
+  s_65dd22ac134ab8::t_2b36ebd7cfe842 19
+  s_65dd22ac134ab8::t_424d68a327323e 187-190
+server/web/src/components/BreakdownTable.tsx
+  s_65dd22ac134ab8::t_22734e85f600b7 1,18,60,119-129
+src/lib/conversationChat.test.ts
+  s_55569e3f11a3cd::t_95b7dbe519c2a4 1-40,45,47-65
+  s_55569e3f11a3cd::t_b1460aeb069fb2 41-44,46
+server/src/main.rs
+  s_4360c456e8f3d4::t_9c7dfc5dbe425a 106-107,117-118
+  s_4360c456e8f3d4::t_0fb8b48b0d4ae1 1-2,26-27,104,108,113,115
+src/assets/source-icons/workbuddy.svg
+  s_65dd22ac134ab8::t_cc2157f2c06632 1
+server/web/src/components/SourceBadge.tsx
+  s_65dd22ac134ab8::t_c7bb536cff2ccf 5,8,46-47
+server/web/src/lib/events.ts
+  s_55569e3f11a3cd::t_4ee38a5cc0d702 14-75,77-78,81-82
+server/web/src/pages/SessionPage.tsx
+  s_55569e3f11a3cd::t_012b7984b1c2e6 117-118
+  s_55569e3f11a3cd::t_f17bba5e0c7bce 1,28,124-140
+src/components/UserAvatar.tsx
+  s_55569e3f11a3cd::t_438d2fbbe652cb 20
+  s_55569e3f11a3cd::t_5773d069fdeaae 17-19
+  s_55569e3f11a3cd::t_0bb946d8ae4faa 21-23
+docs/agent-layers.md
+  s_4360c456e8f3d4::t_0efe84c28ec6fb 240
+server/web/src/pages/WorkTimelinePage.tsx
+  s_65dd22ac134ab8::t_0a31cc1f5b3bb6 5,129
+src/lib/type.ts
+  s_65dd22ac134ab8::t_c34763b342cfb2 13
+deploy/README.md
+  s_4360c456e8f3d4::t_93751d11d3e180 28
+src/assets/source-icons/antigravity.svg
+  s_65dd22ac134ab8::t_cc2157f2c06632 1
+src/lib/conversationTimelineVirtual.ts
+  s_55569e3f11a3cd::t_482ec1088b30ca 182,216-219,227-230,245,251-262,266
+  s_55569e3f11a3cd::t_f54e5e444c4378 5
+src/lib/conversationTimelineVirtual.test.ts
+  s_55569e3f11a3cd::t_7ab0c837b723f0 204
+  s_55569e3f11a3cd::t_988beb361a6b57 234,236,242-252
+src/components/ConversationTimelineRow.tsx
+  s_55569e3f11a3cd::t_f8e1b68b4161f0 56,74,133,135-154
+  s_55569e3f11a3cd::t_a2e6945f7245a8 10,116-130
+src/components/ConversationChatTurn.tsx
+  s_55569e3f11a3cd::t_3b933d57bb4099 10,175,177,179,181-207,212-225
+  s_55569e3f11a3cd::t_06dcb515fe1102 150,160-161,231
+  s_55569e3f11a3cd::t_30b95c19366c33 208-211
+  s_55569e3f11a3cd::t_3d443caf7946e1 1,7
+  s_55569e3f11a3cd::t_02b8cb01335e46 2-6,8-9,11-149,151-159,162-174,176,178,180,226-230,232-238
+src/components/ConversationTimeline.tsx
+  s_55569e3f11a3cd::t_e0e97ab8b609ba 247,300-302
+  s_55569e3f11a3cd::t_cbc124e7406ded 12,109,293-299,303-328,330-331,333-352,406
+  s_55569e3f11a3cd::t_535b79d22424fd 255
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "d4796c30a790782e8f95ccf7733df85bf2d85089",
+  "prompts": {},
+  "sessions": {
+    "s_4360c456e8f3d4": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a12944-6481-7b72-8dba-4dc3221e62fe",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_55569e3f11a3cd": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a12db3-49ea-7541-99af-37252aa71456",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    },
+    "s_65dd22ac134ab8": {
+      "agent_id": {
+        "tool": "grok",
+        "id": "01a12963-92e3-7771-a80c-00a961388e74",
+        "model": "grok-4.7-build-fast"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
