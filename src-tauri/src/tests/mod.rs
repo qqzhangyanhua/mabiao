@@ -17,6 +17,7 @@ mod codex_usage;
 mod conversation;
 mod conversation_boundary;
 mod conversation_cache_layout;
+mod conversation_catalog_deferred;
 mod conversation_context;
 mod conversation_events_page;
 mod conversation_formats;
