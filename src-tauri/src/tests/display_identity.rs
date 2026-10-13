@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::domain::{OfficialQuotaProvider, Source};
+use crate::domain::{Brand, OfficialQuotaProvider, Source};
 
 const UPDATE_ENV: &str = "MABIAO_UPDATE_DISPLAY_IDENTITY";
 const REGEN_COMMAND: &str = "MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact";
@@ -91,6 +91,39 @@ fn push_string_record(out: &mut String, name: &str, entries: &[(&str, &str)]) {
     out.push_str("} as const;\n");
 }
 
+fn merged_brands() -> Vec<(&'static str, Option<&'static str>)> {
+    let mut brands: Vec<(&str, Option<&str>)> = Source::ALL
+        .iter()
+        .copied()
+        .map(|source| (source.as_str(), Some(source.brand().as_str())))
+        .collect();
+    for provider in OfficialQuotaProvider::ALL {
+        let slug = provider.as_str();
+        if brands.iter().any(|(existing, _)| *existing == slug) {
+            continue;
+        }
+        brands.push((slug, provider.brand().map(Brand::as_str)));
+    }
+    brands
+}
+
+fn push_optional_string_record(out: &mut String, name: &str, entries: &[(&str, Option<&str>)]) {
+    out.push_str("export const ");
+    out.push_str(name);
+    out.push_str(" = {\n");
+    for (key, value) in entries {
+        out.push_str("  ");
+        out.push_str(&js_key(key));
+        out.push_str(": ");
+        match value {
+            Some(text) => out.push_str(&js_string(text)),
+            None => out.push_str("null"),
+        }
+        out.push_str(",\n");
+    }
+    out.push_str("} as const;\n");
+}
+
 fn render_display_identity() -> String {
     let mut out = String::new();
     out.push_str("// 由展示身份快照测试生成。不要手改。\n");
@@ -112,10 +145,20 @@ fn render_display_identity() -> String {
     push_string_array(&mut out, "OFFICIAL_QUOTA_PROVIDER_SLUGS", &quota_slugs);
     out.push('\n');
 
+    let brand_ids: Vec<&str> = Brand::ALL.iter().copied().map(Brand::as_str).collect();
+    out.push_str("/** 品牌 ID，顺序与 `Brand::ALL` 一致。 */\n");
+    push_string_array(&mut out, "BRAND_IDS", &brand_ids);
+    out.push('\n');
+
     out.push_str("/** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */\n");
     push_string_record(&mut out, "DISPLAY_NAMES", &merged_display_names());
     out.push('\n');
+
+    out.push_str("/** 按 slug 索引的品牌。重名 slug 以来源为准；没有品牌时为 null。 */\n");
+    push_optional_string_record(&mut out, "BRAND_BY_SLUG", &merged_brands());
+    out.push('\n');
     out.push_str("export type UsageSource = (typeof SOURCE_SLUGS)[number];\n");
+    out.push_str("export type BrandId = (typeof BRAND_IDS)[number];\n");
     out
 }
 

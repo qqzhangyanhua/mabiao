@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::brand::Brand;
+
 /// 用户配置的月度预算（美元），持久化在独立文件里，与单价表分开管理。
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct BudgetConfig {
@@ -58,6 +60,21 @@ impl OfficialQuotaProvider {
             Self::OpenCode => "OpenCode",
             Self::Copilot => "Copilot",
             Self::Devin => "Devin",
+        }
+    }
+
+    /// 这个额度提供方所属的品牌。droid 属于 factory，antigravity 属于 agy，devin 没有品牌。
+    pub fn brand(self) -> Option<Brand> {
+        match self {
+            Self::Claude => Some(Brand::Claude),
+            Self::Codex => Some(Brand::Codex),
+            Self::Cursor => Some(Brand::Cursor),
+            Self::Grok => Some(Brand::Grok),
+            Self::Droid => Some(Brand::Factory),
+            Self::Antigravity => Some(Brand::Agy),
+            Self::OpenCode => Some(Brand::Opencode),
+            Self::Copilot => Some(Brand::Copilot),
+            Self::Devin => None,
         }
     }
 

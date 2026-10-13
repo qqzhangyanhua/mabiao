@@ -3,14 +3,37 @@ import almaIcon from "../assets/source-icons/alma.png";
 import antigravityIcon from "../assets/source-icons/antigravity.svg";
 import workbuddyIcon from "../assets/source-icons/workbuddy.svg";
 import zcodeIcon from "../assets/source-icons/zcode.png";
-import { resolveSourceIconId, type SourceIconId } from "../lib/sourceIcon";
+import type { BrandId } from "../generated/displayIdentity";
+import { resolveSourceIconId } from "../lib/sourceIcon";
 
 type SourceMark =
   | { viewBox: string; body: ReactElement }
   | { src: string; plate?: boolean };
 
+const unknownMark: SourceMark = {
+  viewBox: "4.5 3.1 15 17.8",
+  body: (
+    <>
+      <path d="M12 3.2 4.6 7.4 12 11.6l7.4-4.2L12 3.2Z" />
+      <path
+        d="M4.6 12.2 12 16.4l7.4-4.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.6 16.6 12 20.8l7.4-4.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+};
 
-const marks: Record<SourceIconId, SourceMark> = {
+const brandMarks = {
   claude: {
     viewBox: "0 0 24 24",
     body: (
@@ -138,35 +161,14 @@ const marks: Record<SourceIconId, SourceMark> = {
   workbuddy: { src: workbuddyIcon, plate: true },
   zcode: { src: zcodeIcon, plate: true },
   alma: { src: almaIcon, plate: true },
-  unknown: {
-    viewBox: "4.5 3.1 15 17.8",
-    body: (
-      <>
-        <path d="M12 3.2 4.6 7.4 12 11.6l7.4-4.2L12 3.2Z" />
-        <path
-          d="M4.6 12.2 12 16.4l7.4-4.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M4.6 16.6 12 20.8l7.4-4.2"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </>
-    ),
-  },
-};
-
+} satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {
-  const mark = marks[resolveSourceIconId(source)] ?? marks.unknown;
-  if (!mark) throw new Error("missing unknown source mark");
-  return mark;
+  const iconId = resolveSourceIconId(source);
+  if (iconId === "unknown") {
+    return unknownMark;
+  }
+  return brandMarks[iconId];
 }
 
 export function sourceMarkPlate(source: string): boolean {

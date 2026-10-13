@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { resolveSourceIconId } from "./sourceIcon";
+import { BRAND_IDS } from "../generated/displayIdentity";
+import { brandToneClass, resolveSourceIconId } from "./sourceIcon";
 
 const KNOWN_SOURCES = [
   "claude",
@@ -74,5 +76,19 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("some_new_source")).toBe("unknown");
     expect(resolveSourceIconId("")).toBe("unknown");
     expect(resolveSourceIconId("Claude")).toBe("unknown");
+  });
+});
+
+function toneSelectorExists(css: string, tone: string): boolean {
+  return new RegExp(`(?:^|[\\s,{])\\.${tone}(?![\\w-])`, "m").test(css);
+}
+
+describe("brandToneClass", () => {
+  it("uses a tone class that exists in the tone stylesheet", () => {
+    const css = readFileSync(new URL("../styles/shared/tones.css", import.meta.url), "utf8");
+    for (const brand of BRAND_IDS) {
+      const tone = brandToneClass(brand);
+      expect(toneSelectorExists(css, tone), `${brand} -> ${tone}`).toBe(true);
+    }
   });
 });

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::brand::Brand;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
@@ -100,6 +102,33 @@ impl Source {
             Source::WorkBuddy => "WorkBuddy",
             Source::Zcode => "ZCode",
             Source::Alma => "Alma",
+        }
+    }
+
+    /// 这个来源所属的品牌。`qoder_cn` 属于 Qoder，`cursor_agent` 属于 Cursor。
+    pub fn brand(self) -> Brand {
+        match self {
+            Source::Codex => Brand::Codex,
+            Source::Claude => Brand::Claude,
+            Source::Pi => Brand::Pi,
+            Source::Omp => Brand::Omp,
+            Source::Opencode => Brand::Opencode,
+            Source::Kimi => Brand::Kimi,
+            Source::Dsh => Brand::Dsh,
+            Source::Gemini => Brand::Gemini,
+            Source::Grok => Brand::Grok,
+            Source::Qwen => Brand::Qwen,
+            Source::Factory => Brand::Factory,
+            Source::CursorAgent => Brand::Cursor,
+            Source::Copilot => Brand::Copilot,
+            Source::Hermes => Brand::Hermes,
+            Source::Agy => Brand::Agy,
+            Source::Qoder => Brand::Qoder,
+            Source::QoderCn => Brand::Qoder,
+            Source::Cline => Brand::Cline,
+            Source::WorkBuddy => Brand::WorkBuddy,
+            Source::Zcode => Brand::Zcode,
+            Source::Alma => Brand::Alma,
         }
     }
 

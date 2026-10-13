@@ -1,12 +1,11 @@
-import { sourceTone } from "../icons";
 import { sourceLabel } from "../lib/format";
-import { resolveSourceIconId } from "../lib/sourceIcon";
+import { brandToneClass, resolveSourceIconId } from "../lib/sourceIcon";
 import type { SourceIconProps, SourceLabelProps } from "./type";
 import { SourceGlyph, sourceMarkPlate } from "./sourceGlyph";
 
 export function SourceIcon({ source, size = 16 }: SourceIconProps) {
   const iconId = resolveSourceIconId(source);
-  const tone = sourceTone[source] ?? sourceTone[iconId] ?? "tone-other";
+  const tone = iconId === "unknown" ? "tone-other" : brandToneClass(iconId);
   const plate = sourceMarkPlate(source);
   return (
     <span

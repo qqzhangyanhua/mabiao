@@ -40,6 +40,30 @@ export const OFFICIAL_QUOTA_PROVIDER_SLUGS = [
   "devin",
 ] as const;
 
+/** 品牌 ID，顺序与 `Brand::ALL` 一致。 */
+export const BRAND_IDS = [
+  "claude",
+  "codex",
+  "grok",
+  "gemini",
+  "kimi",
+  "qwen",
+  "copilot",
+  "opencode",
+  "factory",
+  "pi",
+  "omp",
+  "dsh",
+  "cursor",
+  "hermes",
+  "agy",
+  "qoder",
+  "cline",
+  "workbuddy",
+  "zcode",
+  "alma",
+] as const;
+
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
 export const DISPLAY_NAMES = {
   codex: "Codex",
@@ -69,4 +93,34 @@ export const DISPLAY_NAMES = {
   devin: "Devin",
 } as const;
 
+/** 按 slug 索引的品牌。重名 slug 以来源为准；没有品牌时为 null。 */
+export const BRAND_BY_SLUG = {
+  codex: "codex",
+  claude: "claude",
+  pi: "pi",
+  omp: "omp",
+  opencode: "opencode",
+  kimi: "kimi",
+  dsh: "dsh",
+  gemini: "gemini",
+  grok: "grok",
+  qwen: "qwen",
+  factory: "factory",
+  cursor_agent: "cursor",
+  copilot: "copilot",
+  hermes: "hermes",
+  agy: "agy",
+  qoder: "qoder",
+  qoder_cn: "qoder",
+  cline: "cline",
+  workbuddy: "workbuddy",
+  zcode: "zcode",
+  alma: "alma",
+  cursor: "cursor",
+  droid: "factory",
+  antigravity: "agy",
+  devin: null,
+} as const;
+
 export type UsageSource = (typeof SOURCE_SLUGS)[number];
+export type BrandId = (typeof BRAND_IDS)[number];
