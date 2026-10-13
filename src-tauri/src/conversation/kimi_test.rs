@@ -117,3 +117,65 @@ fn adapter_maps_high_frequency_wire_kinds() {
         .iter()
         .any(|event| event.kind == EventKind::Unadapted));
 }
+
+#[test]
+fn agents_layout_shares_session_id_and_skips_usage_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("kimi-code");
+    let path = root.join("sessions/wd/sess/agents/main/wire.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lines = [
+        serde_json::json!({"timestamp":1.0,"message":{"type":"UserMessage","payload":{"message_id":"user-1","content":[{"type":"text","text":"hello from kimi code"}]}}}),
+        serde_json::json!({"type":"usage.record","model":"kimi-code/k3","usage":{"inputOther":10,"output":2,"inputCacheRead":4,"inputCacheCreation":1},"time":1710000005000_i64}),
+        serde_json::json!({"type":"forked","agentId":"main","time":1710000004000_i64}),
+        serde_json::json!({"type":"turn.prompt","time":1710000007000_i64,"input":[{"type":"text","text":"still unadapted"}]}),
+    ];
+    let content = lines
+        .iter()
+        .map(serde_json::Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, content).unwrap();
+    std::fs::write(
+        root.join("kimi.json"),
+        r#"{"work_dirs":[{"last_session_id":"sess","path":"/from/kimi-json"}]}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sessions/wd/sess/state.json"),
+        r#"{"cwd":"/from/state","workDir":"/ignored"}"#,
+    )
+    .unwrap();
+
+    let parsed = index(&path).unwrap();
+    let conversation = &parsed.conversations[0];
+    assert_eq!(conversation.session.session_id, "sess");
+    assert_eq!(conversation.session.project, "/from/state");
+    assert!(conversation.events.iter().any(|event| {
+        event.kind == EventKind::Message && event.text.as_deref() == Some("hello from kimi code")
+    }));
+    assert!(conversation
+        .events
+        .iter()
+        .any(|event| event.event_id.starts_with("kimi:sess:")));
+    assert_eq!(parsed.diagnostics.len(), 1);
+    assert!(parsed.diagnostics[0].message.contains("尚未适配"));
+    assert!(parsed.diagnostics[0].message.contains("turn.prompt"));
+    assert!(parsed
+        .diagnostics
+        .iter()
+        .all(|issue| !issue.message.contains("usage.record") && !issue.message.contains("forked")));
+
+    let sub = root.join("sessions/wd/sess/agents/agent-0/wire.jsonl");
+    std::fs::create_dir_all(sub.parent().unwrap()).unwrap();
+    std::fs::write(
+        &sub,
+        "{\"type\":\"usage.record\",\"model\":\"kimi-code/k3\",\"usage\":{\"inputOther\":1,\"output\":1,\"inputCacheRead\":0,\"inputCacheCreation\":0},\"time\":1710000008000}\n",
+    )
+    .unwrap();
+    let sub_parsed = index(&sub).unwrap();
+    assert_eq!(sub_parsed.conversations[0].session.session_id, "sess");
+    assert_eq!(sub_parsed.conversations[0].session.project, "/from/state");
+    assert!(sub_parsed.diagnostics.is_empty());
+}

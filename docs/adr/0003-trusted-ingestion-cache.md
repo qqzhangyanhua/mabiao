@@ -6,7 +6,7 @@
 
 辅助输入目前包括：
 
-- Kimi：`wire.jsonl` + `kimi.json`
+- Kimi：`wire.jsonl` + `kimi.json`；新布局会话目录下的 `state.json`（文件存在时才进入指纹）
 - Grok：`updates.jsonl` + `summary.json`
 - OpenCode：`opencode.db` + `opencode.db-wal`
 - OMP：子代理 jsonl + 同名父会话 `{stem}.jsonl`（存在与否改变 `session_id` / `is_top_level`）

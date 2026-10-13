@@ -1,0 +1,2 @@
+{"type":"session_meta","timestamp":"2026-01-01T00:00:00Z","payload":{"id":"sess-cache-write","cwd":"/work/app","model_provider":"openai"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:01Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":40,"cache_write_input_tokens":25,"output_tokens":10,"reasoning_output_tokens":0,"total_tokens":999}}}}

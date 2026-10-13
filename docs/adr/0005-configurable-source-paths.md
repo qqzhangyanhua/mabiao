@@ -11,12 +11,12 @@
 
 | Source | 环境变量 | 默认路径 |
 |---|---|---|
-| Codex | `CODEX_HOME` | `~/.codex`（扫 `sessions/` 下 `*.jsonl` 与 `*.jsonl.zst`；同名明文存在时跳过压缩件） |
+| Codex | `CODEX_HOME` | `~/.codex`（扫 `sessions/` 与 `archived_sessions/` 下 `*.jsonl` 与 `*.jsonl.zst`；同目录同名明文存在时跳过压缩件） |
 | Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` **和** `~/.config/claude`（都扫 `projects/`）。另在已存在时追加 Claude Desktop / Cowork 嵌套 `local-agent-mode-sessions/*/*/local_*/.claude/projects`（macOS `~/Library/Application Support/Claude[+ -3p]`、Linux `~/.config/Claude[+ -3p]`、Windows `%APPDATA%` / `%LOCALAPPDATA%` / MSIX `Packages/Claude_*`）。`CLAUDE_CONFIG_DIR` 只替换 Code 根，不关掉 Desktop 发现 |
 | Pi | `PI_AGENT_DIR` | `~/.pi/agent/sessions` |
 | OMP | `OMP_AGENT_DIR` | `~/.omp/agent/sessions` |
 | OpenCode | `OPENCODE_DATA_DIR` | `~/.local/share/opencode`（扫 `opencode.db`） |
-| Kimi | `KIMI_DATA_DIR` | `~/.kimi`（扫 `sessions/` + `kimi.json`） |
+| Kimi | `KIMI_DATA_DIR` | `~/.kimi` 与 `~/.kimi-code`（都扫 `sessions/**/wire.jsonl`，旁路 `kimi.json`；新布局另读会话目录里的 `state.json`）。`KIMI_DATA_DIR` 整体替换这两个默认根，不另读 `KIMI_CODE_HOME` |
 | dsh | `DSH_HOME` | `~/.dsh`（扫 `sessions/`） |
 | Gemini | `GEMINI_DATA_DIR` | `~/.gemini/tmp` |
 | Grok | `GROK_HOME` | `~/.grok`（扫 `sessions/`） |
@@ -33,9 +33,9 @@
 | ZCode | `ZCODE_HOME` | `~/.zcode`（扫 `cli/db/db.sqlite`） |
 | Alma | `ALMA_HOME` | Electron `userData`/`alma`：Linux `~/.config/alma`、macOS `~/Library/Application Support/alma`、Windows `%APPDATA%/alma`（扫 `chat_threads.db`；不是 `~/.local/share/alma`） |
 
-环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径）在显式设置对应环境变量后也不再自动附加。
+环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径、Kimi 的 `~/.kimi` 与 `~/.kimi-code`）在显式设置对应环境变量后也不再自动附加。
 
-路径拼接规则和默认值保持一致：环境变量给的是「根目录」，内部仍然按各 Source 原来的规则拼接子路径（例如 `CODEX_HOME=/x` 实际扫 `/x/sessions`）。
+路径拼接规则和默认值保持一致：环境变量给的是「根目录」，内部仍然按各 Source 原来的规则拼接子路径（例如 `CODEX_HOME=/x` 实际扫 `/x/sessions` 和 `/x/archived_sessions`）。设置页填的仍是这个根，不把 `archived_sessions` 当成另一个默认根。
 
 设置页的来源健康表始终展示当前实际生效的扫描路径（`root_path`，多个路径用「, 」连接），覆盖后这里会如实反映，不需要用户去猜路径拼接结果对不对。
 

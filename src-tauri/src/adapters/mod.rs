@@ -155,7 +155,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: true,
         soft_parse_failure: false,
-        coverage: "轮级 Token（无模型名）",
+        coverage: "轮级 Token",
         display_dirs: None,
         detected: Some(kimi::detected),
     },

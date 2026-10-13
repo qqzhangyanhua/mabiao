@@ -1,0 +1,8 @@
+{"type":"usage.record","model":"kimi-code/k3","usage":{"inputOther":0,"output":0,"inputCacheRead":0,"inputCacheCreation":0},"time":1710000000000}
+{"type":"usage.record","model":"kimi-code/k3","usage":{"inputOther":-1,"output":2,"inputCacheRead":0,"inputCacheCreation":0},"time":1710000001000}
+{"type":"usage.record","model":"kimi-code/k3","usage":{"inputOther":7,"output":1,"inputCacheRead":0,"inputCacheCreation":0},"time":1710000002000}
+
+{"timestamp":1710000003.0,"message":{"type":"StatusUpdate","payload":{"message_id":"chatcmpl-keep","token_usage":{"input_other":5,"output":1,"input_cache_read":0,"input_cache_creation":0}}}}
+{"type":"forked","agentId":"main","time":1710000004000}
+{"type":"usage.record","model":"kimi-code/k3","usage":{"inputOther":10,"output":2,"inputCacheRead":4,"inputCacheCreation":1},"time":1710000005000}
+{"type":"usage.record","model":"magpie/deepseek","usage":{"inputOther":3,"output":1,"inputCacheRead":0,"inputCacheCreation":0},"time":1710000006000}

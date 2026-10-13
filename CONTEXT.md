@@ -104,13 +104,13 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 
 | Source | 存储 | 本机 token | 本机费用 |
 |--------|------|:---:|:---:|
-| Codex | jsonl / jsonl.zst `~/.codex/sessions` | ✅ | ❌ |
+| Codex | jsonl / jsonl.zst `~/.codex/sessions` 与 `~/.codex/archived_sessions` | ✅ | ❌ |
 | Claude Code | jsonl `~/.claude/projects`（另扫 XDG `~/.config/claude/projects`，以及已存在的 Claude Desktop / Cowork 嵌套 `.claude/projects`） | ✅ | ✅ 自带 `costUSD` |
 | pi | jsonl `~/.pi/agent/sessions` | ✅ | ✅ 自带 |
 | OMP | jsonl `~/.omp/agent/sessions` | ✅ | ✅ 自带 `cost.total` |
 | dsh | zstd jsonl `~/.dsh/sessions` | ✅(需解压) | ❌ |
 | opencode | sqlite+json `~/.local/share/opencode`（`message` 与 OpenCode 2 的 `session_v2` / `session_message`） | ✅ | ✅ 自带 |
-| kimi | jsonl `~/.kimi/sessions/*/wire.jsonl` | ✅ | ❌ |
+| kimi | jsonl `~/.kimi` 与 `~/.kimi-code` 的 `sessions/**/wire.jsonl` | ✅ | ❌ |
 | gemini | json / jsonl `~/.gemini/tmp/*/chats/session-*`（`GEMINI_DATA_DIR` 可覆盖） | ✅ | ❌ |
 | grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
 | Hermes | sqlite `~/.hermes/state.db` 与 `~/.hermes/profiles/*/state.db`（`HERMES_HOME` 若在 `profiles/<name>` 则回到根） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |

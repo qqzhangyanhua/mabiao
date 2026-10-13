@@ -11,7 +11,7 @@ fn overview_from_codex_fixture_uses_last_token_usage_totals() {
     let stored = store::load_all(&conn).unwrap();
     let dto = aggregate::overview(&stored, &Filter::default(), &PriceTable::default());
     assert_eq!(dto.total_tokens, 19113);
-    assert_eq!(dto.input_tokens, 18413);
+    assert_eq!(dto.input_tokens, 16365);
     assert_eq!(dto.output_tokens, 700);
     assert_eq!(dto.cache_read_tokens, 2048);
     assert_eq!(dto.cache_creation_tokens, 0);

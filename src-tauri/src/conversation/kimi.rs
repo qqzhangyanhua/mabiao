@@ -30,11 +30,19 @@ pub(super) fn detail(
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
     let sidecar = sidecar_path(path)?;
     validate_sidecar(&sidecar)?;
-    Ok(format!(
+    let mut revision = format!(
         "{}:{}",
         regular_source_revision(path)?,
         ingest::content_fingerprint(&sidecar)
-    ))
+    );
+    if let Some(state) = crate::adapters::kimi::state_json_path(path) {
+        if state.exists() {
+            crate::adapters::kimi::state_cwd(path)?;
+            revision.push(':');
+            revision.push_str(&ingest::content_fingerprint(&state));
+        }
+    }
+    Ok(revision)
 }
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -48,13 +56,10 @@ fn parse(
     path: &Path,
     include_deferred_content: bool,
 ) -> Result<(ParsedConversation, Vec<ConversationIndexIssue>), String> {
-    let session_id = path
-        .parent()
-        .and_then(|parent| parent.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "Kimi wire 路径缺少必需的会话 ID".to_string())?
-        .to_string();
+    let session_id = crate::adapters::kimi::session_id_from_wire(path);
+    if session_id.is_empty() {
+        return Err("Kimi wire 路径缺少必需的会话 ID".to_string());
+    }
     let project = project(path, &session_id)?;
     let values = parse_jsonl_conversation_values(path)?;
     let latest = latest_identities(&values);
@@ -66,6 +71,12 @@ fn parse(
     let mut sequence = 0usize;
 
     for (line, value) in values {
+        if matches!(
+            value.get("type").and_then(Value::as_str),
+            Some("usage.record" | "forked")
+        ) {
+            continue;
+        }
         let message = value.get("message").unwrap_or(&value);
         let raw_kind = message.get("type").and_then(Value::as_str).unwrap_or("");
         let native_identity = identity(message, raw_kind);
@@ -280,6 +291,9 @@ fn identity(message: &Value, raw_kind: &str) -> Option<String> {
 fn project(path: &Path, session_id: &str) -> Result<String, String> {
     let sidecar = sidecar_path(path)?;
     let value = validate_sidecar(&sidecar)?;
+    if let Some(cwd) = crate::adapters::kimi::state_cwd(path)? {
+        return Ok(cwd);
+    }
     Ok(value
         .get("work_dirs")
         .and_then(Value::as_array)
@@ -291,14 +305,7 @@ fn project(path: &Path, session_id: &str) -> Result<String, String> {
         .and_then(|item| item.get("path"))
         .and_then(Value::as_str)
         .map(str::to_string)
-        .unwrap_or_else(|| {
-            path.parent()
-                .and_then(Path::parent)
-                .and_then(Path::file_name)
-                .and_then(|name| name.to_str())
-                .unwrap_or("")
-                .to_string()
-        }))
+        .unwrap_or_else(|| crate::adapters::kimi::directory_project(path)))
 }
 
 fn sidecar_path(path: &Path) -> Result<PathBuf, String> {

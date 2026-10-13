@@ -172,10 +172,12 @@ fn row(
         .unwrap_or_default();
     let join_leaf = join_leaf(source);
     let default_scan = (adapter.scan_dirs)(empty, home);
-    let default_roots = default_scan
-        .iter()
-        .map(|dir| strip_leaf(dir, &join_leaf))
-        .collect();
+    let mut default_roots = Vec::new();
+    for dir in default_scan.iter().map(|dir| strip_leaf(dir, &join_leaf)) {
+        if !default_roots.contains(&dir) {
+            default_roots.push(dir);
+        }
+    }
     let effective_scan_dirs = path_strings(&(adapter.scan_dirs)(merged, home));
     let active = if !override_roots.is_empty() {
         "ui"
@@ -219,6 +221,11 @@ fn strip_leaf(scan: &Path, leaf: &str) -> String {
     if leaf.is_empty() {
         return scan.to_string_lossy().into_owned();
     }
+    if leaf == "sessions"
+        && scan.file_name().and_then(|name| name.to_str()) == Some("archived_sessions")
+    {
+        return scan.parent().unwrap_or(scan).to_string_lossy().into_owned();
+    }
     let mut current = scan.to_path_buf();
     for component in leaf.split('/').rev() {
         if current.file_name().and_then(|name| name.to_str()) == Some(component) {
@@ -232,6 +239,7 @@ fn strip_leaf(scan: &Path, leaf: &str) -> String {
 
 fn row_note(source: Source) -> String {
     match source {
+        Source::Codex => "同级 archived_sessions 一并扫描。".to_string(),
         Source::CursorAgent => "只覆盖 token 包装目录，会话仍扫 ~/.cursor。".to_string(),
         Source::Claude => {
             "CLAUDE_CONFIG_DIR 只替换 Claude Code 根；已存在的 Desktop / Cowork 嵌套 projects 仍会追加。".to_string()

@@ -10,7 +10,14 @@ use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "CODEX_HOME", ".codex", "sessions")
+    let roots = overrides
+        .get("CODEX_HOME")
+        .cloned()
+        .unwrap_or_else(|| vec![home.join(".codex")]);
+    roots
+        .into_iter()
+        .flat_map(|root| [root.join("sessions"), root.join("archived_sessions")])
+        .collect()
 }
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -52,16 +59,18 @@ pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> 
 struct CodexUsage {
     input: i64,
     cached: i64,
+    cache_write: i64,
     output: i64,
     reasoning: i64,
     total: i64,
 }
 
 impl CodexUsage {
-    fn fingerprint(self) -> (i64, i64, i64, i64, i64) {
+    fn fingerprint(self) -> (i64, i64, i64, i64, i64, i64) {
         (
             self.input,
             self.cached,
+            self.cache_write,
             self.output,
             self.reasoning,
             self.total,
@@ -69,13 +78,26 @@ impl CodexUsage {
     }
 
     fn is_zero(self) -> bool {
-        self.input == 0 && self.cached == 0 && self.output == 0 && self.reasoning == 0
+        self.input == 0
+            && self.cached == 0
+            && self.cache_write == 0
+            && self.output == 0
+            && self.reasoning == 0
     }
 
-    fn clamped(self) -> Self {
+    /// `input_tokens` 是整段 prompt，缓存读和 cache write 都算在里面。
+    /// 先做高水位差分，再拆成互斥的三段，避免输入和缓存各计一次。
+    fn spent(self) -> Self {
+        let input = self.input.max(0);
+        let cached = self.cached.max(0).min(input);
+        let cache_write = self.cache_write.max(0).min(input - cached);
         Self {
-            cached: self.cached.min(self.input),
-            ..self
+            input: input - cached - cache_write,
+            cached,
+            cache_write,
+            output: self.output,
+            reasoning: self.reasoning,
+            total: self.total,
         }
     }
 
@@ -83,6 +105,7 @@ impl CodexUsage {
         Self {
             input: self.input.saturating_sub(prev.input),
             cached: self.cached.saturating_sub(prev.cached),
+            cache_write: self.cache_write.saturating_sub(prev.cache_write),
             output: self.output.saturating_sub(prev.output),
             reasoning: self.reasoning.saturating_sub(prev.reasoning),
             total: self.total.saturating_sub(prev.total),
@@ -93,6 +116,7 @@ impl CodexUsage {
         Self {
             input: self.input.max(other.input),
             cached: self.cached.max(other.cached),
+            cache_write: self.cache_write.max(other.cache_write),
             output: self.output.max(other.output),
             reasoning: self.reasoning.max(other.reasoning),
             total: self.total.max(other.total),
@@ -105,7 +129,7 @@ pub fn parse_codex_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usag
     let mut project = String::new();
     let mut provider = String::new();
     let mut model = String::new();
-    let mut last_usage: Option<(i64, i64, i64, i64, i64)> = None;
+    let mut last_usage: Option<(i64, i64, i64, i64, i64, i64)> = None;
     let mut total_high_water: Option<CodexUsage> = None;
     let mut records = Vec::new();
 
@@ -163,7 +187,7 @@ pub fn parse_codex_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usag
                         None => total,
                     });
                 }
-                let usage = usage.clamped();
+                let usage = usage.spent();
                 if usage.is_zero() {
                     continue;
                 }
@@ -183,7 +207,7 @@ pub fn parse_codex_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usag
                     input_tokens: usage.input,
                     output_tokens: usage.output,
                     cache_read_tokens: usage.cached,
-                    cache_creation_tokens: 0,
+                    cache_creation_tokens: usage.cache_write,
                     reasoning_tokens: usage.reasoning,
                     total_tokens: usage.total,
                     native_cost: None,
@@ -207,6 +231,7 @@ fn parse_codex_usage(value: Option<&Value>) -> Option<CodexUsage> {
         "input_tokens",
         "cached_input_tokens",
         "cache_read_input_tokens",
+        "cache_write_input_tokens",
         "output_tokens",
         "reasoning_output_tokens",
         "total_tokens",
@@ -219,6 +244,7 @@ fn parse_codex_usage(value: Option<&Value>) -> Option<CodexUsage> {
     Some(CodexUsage {
         input: i64_field(value, &["input_tokens"]),
         cached: i64_field(value, &["cached_input_tokens", "cache_read_input_tokens"]),
+        cache_write: i64_field(value, &["cache_write_input_tokens"]),
         output: i64_field(value, &["output_tokens"]),
         reasoning: i64_field(value, &["reasoning_output_tokens"]),
         total: i64_field(value, &["total_tokens"]),

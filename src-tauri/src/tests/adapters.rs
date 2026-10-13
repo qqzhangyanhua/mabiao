@@ -18,11 +18,14 @@ fn codex_adapter_counts_last_token_usage_not_cumulative() {
         records[0].session_id,
         "019a9618-5abf-7892-be63-df90ece3d676"
     );
-    assert_eq!(records[0].input_tokens, 8904);
+    assert_eq!(records[0].input_tokens, 7880);
     assert_eq!(records[0].cache_read_tokens, 1024);
+    assert_eq!(records[0].cache_creation_tokens, 0);
     assert_eq!(records[0].output_tokens, 592);
     assert_eq!(records[0].total_tokens, 9496);
-    assert_eq!(records[1].input_tokens, 9509);
+    assert_eq!(records[1].input_tokens, 8485);
+    assert_eq!(records[1].cache_read_tokens, 1024);
+    assert_eq!(records[1].cache_creation_tokens, 0);
     assert_eq!(records[1].output_tokens, 108);
     assert_eq!(records[1].reasoning_tokens, 64);
     assert_eq!(records[1].total_tokens, 9617);
@@ -38,14 +41,74 @@ fn codex_adapter_falls_back_to_total_token_usage_delta() {
         "/Users/zhangyanhua/.codex/sessions/rollout.jsonl",
     );
     assert_eq!(records.len(), 2);
-    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].input_tokens, 50);
     assert_eq!(records[0].cache_read_tokens, 50);
     assert_eq!(records[0].output_tokens, 10);
-    assert_eq!(records[1].input_tokens, 50);
+    assert_eq!(records[0].total_tokens, 110);
+    assert_eq!(records[1].input_tokens, 25);
     assert_eq!(records[1].cache_read_tokens, 25);
     assert_eq!(records[1].output_tokens, 5);
+    assert_eq!(records[1].total_tokens, 55);
     let summed: i64 = records.iter().map(|r| r.input_tokens).sum();
-    assert_eq!(summed, 150);
+    assert_eq!(summed, 75);
+}
+
+#[test]
+fn codex_adapter_splits_cache_write_out_of_input_after_delta() {
+    let records = codex::parse_codex_jsonl(
+        &fixture_lines(&fixture("codex-cache-write.jsonl")),
+        "/Users/zhangyanhua/.codex/sessions/rollout.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 35);
+    assert_eq!(records[0].cache_read_tokens, 40);
+    assert_eq!(records[0].cache_creation_tokens, 25);
+    assert_eq!(records[0].output_tokens, 10);
+    assert_eq!(records[0].total_tokens, 999);
+
+    let clamped = r#"{"type":"event_msg","timestamp":"2026-01-01T00:00:01Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"cached_input_tokens":90,"cache_write_input_tokens":30,"output_tokens":0,"total_tokens":7}}}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:02Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"cache_read_input_tokens":80,"cache_write_input_tokens":5,"output_tokens":0,"total_tokens":3}}}}"#;
+    let records = codex::parse_codex_jsonl(&fixture_lines(clamped), "/tmp/rollout.jsonl");
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].input_tokens, 0);
+    assert_eq!(records[0].cache_read_tokens, 90);
+    assert_eq!(records[0].cache_creation_tokens, 10);
+    assert_eq!(records[0].total_tokens, 7);
+    assert_eq!(records[1].input_tokens, 0);
+    assert_eq!(records[1].cache_read_tokens, 50);
+    assert_eq!(records[1].cache_creation_tokens, 0);
+    assert_eq!(records[1].total_tokens, 3);
+}
+
+#[test]
+fn codex_scan_dirs_include_archived_sessions() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let dirs = codex::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert_eq!(
+        dirs,
+        vec![
+            home.join(".codex/sessions"),
+            home.join(".codex/archived_sessions"),
+        ]
+    );
+
+    let archived = home.join(".codex/archived_sessions");
+    std::fs::create_dir_all(&archived).unwrap();
+    let file = archived.join("rollout.jsonl");
+    std::fs::write(&file, fixture("codex.jsonl")).unwrap();
+    let found = codex::discover(&dirs).unwrap();
+    assert_eq!(found, vec![file]);
+
+    let overrides =
+        ingest::PathOverrides::from([("CODEX_HOME", vec![PathBuf::from("/custom/codex")])]);
+    assert_eq!(
+        codex::scan_dirs(&overrides, home),
+        vec![
+            PathBuf::from("/custom/codex/sessions"),
+            PathBuf::from("/custom/codex/archived_sessions"),
+        ]
+    );
 }
 
 #[test]
@@ -483,6 +546,164 @@ fn kimi_adapter_keeps_last_status_update_per_turn() {
     assert_eq!(records[1].cache_read_tokens, 6656);
     assert_eq!(records[1].cache_creation_tokens, 0);
     assert_eq!(records[1].total_tokens, 7325);
+}
+
+#[test]
+fn kimi_scan_dirs_default_to_both_homes_and_env_replaces_them() {
+    let home = std::path::Path::new("/home/example");
+    assert_eq!(
+        kimi::scan_dirs(&ingest::PathOverrides::new(), home),
+        vec![home.join(".kimi"), home.join(".kimi-code")]
+    );
+    let custom = PathBuf::from("/custom/kimi");
+    let overrides = ingest::PathOverrides::from([("KIMI_DATA_DIR", vec![custom.clone()])]);
+    assert_eq!(kimi::scan_dirs(&overrides, home), vec![custom]);
+}
+
+#[test]
+fn kimi_code_wire_counts_usage_record_and_shares_session_id() {
+    let source = "/tmp/.kimi-code/sessions/wd/sess-1/agents/main/wire.jsonl";
+    let records = kimi::parse_kimi_wire(&fixture("kimi-code-wire.jsonl"), source, "/work/app");
+    assert_eq!(records.len(), 4);
+    assert!(records.iter().all(|record| record.session_id == "sess-1"));
+    assert!(records.iter().all(|record| record.project == "/work/app"));
+    assert_eq!(records[0].model, "kimi-code/k3");
+    assert_eq!(records[0].input_tokens, 7);
+    assert_eq!(records[0].output_tokens, 1);
+    assert_eq!(
+        records[0].occurred_at,
+        chrono::DateTime::from_timestamp_millis(1_710_000_002_000)
+            .unwrap()
+            .to_rfc3339()
+    );
+    assert_eq!(records[1].model, "");
+    assert_eq!(records[1].input_tokens, 5);
+    assert_eq!(
+        records[1].occurred_at,
+        chrono::DateTime::from_timestamp(1_710_000_003, 0)
+            .unwrap()
+            .to_rfc3339()
+    );
+    assert_eq!(records[2].input_tokens, 10);
+    assert_eq!(records[2].output_tokens, 2);
+    assert_eq!(records[2].cache_read_tokens, 4);
+    assert_eq!(records[2].cache_creation_tokens, 1);
+    assert_eq!(records[2].total_tokens, 17);
+    assert_eq!(records[3].model, "magpie/deepseek");
+    assert_eq!(records[3].input_tokens, 3);
+
+    let subagent = "/tmp/.kimi-code/sessions/wd/sess-1/agents/agent-0/wire.jsonl";
+    let sub = kimi::parse_kimi_wire(&fixture("kimi-code-wire.jsonl"), subagent, "/work/app");
+    assert!(sub.iter().all(|record| record.session_id == "sess-1"));
+    assert!(sub.iter().all(|record| record.source_file == subagent));
+    assert_eq!(
+        kimi::directory_project(std::path::Path::new(subagent)),
+        "wd"
+    );
+    assert_eq!(
+        kimi::directory_project(std::path::Path::new(
+            "/tmp/.kimi/sessions/hash/uuid/wire.jsonl"
+        )),
+        "hash"
+    );
+}
+
+#[test]
+fn kimi_fork_drops_copied_usage_records_but_keeps_status_updates() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".kimi-code");
+    let main = root.join("sessions/wd/sess-1/agents/main/wire.jsonl");
+    let sub = root.join("sessions/wd/sess-1/agents/agent-0/wire.jsonl");
+    std::fs::create_dir_all(main.parent().unwrap()).unwrap();
+    std::fs::create_dir_all(sub.parent().unwrap()).unwrap();
+    let body = fixture("kimi-code-wire.jsonl");
+    std::fs::write(&main, &body).unwrap();
+    std::fs::write(&sub, &body).unwrap();
+    let state = root.join("sessions/wd/sess-1/state.json");
+    std::fs::write(
+        &state,
+        r#"{"cwd":"/from/state","workDir":"/ignored","forkedFrom":"parent-sess","createdAt":1710000004500}"#,
+    )
+    .unwrap();
+    let with_state = kimi::sidecar_fingerprint(&main, std::slice::from_ref(&root));
+    assert!(with_state.starts_with(&ingest::content_fingerprint(&root.join("kimi.json"))));
+    assert_ne!(
+        with_state,
+        ingest::content_fingerprint(&root.join("kimi.json"))
+    );
+    std::fs::write(
+        &state,
+        r#"{"cwd":"/from/state","forkedFrom":"parent-sess"}"#,
+    )
+    .unwrap();
+    assert_ne!(
+        kimi::sidecar_fingerprint(&main, std::slice::from_ref(&root)),
+        with_state
+    );
+    std::fs::write(
+        &state,
+        r#"{"cwd":"/from/state","workDir":"/ignored","forkedFrom":"parent-sess","createdAt":1710000004500}"#,
+    )
+    .unwrap();
+    let old_root = dir.path().join(".kimi");
+    let old_wire = old_root.join("sessions/hash/uuid/wire.jsonl");
+    assert_eq!(
+        kimi::sidecar_fingerprint(&old_wire, std::slice::from_ref(&old_root)),
+        ingest::content_fingerprint(&old_root.join("kimi.json"))
+    );
+
+    let records = kimi::parse(&main, &root).unwrap();
+    assert!(records.iter().all(|record| record.session_id == "sess-1"));
+    assert!(records.iter().all(|record| record.project == "/from/state"));
+    assert!(records.iter().all(|record| record.input_tokens != 7));
+    assert!(records.iter().any(|record| record.input_tokens == 5));
+    assert!(records.iter().any(|record| record.input_tokens == 10));
+    assert_eq!(
+        records
+            .iter()
+            .find(|record| record.input_tokens == 10)
+            .unwrap()
+            .source_file,
+        main.to_string_lossy()
+    );
+
+    let sub_records = kimi::parse(&sub, &root).unwrap();
+    assert!(sub_records
+        .iter()
+        .all(|record| record.session_id == "sess-1"));
+    assert!(sub_records
+        .iter()
+        .all(|record| record.source_file == sub.to_string_lossy()));
+    assert!(sub_records.iter().all(|record| record.input_tokens != 7));
+
+    std::fs::write(
+        root.join("sessions/wd/sess-1/state.json"),
+        r#"{"cwd":"/from/state","forkedFrom":""}"#,
+    )
+    .unwrap();
+    let parent = kimi::parse(&main, &root).unwrap();
+    assert!(parent.iter().any(|record| record.input_tokens == 7));
+
+    let bare = root.join("sessions/wd/sess-2/agents/main/wire.jsonl");
+    std::fs::create_dir_all(bare.parent().unwrap()).unwrap();
+    std::fs::write(
+        &bare,
+        "{\"type\":\"usage.record\",\"model\":\"kimi-code/k3\",\"usage\":{\"inputOther\":4,\"output\":1,\"inputCacheRead\":0,\"inputCacheCreation\":0},\"time\":1709999999000}\n{\"type\":\"usage.record\",\"model\":\"kimi-code/k3\",\"usage\":{\"inputOther\":6,\"output\":1,\"inputCacheRead\":0,\"inputCacheCreation\":0},\"time\":1710000001000}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("sessions/wd/sess-2/state.json"),
+        r#"{"forkedFrom":"parent-sess","createdAt":"2024-03-09T16:00:00Z"}"#,
+    )
+    .unwrap();
+    let since = chrono::DateTime::parse_from_rfc3339("2024-03-09T16:00:00Z")
+        .unwrap()
+        .timestamp_millis();
+    assert!(since > 1_709_999_999_000 && since < 1_710_000_001_000);
+    let cut = kimi::parse(&bare, &root).unwrap();
+    assert_eq!(cut.len(), 1);
+    assert_eq!(cut[0].input_tokens, 6);
+    assert_eq!(cut[0].session_id, "sess-2");
 }
 
 #[test]

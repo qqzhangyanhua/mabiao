@@ -67,13 +67,19 @@ fn ui_override_wins_over_env_and_empty_ui_keeps_env() {
     let merged = ingest::merge_path_overrides(env.clone(), file);
     assert_eq!(
         ingest::source_scan_dirs_with(&merged, home, Source::Codex),
-        vec![PathBuf::from("/ui/codex/sessions")]
+        vec![
+            PathBuf::from("/ui/codex/sessions"),
+            PathBuf::from("/ui/codex/archived_sessions"),
+        ]
     );
 
     let env_only = ingest::merge_path_overrides(env, PathOverrides::new());
     assert_eq!(
         ingest::source_scan_dirs_with(&env_only, home, Source::Codex),
-        vec![PathBuf::from("/env/codex/sessions")]
+        vec![
+            PathBuf::from("/env/codex/sessions"),
+            PathBuf::from("/env/codex/archived_sessions"),
+        ]
     );
 }
 
@@ -116,17 +122,22 @@ fn panel_reports_ui_layer_and_effective_scan_dirs() {
     );
     assert_eq!(
         codex.effective_scan_dirs,
-        vec![custom.join("sessions").to_string_lossy().into_owned()]
+        vec![
+            custom.join("sessions").to_string_lossy().into_owned(),
+            custom
+                .join("archived_sessions")
+                .to_string_lossy()
+                .into_owned(),
+        ]
     );
     assert_eq!(codex.join_leaf, "sessions");
-    assert!(
-        codex
-            .default_roots
-            .iter()
-            .any(|root| root.ends_with(".codex")),
-        "{:?}",
-        codex.default_roots
-    );
+    assert!(codex.note.contains("archived_sessions"));
+    let codex_roots: Vec<_> = codex
+        .default_roots
+        .iter()
+        .filter(|root| root.ends_with(".codex"))
+        .collect();
+    assert_eq!(codex_roots.len(), 1, "{:?}", codex.default_roots);
 
     let cursor_agent = panel
         .rows

@@ -872,7 +872,7 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
         .iter()
         .find(|diagnostic| diagnostic.source == "kimi")
         .unwrap();
-    assert_eq!(kimi.coverage, "轮级 Token（无模型名）");
+    assert_eq!(kimi.coverage, "轮级 Token");
     assert!(
         !kimi.detected,
         "kimi root without sessions/ must not count as detected"
@@ -1096,7 +1096,14 @@ fn source_scan_dirs_default_to_home_relative_paths() {
 
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Codex),
-        vec![home.join(".codex/sessions")],
+        vec![
+            home.join(".codex/sessions"),
+            home.join(".codex/archived_sessions"),
+        ],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Kimi),
+        vec![home.join(".kimi"), home.join(".kimi-code")],
     );
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Grok),
@@ -1171,6 +1178,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     let home = std::path::Path::new("/home/example");
     let overrides = ingest::PathOverrides::from([
         ("CODEX_HOME", vec![PathBuf::from("/custom/codex")]),
+        ("KIMI_DATA_DIR", vec![PathBuf::from("/custom/kimi")]),
         (
             "CLAUDE_CONFIG_DIR",
             vec![
@@ -1207,7 +1215,14 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
 
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Codex),
-        vec![PathBuf::from("/custom/codex/sessions")],
+        vec![
+            PathBuf::from("/custom/codex/sessions"),
+            PathBuf::from("/custom/codex/archived_sessions"),
+        ],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Kimi),
+        vec![PathBuf::from("/custom/kimi")],
     );
     // 覆盖后不再回退到默认的 XDG 双路径，只扫用户显式给出的目录。
     assert_eq!(
@@ -1282,8 +1297,8 @@ fn ingest_scans_multiple_overridden_directories_for_one_source() {
     )
     .unwrap();
 
-    // CODEX_HOME 覆盖为两个自定义根目录（逗号分隔多个），两个都要按同样的 /sessions
-    // 规则拼接、都要被扫到。
+    // CODEX_HOME 覆盖为两个自定义根目录（逗号分隔多个），两个都要按同样的
+    // sessions 与 archived_sessions 规则拼接。这里只放了 sessions，缺的目录不加文件。
     let root_a = home.join("codex-root-a");
     let root_b = home.join("codex-root-b");
     std::fs::create_dir_all(root_a.join("sessions")).unwrap();
