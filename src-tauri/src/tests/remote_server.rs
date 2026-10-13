@@ -9,6 +9,7 @@ use push_protocol::{ApiErrorCode, LoginResponse, RemoteRole};
 
 use crate::backup;
 use crate::remote_server::address::normalize_base_url;
+use crate::remote_server::client::transport_failure_message;
 use crate::remote_server::store::{self, RemoteServerPaths, StoredToken, CONFIG_NAME, TOKEN_NAME};
 use crate::remote_server::{self, LoginInput, SessionState};
 use crate::store as db_store;
@@ -54,9 +55,12 @@ fn all_file_text(dir: &Path) -> String {
 // ---- 地址校验 ----
 
 #[test]
-fn https_is_required_but_loopback_may_use_http() {
+fn http_and_https_are_both_accepted() {
     for ok in [
         "https://mabiao.example.com",
+        "http://mabiao.example.com",
+        "http://192.168.1.5:8080",
+        "http://localhost.evil.com",
         "http://localhost:8080",
         "http://LOCALHOST",
         "http://127.0.0.1:3000",
@@ -66,9 +70,6 @@ fn https_is_required_but_loopback_may_use_http() {
         assert!(normalize_base_url(ok).is_ok(), "{ok} 应通过");
     }
     for bad in [
-        "http://mabiao.example.com",
-        "http://192.168.1.5:8080",
-        "http://localhost.evil.com",
         "ftp://mabiao.example.com",
         "mabiao.example.com",
         "localhost:8080",
@@ -80,9 +81,37 @@ fn https_is_required_but_loopback_may_use_http() {
 }
 
 #[test]
-fn http_rejection_explains_why_in_chinese() {
-    let error = normalize_base_url("http://mabiao.example.com").unwrap_err();
-    assert!(error.contains("https"), "{error}");
+fn non_http_scheme_explains_why_in_chinese() {
+    let error = normalize_base_url("ftp://mabiao.example.com").unwrap_err();
+    assert!(error.contains("http://"), "{error}");
+}
+
+#[test]
+fn tls_rejection_is_not_reported_as_connection_failure() {
+    let ca_leaf = transport_failure_message(
+        ureq::ErrorKind::ConnectionFailed,
+        "tls connection init failed: invalid peer certificate: Other(OtherError(CaUsedAsEndEntity))",
+    );
+    assert!(ca_leaf.contains("CA"), "{ca_leaf}");
+    assert!(!ca_leaf.contains("连不上"), "{ca_leaf}");
+
+    let untrusted = transport_failure_message(
+        ureq::ErrorKind::ConnectionFailed,
+        "tls connection init failed: invalid peer certificate: UnknownIssuer",
+    );
+    assert!(untrusted.contains("公共 CA"), "{untrusted}");
+
+    let too_long = transport_failure_message(
+        ureq::ErrorKind::ConnectionFailed,
+        "native_tls connect failed: The validity period in the certificate exceeds the maximum allowed",
+    );
+    assert!(too_long.contains("825"), "{too_long}");
+
+    let refused = transport_failure_message(
+        ureq::ErrorKind::ConnectionFailed,
+        "Connect error: Connection refused",
+    );
+    assert!(refused.contains("连不上"), "{refused}");
 }
 
 #[test]
@@ -95,6 +124,10 @@ fn normalization_strips_slashes_and_rejects_credentials_and_params() {
         normalize_base_url("https://example.com:8443/team//").unwrap(),
         "https://example.com:8443/team"
     );
+    assert_eq!(
+        normalize_base_url("http://192.168.1.5:8080/team/").unwrap(),
+        "http://192.168.1.5:8080/team"
+    );
     assert!(normalize_base_url("https://alice:secret@example.com").is_err());
     assert!(normalize_base_url("https://example.com/?token=1").is_err());
     assert!(normalize_base_url("https://example.com/#x").is_err());
@@ -103,9 +136,9 @@ fn normalization_strips_slashes_and_rejects_credentials_and_params() {
 #[test]
 fn invalid_address_is_rejected_before_any_request() {
     let dir = tempfile::tempdir().unwrap();
-    let error = remote_server::login(&paths(dir.path()), input("http://example.com", "pw"), now())
+    let error = remote_server::login(&paths(dir.path()), input("ftp://example.com", "pw"), now())
         .unwrap_err();
-    assert!(error.contains("https"), "{error}");
+    assert!(error.contains("http://"), "{error}");
     assert!(!dir.path().join(TOKEN_NAME).exists());
     assert!(!dir.path().join(CONFIG_NAME).exists());
 }

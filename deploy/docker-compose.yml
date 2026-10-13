@@ -30,7 +30,7 @@ services:
       DATABASE_URL: postgres://mabiao:${POSTGRES_PASSWORD}@postgres:5432/mabiao
       MABIAO_BIND: 0.0.0.0:8080
     ports:
-      # 只绑回环：桌面端强制 https，前面要放反向代理做 TLS。
+      # 只绑回环：服务是明文 HTTP，默认不暴露到局域网。
       - "127.0.0.1:8080:8080"
 
 volumes:

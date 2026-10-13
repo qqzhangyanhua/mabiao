@@ -130,13 +130,13 @@
 1. 只在用户显式发起时发送；成员自己打开的每日自动推送默认关，不复用本机摄取定时器。
 2. 不推：Cursor 账号用量、官方额度、代码量、全局指令。其它任何路径都不得把对话正文送出本机。
 3. 正文与注入原文推送前按内置规则打码；`injected` 层原文推送时现场读源快照，不落库；`on_disk_possible` 层只推条目、路径与体积。
-4. 密码不落盘；token 单独存 0600 文件，不进备份；强制 https，回环地址例外。
+4. 密码不落盘；token 单独存 0600 文件，不进备份。地址接受 http 与 https，其它协议拒绝。
 5. 线上格式在「推送协议」层；费用快照与定价来源用 `crates/pricing`（逐条 `price_usage`，批量用与它逐条等价的 `price_usage_cached`），不另写计价。
 6. 读 ADR 0026、0011、0025。
 
 ### 远程服务登录与凭证（`src-tauri/src/remote_server/`）
 
-1. 地址校验只有 `address::normalize_base_url` 一份（强制 https，`localhost` / 回环地址例外）；设置页提示、登录、之后每次联网都过它，前端不重写。
+1. 地址校验只有 `address::normalize_base_url` 一份（接受 http 与 https，其它协议拒绝）；设置页提示、登录、之后每次联网都过它，前端不重写。
 2. 联网只在 `client.rs`：不跟随重定向（密码与 token 不能被 307 带走），回环地址不走代理，错误一律翻成中文人话。webview 不直接请求远程服务。
 3. 配置（`remote_server.json`：地址、账号、设备 ID、设备名）与 token（`remote_server_token.json`，0600，创建即 0600 再 `rename`；0600 仅 Unix 生效，Windows 沿用目录默认权限，与自定义提供商凭证一致）分两份文件；密码不落盘，`LoginInput` 的 Debug 不输出它。
 4. 这两份文件都不在备份白名单里，也不被恢复覆盖：设备 ID 是「这台机器」的身份，不能跟着备份换机器。新增备份项时别把它们加进去。

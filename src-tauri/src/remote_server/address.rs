@@ -1,7 +1,7 @@
 //! 远程服务地址的校验与归一化（ADR 0026）。设置页在保存前就用它提示，登录与之后每次联网也再过一遍，
 //! 所以手改配置文件也绕不过去。
 //!
-//! 强制 https；只有 `localhost` 与回环地址可以用 http，方便本机调试服务端。
+//! 接受 `http` 与 `https`，不因明文拒绝 http。其它协议拒绝。
 
 use std::net::IpAddr;
 
@@ -16,19 +16,10 @@ pub fn normalize_base_url(raw: &str) -> Result<String, String> {
         return Err(format!("请填写远程服务地址，例如 {EXAMPLE}"));
     }
     let url = Url::parse(trimmed)
-        .map_err(|_| format!("地址格式不对，应类似 {EXAMPLE}（要带 https://）"))?;
+        .map_err(|_| format!("地址格式不对，应类似 {EXAMPLE}（要带 http:// 或 https://）"))?;
 
-    match url.scheme() {
-        "https" => {}
-        "http" => {
-            if !is_loopback(&url) {
-                return Err(
-                    "必须使用 https:// 地址，明文 http 会让密码和对话内容暴露在网络上（只有 localhost 与回环地址例外）"
-                        .to_string(),
-                );
-            }
-        }
-        _ => return Err(format!("地址要以 https:// 开头，例如 {EXAMPLE}")),
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(format!("地址要以 http:// 或 https:// 开头，例如 {EXAMPLE}"));
     }
     if url.host().is_none() {
         return Err(format!("地址里缺少主机名，例如 {EXAMPLE}"));

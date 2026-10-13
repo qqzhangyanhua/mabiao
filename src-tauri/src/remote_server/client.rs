@@ -147,18 +147,46 @@ fn unrecognized_status(status: u16) -> RemoteError {
 }
 
 fn transport_error(transport: &ureq::Transport) -> RemoteError {
-    use ureq::ErrorKind;
-    let detail = transport.to_string();
+    RemoteError::message(transport_failure_message(
+        transport.kind(),
+        &transport.to_string(),
+    ))
+}
+
+/// ureq 把 TLS 握手失败也标成 `ConnectionFailed`。先看详情，否则自签证书会被说成「连不上」。
+pub(crate) fn transport_failure_message(kind: ureq::ErrorKind, detail: &str) -> String {
     let lowered = detail.to_lowercase();
-    RemoteError::message(match transport.kind() {
-        ErrorKind::Dns => "找不到这个地址，请检查拼写与网络".to_string(),
-        ErrorKind::ConnectionFailed => "连不上远程服务，请检查地址、端口与网络".to_string(),
-        _ if lowered.contains("certificate") || lowered.contains("invalid peer") => {
-            "远程服务的 https 证书不可信（自签名证书需要先装进系统信任）".to_string()
-        }
+    if let Some(message) = certificate_failure_message(&lowered) {
+        return message;
+    }
+    match kind {
+        ureq::ErrorKind::Dns => "找不到这个地址，请检查拼写与网络".to_string(),
+        ureq::ErrorKind::ConnectionFailed => "连不上远程服务，请检查地址、端口与网络".to_string(),
         _ if lowered.contains("timed out") || lowered.contains("timeout") => {
             "连接远程服务超时，请检查网络或稍后再试".to_string()
         }
         _ => format!("请求远程服务失败：{detail}"),
-    })
+    }
+}
+
+fn certificate_failure_message(lowered: &str) -> Option<String> {
+    if lowered.contains("causedasendentity") || lowered.contains("ca used as end") {
+        return Some(
+            "远程服务的证书被标成了 CA，不能当网站证书用。请重新签发一张普通服务器证书（不要设 CA:TRUE）。这不是地址或端口问题。"
+                .to_string(),
+        );
+    }
+    if lowered.contains("validity period") || lowered.contains("exceeds the maximum") {
+        return Some(
+            "远程服务的证书有效期超过系统允许的上限（大约 825 天）。请换一张更短的证书。这不是地址或端口问题。"
+                .to_string(),
+        );
+    }
+    if lowered.contains("certificate") || lowered.contains("invalid peer") {
+        return Some(
+            "远程服务的 https 证书不被信任。码表只认内置公共 CA，不读系统钥匙串，浏览器里点过继续访问也不算。请换一张公共 CA 签发的证书。这不是地址或端口问题。"
+                .to_string(),
+        );
+    }
+    None
 }

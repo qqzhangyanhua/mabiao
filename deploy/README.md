@@ -29,8 +29,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env \
 
 ## TLS
 
-服务只监听明文 HTTP，且 compose 只把端口绑在 `127.0.0.1:8080`。桌面端强制 https（回环地址除外），
-所以对外要在前面放 Caddy / nginx 之类的反向代理终结 TLS。
+服务只监听明文 HTTP，且 compose 只把端口绑在 `127.0.0.1:8080`。桌面端接受 http 与 https。
+要对局域网或公网开放，改端口绑定；需要加密时再在前面放 Caddy / nginx 终结 TLS。
 
 ## 备份
 

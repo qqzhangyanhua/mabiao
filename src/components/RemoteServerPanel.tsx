@@ -9,7 +9,7 @@ import { Field } from "./ui/Field";
 const URL_CHECK_DEBOUNCE_MS = 300;
 
 /**
- * 地址是否合法由 Rust 判定（强制 https，回环地址例外），这里只显示结果，
+ * 地址是否合法由 Rust 判定（http 或 https），这里只显示结果，
  * 这样「保存前的提示」与「真正联网前的校验」永远是同一份规则。
  * 结果连同它是对着哪段输入算的一起收着：输入变了而新结果还没回来时，不显示旧结论。
  */
@@ -108,8 +108,8 @@ export function RemoteServerPanel() {
         <div>
           <h2>远程服务</h2>
           <p className="panel-note">
-            登录团队的远程服务，之后才能在对话记录页把对话与消耗推送上去。必须是 https
-            地址（本机 localhost 可用 http）。密码只用来换登录凭证，不会保存；凭证单独存一份仅本人可读的文件，不进备份。
+            登录团队的远程服务，之后才能在对话记录页把对话与消耗推送上去。填写 http:// 或
+            https:// 地址。密码只用来换登录凭证，不会保存；凭证单独存一份仅本人可读的文件，不进备份。
             管理员可以查看你推送的全部正文。
           </p>
         </div>
@@ -167,7 +167,7 @@ export function RemoteServerPanel() {
         >
           <Field
             label="服务地址"
-            placeholder="https://mabiao.example.com"
+            placeholder="http://mabiao.example.com"
             value={baseUrl}
             autoComplete="off"
             spellCheck={false}
