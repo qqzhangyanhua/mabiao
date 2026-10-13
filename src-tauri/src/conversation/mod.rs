@@ -147,7 +147,7 @@ pub(crate) type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedCon
 pub(crate) type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 
 pub(crate) struct ConversationAdapter {
-    source: Source,
+    pub(crate) source: Source,
     discover: ConversationDiscoverFn,
     index: ConversationIndexFn,
     /// 只解析后缀、不写库。未填则刷新时一律全量 index。
@@ -373,7 +373,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
 
 const CONVERSATION_SOURCE_COUNT: usize = CONVERSATION_ADAPTERS.len();
 
-/// 对话记录覆盖的来源。从 [`CONVERSATION_ADAPTERS`] 推导，顺序与适配器表一致。
+/// 对话记录覆盖的来源。从对话记录适配器表 [`CONVERSATION_ADAPTERS`] 推导，顺序与该表一致。
 pub(crate) const CONVERSATION_SOURCES: &[Source] = &{
     let mut sources = [Source::Codex; CONVERSATION_SOURCE_COUNT];
     let mut index = 0;
