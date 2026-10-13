@@ -107,6 +107,14 @@ fn merged_brands() -> Vec<(&'static str, Option<&'static str>)> {
     brands
 }
 
+fn resume_templates() -> Vec<(&'static str, Option<&'static str>)> {
+    Source::ALL
+        .iter()
+        .copied()
+        .map(|source| (source.as_str(), source.resume_template()))
+        .collect()
+}
+
 fn push_optional_string_record(out: &mut String, name: &str, entries: &[(&str, Option<&str>)]) {
     out.push_str("export const ");
     out.push_str(name);
@@ -157,6 +165,13 @@ fn render_display_identity() -> String {
     out.push_str("/** 按 slug 索引的品牌。重名 slug 以来源为准；没有品牌时为 null。 */\n");
     push_optional_string_record(&mut out, "BRAND_BY_SLUG", &merged_brands());
     out.push('\n');
+
+    out.push_str(
+        "/** 按来源 slug 索引的恢复命令模板，`{id}` 占位会话 ID；没有公开恢复命令时为 null。只有来源才有模板，只在额度里出现的 slug 没有这个字段。 */\n",
+    );
+    push_optional_string_record(&mut out, "RESUME_TEMPLATES", &resume_templates());
+    out.push('\n');
+
     out.push_str("export type UsageSource = (typeof SOURCE_SLUGS)[number];\n");
     out.push_str("export type BrandId = (typeof BRAND_IDS)[number];\n");
     out

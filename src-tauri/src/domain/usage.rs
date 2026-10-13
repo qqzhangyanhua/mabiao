@@ -132,6 +132,33 @@ impl Source {
         }
     }
 
+    /// 这个来源的 CLI 恢复命令模板，`{id}` 占位会话 ID；没有公开恢复命令时为 `None`。
+    pub fn resume_template(self) -> Option<&'static str> {
+        match self {
+            Source::Codex => Some("codex resume {id}"),
+            Source::Claude => Some("claude --resume {id}"),
+            Source::Pi => Some("pi --session {id}"),
+            Source::Omp => Some("omp --session {id}"),
+            Source::Opencode => Some("opencode --session {id}"),
+            Source::Kimi => Some("kimi --session {id}"),
+            Source::Dsh => None,
+            Source::Gemini => Some("gemini --resume {id}"),
+            Source::Grok => Some("grok --resume {id}"),
+            Source::Qwen => Some("qwen --resume {id}"),
+            Source::Factory => Some("droid --resume {id}"),
+            Source::CursorAgent => Some("cursor-agent --resume {id}"),
+            Source::Copilot => Some("copilot --resume={id}"),
+            Source::Hermes => None,
+            Source::Agy => None,
+            Source::Qoder => Some("qodercli --resume {id}"),
+            Source::QoderCn => Some("qoderclicn --resume {id}"),
+            Source::Cline => Some("cline --id {id}"),
+            Source::WorkBuddy => None,
+            Source::Zcode => None,
+            Source::Alma => None,
+        }
+    }
+
     pub fn parse(value: &str) -> Option<Self> {
         match value {
             "codex" => Some(Source::Codex),

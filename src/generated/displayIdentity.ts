@@ -122,5 +122,30 @@ export const BRAND_BY_SLUG = {
   devin: null,
 } as const;
 
+/** 按来源 slug 索引的恢复命令模板，`{id}` 占位会话 ID；没有公开恢复命令时为 null。只有来源才有模板，只在额度里出现的 slug 没有这个字段。 */
+export const RESUME_TEMPLATES = {
+  codex: "codex resume {id}",
+  claude: "claude --resume {id}",
+  pi: "pi --session {id}",
+  omp: "omp --session {id}",
+  opencode: "opencode --session {id}",
+  kimi: "kimi --session {id}",
+  dsh: null,
+  gemini: "gemini --resume {id}",
+  grok: "grok --resume {id}",
+  qwen: "qwen --resume {id}",
+  factory: "droid --resume {id}",
+  cursor_agent: "cursor-agent --resume {id}",
+  copilot: "copilot --resume={id}",
+  hermes: null,
+  agy: null,
+  qoder: "qodercli --resume {id}",
+  qoder_cn: "qoderclicn --resume {id}",
+  cline: "cline --id {id}",
+  workbuddy: null,
+  zcode: null,
+  alma: null,
+} as const;
+
 export type UsageSource = (typeof SOURCE_SLUGS)[number];
 export type BrandId = (typeof BRAND_IDS)[number];
