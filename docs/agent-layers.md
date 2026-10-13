@@ -4,19 +4,25 @@
 
 ## Adapter
 
-新增或改 Usage Source 的消耗记录解析。
+新增或改 Usage Source 的消耗记录解析。步骤与 ADR 0001 一致：属于已有品牌时，前端只改额度模块的手排名单；引入新品牌时才补 SVG 和配色。
 
 1. 在 `domain::Source` 加变体（`src-tauri/src/domain/usage.rs`，`domain.rs` re-export）。
-2. 实现 `src-tauri/src/adapters/<source>.rs`：扫描、发现、解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
-3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，含 `path_env`（漏了完备性测试会红）。
-4. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
-5. `tests/adapters.rs` 断言去重与累计口径。
-6. 归一化输出变了就递增 `store.rs::ADAPTER_VERSION`。
-7. 重新生成展示身份文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。显示名来自 `Source::application_name`，不要手改 `src/generated/displayIdentity.ts`，也不要再写一份显示名表。
+2. 给穷举方法补分支，缺一处编译失败：
+   - `application_name`：显示名。
+   - `brand`：所属品牌。沿用已有品牌即可；新品牌还要在 `Brand` 枚举加成员。
+   - `resume_template`：恢复命令模板，`{id}` 占位会话 ID；没有公开命令就返回 `None`。
+3. 实现 `src-tauri/src/adapters/<source>.rs`：扫描、发现、解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
+4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，含 `path_env`（漏了完备性测试会红）。
+5. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
+6. `tests/adapters.rs` 断言去重与累计口径。
+7. 归一化输出变了就递增 `store.rs::ADAPTER_VERSION`。
+8. 重新生成展示身份文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。不要手改 `src/generated/displayIdentity.ts`，也不要再写一份显示名、图标或恢复命令表。
+9. 把新来源加进 `src/lib/overviewLayout.ts` 的 `QUOTA_SOURCE_IDS`（手排顺序，常用项靠前）。`pnpm test` 里的集合断言要求它等于全部来源加上 `cursor`。
+10. 只有新品牌才改前端视觉：`src/components/sourceGlyph.tsx` 的品牌 SVG、`src/lib/sourceIcon.ts` 的 `BRAND_TONE`。少一条 tsc 报错。已有品牌到此为止，不用改其它前端文件。
 
 来源差异写在 Adapter 表与 `adapters/<source>.rs`。`ingest.rs` 保持来源无关。
 
-完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，展示身份快照测试在未设置 `MABIAO_UPDATE_DISPLAY_IDENTITY` 时通过，`cargo test adapters` 绿。
+完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，展示身份快照测试在未设置 `MABIAO_UPDATE_DISPLAY_IDENTITY` 时通过，`cargo test adapters` 绿。新品牌时 `pnpm build` 绿。
 
 ## 聚合
 
@@ -29,7 +35,7 @@
 ## DTO
 
 1. 先改 Rust `domain`（`domain.rs` 全量 re-export），再改 `src/types.ts`，字段 snake_case。来源联合类型 `UsageSource` 不在 `types.ts` 手写，从 `src/generated/displayIdentity.ts` 推导后 re-export（ADR 0028）。
-2. 改了 `Source::ALL`、`Source::application_name`、`OfficialQuotaProvider::ALL` 或 `OfficialQuotaProvider::display_name` 后，重新生成展示身份文件。命令见 Adapter 节第 7 步。
+2. 改了 `Source` 的 slug、`application_name`、`brand` 或 `resume_template`，或改了 `OfficialQuotaProvider` 的 slug、`display_name` 或 `brand` 后，重新生成展示身份文件。命令见 Adapter 节第 8 步。
 3. `pnpm build` 绿。
 
 ## 摄取
@@ -66,7 +72,7 @@
 
 ## 官方额度
 
-1. 内置账号在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`）。新增一家：加 `official_quota/<provider>.rs`，并接到 `detect.rs` 与 `fetch.rs`。
+1. 内置账号在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`）。新增一家：加 `official_quota/<provider>.rs`，并接到 `detect.rs` 与 `fetch.rs`。给 `display_name` 和 `brand` 补穷举分支，再重新生成展示身份文件（命令见 Adapter 节第 8 步）。首页额度开关的提供方 id 来自生成文件的 `OFFICIAL_QUOTA_PROVIDER_SLUGS`。`OFFICIAL_QUOTA_PROVIDER_LABELS` 仍是手写短名，新增一家要补一条；和展示身份显示名不一致的地方见 #359。
 2. 凭证只读各客户端已有登录态。自定义提供商密钥单独文件，备份排除该文件。
 3. `tray.rs::sync_official_quota` 在刷新、全量摄取后、每 5 分钟 stale 检查时取数（受退避约束）。最紧一档走 `official_quota::tightest_window`：无 `resets_at` 的自定义充值余额不参与；有重置时间的自定义预算窗参与。
 4. fixture 测响应解析。读 ADR 0008、0012、0013。

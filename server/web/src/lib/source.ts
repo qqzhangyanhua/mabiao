@@ -1,4 +1,4 @@
-/** 来源 slug → 界面名。与桌面端 `sourceNames` / CONTEXT.md application 名对齐。 */
+/** 来源 slug → 界面名。管理网页自持一份，不读桌面端生成文件。见 ADR 0028。 */
 const SOURCE_LABEL: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",

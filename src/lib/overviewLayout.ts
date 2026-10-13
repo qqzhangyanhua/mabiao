@@ -1,3 +1,5 @@
+import { OFFICIAL_QUOTA_PROVIDER_SLUGS } from "../generated/displayIdentity";
+
 export const OVERVIEW_LAYOUT_STORAGE_KEY = "mabiao:overview-layout";
 
 export const OVERVIEW_MODULE_IDS = [
@@ -57,21 +59,12 @@ export type QuotaSourceId = (typeof QUOTA_SOURCE_IDS)[number];
 /** 额度区块里最常单独盯的来源，对应「常用」一键。 */
 export const FAVORITE_QUOTA_SOURCES = ["codex", "claude", "cursor", "cursor_agent"] as const;
 
-/** 官方额度区块可单独开关的账号，顺序与首页 / OfficialQuotaProvider::ALL 一致。 */
-export const OFFICIAL_QUOTA_PROVIDER_IDS = [
-  "claude",
-  "codex",
-  "cursor",
-  "grok",
-  "droid",
-  "antigravity",
-  "opencode",
-  "copilot",
-  "devin",
-] as const;
+/** 官方额度区块可单独开关的账号，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
+export const OFFICIAL_QUOTA_PROVIDER_IDS = OFFICIAL_QUOTA_PROVIDER_SLUGS;
 
 export type OfficialQuotaProviderId = (typeof OFFICIAL_QUOTA_PROVIDER_IDS)[number];
 
+/** 额度开关上的短名。和展示身份显示名不一致的地方见 #359。 */
 export const OFFICIAL_QUOTA_PROVIDER_LABELS: Record<OfficialQuotaProviderId, string> = {
   claude: "Claude Code",
   codex: "Codex",

@@ -10,7 +10,7 @@ alwaysApply: false
 
 - `tsconfig.json` 已开启 `strict`、`noUnusedLocals`、`noUnusedParameters`；禁止使用 `any`，禁止用 `as any` 逃逸类型检查
 - `src/types.ts` 里的类型手动对应 Rust `domain` 模块的 DTO（`domain.rs` 全量 re-export；字段名保持 `snake_case`，和后端序列化一致，不要转成 camelCase）；改了 Rust DTO 字段必须同步改这里
-- 来源显示名和来源联合类型不手写。`src/generated/displayIdentity.ts` 由 Rust 测试生成并提交（ADR 0028），全部导出都是 `as const` 字面量。`src/types.ts` 的手写镜像不再包含来源联合类型：`UsageSource` 从生成文件的 `SOURCE_SLUGS` 推导后 re-export。`sourceLabel` 仍在 `src/lib/format.ts`，读生成文件的 `DISPLAY_NAMES`，未知 slug 原样返回。改了 Rust 侧来源或官方额度提供方的 slug / 显示名后，先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写生成文件，再去掉该环境变量跑同一条测试，第二次必须通过：`cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`。不要手改生成文件。
+- 来源显示名和来源联合类型不手写。`src/generated/displayIdentity.ts` 由 Rust 测试生成并提交（ADR 0028），全部导出都是 `as const` 字面量。`src/types.ts` 的手写镜像不再包含来源联合类型：`UsageSource` 从生成文件的 `SOURCE_SLUGS` 推导后 re-export。`sourceLabel` 仍在 `src/lib/format.ts`，读生成文件的 `DISPLAY_NAMES`，未知 slug 原样返回。改了 Rust 侧来源或官方额度提供方的 slug、显示名、品牌或恢复命令后，先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写生成文件，再去掉该环境变量跑同一条测试，第二次必须通过：`cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`。不要手改生成文件。新增来源且属于已有品牌时，前端只把 slug 加进 `QUOTA_SOURCE_IDS`（手排顺序）。新品牌才补 `sourceGlyph.tsx` 的 SVG 和 `sourceIcon.ts` 的 `BRAND_TONE`。见 ADR 0001。
 - 组件 props 用内联对象类型或就近的 `type`，不需要为每个组件单独建 `.types.ts` 文件
 
 ## 组件规范

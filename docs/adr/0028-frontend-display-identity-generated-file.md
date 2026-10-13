@@ -58,7 +58,7 @@ SVG 和配色 class 不进生成文件。前端两张表以 `BrandId` 为键，�
 - 删除按来源 slug 索引的图标表和配色表。图标和配色改为 slug → 品牌 → SVG / 配色 class。
 - `src/types.ts` 的手写镜像不再包含来源联合类型。`UsageSource` 从生成文件推导后 re-export，`SourceIngestReport.source` 仍用这个类型。
 - 额度模块「可单独开关的来源」（`QUOTA_SOURCE_IDS`）保留手排顺序。vitest 只断言它在集合上等于全部来源加上 `cursor`。
-- 官方额度设置里的提供方标签（`OFFICIAL_QUOTA_PROVIDER_LABELS`）不是这张显示名表，本篇不改。
+- 官方额度开关的提供方短名（`OFFICIAL_QUOTA_PROVIDER_LABELS`）不是这张显示名表，本篇不改。短名和展示身份不一致的地方见 #359。提供方 id 列表用生成文件的 `OFFICIAL_QUOTA_PROVIDER_SLUGS`。
 - 管理网页 `server/web` 自持一份显示名，不在本决定范围。
 
 ## 后果
