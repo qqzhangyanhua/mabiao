@@ -38,6 +38,7 @@ mod cursor_quota;
 mod cursor_session;
 mod custom_quota;
 mod devin_quota;
+mod display_identity;
 mod droid_quota;
 mod dsh_droid_conversation;
 mod grok_quota;

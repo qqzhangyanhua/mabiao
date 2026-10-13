@@ -1,3 +1,4 @@
+import { DISPLAY_NAMES } from "../generated/displayIdentity";
 import type { Filter, Grain } from "../types";
 import { bucketToDateRange, parseDateValue } from "./calendar";
 
@@ -86,33 +87,9 @@ export function formatDelta(
   };
 }
 
-const sourceNames: Record<string, string> = {
-  claude: "Claude Code",
-  codex: "Codex",
-  factory: "Droid",
-  droid: "Droid",
-  pi: "Pi",
-  omp: "OMP",
-  opencode: "OpenCode",
-  kimi: "Kimi CLI",
-  dsh: "DeepSeek Harness",
-  gemini: "Gemini CLI",
-  grok: "Grok CLI",
-  qwen: "Qwen Code",
-  cursor: "Cursor",
-  cursor_agent: "Cursor Agent",
-  copilot: "GitHub Copilot CLI",
-  hermes: "Hermes",
-  agy: "Antigravity",
-  antigravity: "Antigravity",
-  qoder: "Qoder",
-  qoder_cn: "Qoder CN",
-  cline: "Cline",
-  workbuddy: "WorkBuddy",
-  zcode: "ZCode",
-  alma: "Alma",
-  devin: "Devin",
-};
+function isDisplaySlug(source: string): source is keyof typeof DISPLAY_NAMES {
+  return Object.hasOwn(DISPLAY_NAMES, source);
+}
 
 export function weeklyCountLabel(source: string, count: number): string {
   if (source === "cursor") {
@@ -122,7 +99,7 @@ export function weeklyCountLabel(source: string, count: number): string {
 }
 
 export function sourceLabel(source: string): string {
-  return sourceNames[source] ?? source;
+  return isDisplaySlug(source) ? DISPLAY_NAMES[source] : source;
 }
 
 export function sourceFilterOptions(usageSources: string[]): string[] {

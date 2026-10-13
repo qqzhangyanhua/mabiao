@@ -12,10 +12,11 @@
 4. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
 5. `tests/adapters.rs` 断言去重与累计口径。
 6. 归一化输出变了就递增 `store.rs::ADAPTER_VERSION`。
+7. 重新生成展示身份文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。显示名来自 `Source::application_name`，不要手改 `src/generated/displayIdentity.ts`，也不要再写一份显示名表。
 
 来源差异写在 Adapter 表与 `adapters/<source>.rs`。`ingest.rs` 保持来源无关。
 
-完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，`cargo test adapters` 绿。
+完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，展示身份快照测试在未设置 `MABIAO_UPDATE_DISPLAY_IDENTITY` 时通过，`cargo test adapters` 绿。
 
 ## 聚合
 
@@ -27,8 +28,9 @@
 
 ## DTO
 
-1. 先改 Rust `domain`（`domain.rs` 全量 re-export），再改 `src/types.ts`，字段 snake_case。
-2. `pnpm build` 绿。
+1. 先改 Rust `domain`（`domain.rs` 全量 re-export），再改 `src/types.ts`，字段 snake_case。来源联合类型 `UsageSource` 不在 `types.ts` 手写，从 `src/generated/displayIdentity.ts` 推导后 re-export（ADR 0028）。
+2. 改了 `Source::ALL`、`Source::application_name`、`OfficialQuotaProvider::ALL` 或 `OfficialQuotaProvider::display_name` 后，重新生成展示身份文件。命令见 Adapter 节第 7 步。
+3. `pnpm build` 绿。
 
 ## 摄取
 

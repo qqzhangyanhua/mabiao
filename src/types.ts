@@ -1,3 +1,5 @@
+import type { UsageSource } from "./generated/displayIdentity";
+
 export type Filter = {
   from: string | null;
   to: string | null;
@@ -958,29 +960,8 @@ export type IngestIssue = {
   line?: number | null;
 };
 
-/** 消耗记录来源 slug，与 `domain.rs::Source::as_str` 对齐。 */
-export type UsageSource =
-  | "codex"
-  | "claude"
-  | "pi"
-  | "omp"
-  | "opencode"
-  | "kimi"
-  | "dsh"
-  | "gemini"
-  | "grok"
-  | "qwen"
-  | "factory"
-  | "cursor_agent"
-  | "copilot"
-  | "hermes"
-  | "agy"
-  | "qoder"
-  | "qoder_cn"
-  | "cline"
-  | "workbuddy"
-  | "zcode"
-  | "alma";
+/** 消耗记录来源 slug。由 `src/generated/displayIdentity.ts` 推导，不要在这里手写。 */
+export type { UsageSource };
 
 export type SourceIngestReport = {
   source: UsageSource;

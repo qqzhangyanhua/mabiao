@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SOURCE_SLUGS } from "../generated/displayIdentity";
 import {
   applyDetectedQuotaSources,
   applyFavoriteQuotaSources,
@@ -318,5 +319,11 @@ describe("readOverviewLayout / writeOverviewLayout", () => {
     expect(loaded.modules.billing).toBe(false);
     expect(loaded.quotaSources.cursor_agent).toBe(false);
     expect(loaded.modules.weekly).toBe(true);
+  });
+});
+
+describe("QUOTA_SOURCE_IDS", () => {
+  it("equals every usage source plus cursor as a set", () => {
+    expect([...QUOTA_SOURCE_IDS].sort()).toEqual([...SOURCE_SLUGS, "cursor"].sort());
   });
 });
