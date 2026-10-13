@@ -2268,7 +2268,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tempfile",
- "toml 0.9.8",
+ "toml 1.1.8+spec-1.1.0",
  "ureq",
  "url",
  "urlencoding",
@@ -5854,9 +5854,9 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zstd"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf06bd8162af0734b344780deb55b42a2429ae430870d13fcc12f238e880fe6e"
+checksum = "a4a9ecd0608fac4196ed58e1f337e9a72680fcc9ee449b8bcde6acea680b46f0"
 dependencies = [
  "zstd-safe",
 ]
