@@ -1908,6 +1908,50 @@ fn conversation_catalog_filters_by_model_provider_and_range() {
 }
 
 #[test]
+fn conversation_catalog_range_compares_offset_timestamps_as_instants() {
+    let conn = store::open_memory().unwrap();
+    conn.execute(
+        "INSERT INTO conversation_sessions(
+            source, session_id, title, project, model, started_at, ended_at, source_file
+        ) VALUES (?1, ?2, ?3, '', '', ?4, ?5, 'cursor.jsonl')",
+        rusqlite::params![
+            "cursor_agent",
+            "offset-in-window",
+            "本地晚间",
+            "2026-10-13T21:57:00+08:00",
+            "2026-10-13T22:00:00+08:00",
+        ],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO conversation_sessions(
+            source, session_id, title, project, model, started_at, ended_at, source_file
+        ) VALUES (?1, ?2, ?3, '', '', ?4, ?5, 'cursor-late.jsonl')",
+        rusqlite::params![
+            "cursor_agent",
+            "offset-after-window",
+            "更晚",
+            "2026-10-13T23:30:00+08:00",
+            "2026-10-13T23:40:00+08:00",
+        ],
+    )
+    .unwrap();
+
+    // 21:57+08 是 13:57Z，落在上界 14:16Z 之内；字符串比较会把它看成 21:57 > 14:16 而丢掉。
+    let page = crate::conversation::sessions_page(
+        &conn,
+        &crate::domain::ConversationQuery {
+            from: Some("2026-10-06T14:16:55.998Z".into()),
+            to: Some("2026-10-13T14:16:55.998Z".into()),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.rows[0].session_id, "offset-in-window");
+}
+
+#[test]
 fn conversation_catalog_filters_by_tool_name_and_failure() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

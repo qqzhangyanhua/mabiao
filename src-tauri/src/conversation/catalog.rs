@@ -38,6 +38,11 @@ pub(crate) fn catalog_session_end_sql() -> &'static str {
     "COALESCE(NULLIF(sessions.ended_at, ''), (SELECT COALESCE(NULLIF(cs.last_seen_at, ''), cs.first_seen_at) FROM cursor_sessions cs WHERE sessions.source = 'cursor_agent' AND cs.session_id = sessions.session_id LIMIT 1), '')"
 }
 
+/// `datetime()` 会把 `Z` 和 `+08:00` 都折成 UTC 再比。解析不了的时间当作不在窗内。
+fn catalog_instant_predicate(column_sql: &str, op: &str) -> String {
+    format!("datetime({column_sql}) IS NOT NULL AND datetime({column_sql}) {op} datetime(?)")
+}
+
 pub(crate) fn push_in_filter(
     clauses: &mut Vec<String>,
     params: &mut Vec<rusqlite::types::Value>,
@@ -98,14 +103,17 @@ pub(crate) fn catalog_filter_sql(
             params.push(rusqlite::types::Value::Text(provider.clone()));
         }
     }
+    // 按时刻比较，不用字符串。Cursor transcript 存的是带偏移的本地时间
+    // （`2026-10-13T21:57:00+08:00`），筛选上界来自前端 `toISOString()`（`...Z`）。
+    // 同一天里本地钟点的文本会大于 UTC 文本，字符串比较会把仍在窗内的会话丢掉。
     if let Some(from) = query.from.as_deref().filter(|value| !value.is_empty()) {
         let end_at = catalog_session_end_sql();
-        clauses.push(format!("({end_at} != '' AND {end_at} >= ?)"));
+        clauses.push(catalog_instant_predicate(&end_at, ">="));
         params.push(rusqlite::types::Value::Text(from.to_string()));
     }
     if let Some(to) = query.to.as_deref().filter(|value| !value.is_empty()) {
         let start_at = catalog_session_start_sql();
-        clauses.push(format!("({start_at} != '' AND {start_at} <= ?)"));
+        clauses.push(catalog_instant_predicate(&start_at, "<="));
         params.push(rusqlite::types::Value::Text(to.to_string()));
     }
     if let Some(event_predicate) = catalog_tool_event_predicate(query) {
