@@ -1,0 +1,28 @@
+deploy/README.md
+  h_4132837b09b7e7 32-33
+deploy/docker-compose.yml
+  h_4132837b09b7e7 33
+docs/adr/0026-push-to-remote-server.md
+  h_4132837b09b7e7 32
+docs/agent-layers.md
+  h_4132837b09b7e7 133,139
+src-tauri/src/remote_server/address.rs
+  h_4132837b09b7e7 4,19,21-22
+src-tauri/src/remote_server/client.rs
+  h_4132837b09b7e7 150-157,159-164,169-191
+src-tauri/src/tests/remote_server.rs
+  h_4132837b09b7e7 12,58,61-63,84-114,127-130,139,141
+src/components/RemoteServerPanel.tsx
+  h_4132837b09b7e7 12,111-112,170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "91298ac17903fb486b6daa4529b1bb52cd481494",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
