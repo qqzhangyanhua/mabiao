@@ -1,4 +1,5 @@
 mod billing;
+mod brand;
 mod conversation;
 mod cursor;
 mod ingest;
@@ -13,6 +14,7 @@ mod work_notes;
 mod work_timeline;
 
 pub use billing::*;
+pub use brand::*;
 pub use conversation::*;
 pub use cursor::*;
 pub use ingest::*;

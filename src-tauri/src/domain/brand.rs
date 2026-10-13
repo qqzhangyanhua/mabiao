@@ -1,0 +1,76 @@
+/// 一个 AI 产品。来源和官方额度提供方可以属于同一个品牌。
+///
+/// 字符串 ID 与前端图标 ID 相同。SVG 和配色 class 不在这里。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Brand {
+    Claude,
+    Codex,
+    Grok,
+    Gemini,
+    Kimi,
+    Qwen,
+    Copilot,
+    Opencode,
+    Factory,
+    Pi,
+    Omp,
+    Dsh,
+    Cursor,
+    Hermes,
+    Agy,
+    Qoder,
+    Cline,
+    WorkBuddy,
+    Zcode,
+    Alma,
+}
+
+impl Brand {
+    pub const ALL: [Brand; 20] = [
+        Brand::Claude,
+        Brand::Codex,
+        Brand::Grok,
+        Brand::Gemini,
+        Brand::Kimi,
+        Brand::Qwen,
+        Brand::Copilot,
+        Brand::Opencode,
+        Brand::Factory,
+        Brand::Pi,
+        Brand::Omp,
+        Brand::Dsh,
+        Brand::Cursor,
+        Brand::Hermes,
+        Brand::Agy,
+        Brand::Qoder,
+        Brand::Cline,
+        Brand::WorkBuddy,
+        Brand::Zcode,
+        Brand::Alma,
+    ];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Brand::Claude => "claude",
+            Brand::Codex => "codex",
+            Brand::Grok => "grok",
+            Brand::Gemini => "gemini",
+            Brand::Kimi => "kimi",
+            Brand::Qwen => "qwen",
+            Brand::Copilot => "copilot",
+            Brand::Opencode => "opencode",
+            Brand::Factory => "factory",
+            Brand::Pi => "pi",
+            Brand::Omp => "omp",
+            Brand::Dsh => "dsh",
+            Brand::Cursor => "cursor",
+            Brand::Hermes => "hermes",
+            Brand::Agy => "agy",
+            Brand::Qoder => "qoder",
+            Brand::Cline => "cline",
+            Brand::WorkBuddy => "workbuddy",
+            Brand::Zcode => "zcode",
+            Brand::Alma => "alma",
+        }
+    }
+}

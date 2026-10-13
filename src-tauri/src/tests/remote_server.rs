@@ -10,7 +10,9 @@ use push_protocol::{ApiErrorCode, LoginResponse, RemoteRole};
 use crate::backup;
 use crate::remote_server::address::normalize_base_url;
 use crate::remote_server::client::transport_failure_message;
-use crate::remote_server::store::{self, RemoteServerPaths, StoredToken, CONFIG_NAME, TOKEN_NAME};
+#[cfg(unix)]
+use crate::remote_server::store::{self, StoredToken};
+use crate::remote_server::store::{RemoteServerPaths, CONFIG_NAME, TOKEN_NAME};
 use crate::remote_server::{self, LoginInput, SessionState};
 use crate::store as db_store;
 use crate::test_support::http_stub::{api_error, json_reply, serve, Reply};

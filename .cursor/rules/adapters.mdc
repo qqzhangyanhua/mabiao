@@ -15,6 +15,7 @@ alwaysApply: false
 3. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 表加一行：登记路径环境变量、扫描目录、发现、解析、是否追加型日志、覆盖说明。漏填会让表完备性测试失败
 4. 在 `src-tauri/tests/fixtures/` 添加最小化脱敏 fixture，并在 `tests/adapters.rs` 写对应单测（参照 `codex_adapter_counts_last_token_usage_not_cumulative`）
 5. 若新增/修改了归一化规则，必须递增 `store.rs::ADAPTER_VERSION`（见 ingestion-cache 规则），否则旧缓存不会重新解析
+6. 重新生成展示身份文件，然后不带 `MABIAO_UPDATE_DISPLAY_IDENTITY` 再跑同一条测试确认快照一致。命令见 `docs/agent-layers.md` Adapter 节第 7 步与 ADR 0028。不要手改 `src/generated/displayIdentity.ts` 或再写一份显示名表
 
 不要在 `ingest.rs` 里按来源加分叉。摄取模块只负责可信摄取语义（发现、比指纹、解析、验证、落库、对账、同步预聚合）。
 

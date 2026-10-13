@@ -1,53 +1,42 @@
-export type SourceIconId =
-  | "claude"
-  | "codex"
-  | "grok"
-  | "gemini"
-  | "kimi"
-  | "qwen"
-  | "copilot"
-  | "opencode"
-  | "factory"
-  | "pi"
-  | "omp"
-  | "dsh"
-  | "cursor"
-  | "hermes"
-  | "agy"
-  | "qoder"
-  | "cline"
-  | "workbuddy"
-  | "zcode"
-  | "alma"
-  | "unknown";
+import { BRAND_BY_SLUG, type BrandId } from "../generated/displayIdentity";
 
-const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
-  claude: "claude",
-  codex: "codex",
-  grok: "grok",
-  gemini: "gemini",
-  kimi: "kimi",
-  qwen: "qwen",
-  copilot: "copilot",
-  opencode: "opencode",
-  factory: "factory",
-  droid: "factory",
-  antigravity: "agy",
-  agy: "agy",
-  pi: "pi",
-  omp: "omp",
-  dsh: "dsh",
-  cursor: "cursor",
-  cursor_agent: "cursor",
-  hermes: "hermes",
-  qoder: "qoder",
-  qoder_cn: "qoder",
-  cline: "cline",
-  workbuddy: "workbuddy",
-  zcode: "zcode",
-  alma: "alma",
-};
+export type SourceIconId = BrandId | "unknown";
+
+/** 品牌到配色 class。少一个品牌时 tsc 失败。Antigravity（agy）沿用 Gemini 的配色。 */
+const BRAND_TONE = {
+  claude: "tone-claude",
+  codex: "tone-codex",
+  grok: "tone-grok",
+  gemini: "tone-gemini",
+  kimi: "tone-kimi",
+  qwen: "tone-qwen",
+  copilot: "tone-copilot",
+  opencode: "tone-open",
+  factory: "tone-factory",
+  pi: "tone-pi",
+  omp: "tone-omp",
+  dsh: "tone-dsh",
+  cursor: "tone-cursor",
+  hermes: "tone-hermes",
+  agy: "tone-gemini",
+  qoder: "tone-qoder",
+  cline: "tone-cline",
+  workbuddy: "tone-workbuddy",
+  zcode: "tone-zcode",
+  alma: "tone-alma",
+} as const satisfies Record<BrandId, string>;
+
+export function brandToneClass(brand: BrandId): string {
+  return BRAND_TONE[brand];
+}
+
+function isIdentitySlug(source: string): source is keyof typeof BRAND_BY_SLUG {
+  return Object.hasOwn(BRAND_BY_SLUG, source);
+}
 
 export function resolveSourceIconId(source: string): SourceIconId {
-  return SOURCE_ICON_BY_ID[source] ?? "unknown";
+  if (!isIdentitySlug(source)) {
+    return "unknown";
+  }
+  return BRAND_BY_SLUG[source] ?? "unknown";
 }

@@ -12,8 +12,12 @@ _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记�
 一个被统计的 AI 工具。Usage Source 权威名单是 **`domain::Source::ALL`（当前 21 个）**：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn、cline、workbuddy、zcode、alma。每个 Source 有各自的本地存储格式与字段命名。Cursor（代码量/账号/会话）、amp（云端）等**不是** Source 变体。
 _Avoid_: 工具、tool、渠道
 
+**品牌 (Brand)**：
+一个 AI 产品。来源 (Source) 和官方额度的内置提供方可以属于同一个品牌，共用图标和配色。权威名单是 `domain::Brand::ALL`（当前 20 个），字符串 ID 为 claude、codex、grok、gemini、kimi、qwen、copilot、opencode、factory、pi、omp、dsh、cursor、hermes、agy、qoder、cline、workbuddy、zcode、alma。归属由 `Source::brand()` 与 `OfficialQuotaProvider::brand()` 穷举登记：`qoder_cn` 属于 Qoder，`cursor_agent` 属于 Cursor；额度里的 droid 属于 factory、antigravity 属于 agy、cursor 属于 cursor，devin 没有品牌。Rust 只回答属于哪个品牌。SVG 和配色 class 留在前端，按品牌 ID 查，少一个品牌就过不了 tsc。重名 slug 的品牌以来源为准。见 ADR 0028。
+_Avoid_: 来源 (Source)、官方额度提供方、把 SVG 或配色 class 写进 Rust
+
 **适配器 (Adapter)**：
-把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源 = 往适配器表加一行 + 写一个 Adapter，统计与界面逻辑不受影响。对话记录不走这张表，见「对话记录适配器」。
+把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源要登记适配器表并写一个 Adapter，给 `Source` 补显示名、品牌和恢复命令，再重新生成展示身份文件。属于已有品牌时，前端只改额度模块的手排名单；新品牌才补 SVG 和配色。统计逻辑不感知原始格式。见 ADR 0001。对话记录不走这张表，见「对话记录适配器」。
 _Avoid_: parser、解析器、插件；不要用它指对话正文/事件的解析模块
 
 **Token 口径 (Token Dimension)**：

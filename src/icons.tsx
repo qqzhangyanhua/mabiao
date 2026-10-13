@@ -258,30 +258,3 @@ export function Icon({
     </svg>
   );
 }
-
-export const sourceTone: Record<string, string> = {
-  claude: "tone-claude",
-  codex: "tone-codex",
-  pi: "tone-pi",
-  omp: "tone-omp",
-  opencode: "tone-open",
-  kimi: "tone-kimi",
-  grok: "tone-grok",
-  gemini: "tone-gemini",
-  qwen: "tone-qwen",
-  factory: "tone-factory",
-  droid: "tone-factory",
-  dsh: "tone-dsh",
-  cursor: "tone-cursor",
-  cursor_agent: "tone-cursor",
-  copilot: "tone-copilot",
-  hermes: "tone-hermes",
-  antigravity: "tone-gemini",
-  agy: "tone-gemini",
-  qoder: "tone-qoder",
-  qoder_cn: "tone-qoder",
-  cline: "tone-cline",
-  workbuddy: "tone-workbuddy",
-  zcode: "tone-zcode",
-  alma: "tone-alma",
-};

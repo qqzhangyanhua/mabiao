@@ -102,29 +102,6 @@ pub(crate) use export::{export_default_name, write_conversation_export};
 
 pub(super) const DEFAULT_PAGE_SIZE: u32 = 20;
 pub(super) const MAX_PAGE_SIZE: u32 = 200;
-pub(crate) const CONVERSATION_SOURCES: &[Source] = &[
-    Source::Codex,
-    Source::Claude,
-    Source::CursorAgent,
-    Source::Dsh,
-    Source::Factory,
-    Source::Kimi,
-    Source::Grok,
-    Source::Pi,
-    Source::Omp,
-    Source::Gemini,
-    Source::Opencode,
-    Source::Qwen,
-    Source::Copilot,
-    Source::Qoder,
-    Source::QoderCn,
-    Source::Cline,
-    Source::WorkBuddy,
-    Source::Zcode,
-    Source::Alma,
-    Source::Hermes,
-    Source::Agy,
-];
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
 pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 18;
 
@@ -170,7 +147,7 @@ pub(crate) type ConversationDetailFn = fn(&Path, &str, bool) -> Result<ParsedCon
 pub(crate) type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 
 pub(crate) struct ConversationAdapter {
-    source: Source,
+    pub(crate) source: Source,
     discover: ConversationDiscoverFn,
     index: ConversationIndexFn,
     /// 只解析后缀、不写库。未填则刷新时一律全量 index。
@@ -393,6 +370,19 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         reuse_unchanged_index: true,
     },
 ];
+
+const CONVERSATION_SOURCE_COUNT: usize = CONVERSATION_ADAPTERS.len();
+
+/// 对话记录覆盖的来源。从对话记录适配器表 [`CONVERSATION_ADAPTERS`] 推导，顺序与该表一致。
+pub(crate) const CONVERSATION_SOURCES: &[Source] = &{
+    let mut sources = [Source::Codex; CONVERSATION_SOURCE_COUNT];
+    let mut index = 0;
+    while index < CONVERSATION_SOURCE_COUNT {
+        sources[index] = CONVERSATION_ADAPTERS[index].source;
+        index += 1;
+    }
+    sources
+};
 
 pub(crate) fn conversation_adapter(source: Source) -> Result<&'static ConversationAdapter, String> {
     CONVERSATION_ADAPTERS

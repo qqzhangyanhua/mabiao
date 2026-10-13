@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use super::brand::Brand;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
@@ -100,6 +102,60 @@ impl Source {
             Source::WorkBuddy => "WorkBuddy",
             Source::Zcode => "ZCode",
             Source::Alma => "Alma",
+        }
+    }
+
+    /// 这个来源所属的品牌。`qoder_cn` 属于 Qoder，`cursor_agent` 属于 Cursor。
+    pub fn brand(self) -> Brand {
+        match self {
+            Source::Codex => Brand::Codex,
+            Source::Claude => Brand::Claude,
+            Source::Pi => Brand::Pi,
+            Source::Omp => Brand::Omp,
+            Source::Opencode => Brand::Opencode,
+            Source::Kimi => Brand::Kimi,
+            Source::Dsh => Brand::Dsh,
+            Source::Gemini => Brand::Gemini,
+            Source::Grok => Brand::Grok,
+            Source::Qwen => Brand::Qwen,
+            Source::Factory => Brand::Factory,
+            Source::CursorAgent => Brand::Cursor,
+            Source::Copilot => Brand::Copilot,
+            Source::Hermes => Brand::Hermes,
+            Source::Agy => Brand::Agy,
+            Source::Qoder => Brand::Qoder,
+            Source::QoderCn => Brand::Qoder,
+            Source::Cline => Brand::Cline,
+            Source::WorkBuddy => Brand::WorkBuddy,
+            Source::Zcode => Brand::Zcode,
+            Source::Alma => Brand::Alma,
+        }
+    }
+
+    /// 这个来源的 CLI 恢复命令模板，`{id}` 占位会话 ID；没有公开恢复命令时为 `None`。
+    pub fn resume_template(self) -> Option<&'static str> {
+        match self {
+            Source::Codex => Some("codex resume {id}"),
+            Source::Claude => Some("claude --resume {id}"),
+            Source::Pi => Some("pi --session {id}"),
+            Source::Omp => Some("omp --session {id}"),
+            Source::Opencode => Some("opencode --session {id}"),
+            Source::Kimi => Some("kimi --session {id}"),
+            Source::Dsh => None,
+            Source::Gemini => Some("gemini --resume {id}"),
+            Source::Grok => Some("grok --resume {id}"),
+            Source::Qwen => Some("qwen --resume {id}"),
+            Source::Factory => Some("droid --resume {id}"),
+            Source::CursorAgent => Some("cursor-agent --resume {id}"),
+            Source::Copilot => Some("copilot --resume={id}"),
+            Source::Hermes => None,
+            Source::Agy => None,
+            Source::Qoder => Some("qodercli --resume {id}"),
+            Source::QoderCn => Some("qoderclicn --resume {id}"),
+            Source::Cline => Some("cline --id {id}"),
+            Source::WorkBuddy => None,
+            Source::Zcode => None,
+            Source::Alma => None,
         }
     }
 

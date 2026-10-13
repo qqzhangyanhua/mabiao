@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { OFFICIAL_QUOTA_PROVIDER_SLUGS, SOURCE_SLUGS } from "../generated/displayIdentity";
 import {
   applyDetectedQuotaSources,
   applyFavoriteQuotaSources,
@@ -67,17 +68,7 @@ describe("parseOverviewLayout", () => {
     expect(QUOTA_SOURCE_IDS.every((id) => layout.quotaSources[id])).toBe(true);
     expect(OFFICIAL_QUOTA_PROVIDER_IDS.every((id) => layout.officialProviders[id])).toBe(true);
     expect(visibleOfficialProviderCount(layout)).toBe(OFFICIAL_QUOTA_PROVIDER_IDS.length);
-    expect(OFFICIAL_QUOTA_PROVIDER_IDS).toEqual([
-      "claude",
-      "codex",
-      "cursor",
-      "grok",
-      "droid",
-      "antigravity",
-      "opencode",
-      "copilot",
-      "devin",
-    ]);
+    expect(OFFICIAL_QUOTA_PROVIDER_IDS).toBe(OFFICIAL_QUOTA_PROVIDER_SLUGS);
   });
 
   it("merges partial stored config and keeps unknown sources", () => {
@@ -318,5 +309,11 @@ describe("readOverviewLayout / writeOverviewLayout", () => {
     expect(loaded.modules.billing).toBe(false);
     expect(loaded.quotaSources.cursor_agent).toBe(false);
     expect(loaded.modules.weekly).toBe(true);
+  });
+});
+
+describe("QUOTA_SOURCE_IDS", () => {
+  it("equals every usage source plus cursor as a set", () => {
+    expect([...QUOTA_SOURCE_IDS].sort()).toEqual([...SOURCE_SLUGS, "cursor"].sort());
   });
 });
