@@ -18,7 +18,7 @@
 4. 把新来源加进额度模块「可单独开关的来源」（`QUOTA_SOURCE_IDS`）。这是手排顺序，常用项靠前；集合必须等于全部来源加上 `cursor`，vitest 会检查。
 5. 只有这个来源引入了新品牌时，才在前端补该品牌的 SVG（`src/components/sourceGlyph.tsx`）和配色 class（`src/lib/sourceIcon.ts`）。少一条时 tsc 报错。已有品牌不用改这两张视觉表。
 
-Cursor 专属的展示规则（对话记录里的 “Cursor / Cursor Agent”、用量筛选 `cursor` 对应 `cursor_agent`、“共 N 条事件”）描述的是 Cursor 维度在某个界面里怎么称呼，不在这张清单里。官方额度开关的短名表见 #359。
+Cursor 专属的展示规则（对话记录里的 “Cursor / Cursor Agent”、用量筛选 `cursor` 对应 `cursor_agent`、“共 N 条事件”）描述的是 Cursor 维度在某个界面里怎么称呼，不在这张清单里。官方额度开关的文案读展示身份显示名，见 ADR 0028。
 
 ## Consequences
 - 每个 Adapter 需各自处理该工具的去重口径（如 Codex 同时存在累计 `total_token_usage` 与单轮 `last_token_usage`，必须只取其一避免重复计数）。

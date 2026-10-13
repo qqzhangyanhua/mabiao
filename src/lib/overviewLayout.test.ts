@@ -172,6 +172,11 @@ describe("visibility helpers", () => {
     expect(isOfficialProviderVisible(layout, "claude")).toBe(false);
     expect(isOfficialProviderVisible(layout, "droid")).toBe(false);
     expect(isOfficialProviderVisible(layout, "unknown")).toBe(true);
+  });
+
+  it("labels built-in official quota providers with display identity names", () => {
+    expect(officialQuotaProviderLabel("grok")).toBe("Grok CLI");
+    expect(officialQuotaProviderLabel("copilot")).toBe("GitHub Copilot CLI");
     expect(officialQuotaProviderLabel("claude")).toBe("Claude Code");
     expect(officialQuotaProviderLabel("devin")).toBe("Devin");
     expect(officialQuotaProviderLabel("custom_acct")).toBe("custom_acct");

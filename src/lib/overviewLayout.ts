@@ -1,4 +1,4 @@
-import { OFFICIAL_QUOTA_PROVIDER_SLUGS } from "../generated/displayIdentity";
+import { DISPLAY_NAMES, OFFICIAL_QUOTA_PROVIDER_SLUGS } from "../generated/displayIdentity";
 
 export const OVERVIEW_LAYOUT_STORAGE_KEY = "mabiao:overview-layout";
 
@@ -63,19 +63,6 @@ export const FAVORITE_QUOTA_SOURCES = ["codex", "claude", "cursor", "cursor_agen
 export const OFFICIAL_QUOTA_PROVIDER_IDS = OFFICIAL_QUOTA_PROVIDER_SLUGS;
 
 export type OfficialQuotaProviderId = (typeof OFFICIAL_QUOTA_PROVIDER_IDS)[number];
-
-/** 额度开关上的短名。和展示身份显示名不一致的地方见 #359。 */
-export const OFFICIAL_QUOTA_PROVIDER_LABELS: Record<OfficialQuotaProviderId, string> = {
-  claude: "Claude Code",
-  codex: "Codex",
-  cursor: "Cursor",
-  grok: "Grok",
-  droid: "Droid",
-  antigravity: "Antigravity",
-  opencode: "OpenCode",
-  copilot: "Copilot",
-  devin: "Devin",
-};
 
 export type OverviewLayout = {
   modules: Record<OverviewModuleId, boolean>;
@@ -295,7 +282,7 @@ export function setAllOfficialProvidersVisible(
 
 export function officialQuotaProviderLabel(provider: string): string {
   if (isOfficialQuotaProviderId(provider)) {
-    return OFFICIAL_QUOTA_PROVIDER_LABELS[provider];
+    return DISPLAY_NAMES[provider];
   }
   return provider;
 }

@@ -7,7 +7,7 @@ import {
   isOfficialProviderVisible,
   isQuotaSourceVisible,
   OFFICIAL_QUOTA_PROVIDER_IDS,
-  OFFICIAL_QUOTA_PROVIDER_LABELS,
+  officialQuotaProviderLabel,
   OVERVIEW_MODULE_IDS,
   OVERVIEW_MODULE_LABELS,
   quotaSourceChipIds,
@@ -96,7 +96,7 @@ export function OverviewLayoutControls({
           <ToggleChip
             key={id}
             icon={<SourceIcon source={id} size={14} />}
-            label={OFFICIAL_QUOTA_PROVIDER_LABELS[id]}
+            label={officialQuotaProviderLabel(id)}
             pressed={isOfficialProviderVisible(layout, id)}
             onToggle={() =>
               onChange(
