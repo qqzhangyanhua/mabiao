@@ -1,0 +1,25 @@
+package.json
+  s_5aad898cd00fa8::t_9049b6ca540095 4
+src-tauri/Cargo.toml
+  s_5aad898cd00fa8::t_7b05ea41ff90c1 3
+src-tauri/tauri.conf.json
+  s_5aad898cd00fa8::t_6ba146da9eaecf 4
+src-tauri/Cargo.lock
+  s_5aad898cd00fa8::t_05eb7a76cc4628 2250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "de55ded20378a32a1bb22970e3a98fec70e0c46e",
+  "prompts": {},
+  "sessions": {
+    "s_5aad898cd00fa8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "1f906e3b-3e3f-4d88-89fb-89f45ab9ee95",
+        "model": "grok-4.7"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
