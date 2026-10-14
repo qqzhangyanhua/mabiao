@@ -108,12 +108,12 @@ pub(crate) fn catalog_filter_sql(
     // 同一天里本地钟点的文本会大于 UTC 文本，字符串比较会把仍在窗内的会话丢掉。
     if let Some(from) = query.from.as_deref().filter(|value| !value.is_empty()) {
         let end_at = catalog_session_end_sql();
-        clauses.push(catalog_instant_predicate(&end_at, ">="));
+        clauses.push(catalog_instant_predicate(end_at, ">="));
         params.push(rusqlite::types::Value::Text(from.to_string()));
     }
     if let Some(to) = query.to.as_deref().filter(|value| !value.is_empty()) {
         let start_at = catalog_session_start_sql();
-        clauses.push(catalog_instant_predicate(&start_at, "<="));
+        clauses.push(catalog_instant_predicate(start_at, "<="));
         params.push(rusqlite::types::Value::Text(to.to_string()));
     }
     if let Some(event_predicate) = catalog_tool_event_predicate(query) {
