@@ -222,7 +222,7 @@
 
 接口：`GET /api/v1/usage/summary`、`GET /api/v1/sessions`、`GET /api/v1/work-timeline`。
 
-1. 聚合在服务端做，网页只展示。`summary` 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。
+1. 聚合在服务端做，网页只展示。费用与 token 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。按来源另外并上已推送会话：没有消耗记录的来源仍出现，`session_count` 是会话数，token 与费用为 0。
 2. 三个接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
 3. `from` 含、`to` 不含，RFC 3339；按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
 4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。

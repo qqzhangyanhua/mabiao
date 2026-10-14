@@ -19,7 +19,7 @@ const DIMENSIONS: [string, (summary: SummaryResponse) => Breakdown[]][] = [
 /** 当前视图的全部拆分表。两种费用都导出，不随页面上的切换变，方便在表格里自己对照。 */
 export function summaryRows(summary: SummaryResponse): CsvCell[][] {
   const rows: CsvCell[][] = [
-    ["维度", "名称", "记录数", "token", "统一价费用", "客户端快照费用", "统一价未定价记录数"],
+    ["维度", "名称", "记录数", "会话数", "token", "统一价费用", "客户端快照费用", "统一价未定价记录数"],
   ];
   for (const [dimension, pick] of DIMENSIONS) {
     for (const item of pick(summary)) {
@@ -27,6 +27,7 @@ export function summaryRows(summary: SummaryResponse): CsvCell[][] {
         dimension,
         item.label,
         item.record_count,
+        item.session_count,
         item.total_tokens,
         item.unified_cost,
         item.cost_snapshot,

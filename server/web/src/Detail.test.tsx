@@ -30,6 +30,7 @@ const SUMMARY: SummaryResponse = {
       cost_snapshot: 1,
       unified_cost: 0.002,
       unpriced_count: 0,
+      session_count: 0,
     },
     {
       key: "bob",
@@ -40,6 +41,7 @@ const SUMMARY: SummaryResponse = {
       cost_snapshot: 1,
       unified_cost: 0.006,
       unpriced_count: 0,
+      session_count: 0,
     },
   ],
   by_source: [],
@@ -54,6 +56,7 @@ const SUMMARY: SummaryResponse = {
       cost_snapshot: 2,
       unified_cost: 0.008,
       unpriced_count: 0,
+      session_count: 0,
     },
   ],
 };

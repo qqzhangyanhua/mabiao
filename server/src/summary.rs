@@ -29,6 +29,9 @@ pub struct BreakdownRow {
     pub cost_snapshot: f64,
     pub unified_cost: f64,
     pub unpriced_count: i64,
+    /// 同一分组里的已推送会话数。只有「按来源」有数，其它维度是 0。
+    /// 没有消耗记录的来源（例如只推了会话的 Qoder、Cursor Agent）靠它出现在按 Agent 工具的统计里。
+    pub session_count: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,11 +49,25 @@ const FILTER: &str = "($1::bigint IS NULL OR u.account_id = $1)
     AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
     AND ($4::bigint IS NULL OR u.project_id = $4)";
 
-const METRICS: &str = "count(*)::bigint AS record_count,
+const USAGE_METRICS: &str = "count(*)::bigint AS record_count,
     COALESCE(sum(u.total_tokens), 0)::bigint AS total_tokens,
     COALESCE(sum(u.cost_snapshot), 0)::float8 AS cost_snapshot,
     COALESCE(sum(u.unified_cost), 0)::float8 AS unified_cost,
     (count(*) FILTER (WHERE u.unified_pricing_source = 'unpriced'))::bigint AS unpriced_count";
+
+/// 消耗记录聚合没有会话数。`session_count` 只在按来源时另算。
+const METRICS: &str = "count(*)::bigint AS record_count,
+    COALESCE(sum(u.total_tokens), 0)::bigint AS total_tokens,
+    COALESCE(sum(u.cost_snapshot), 0)::float8 AS cost_snapshot,
+    COALESCE(sum(u.unified_cost), 0)::float8 AS unified_cost,
+    (count(*) FILTER (WHERE u.unified_pricing_source = 'unpriced'))::bigint AS unpriced_count,
+    0::bigint AS session_count";
+
+/// 与会话列表同一口径：结束时间，解析不了就退回开始、再退回推送时间。
+const SESSION_FILTER: &str = "($1::bigint IS NULL OR s.account_id = $1)
+    AND ($2::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) >= $2)
+    AND ($3::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) < $3)
+    AND ($4::bigint IS NULL OR s.project_id = $4)";
 
 const RANKED: &str = "ORDER BY unified_cost DESC, total_tokens DESC, key ASC";
 
@@ -111,15 +128,7 @@ pub async fn build(
         ),
     )
     .await?;
-    let by_source = dimension(
-        pool,
-        filter,
-        &format!(
-            "SELECT u.source AS key, u.source AS label, NULL::bigint AS id, {METRICS}
-             FROM usage_records u WHERE {FILTER} GROUP BY u.source"
-        ),
-    )
-    .await?;
+    let by_source = source_rows(pool, filter).await?;
     let by_model = dimension(
         pool,
         filter,
@@ -148,6 +157,42 @@ pub async fn build(
         by_model,
         by_project,
     })
+}
+
+/// 按来源：消耗记录与已推送会话取并集。
+///
+/// 只有会话、没有消耗记录的来源（Qoder、Cursor Agent 常见）token 与费用是 0，
+/// `session_count` 仍让它们出现在「按 Agent 工具」里。费用与 token 仍只加总消耗记录。
+async fn source_rows(pool: &PgPool, filter: &Filter) -> Result<Vec<BreakdownRow>, AppError> {
+    let sql = format!(
+        "SELECT COALESCE(usage.key, sessions.key) AS key,
+                COALESCE(usage.key, sessions.key) AS label,
+                NULL::bigint AS id,
+                COALESCE(usage.record_count, 0)::bigint AS record_count,
+                COALESCE(usage.total_tokens, 0)::bigint AS total_tokens,
+                COALESCE(usage.cost_snapshot, 0)::float8 AS cost_snapshot,
+                COALESCE(usage.unified_cost, 0)::float8 AS unified_cost,
+                COALESCE(usage.unpriced_count, 0)::bigint AS unpriced_count,
+                COALESCE(sessions.session_count, 0)::bigint AS session_count
+         FROM (
+             SELECT u.source AS key, {USAGE_METRICS}
+             FROM usage_records u WHERE {FILTER}
+             GROUP BY u.source
+         ) AS usage
+         FULL OUTER JOIN (
+             SELECT s.source AS key, count(*)::bigint AS session_count
+             FROM sessions s WHERE {SESSION_FILTER}
+             GROUP BY s.source
+         ) AS sessions ON sessions.key = usage.key
+         {RANKED} LIMIT {MAX_BREAKDOWN_ROWS}"
+    );
+    Ok(sqlx::query_as(&sql)
+        .bind(filter.account_id)
+        .bind(filter.from)
+        .bind(filter.to)
+        .bind(filter.project_id)
+        .fetch_all(pool)
+        .await?)
 }
 
 /// 一场会话自己的消耗：按模型拆开，合计由调用方求和。

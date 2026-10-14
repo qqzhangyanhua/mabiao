@@ -1,3 +1,14 @@
+/** 来源卡上的用量与会话数。没有消耗记录时仍写出会话场数。 */
+export function sourceStatLabel(row: {
+  total_tokens: number;
+  record_count: number;
+  session_count?: number;
+}): string {
+  const usage = `${formatTokens(row.total_tokens)} token · ${row.record_count} 条`;
+  const sessions = row.session_count ?? 0;
+  return sessions > 0 ? `${usage} · ${sessions} 场` : usage;
+}
+
 export function formatTokens(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;

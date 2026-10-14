@@ -401,6 +401,40 @@ async fn an_empty_team_gives_an_empty_summary(pool: PgPool) {
     }
 }
 
+#[sqlx::test]
+async fn source_breakdown_includes_sessions_that_have_no_usage_records(pool: PgPool) {
+    let (app, admin, alice, bob) = setup(&pool).await;
+    push_session(&app, &alice, "q-1", "qoder", "2026-03-02T10:00:00Z").await;
+    push_session(&app, &alice, "c-1", "cursor_agent", "2026-03-02T11:00:00Z").await;
+    push_session(&app, &bob, "c-bob", "cursor_agent", "2026-03-02T12:00:00Z").await;
+    push_session(&app, &alice, "old", "qoder", "2026-02-01T10:00:00Z").await;
+
+    let range = "/api/v1/usage/summary?from=2026-03-01T00:00:00Z&to=2026-03-03T00:00:00Z";
+    let (status, body) = get(&app, &admin, range).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    // 消耗合计仍只算消耗记录，不把纯会话算进去。
+    assert_eq!(body["totals"]["record_count"], 4);
+
+    let qoder = item(&body["by_source"], "qoder");
+    assert_eq!(qoder["record_count"], 0);
+    assert_eq!(qoder["total_tokens"], 0);
+    assert_eq!(qoder["session_count"], 1, "窗口外的那场不算");
+    let cursor = item(&body["by_source"], "cursor_agent");
+    assert_eq!(cursor["record_count"], 0);
+    assert_eq!(cursor["total_tokens"], 0);
+    assert_eq!(cursor["session_count"], 2);
+
+    let codex = item(&body["by_source"], "codex");
+    assert_eq!(codex["record_count"], 3);
+    assert_eq!(codex["session_count"], 0);
+
+    let (status, mine) = get(&app, &alice, range).await;
+    assert_eq!(status, StatusCode::OK, "{mine}");
+    assert_eq!(item(&mine["by_source"], "cursor_agent")["session_count"], 1);
+    assert_eq!(item(&mine["by_source"], "qoder")["session_count"], 1);
+    assert_eq!(mine["totals"]["record_count"], 3);
+}
+
 // ---------- 会话列表 ----------
 
 #[sqlx::test]

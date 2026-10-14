@@ -45,6 +45,8 @@ export interface Breakdown {
   cost_snapshot: number;
   unified_cost: number;
   unpriced_count: number;
+  /** 已推送会话数。只有按来源的行有数，其它维度是 0。 */
+  session_count: number;
 }
 
 export interface SummaryResponse {

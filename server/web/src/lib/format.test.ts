@@ -7,7 +7,20 @@ import {
   formatRelativeDay,
   formatTokens,
   formatUnitPrice,
+  sourceStatLabel,
 } from "./format";
+
+describe("sourceStatLabel", () => {
+  it("keeps a source that only has sessions", () => {
+    expect(sourceStatLabel({ total_tokens: 0, record_count: 0, session_count: 14 })).toBe(
+      "0 token · 0 条 · 14 场",
+    );
+  });
+
+  it("omits the session count when there are none", () => {
+    expect(sourceStatLabel({ total_tokens: 1500, record_count: 2 })).toBe("1.5K token · 2 条");
+  });
+});
 
 describe("formatTokens", () => {
   it.each([

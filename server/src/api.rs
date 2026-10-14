@@ -273,6 +273,8 @@ pub struct BreakdownView {
     pub unified_cost: f64,
     /// 统一价未定价的记录数；大于 0 时统一费用是下限。
     pub unpriced_count: i64,
+    /// 已推送会话数。只有按来源的行有数，其它维度是 0。
+    pub session_count: i64,
 }
 
 impl From<BreakdownRow> for BreakdownView {
@@ -286,6 +288,7 @@ impl From<BreakdownRow> for BreakdownView {
             cost_snapshot: row.cost_snapshot,
             unified_cost: row.unified_cost,
             unpriced_count: row.unpriced_count,
+            session_count: row.session_count,
         }
     }
 }

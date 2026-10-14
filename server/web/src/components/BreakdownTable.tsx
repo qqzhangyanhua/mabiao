@@ -128,7 +128,10 @@ export function BreakdownTable({ title, rows, mode, linkOf, labelOf, markOf }: P
                           )}
                         </span>
                       </th>
-                      <td className={`py-1.5 ${numCellClass}`}>{row.record_count}</td>
+                      <td className={`py-1.5 ${numCellClass}`}>
+                        {row.record_count}
+                        {row.session_count > 0 ? ` · ${row.session_count} 场` : ""}
+                      </td>
                       <td className={`py-1.5 ${numCellClass}`}>{formatTokens(row.total_tokens)}</td>
                       <td className={`py-1.5 ${numCellClass}`}>
                         {formatCost(costOf(row, mode))}

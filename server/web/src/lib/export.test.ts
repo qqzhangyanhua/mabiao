@@ -11,6 +11,7 @@ const row = (key: string, unified: number, snapshot: number) => ({
   cost_snapshot: snapshot,
   unified_cost: unified,
   unpriced_count: 1,
+  session_count: 0,
 });
 
 describe("summaryRows", () => {
@@ -34,13 +35,14 @@ describe("summaryRows", () => {
       "维度",
       "名称",
       "记录数",
+      "会话数",
       "token",
       "统一价费用",
       "客户端快照费用",
       "统一价未定价记录数",
     ]);
     expect(rows.slice(1).map((r) => r[0])).toEqual(["按天", "按成员", "按 Agent 工具", "按模型"]);
-    expect(rows[1]).toEqual(["按天", "2026-03-01", 2, 3000, 1, 9, 1]);
+    expect(rows[1]).toEqual(["按天", "2026-03-01", 2, 0, 3000, 1, 9, 1]);
   });
 });
 

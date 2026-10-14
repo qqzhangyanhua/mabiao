@@ -2,7 +2,7 @@ import { ArrowRight, Bot, FolderKanban, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Breakdown } from "../api/types";
 import { costOf, type CostMode } from "../lib/cost";
-import { formatCost, formatTokens } from "../lib/format";
+import { formatCost, sourceStatLabel } from "../lib/format";
 import type { TokenSplit } from "../lib/tokens";
 import { splitForRow } from "../lib/usageAgg";
 import { TokenComposition } from "./TokenComposition";
@@ -92,9 +92,7 @@ export function DimensionCards({
                         {formatCost(costOf(row, mode))}
                       </span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {formatTokens(row.total_tokens)} token · {row.record_count} 条
-                    </div>
+                    <div className="text-xs text-muted-foreground">{sourceStatLabel(row)}</div>
                   </div>
                 </div>
                 {split && (
