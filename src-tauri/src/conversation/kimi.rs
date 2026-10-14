@@ -11,6 +11,9 @@ use super::{
 };
 use crate::ingest;
 
+#[path = "kimi_code.rs"]
+mod kimi_code;
+
 #[cfg(test)]
 #[path = "kimi_test.rs"]
 mod tests;
@@ -42,6 +45,9 @@ pub(super) fn source_revision(path: &Path) -> Result<String, String> {
             revision.push_str(&ingest::content_fingerprint(&state));
         }
     }
+    // Kimi Code 的 wire 改了时间字段和正文投影。只改这条修订号，
+    // 不递增 CONVERSATION_ADAPTER_VERSION，避免其它来源整库重索引。
+    revision.push_str(":wire-v2");
     Ok(revision)
 }
 
@@ -68,14 +74,42 @@ fn parse(
     let mut diagnostics = Vec::new();
     let mut started_at = String::new();
     let mut ended_at = String::new();
+    let mut model = String::new();
     let mut sequence = 0usize;
 
     for (line, value) in values {
-        if matches!(
-            value.get("type").and_then(Value::as_str),
-            Some("usage.record" | "forked")
-        ) {
-            continue;
+        let occurred_at = kimi_timestamp(&value);
+        update_time_bounds(&occurred_at, &mut started_at, &mut ended_at);
+        if model.is_empty() {
+            if let Some(observed) = kimi_code::observed_model(&value) {
+                model = observed;
+            }
+        }
+        let event_start = events.len();
+        let (action, added) = {
+            let mut cursor = kimi_code::WireCursor {
+                path,
+                line,
+                sequence,
+                occurred_at: &occurred_at,
+                messages: &mut messages,
+                events: &mut events,
+                diagnostics: &mut diagnostics,
+            };
+            let action = kimi_code::accept(&mut cursor, &value);
+            let added = cursor.events.len().saturating_sub(event_start);
+            (action, added)
+        };
+        match action {
+            kimi_code::WireAccept::Silent => continue,
+            kimi_code::WireAccept::Handled => {
+                if added > 0 {
+                    tag_source_events(&mut events[event_start..], line, None);
+                    sequence += added;
+                }
+                continue;
+            }
+            kimi_code::WireAccept::Legacy => {}
         }
         let message = value.get("message").unwrap_or(&value);
         let raw_kind = message.get("type").and_then(Value::as_str).unwrap_or("");
@@ -87,8 +121,6 @@ fn parse(
             continue;
         }
         let payload = message.get("payload").unwrap_or(message);
-        let occurred_at = kimi_timestamp(&value);
-        update_time_bounds(&occurred_at, &mut started_at, &mut ended_at);
         let event_start = events.len();
         let role = payload
             .get("role")
@@ -246,7 +278,7 @@ fn parse(
         session_id,
         String::new(),
         project,
-        String::new(),
+        model,
         started_at,
         ended_at,
         messages,
@@ -398,15 +430,39 @@ fn display_kind(kind: &str) -> &str {
 }
 
 fn kimi_timestamp(value: &Value) -> String {
-    let Some(timestamp) = value.get("timestamp") else {
-        return String::new();
-    };
-    if let Some(text) = timestamp.as_str() {
-        return text.to_string();
+    if let Some(text) = value.get("timestamp").and_then(Value::as_str) {
+        if !text.is_empty() {
+            return text.to_string();
+        }
     }
-    timestamp
-        .as_f64()
-        .and_then(|seconds| chrono::DateTime::from_timestamp_millis((seconds * 1000.0) as i64))
+    if let Some(seconds) = value.get("timestamp").and_then(Value::as_f64) {
+        return unix_millis_to_rfc3339((seconds * 1000.0) as i64);
+    }
+    // Kimi Code：`time` 与 metadata `created_at` 是 Unix 毫秒。`finishedAt` 是 ISO 文本。
+    for key in ["time", "created_at"] {
+        if let Some(millis) = unix_millis(value.get(key)) {
+            return unix_millis_to_rfc3339(millis);
+        }
+    }
+    value
+        .get("finishedAt")
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+        .unwrap_or("")
+        .to_string()
+}
+
+fn unix_millis(value: Option<&Value>) -> Option<i64> {
+    let value = value?;
+    value
+        .as_i64()
+        .or_else(|| value.as_u64().and_then(|millis| i64::try_from(millis).ok()))
+        .or_else(|| value.as_f64().map(|millis| millis as i64))
+        .filter(|millis| *millis > 0)
+}
+
+fn unix_millis_to_rfc3339(millis: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(millis)
         .map(|timestamp| timestamp.to_rfc3339())
         .unwrap_or_default()
 }

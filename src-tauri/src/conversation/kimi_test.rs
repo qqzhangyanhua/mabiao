@@ -159,13 +159,10 @@ fn agents_layout_shares_session_id_and_skips_usage_records() {
         .events
         .iter()
         .any(|event| event.event_id.starts_with("kimi:sess:")));
-    assert_eq!(parsed.diagnostics.len(), 1);
-    assert!(parsed.diagnostics[0].message.contains("尚未适配"));
-    assert!(parsed.diagnostics[0].message.contains("turn.prompt"));
-    assert!(parsed
-        .diagnostics
-        .iter()
-        .all(|issue| !issue.message.contains("usage.record") && !issue.message.contains("forked")));
+    assert!(conversation.events.iter().any(|event| {
+        event.kind == EventKind::Message && event.text.as_deref() == Some("still unadapted")
+    }));
+    assert!(parsed.diagnostics.is_empty());
 
     let sub = root.join("sessions/wd/sess/agents/agent-0/wire.jsonl");
     std::fs::create_dir_all(sub.parent().unwrap()).unwrap();
@@ -178,4 +175,80 @@ fn agents_layout_shares_session_id_and_skips_usage_records() {
     assert_eq!(sub_parsed.conversations[0].session.session_id, "sess");
     assert_eq!(sub_parsed.conversations[0].session.project, "/from/state");
     assert!(sub_parsed.diagnostics.is_empty());
+}
+
+#[test]
+fn kimi_code_wire_keeps_prompt_and_reply_inside_the_time_window() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("kimi-code");
+    let path = root.join("sessions/wd/sess/agents/main/wire.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lines = [
+        serde_json::json!({"type":"metadata","protocol_version":"1.5","created_at":1710000000000_i64}),
+        serde_json::json!({"type":"runtime.set_binding","time":1710000000275_i64}),
+        serde_json::json!({"type":"profile.bind","systemPrompt":"secret system prompt","time":1710000000311_i64}),
+        serde_json::json!({"type":"turn.prompt","input":[{"type":"text","text":"who are you"}],"origin":{"kind":"user"},"time":1710000000328_i64}),
+        serde_json::json!({"type":"context.append_message","message":{"role":"user","content":[{"type":"text","text":"who are you"}],"origin":{"kind":"user"}},"time":1710000000329_i64}),
+        serde_json::json!({"type":"agent.message.appended","message":{"message":{"role":"user","content":[{"type":"text","text":"who are you"}]}},"time":1710000000325_i64}),
+        serde_json::json!({"type":"context.append_message","message":{"role":"user","content":[{"type":"text","text":"injected clock"}],"origin":{"kind":"injection","variant":"date_change"}},"time":1710000000340_i64}),
+        serde_json::json!({"type":"llm.request","model":"deepseek-flash","time":1710000000346_i64}),
+        serde_json::json!({"type":"usage.record","model":"kimi-code/k3","time":1710000001509_i64}),
+        serde_json::json!({"type":"context.append_loop_event","event":{"type":"step.begin","step":1},"time":1710000000343_i64}),
+        serde_json::json!({"type":"context.append_loop_event","event":{"type":"content.part","part":{"type":"think","think":"check identity"}},"time":1710000001510_i64}),
+        serde_json::json!({"type":"context.append_loop_event","event":{"type":"content.part","part":{"type":"text","text":"I am Kimi"}},"time":1710000001510_i64}),
+        serde_json::json!({"type":"context.append_loop_event","event":{"type":"step.end","finishReason":"stop"},"time":1710000001511_i64}),
+        serde_json::json!({"type":"agent.message.appended","message":{"message":{"role":"assistant","content":[{"type":"text","text":"I am Kimi"}]}},"time":1710000001510_i64}),
+        serde_json::json!({"type":"prompt.completed","finishedAt":"2024-03-09T16:00:07Z","time":1710000007000_i64}),
+        serde_json::json!({"type":"future.event","secret_body":"must not enter diagnostics"}),
+    ];
+    let content = lines
+        .iter()
+        .map(serde_json::Value::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    std::fs::write(&path, content).unwrap();
+    std::fs::write(
+        root.join("sessions/wd/sess/state.json"),
+        r#"{"cwd":"D:\\AI\\mabiao"}"#,
+    )
+    .unwrap();
+
+    let parsed = index(&path).unwrap();
+    let conversation = &parsed.conversations[0];
+    assert_eq!(conversation.session.project, "D:\\AI\\mabiao");
+    assert_eq!(conversation.session.model, "deepseek-flash");
+    assert_eq!(conversation.session.started_at, "2024-03-09T16:00:00+00:00");
+    assert_eq!(conversation.session.ended_at, "2024-03-09T16:00:07+00:00");
+    assert_eq!(conversation.session.title, "who are you");
+
+    let messages = conversation
+        .events
+        .iter()
+        .filter(|event| event.kind == EventKind::Message)
+        .map(|event| event.text.clone().unwrap_or_default())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        messages,
+        vec!["who are you".to_string(), "I am Kimi".to_string()]
+    );
+    assert!(conversation.events.iter().any(|event| {
+        event.kind == EventKind::Plan && event.text.as_deref() == Some("check identity")
+    }));
+    let rendered = conversation
+        .events
+        .iter()
+        .map(|event| event.text.clone().unwrap_or_default())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!rendered.contains("injected clock"));
+    assert!(!rendered.contains("secret system prompt"));
+    assert!(!rendered.contains("must not enter diagnostics"));
+    assert_eq!(parsed.diagnostics.len(), 1);
+    assert!(parsed.diagnostics[0].message.contains("future.event"));
+    assert!(parsed
+        .diagnostics
+        .iter()
+        .all(|issue| !issue.message.contains("must not enter diagnostics")));
+    assert!(super::source_revision(&path).unwrap().ends_with(":wire-v2"));
 }
