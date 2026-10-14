@@ -196,6 +196,8 @@ export interface UsageRecord {
   project: string;
   project_id: number | null;
   session_id: string;
+  /** 对上已推送会话时是会话主键。 */
+  session_pk: number | null;
   tokens: UsageTokens;
   native_cost: number | null;
   cost_snapshot: number | null;
@@ -208,6 +210,53 @@ export interface UsageRecord {
 export interface UsageResponse {
   records: UsageRecord[];
   totals: UsageTotals;
+}
+
+export interface TokenParts {
+  input: number;
+  output: number;
+  cache_read: number;
+  cache_creation: number;
+  reasoning: number;
+}
+
+export interface CompositionBucket extends TokenParts {
+  key: string;
+}
+
+export interface UnpricedModel {
+  model: string;
+  count: number;
+}
+
+export interface UsageComposition {
+  totals: TokenParts;
+  by_model: CompositionBucket[];
+  by_source: CompositionBucket[];
+  by_project: CompositionBucket[];
+  unpriced_models: UnpricedModel[];
+}
+
+export interface DeviceView {
+  device_id: string;
+  device_name: string;
+  first_seen_at: string;
+  last_seen_at: string;
+}
+
+export interface ToolStat {
+  name: string;
+  calls: number;
+  failures: number;
+}
+
+export interface BehaviorReport {
+  tool_calls: number;
+  tool_failures: number;
+  other_errors: number;
+  failure_rate: number | null;
+  tools: ToolStat[];
+  tools_truncated: boolean;
 }
 
 export interface TeamPrice {

@@ -8,7 +8,7 @@ import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { summaryRows } from "../lib/export";
-import { splitsBy } from "../lib/usageAgg";
+import { useScopeInsights } from "../useInsights";
 import { useHref, useView } from "../view";
 
 export function ProjectsPage() {
@@ -21,11 +21,7 @@ export function ProjectsPage() {
     [api, bounds, offset],
   );
   const summary = useAsync(load);
-  const loadUsage = useCallback(
-    () => (bounds ? api.usage(bounds, 1000, 0) : Promise.reject(new Error("日期范围不正确"))),
-    [api, bounds],
-  );
-  const usage = useAsync(loadUsage);
+  const insights = useScopeInsights(bounds);
   const data = summary.data;
 
   usePageExports(
@@ -60,9 +56,7 @@ export function ProjectsPage() {
             title={profile.role === "admin" ? "全员按项目" : "我的项目"}
             rows={data.by_project}
             mode={view.mode}
-            splits={splitsBy(usage.data?.records ?? [], (row) =>
-              row.project_id !== null ? String(row.project_id) : "",
-            )}
+            splits={insights.projectSplits}
             hrefOf={(row) => (row.id === null ? undefined : href({ page: "project", projectId: row.id }))}
           />
           {profile.role === "admin" && (

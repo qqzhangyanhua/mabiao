@@ -8,6 +8,23 @@ export const COST_MODE_LABEL: Record<CostMode, string> = {
   snapshot: "客户端快照",
 };
 
+export type UnifiedCostSource = "native" | "team" | "snapshot" | "none";
+
+export const UNIFIED_COST_SOURCE_LABEL: Record<UnifiedCostSource, string> = {
+  native: "来源自带",
+  team: "团队价目",
+  snapshot: "内置快照",
+  none: "未定价",
+};
+
+export function unifiedCostSourceLabel(value: string | null): string {
+  if (!value) return "未计算";
+  if (value in UNIFIED_COST_SOURCE_LABEL) {
+    return UNIFIED_COST_SOURCE_LABEL[value as UnifiedCostSource];
+  }
+  return value;
+}
+
 export function costOf(
   row: Pick<Breakdown, "unified_cost" | "cost_snapshot">,
   mode: CostMode,

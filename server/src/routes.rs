@@ -11,7 +11,7 @@ use tower_http::services::ServeDir;
 use crate::api::{
     AccountView, CoverageView, CreateMemberRequest, DeviceView, PricingOverview, RecomputeResponse,
     SessionListQuery, SessionListResponse, SetTeamPriceRequest, SetTeamPriceResponse,
-    SnapshotMetaView, SummaryQuery, SummaryResponse, UsageQuery, UsageResponse,
+    SnapshotMetaView, SummaryQuery, SummaryResponse,
 };
 use crate::api_detail::{
     AdminProjectView, MergeProjectRequest, MergeProjectResponse, ProjectDetailResponse,
@@ -24,7 +24,9 @@ use crate::summary;
 use crate::team_pricing::{self, Scope};
 use crate::usage_query::{self, Filter};
 use crate::work_timeline::{self, WorkTimelineQuery, WorkTimelineResponse};
-use crate::{accounts, coverage, devices, password, project_admin, push, tokens, AppState};
+use crate::{
+    accounts, analytics, coverage, devices, password, project_admin, push, tokens, AppState,
+};
 
 /// 注意：这里没有注册 / 自助开户的路由，账号只能由管理员接口或服务端命令行创建。
 pub fn router(state: AppState) -> Router {
@@ -66,7 +68,15 @@ pub fn router(state: AppState) -> Router {
             delete(admin_delete_price),
         )
         .route("/api/v1/admin/pricing/recompute", post(admin_recompute))
-        .route("/api/v1/usage", get(usage_list))
+        .route("/api/v1/usage", get(analytics::usage_list))
+        .route(
+            "/api/v1/usage/composition",
+            get(analytics::usage_composition),
+        )
+        .route(
+            "/api/v1/sessions/behavior",
+            get(analytics::session_behavior),
+        )
         .route("/api/v1/usage/summary", get(usage_summary))
         .route("/api/v1/work-timeline", get(work_timeline))
         .route("/api/v1/sessions", get(session_list))
@@ -261,7 +271,7 @@ fn parse_bound(
         .transpose()
 }
 
-fn build_filter(
+pub(crate) fn build_filter(
     account_id: Option<i64>,
     project_id: Option<i64>,
     from: Option<&str>,
@@ -277,7 +287,10 @@ fn build_filter(
 
 /// 成员只看自己的；管理员默认看全体，可用 `account_id` 收窄。
 /// 成员指定别人的 `account_id` 得到 403，与其它按账号归属的接口走同一个 `can_access`。
-fn scope_account(caller: &AuthedAccount, requested: Option<i64>) -> Result<Option<i64>, AppError> {
+pub(crate) fn scope_account(
+    caller: &AuthedAccount,
+    requested: Option<i64>,
+) -> Result<Option<i64>, AppError> {
     match requested {
         Some(id) if !caller.can_access(id) => Err(AppError::forbidden("只能查看自己的数据")),
         Some(id) => Ok(Some(id)),
@@ -286,7 +299,10 @@ fn scope_account(caller: &AuthedAccount, requested: Option<i64>) -> Result<Optio
     }
 }
 
-fn parse_paging(limit: Option<i64>, offset: Option<i64>) -> Result<(i64, i64), AppError> {
+pub(crate) fn parse_paging(
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<(i64, i64), AppError> {
     let limit = limit.unwrap_or(usage_query::DEFAULT_LIMIT);
     if !(1..=usage_query::MAX_LIMIT).contains(&limit) {
         return Err(AppError::invalid(format!(
@@ -299,27 +315,6 @@ fn parse_paging(limit: Option<i64>, offset: Option<i64>) -> Result<(i64, i64), A
         return Err(AppError::invalid("offset 不能为负"));
     }
     Ok((limit, offset))
-}
-
-async fn usage_list(
-    State(state): State<AppState>,
-    caller: AuthedAccount,
-    ApiQuery(query): ApiQuery<UsageQuery>,
-) -> Result<Json<UsageResponse>, AppError> {
-    let account_id = scope_account(&caller, query.account_id)?;
-    let (limit, offset) = parse_paging(query.limit, query.offset)?;
-    let filter = build_filter(
-        account_id,
-        query.project_id,
-        query.from.as_deref(),
-        query.to.as_deref(),
-    )?;
-    let rows = usage_query::list(&state.pool, &filter, limit, offset).await?;
-    let totals = usage_query::totals(&state.pool, &filter).await?;
-    Ok(Json(UsageResponse {
-        records: rows.into_iter().map(Into::into).collect(),
-        totals: totals.into(),
-    }))
 }
 
 fn parse_tz_offset(requested: Option<i32>) -> Result<i32, AppError> {

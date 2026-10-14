@@ -12,6 +12,7 @@ function record(partial: Partial<UsageRecord> & Pick<UsageRecord, "id" | "model"
     project: "/w/alpha",
     project_id: 11,
     session_id: "s",
+    session_pk: null,
     tokens: { input: 10, output: 20, cache_read: 5, cache_creation: 0, reasoning: 0, total: 35 },
     native_cost: null,
     cost_snapshot: 1,

@@ -43,6 +43,7 @@ interface Props {
   showProjects?: boolean;
   sessions?: number;
   cacheHit?: number | null;
+  onUnpriced?: () => void;
   modelSplits?: Map<string, TokenSplit>;
   projectSplits?: Map<string, TokenSplit>;
   sourceSplits?: Map<string, TokenSplit>;
@@ -57,6 +58,7 @@ export function SummaryView({
   showProjects = true,
   sessions,
   cacheHit = null,
+  onUnpriced,
   modelSplits,
   projectSplits,
   sourceSplits,
@@ -117,6 +119,7 @@ export function SummaryView({
           sessions={sessions}
           cacheHit={cacheHit}
           unpriced={unpriced}
+          onUnpriced={onUnpriced}
           mode={mode}
           recordCount={totals.record_count}
           costTrend={dailyPoints(

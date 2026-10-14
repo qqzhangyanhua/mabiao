@@ -2,6 +2,8 @@ import { ChartColumn } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { BackLink } from "../components/BackLink";
+import { BehaviorPanel } from "../components/BehaviorPanel";
+import { DeviceList } from "../components/DeviceList";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -12,12 +14,12 @@ import { SessionListSection } from "../components/SessionListSection";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
 import { TablePager } from "../components/TablePager";
+import { UsageSection } from "../components/UsageSection";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { sessionRows, summaryRows } from "../lib/export";
-import { cacheHitRate } from "../lib/tokens";
-import { splitsBy, totalSplit } from "../lib/usageAgg";
+import { useScopeInsights } from "../useInsights";
 import { useView } from "../view";
 
 const PAGE_SIZE = 50;
@@ -28,6 +30,13 @@ export function MemberPage({ accountId }: { accountId: number }) {
   const { bounds, offset } = view;
   const [page, setPage] = useState(0);
   const [generated, setGenerated] = useState<GeneratedFilter>("all");
+  const scope = useMemo(
+    () => (bounds ? { ...bounds, accountId } : null),
+    [bounds, accountId],
+  );
+  const insights = useScopeInsights(scope);
+  const loadDevices = useCallback(() => api.devices(accountId), [api, accountId]);
+  const devices = useAsync(loadDevices);
 
   const loadName = useCallback(
     async () =>
@@ -60,18 +69,9 @@ export function MemberPage({ accountId }: { accountId: number }) {
     [api, bounds, accountId, page, generated],
   );
   const sessions = useAsync(loadSessions);
-  const loadUsage = useCallback(
-    () =>
-      bounds
-        ? api.usage({ ...bounds, accountId }, 1000, 0)
-        : Promise.reject(new Error("日期范围不正确")),
-    [api, bounds, accountId],
-  );
-  const usage = useAsync(loadUsage);
 
   const title = name.data ?? "成员";
   const pageCount = sessions.data ? Math.max(1, Math.ceil(sessions.data.total / PAGE_SIZE)) : 1;
-  const records = usage.data?.records ?? [];
 
   usePageExports(
     useMemo(
@@ -124,13 +124,29 @@ export function MemberPage({ accountId }: { accountId: number }) {
           showAccounts={false}
           linkAccounts={false}
           sessions={sessions.data?.total}
-          cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
-          modelSplits={splitsBy(records, (row) => row.model)}
-          sourceSplits={splitsBy(records, (row) => row.source)}
-          projectSplits={splitsBy(records, (row) =>
-            row.project_id !== null ? String(row.project_id) : "",
-          )}
+          cacheHit={insights.cacheHit}
+          onUnpriced={insights.showUnpriced}
+          modelSplits={insights.modelSplits}
+          sourceSplits={insights.sourceSplits}
+          projectSplits={insights.projectSplits}
         />
+      )}
+
+      <DeviceList devices={devices} />
+      {insights.scope && (
+        <>
+          <BehaviorPanel report={insights.behavior} />
+          <UsageSection
+            scope={insights.scope}
+            showAccount={false}
+            composition={insights.composition.data}
+            costSource={insights.costSource}
+            model={insights.model}
+            onCostSource={insights.setCostSource}
+            onModel={insights.setModel}
+            isAdmin={profile.role === "admin"}
+          />
+        </>
       )}
 
       {bounds && (

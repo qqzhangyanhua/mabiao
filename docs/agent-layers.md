@@ -220,14 +220,17 @@
 
 ### 网页用的聚合与会话列表（`server/src/summary.rs`、`sessions::list`）
 
-接口：`GET /api/v1/usage/summary`、`GET /api/v1/sessions`、`GET /api/v1/work-timeline`。
+接口：`GET /api/v1/usage/summary`、`GET /api/v1/usage/composition`、`GET /api/v1/usage`、`GET /api/v1/sessions`、`GET /api/v1/sessions/behavior`、`GET /api/v1/work-timeline`。
 
 1. 聚合在服务端做，网页只展示。费用与 token 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。按来源另外并上已推送会话：没有消耗记录的来源仍出现，`session_count` 是会话数，token 与费用为 0。
-2. 三个接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
-3. `from` 含、`to` 不含，RFC 3339；按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
-4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。
+2. 这些接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
+3. `from` 含、`to` 不含，RFC 3339。summary 按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。summary 每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
+4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。列表时间是 `COALESCE(ended_at, started_at, pushed_at)`。
 5. 工作时间线只铺已推送会话：按起止与区间**重叠**选（不是列表那种按结束时间落点），裁到本地日历日；当天 token / 费用只统计该场落在这天的消耗记录。不发明未推送的 Cursor 本机会话，不画账号用量或代码量。可选 `source` 精确匹配。最多 `MAX_SESSIONS` 场，超出标 `truncated`。
-6. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`；时间线 `cargo test --manifest-path server/Cargo.toml --test work_timeline`。
+6. `GET /api/v1/usage/composition` 与消耗查询同一范围（账号、项目、from、to），一次给出 token 五口径的全量合计，以及按模型、来源、项目拆开。项目键是项目 id 的字符串，没有项目用空串。`unpriced_models` 只含 `unified_cost_source = 'none'`，三列都空的「没算过」不算未定价，最多 200 个模型，不从 `by_model` 的前几行里挑。网页的 token 构成走这个接口，不要把明细分页拉到浏览器里加总。
+7. `GET /api/v1/usage` 另收可选精确过滤 `source`、`model`、`unified_cost_source`（`native` / `team` / `snapshot` / `none`）。`totals` 仍是该过滤下的全部合计，不受分页影响。这些过滤不进 summary，避免合计被明细筛选带偏。每行按（账号, 设备, 来源, session_id）左连 `sessions`，对上则带 `session_pk`，对不上为空。
+8. `GET /api/v1/sessions/behavior` 统计已推送会话的语义事件，时间与会话列表相同，可按账号、项目过滤，不按消耗记录的 `occurred_at`。工具调用是 `kind = tool_call`；工具失败是 `kind = error` 且 `actor = tool`；失败率是工具失败 ÷ 工具调用，没有调用则为空。其它错误（`kind = error` 且执行者不是工具）单独计数，不进失败率。工具按 `name` 合并，空名字算「未命名」，按调用数、失败数、名字排序，最多 30 个，超出标 `tools_truncated`，合计始终是全量。这不是桌面端 Cursor 会话的失败率（那个是错误数除以轮次）。事件仍在 `sessions.events`，不另建表。
+9. 收窄测试：`cargo test --manifest-path server/Cargo.toml --test summary`；时间线 `cargo test --manifest-path server/Cargo.toml --test work_timeline`；构成、明细过滤与行为 `cargo test --manifest-path server/Cargo.toml --test analytics`。
 
 ### 会话详情、项目页与项目合并（`sessions::detail`、`project_admin.rs`）
 
@@ -251,6 +254,9 @@ React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnp
 5. 会话详情的上下文清单按证据层级分组（`lib/context.ts::tierOf`）：只有 `injected` 层且清单不是来自缓存、有注入快照、条目带原文才写「已注入（原文）」；磁盘可能生效、来自缓存无原文、按磁盘重建都各用自己的说法，不得写成已注入。改说法要同步 `context.test.ts`。项目改名与合并只在项目页对管理员显示，成员不请求 `/admin/` 接口。
 6. 服务端用 `--web-dir` / `MABIAO_WEB_DIR` 托管 `dist`（`router_with_web`）；镜像里已设好，镜像只拷贝 `dist`。调试构建（`cargo run -- serve`）若该目录上一级有 `vite.config.ts`，会自动 `vite build --watch`，保存源码后刷新浏览器即可；`MABIAO_WEB_WATCH=0` 关掉。发行构建不监视。静态托管测试：`cargo test --manifest-path server/Cargo.toml --test web`。
 7. 在 `server/web/` 下跑：`pnpm install --frozen-lockfile`、`pnpm lint`、`pnpm test`、`pnpm build`。
+8. token 构成与缓存命中率走 `GET /api/v1/usage/composition`。总览、成员页、项目页、来源页有消耗明细：按定价来源（全部 / 来源自带 / 团队价目 / 内置快照 / 未定价）、来源、模型筛选，每页 50 条。统一价 KPI 上的「未计入」把筛选设成未定价。未定价模型来自 `unpriced_models`；管理员可去 `#/pricing`，成员只筛到该模型。有 `session_pk` 的时间链到会话详情。成员列在总览始终显示，管理员在项目页和来源页也显示。项目列表只要构成，不铺明细，也不放行为面板。
+9. 行为面板在总览、成员页、项目页，和费用 KPI 分开。失败率用行为接口的定义，没有工具调用时显示「—」。文案写明只统计已推送会话的语义事件，不是桌面端 Cursor 会话失败率。来源页和项目列表不放。
+10. 成员页在会话列表上方列设备名、首次出现、最后出现，按最后出现从新到旧，不展示设备 ID。没有设备时写「还没有推送过的设备」。这一块自己的错误不替换整页。成员列表继续只显示设备数。接口是已有的 `GET /api/v1/accounts/{id}/devices`。
 
 完成：服务端三条命令绿，且网页四条命令绿。
 

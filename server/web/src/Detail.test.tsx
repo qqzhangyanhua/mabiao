@@ -177,9 +177,30 @@ function stubServer(role: "admin" | "member", options: { sessionTotal?: number }
         return Promise.resolve(
           json(200, { project: ADMIN_PROJECTS[1], sessions_moved: 3, usage_records_moved: 2 }),
         );
+      if (url.startsWith("/api/v1/usage/composition"))
+        return Promise.resolve(
+          json(200, {
+            totals: { input: 0, output: 0, cache_read: 0, cache_creation: 0, reasoning: 0 },
+            by_model: [],
+            by_source: [],
+            by_project: [],
+            unpriced_models: [],
+          }),
+        );
       if (url.startsWith("/api/v1/usage/summary")) return Promise.resolve(json(200, SUMMARY));
       if (url.startsWith("/api/v1/usage"))
         return Promise.resolve(json(200, { records: [], totals: TOTALS }));
+      if (url.startsWith("/api/v1/sessions/behavior"))
+        return Promise.resolve(
+          json(200, {
+            tool_calls: 0,
+            tool_failures: 0,
+            other_errors: 0,
+            failure_rate: null,
+            tools: [],
+            tools_truncated: false,
+          }),
+        );
       if (url === "/api/v1/admin/pricing")
         return Promise.resolve(
           json(200, { prices: [], snapshot: { as_of: "2026-03-01", source: "litellm", count: 12 } }),

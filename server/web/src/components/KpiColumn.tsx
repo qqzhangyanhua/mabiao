@@ -67,6 +67,7 @@ export function KpiColumn({
   sessions,
   cacheHit,
   unpriced,
+  onUnpriced,
   mode,
   recordCount,
   costTrend,
@@ -77,6 +78,7 @@ export function KpiColumn({
   sessions: number | undefined;
   cacheHit: number | null;
   unpriced: number;
+  onUnpriced?: () => void;
   mode: CostMode;
   recordCount: number;
   costTrend?: number[];
@@ -93,9 +95,17 @@ export function KpiColumn({
         trendColor="var(--chart-3)"
         badge={
           unpriced > 0 ? (
-            <Badge variant="warning" title={`另有 ${unpriced} 条记录的模型没有价目，未计入`}>
-              {unpriced} 条未计入
-            </Badge>
+            onUnpriced ? (
+              <button type="button" onClick={onUnpriced} className="rounded-md text-left">
+                <Badge variant="warning" title="查看未定价的消耗记录">
+                  {unpriced} 条未计入
+                </Badge>
+              </button>
+            ) : (
+              <Badge variant="warning" title={`另有 ${unpriced} 条记录的模型没有价目，未计入`}>
+                {unpriced} 条未计入
+              </Badge>
+            )
           ) : undefined
         }
       />

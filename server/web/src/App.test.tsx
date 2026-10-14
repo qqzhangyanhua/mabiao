@@ -1,7 +1,24 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
-import type { AccountView, CoverageView, SummaryResponse } from "./api/types";
+import type { AccountView, BehaviorReport, CoverageView, SummaryResponse, UsageComposition } from "./api/types";
+
+const EMPTY_COMPOSITION: UsageComposition = {
+  totals: { input: 0, output: 0, cache_read: 0, cache_creation: 0, reasoning: 0 },
+  by_model: [],
+  by_source: [],
+  by_project: [],
+  unpriced_models: [],
+};
+
+const EMPTY_BEHAVIOR: BehaviorReport = {
+  tool_calls: 0,
+  tool_failures: 0,
+  other_errors: 0,
+  failure_rate: null,
+  tools: [],
+  tools_truncated: false,
+};
 
 const EMPTY_SUMMARY: SummaryResponse = {
   totals: {
@@ -79,11 +96,16 @@ function stubServer(role: "admin" | "member", withPrice = false) {
         );
       }
       if (url === "/api/v1/me") return Promise.resolve(json(200, me));
+      if (url.startsWith("/api/v1/usage/composition"))
+        return Promise.resolve(json(200, EMPTY_COMPOSITION));
       if (url.startsWith("/api/v1/usage/summary")) return Promise.resolve(json(200, EMPTY_SUMMARY));
       if (url.startsWith("/api/v1/usage"))
         return Promise.resolve(json(200, { records: [], totals: EMPTY_SUMMARY.totals }));
+      if (url.startsWith("/api/v1/sessions/behavior"))
+        return Promise.resolve(json(200, EMPTY_BEHAVIOR));
       if (url.startsWith("/api/v1/sessions"))
         return Promise.resolve(json(200, { sessions: [], total: 0 }));
+      if (/\/api\/v1\/accounts\/\d+\/devices$/.test(url)) return Promise.resolve(json(200, []));
       if (url.startsWith("/api/v1/work-timeline"))
         return Promise.resolve(
           json(200, {

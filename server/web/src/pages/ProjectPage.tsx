@@ -1,7 +1,8 @@
 import { Folder } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { BackLink } from "../components/BackLink";
+import { BehaviorPanel } from "../components/BehaviorPanel";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import {
@@ -13,9 +14,9 @@ import { SessionListSection } from "../components/SessionListSection";
 import { SessionTable } from "../components/SessionTable";
 import { SummaryView } from "../components/SummaryView";
 import { TablePager } from "../components/TablePager";
+import { UsageSection } from "../components/UsageSection";
 import { useAsync } from "../hooks";
-import { cacheHitRate } from "../lib/tokens";
-import { splitsBy, totalSplit } from "../lib/usageAgg";
+import { useScopeInsights } from "../useInsights";
 import { useView } from "../view";
 
 const PAGE_SIZE = 50;
@@ -26,6 +27,11 @@ export function ProjectPage({ projectId }: { projectId: number }) {
   const { bounds, offset } = view;
   const [generated, setGenerated] = useState<GeneratedFilter>("all");
   const [page, setPage] = useState(0);
+  const scope = useMemo(
+    () => (bounds ? { ...bounds, projectId } : null),
+    [bounds, projectId],
+  );
+  const insights = useScopeInsights(scope);
 
   const loadProject = useCallback(
     () =>
@@ -49,18 +55,9 @@ export function ProjectPage({ projectId }: { projectId: number }) {
     [api, bounds, projectId, generated, page],
   );
   const sessions = useAsync(loadSessions);
-  const loadUsage = useCallback(
-    () =>
-      bounds
-        ? api.usage({ ...bounds, projectId }, 1000, 0)
-        : Promise.reject(new Error("日期范围不正确")),
-    [api, bounds, projectId],
-  );
-  const usage = useAsync(loadUsage);
 
   const isAdmin = profile.role === "admin";
   const detail = project.data;
-  const records = usage.data?.records ?? [];
   const pageCount = sessions.data ? Math.max(1, Math.ceil(sessions.data.total / PAGE_SIZE)) : 1;
 
   return (
@@ -92,10 +89,26 @@ export function ProjectPage({ projectId }: { projectId: number }) {
           linkAccounts={isAdmin}
           showProjects={false}
           sessions={sessions.data?.total}
-          cacheHit={records.length > 0 ? cacheHitRate(totalSplit(records)) : null}
-          modelSplits={splitsBy(records, (row) => row.model)}
-          sourceSplits={splitsBy(records, (row) => row.source)}
+          cacheHit={insights.cacheHit}
+          onUnpriced={insights.showUnpriced}
+          modelSplits={insights.modelSplits}
+          sourceSplits={insights.sourceSplits}
         />
+      )}
+      {insights.scope && (
+        <>
+          <BehaviorPanel report={insights.behavior} />
+          <UsageSection
+            scope={insights.scope}
+            showAccount={isAdmin}
+            composition={insights.composition.data}
+            costSource={insights.costSource}
+            model={insights.model}
+            onCostSource={insights.setCostSource}
+            onModel={insights.setModel}
+            isAdmin={isAdmin}
+          />
+        </>
       )}
       {isAdmin && detail && (
         <ProjectAdmin

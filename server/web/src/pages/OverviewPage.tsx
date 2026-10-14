@@ -4,12 +4,13 @@ import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
 import { SummaryView } from "../components/SummaryView";
+import { BehaviorPanel } from "../components/BehaviorPanel";
+import { UsageSection } from "../components/UsageSection";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { summaryRows } from "../lib/export";
-import { splitsBy, totalSplit } from "../lib/usageAgg";
-import { cacheHitRate } from "../lib/tokens";
+import { useScopeInsights } from "../useInsights";
 import { useView } from "../view";
 
 export function OverviewPage() {
@@ -26,11 +27,7 @@ export function OverviewPage() {
     [api, bounds],
   );
   const sessions = useAsync(loadSessions);
-  const loadUsage = useCallback(
-    () => (bounds ? api.usage(bounds, 1000, 0) : Promise.reject(new Error("日期范围不正确"))),
-    [api, bounds],
-  );
-  const usage = useAsync(loadUsage);
+  const insights = useScopeInsights(bounds);
 
   const data = summary.data;
   usePageExports(
@@ -45,9 +42,6 @@ export function OverviewPage() {
       [data],
     ),
   );
-
-  const records = usage.data?.records ?? [];
-  const split = totalSplit(records);
 
   return (
     <>
@@ -70,13 +64,27 @@ export function OverviewPage() {
           showAccounts
           linkAccounts
           sessions={sessions.data?.total}
-          cacheHit={records.length > 0 ? cacheHitRate(split) : null}
-          modelSplits={splitsBy(records, (row) => row.model)}
-          sourceSplits={splitsBy(records, (row) => row.source)}
-          projectSplits={splitsBy(records, (row) =>
-            row.project_id !== null ? String(row.project_id) : "",
-          )}
+          cacheHit={insights.cacheHit}
+          onUnpriced={insights.showUnpriced}
+          modelSplits={insights.modelSplits}
+          sourceSplits={insights.sourceSplits}
+          projectSplits={insights.projectSplits}
         />
+      )}
+      {insights.scope && (
+        <>
+          <BehaviorPanel report={insights.behavior} />
+          <UsageSection
+            scope={insights.scope}
+            showAccount
+            composition={insights.composition.data}
+            costSource={insights.costSource}
+            model={insights.model}
+            onCostSource={insights.setCostSource}
+            onModel={insights.setModel}
+            isAdmin
+          />
+        </>
       )}
     </>
   );

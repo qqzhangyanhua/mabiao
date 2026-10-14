@@ -137,6 +137,12 @@ pub struct UsageQuery {
     pub to: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// 精确匹配来源。空表示不过滤。
+    pub source: Option<String>,
+    /// 精确匹配模型。空表示不过滤。
+    pub model: Option<String>,
+    /// `native` / `team` / `snapshot` / `none`。
+    pub unified_cost_source: Option<String>,
 }
 
 /// 一条消耗记录：客户端费用快照与服务端统一费用并列。跨人比较看 `unified_*`。
@@ -152,6 +158,8 @@ pub struct UsageRecordView {
     pub project: String,
     pub project_id: Option<i64>,
     pub session_id: String,
+    /// 对上已推送会话时是会话主键，网页用它打开详情。
+    pub session_pk: Option<i64>,
     pub tokens: UsageTokens,
     pub native_cost: Option<f64>,
     /// 推送当时客户端本机算的费用，只作对照。
@@ -178,6 +186,7 @@ impl From<UsageRow> for UsageRecordView {
             project: row.project_path,
             project_id: row.project_id,
             session_id: row.session_id,
+            session_pk: row.session_pk,
             tokens: UsageTokens {
                 input: row.input_tokens,
                 output: row.output_tokens,
@@ -383,4 +392,64 @@ pub struct SessionListResponse {
     pub sessions: Vec<SessionListItem>,
     /// 过滤条件下的会话总数，不受分页影响。
     pub total: i64,
+}
+
+/// 账号、项目、时间。构成与行为指标共用，不含分页。
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ScopeQuery {
+    pub account_id: Option<i64>,
+    pub project_id: Option<i64>,
+    pub from: Option<String>,
+    pub to: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TokenPartsView {
+    pub input: i64,
+    pub output: i64,
+    pub cache_read: i64,
+    pub cache_creation: i64,
+    pub reasoning: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CompositionBucketView {
+    pub key: String,
+    pub input: i64,
+    pub output: i64,
+    pub cache_read: i64,
+    pub cache_creation: i64,
+    pub reasoning: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnpricedModelView {
+    pub model: String,
+    pub count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageCompositionView {
+    pub totals: TokenPartsView,
+    pub by_model: Vec<CompositionBucketView>,
+    pub by_source: Vec<CompositionBucketView>,
+    pub by_project: Vec<CompositionBucketView>,
+    pub unpriced_models: Vec<UnpricedModelView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolStatView {
+    pub name: String,
+    pub calls: i64,
+    pub failures: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BehaviorView {
+    pub tool_calls: i64,
+    pub tool_failures: i64,
+    pub other_errors: i64,
+    pub failure_rate: Option<f64>,
+    pub tools: Vec<ToolStatView>,
+    pub tools_truncated: bool,
 }

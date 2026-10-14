@@ -2,7 +2,9 @@ import type {
   AccountView,
   AdminProject,
   ApiErrorBody,
+  BehaviorReport,
   CoverageView,
+  DeviceView,
   LoginResponse,
   MergeProjectResponse,
   PricingOverview,
@@ -13,6 +15,7 @@ import type {
   SessionListResponse,
   SetTeamPriceResponse,
   SummaryResponse,
+  UsageComposition,
   UsageResponse,
   WorkTimelineResponse,
 } from "./types";
@@ -57,6 +60,7 @@ export interface Api {
   accounts(): Promise<AccountView[]>;
   createMember(account: string, password: string): Promise<AccountView>;
   deactivate(accountId: number): Promise<AccountView>;
+  devices(accountId: number): Promise<DeviceView[]>;
   coverage(): Promise<CoverageView[]>;
   summary(scope: ScopeParams, tzOffsetMinutes: number): Promise<SummaryResponse>;
   /** `generatedByWorkNotes`：`true` 只看「码表生成」的，`false` 排除它们，不传不过滤。 */
@@ -72,7 +76,14 @@ export interface Api {
   adminProjects(): Promise<AdminProject[]>;
   renameProject(id: number, name: string): Promise<Project>;
   mergeProject(id: number, intoProjectId: number): Promise<MergeProjectResponse>;
-  usage(scope: ScopeParams, limit: number, offset: number): Promise<UsageResponse>;
+  usage(
+    scope: ScopeParams,
+    limit: number,
+    offset: number,
+    filters?: { source?: string; model?: string; costSource?: string },
+  ): Promise<UsageResponse>;
+  composition(scope: ScopeParams): Promise<UsageComposition>;
+  behavior(scope: ScopeParams): Promise<BehaviorReport>;
   workTimeline(scope: ScopeParams & { source?: string }, tzOffsetMinutes: number): Promise<WorkTimelineResponse>;
   pricing(): Promise<PricingOverview>;
   setPrice(body: {
@@ -162,6 +173,7 @@ export function createApi(options: ApiOptions): Api {
     createMember: (account, password) =>
       request("POST", "/api/v1/admin/accounts", { account, password }),
     deactivate: (accountId) => request("POST", `/api/v1/admin/accounts/${accountId}/deactivate`),
+    devices: (accountId) => request("GET", `/api/v1/accounts/${accountId}/devices`),
     coverage: () => request("GET", "/api/v1/admin/coverage"),
     summary: (scope, tzOffsetMinutes) =>
       request(
@@ -189,11 +201,20 @@ export function createApi(options: ApiOptions): Api {
     renameProject: (id, name) => request("PUT", `/api/v1/admin/projects/${id}`, { name }),
     mergeProject: (id, intoProjectId) =>
       request("POST", `/api/v1/admin/projects/${id}/merge`, { into_project_id: intoProjectId }),
-    usage: (scope, limit, offset) =>
+    usage: (scope, limit, offset, filters) =>
       request(
         "GET",
-        `/api/v1/usage${toQueryString({ ...scopeQuery(scope), limit, offset })}`,
+        `/api/v1/usage${toQueryString({
+          ...scopeQuery(scope),
+          limit,
+          offset,
+          source: filters?.source,
+          model: filters?.model,
+          unified_cost_source: filters?.costSource,
+        })}`,
       ),
+    composition: (scope) => request("GET", `/api/v1/usage/composition${toQueryString(scopeQuery(scope))}`),
+    behavior: (scope) => request("GET", `/api/v1/sessions/behavior${toQueryString(scopeQuery(scope))}`),
     workTimeline: (scope, tzOffsetMinutes) =>
       request(
         "GET",

@@ -8,9 +8,10 @@ import { SourceIcon } from "../components/SourceIcon";
 import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
+import { UsageSection } from "../components/UsageSection";
 import { summaryRows } from "../lib/export";
 import { sourceLabel } from "../lib/source";
-import { splitsBy } from "../lib/usageAgg";
+import { useScopeInsights } from "../useInsights";
 import { useView } from "../view";
 
 export function SourcesPage() {
@@ -22,11 +23,7 @@ export function SourcesPage() {
     [api, bounds, offset],
   );
   const summary = useAsync(load);
-  const loadUsage = useCallback(
-    () => (bounds ? api.usage(bounds, 1000, 0) : Promise.reject(new Error("日期范围不正确"))),
-    [api, bounds],
-  );
-  const usage = useAsync(loadUsage);
+  const insights = useScopeInsights(bounds);
   const data = summary.data;
 
   usePageExports(
@@ -66,13 +63,25 @@ export function SourcesPage() {
           rows={data.by_source}
           mode={view.mode}
           limit={null}
-          splits={splitsBy(usage.data?.records ?? [], (row) => row.source)}
+          splits={insights.sourceSplits}
           labelOf={(row) => sourceLabel(row.label)}
           markOf={(row) => (
             <span className="grid size-7 shrink-0 place-items-center">
               <SourceIcon source={row.key} size={22} />
             </span>
           )}
+        />
+      )}
+      {insights.scope && (
+        <UsageSection
+          scope={insights.scope}
+          showAccount={profile.role === "admin"}
+          composition={insights.composition.data}
+          costSource={insights.costSource}
+          model={insights.model}
+          onCostSource={insights.setCostSource}
+          onModel={insights.setModel}
+          isAdmin={profile.role === "admin"}
         />
       )}
     </>

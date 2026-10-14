@@ -3,9 +3,11 @@
 //! 含远程账号、登录与鉴权、推送接收，团队价目与统一费用重算，以及管理网页用的聚合接口与静态文件托管。
 
 pub mod accounts;
+pub mod analytics;
 pub mod api;
 pub mod api_detail;
 pub mod auth;
+pub mod behavior;
 pub mod coverage;
 pub mod db;
 pub mod devices;
