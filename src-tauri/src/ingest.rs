@@ -30,14 +30,17 @@ pub fn default_home() -> PathBuf {
 pub(crate) type PathOverrides = BTreeMap<&'static str, Vec<PathBuf>>;
 
 pub(crate) fn env_overrides() -> PathOverrides {
-    Source::ALL
+    let mut overrides: PathOverrides = Source::ALL
         .iter()
         .copied()
         .filter_map(|source| {
             let var = usage_adapter(source).path_env;
             env_override(var).map(|paths| (var, paths))
         })
-        .collect()
+        .collect();
+    // OpenCode 另外认 XDG_DATA_HOME 与 OPENCODE_DB。逻辑留在适配器里。
+    crate::adapters::opencode::apply_env(&mut overrides);
+    overrides
 }
 
 /// 设置页覆盖叠在环境变量上：同一来源以设置页为准，未填写的来源仍走环境变量。

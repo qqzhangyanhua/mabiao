@@ -370,3 +370,125 @@ fn opencode_catalog_refresh_never_marks_sessions_for_backfill() {
     assert_eq!(progress.indexed, progress.total);
     assert_eq!(progress.total, 2);
 }
+
+#[test]
+fn opencode_legacy_json_feeds_catalog_and_skips_synthetic_text() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let root = home.join(".local/share/opencode");
+    write_legacy_session(
+        &root,
+        "ses-json",
+        None,
+        "Flaky test hunt",
+        "msg-user",
+        "msg-assistant",
+    );
+    write_legacy_session(
+        &root,
+        "ses-child",
+        Some("ses-json"),
+        "Scout",
+        "msg-child-user",
+        "msg-child-assistant",
+    );
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    assert_eq!(report.files_failed, 0, "{report:?}");
+
+    let page = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    let row = page
+        .rows
+        .iter()
+        .find(|row| row.source == "opencode" && row.session_id == "ses-json")
+        .expect("legacy session");
+    assert_eq!(row.title, "Flaky test hunt");
+    assert_eq!(row.project, "/work/oc");
+    assert_eq!(row.model, "gpt-6-astra");
+    assert!(page.rows.iter().all(|row| row.session_id != "ses-child"));
+
+    let detail = conversation::load_parsed_detail(&conn, home, "opencode", "ses-json").unwrap();
+    assert_eq!(
+        message_texts(&detail),
+        vec![
+            "Why does the login test flake?".to_string(),
+            "It races the clock.".to_string()
+        ]
+    );
+    assert!(detail.events.iter().any(|event| {
+        event.kind == ConversationEventKind::ToolResult
+            && event.text.as_deref() == Some("from content")
+    }));
+    assert!(usage_rows(&conn, "opencode", "ses-json").len() == 1);
+    let parent = conversation::load_detail(&conn, home, "opencode", "ses-json").unwrap();
+    assert!(parent.agent_relations.children.iter().any(|child| {
+        child
+            .session
+            .as_ref()
+            .is_some_and(|session| session.session_id == "ses-child")
+    }));
+}
+
+fn write_legacy_session(
+    root: &std::path::Path,
+    session_id: &str,
+    parent_id: Option<&str>,
+    title: &str,
+    user_id: &str,
+    assistant_id: &str,
+) {
+    let session = root.join(format!("storage/session/0f3a/{session_id}.json"));
+    std::fs::create_dir_all(session.parent().unwrap()).unwrap();
+    let parent = parent_id
+        .map(|id| format!(r#""parentID":"{id}","#))
+        .unwrap_or_default();
+    std::fs::write(
+        &session,
+        format!(
+            r#"{{{parent}"id":"{session_id}","directory":"/work/oc","title":"{title}","time":{{"created":1790416800000,"updated":1790416980000}}}}"#
+        ),
+    )
+    .unwrap();
+    let message_dir = root.join(format!("storage/message/{session_id}"));
+    std::fs::create_dir_all(&message_dir).unwrap();
+    std::fs::write(
+        message_dir.join(format!("{user_id}.json")),
+        format!(r#"{{"id":"{user_id}","role":"user","time":{{"created":1790416805000}}}}"#),
+    )
+    .unwrap();
+    std::fs::write(
+        message_dir.join(format!("{assistant_id}.json")),
+        r#"{"id":"assistant","role":"assistant","modelID":"gpt-6-astra","providerID":"openai","tokens":{"input":8,"output":4,"reasoning":1,"cache":{"read":0,"write":0}},"time":{"created":1790416806000,"completed":1790416830000},"path":{"cwd":"/work/oc","root":"/work/oc"}}"#,
+    )
+    .unwrap();
+    let user_parts = root.join(format!("storage/part/{user_id}"));
+    std::fs::create_dir_all(&user_parts).unwrap();
+    std::fs::write(
+        user_parts.join("typed.json"),
+        r#"{"id":"typed","type":"text","text":"Why does the login test flake?"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        user_parts.join("synthetic.json"),
+        r#"{"id":"synthetic","type":"text","synthetic":true,"text":"Called the Read tool with the following input"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        user_parts.join("ignored.json"),
+        r#"{"id":"ignored","type":"text","ignored":true,"text":"command template"}"#,
+    )
+    .unwrap();
+    let assistant_parts = root.join(format!("storage/part/{assistant_id}"));
+    std::fs::create_dir_all(&assistant_parts).unwrap();
+    std::fs::write(
+        assistant_parts.join("reply.json"),
+        r#"{"id":"reply","type":"text","text":"It races the clock."}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        assistant_parts.join("tool.json"),
+        r#"{"id":"tool","type":"tool","tool":"read","callID":"call-1","state":{"status":"completed","input":{"path":"test"},"output":"","content":[{"type":"text","text":"from content"}]}}"#,
+    )
+    .unwrap();
+}

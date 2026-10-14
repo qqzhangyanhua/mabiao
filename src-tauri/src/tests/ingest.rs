@@ -104,7 +104,9 @@ fn ingest_allows_record_count_drop_when_adapter_version_is_stale() {
     // 不该挡住版本升级触发的合法覆盖，否则会每轮重解析却永远卡在旧 version。
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
-    let session_dir = home.join(".codex/sessions");
+    // `join(".codex/sessions")` 在 Windows 上会把正斜杠留在路径字符串里，
+    // 目录扫描返回的是反斜杠，按字符串对账就会对不上。
+    let session_dir = home.join(".codex").join("sessions");
     std::fs::create_dir_all(&session_dir).unwrap();
     let path = session_dir.join("one.jsonl");
     std::fs::write(&path, fixture("codex.jsonl")).unwrap();
@@ -1280,6 +1282,44 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Pi),
         vec![home.join(".pi/agent/sessions")],
+    );
+}
+
+#[test]
+fn opencode_scan_uses_xdg_data_home_and_opencode_db() {
+    let home = std::path::Path::new("/home/example");
+    let mut xdg = ingest::PathOverrides::new();
+    crate::adapters::opencode::apply_env_values(&mut xdg, Some("/xdg"), Some("sessions.db"));
+    assert_eq!(
+        ingest::source_scan_dirs_with(&xdg, home, Source::Opencode),
+        vec![PathBuf::from("/xdg/opencode/sessions.db")],
+    );
+
+    // Windows 上以 `/` 开头的路径 `is_absolute()` 为 false，但 `join` 仍会把它当成根路径。
+    // 用本机绝对路径才能测到「库文件还不存在 → 回退到数据目录的 opencode.db」。
+    let missing_dir = tempfile::tempdir().unwrap();
+    let missing_db = missing_dir.path().join("custom.db");
+    assert!(missing_db.is_absolute());
+    assert!(!missing_db.exists());
+    let mut missing_absolute = ingest::PathOverrides::new();
+    crate::adapters::opencode::apply_env_values(
+        &mut missing_absolute,
+        None,
+        Some(missing_db.to_str().expect("temp path is utf-8")),
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&missing_absolute, home, Source::Opencode),
+        vec![home.join(".local/share/opencode/opencode.db")],
+    );
+
+    let mut settings = ingest::PathOverrides::from([(
+        "OPENCODE_DATA_DIR",
+        vec![PathBuf::from("/custom/opencode")],
+    )]);
+    crate::adapters::opencode::apply_env_values(&mut settings, Some("/xdg"), Some("custom.db"));
+    assert_eq!(
+        ingest::source_scan_dirs_with(&settings, home, Source::Opencode),
+        vec![PathBuf::from("/custom/opencode/custom.db")],
     );
 }
 

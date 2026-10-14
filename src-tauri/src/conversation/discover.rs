@@ -87,11 +87,7 @@ pub(crate) fn discover_codex(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> 
 }
 
 pub(crate) fn discover_opencode(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(roots
-        .iter()
-        .filter(|path| path.is_file())
-        .cloned()
-        .collect())
+    crate::adapters::opencode::discover(roots)
 }
 
 pub(crate) fn regular_source_revision(path: &Path) -> Result<String, String> {

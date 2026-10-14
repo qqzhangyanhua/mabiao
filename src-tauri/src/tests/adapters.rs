@@ -516,6 +516,55 @@ fn opencode_adapter_reads_unmigrated_v1_beside_session_v2() {
 }
 
 #[test]
+fn opencode_discover_reads_legacy_json_only_when_database_is_absent() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("opencode");
+    let session = root.join("storage/session/0f3a/ses-json.json");
+    std::fs::create_dir_all(session.parent().unwrap()).unwrap();
+    std::fs::write(
+        &session,
+        r#"{"id":"ses-json","directory":"/work","title":"Legacy","time":{"created":1790416800000,"updated":1790416980000}}"#,
+    )
+    .unwrap();
+    let message_dir = root.join("storage/message/ses-json");
+    std::fs::create_dir_all(&message_dir).unwrap();
+    std::fs::write(
+        message_dir.join("msg-u.json"),
+        r#"{"id":"msg-u","role":"user","time":{"created":1790416805000}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        message_dir.join("msg-a.json"),
+        r#"{"id":"msg-a","role":"assistant","modelID":"gpt-6","providerID":"openai","cost":0.02,"tokens":{"input":4,"output":3,"reasoning":1,"cache":{"read":0,"write":0}},"time":{"created":1790416806000,"completed":1790416830000},"path":{"cwd":"/work","root":"/work"}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        message_dir.join("msg-gateway.json"),
+        r#"{"id":"msg-gateway","role":"assistant","modelID":"gpt-6","providerID":"magpie","tokens":{"input":2,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1790416890000,"completed":1790416900000}}"#,
+    )
+    .unwrap();
+
+    let db_path = root.join("opencode.db");
+    let found = crate::adapters::opencode::discover(std::slice::from_ref(&db_path)).unwrap();
+    assert_eq!(found, vec![session.clone()]);
+    let records = crate::adapters::opencode::parse(&session, &root).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].model, "gpt-6");
+    assert_eq!(records[0].provider, "openai");
+    assert_eq!(records[0].input_tokens, 4);
+    assert_eq!(records[0].output_tokens, 3);
+    assert_eq!(records[0].reasoning_tokens, 1);
+    assert_eq!(records[0].session_id, "ses-json");
+    assert_eq!(records[0].project, "/work");
+    assert!((records[0].native_cost.unwrap() - 0.02).abs() < 1e-9);
+    assert_eq!(records[1].provider, "magpie");
+
+    std::fs::write(&db_path, b"present").unwrap();
+    let found = crate::adapters::opencode::discover(std::slice::from_ref(&db_path)).unwrap();
+    assert_eq!(found, vec![db_path]);
+}
+
+#[test]
 fn kimi_adapter_keeps_last_status_update_per_turn() {
     let records = kimi::parse_kimi_wire(
         &fixture("kimi-wire.jsonl"),

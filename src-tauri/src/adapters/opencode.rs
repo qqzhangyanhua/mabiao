@@ -1,4 +1,6 @@
 use std::collections::HashSet;
+use std::ffi::OsStr;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
@@ -9,26 +11,126 @@ use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(
-        overrides,
-        home,
-        "OPENCODE_DATA_DIR",
-        ".local/share/opencode",
-        "opencode.db",
-    )
+    let roots = overrides
+        .get("OPENCODE_DATA_DIR")
+        .cloned()
+        .unwrap_or_else(|| vec![home.join(".local/share/opencode")]);
+    let db = overrides.get("OPENCODE_DB").and_then(|paths| paths.first());
+    let mut planned: Vec<PathBuf> = roots.iter().map(|root| db_file(root, db)).collect();
+    planned.sort();
+    planned.dedup();
+    let existing: Vec<PathBuf> = planned
+        .iter()
+        .filter(|path| path.is_file())
+        .cloned()
+        .collect();
+    if !existing.is_empty() {
+        return existing;
+    }
+    // 绝对路径的库还不存在时，旧 JSON 仍在数据目录的 storage/ 下，不在那个绝对路径旁边。
+    if db.is_some_and(|path| path.is_absolute()) {
+        let mut fallback: Vec<PathBuf> =
+            roots.iter().map(|root| root.join("opencode.db")).collect();
+        fallback.sort();
+        fallback.dedup();
+        return fallback;
+    }
+    planned
 }
 
-/// 扫描目录解析出来的就是数据库文件本身；发现退化成「这个文件存在吗」。
+/// 数据目录的环境变量补进覆盖表。`OPENCODE_DATA_DIR` 已有（设置页或同名环境变量）时
+/// 不再用 `XDG_DATA_HOME`。`OPENCODE_DB` 是库文件名或绝对路径，不是另一个数据根。
+pub(crate) fn apply_env(overrides: &mut PathOverrides) {
+    let xdg = trimmed_env("XDG_DATA_HOME");
+    let db = trimmed_env("OPENCODE_DB").filter(|value| value != ":memory:");
+    apply_env_values(overrides, xdg.as_deref(), db.as_deref());
+}
+
+pub(crate) fn apply_env_values(
+    overrides: &mut PathOverrides,
+    xdg_data_home: Option<&str>,
+    opencode_db: Option<&str>,
+) {
+    if !overrides.contains_key("OPENCODE_DATA_DIR") {
+        if let Some(xdg) = xdg_data_home
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            overrides.insert(
+                "OPENCODE_DATA_DIR",
+                vec![PathBuf::from(xdg).join("opencode")],
+            );
+        }
+    }
+    if let Some(db) = opencode_db
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != ":memory:")
+    {
+        overrides.insert("OPENCODE_DB", vec![PathBuf::from(db)]);
+    }
+}
+
+/// 有 `opencode.db`（或 `OPENCODE_DB`）就只读它。库不在时才读 1.2 以前留在
+/// `storage/session/<项目>/<id>.json` 的会话；库是从这些文件迁出来的，两边都在时只读库。
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
-    Ok(roots.iter().filter(|path| path.exists()).cloned().collect())
+    let mut paths = Vec::new();
+    for root in roots {
+        if root.is_file() {
+            paths.push(root.clone());
+            continue;
+        }
+        let Some(data_dir) = root.parent() else {
+            continue;
+        };
+        paths.extend(legacy_sessions(&data_dir.join("storage"))?);
+    }
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    if is_legacy_session(path) {
+        return legacy_sidecar(path);
+    }
     let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
     ingest::metadata_fingerprint(&wal)
 }
 
+pub(crate) fn is_legacy_session(path: &Path) -> bool {
+    path.extension().and_then(|ext| ext.to_str()) == Some("json")
+        && ancestor_name(path, 2) == Some("session")
+        && ancestor_name(path, 3) == Some("storage")
+}
+
+pub(crate) fn legacy_sidecar(path: &Path) -> String {
+    let mut prints = Vec::new();
+    let Some(storage) = legacy_storage(path) else {
+        return String::new();
+    };
+    let session_id = path
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    collect_json_fingerprints(&storage.join("message").join(session_id), &mut prints);
+    if let Ok(entries) = fs::read_dir(storage.join("message").join(session_id)) {
+        let mut messages: Vec<PathBuf> = entries
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .collect();
+        messages.sort();
+        for message in messages {
+            if let Some(id) = message.file_stem().and_then(|name| name.to_str()) {
+                collect_json_fingerprints(&storage.join("part").join(id), &mut prints);
+            }
+        }
+    }
+    prints.join("|")
+}
+
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
+    if is_legacy_session(path) {
+        return parse_legacy_session(path);
+    }
     let source_db = ingest::open_readonly(path)?;
     let loc = path.to_string_lossy().into_owned();
     let mut messages = Vec::new();
@@ -254,4 +356,131 @@ fn millis_to_rfc3339(ms: i64) -> String {
     chrono::DateTime::from_timestamp_millis(ms)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default()
+}
+
+fn db_file(root: &Path, db: Option<&PathBuf>) -> PathBuf {
+    match db {
+        Some(path) if path.is_absolute() => path.clone(),
+        Some(path) => root.join(path),
+        None => root.join("opencode.db"),
+    }
+}
+
+fn trimmed_env(key: &str) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn ancestor_name(path: &Path, generations: usize) -> Option<&str> {
+    let mut current = path;
+    for _ in 0..generations {
+        current = current.parent()?;
+    }
+    current.file_name().and_then(|name| name.to_str())
+}
+
+fn legacy_storage(path: &Path) -> Option<PathBuf> {
+    path.parent()?.parent()?.parent().map(Path::to_path_buf)
+}
+
+fn legacy_sessions(storage: &Path) -> Result<Vec<PathBuf>, String> {
+    let session_root = storage.join("session");
+    if !session_root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut paths = Vec::new();
+    let projects = fs::read_dir(&session_root).map_err(|error| {
+        format!(
+            "扫描 OpenCode 旧会话目录 {} 失败：{error}",
+            session_root.display()
+        )
+    })?;
+    for project in projects {
+        let project = project.map_err(|error| {
+            format!(
+                "读取 OpenCode 旧会话目录 {} 失败：{error}",
+                session_root.display()
+            )
+        })?;
+        if !project.path().is_dir() {
+            continue;
+        }
+        let files = fs::read_dir(project.path()).map_err(|error| {
+            format!(
+                "扫描 OpenCode 旧会话目录 {} 失败：{error}",
+                project.path().display()
+            )
+        })?;
+        for file in files {
+            let file = file.map_err(|error| error.to_string())?;
+            let path = file.path();
+            if path.extension() == Some(OsStr::new("json")) {
+                paths.push(path);
+            }
+        }
+    }
+    Ok(paths)
+}
+
+fn collect_json_fingerprints(dir: &Path, prints: &mut Vec<String>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut files: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension() == Some(OsStr::new("json")))
+        .collect();
+    files.sort();
+    for file in files {
+        prints.push(ingest::metadata_fingerprint(&file));
+    }
+}
+
+fn parse_legacy_session(path: &Path) -> Result<Vec<UsageRecord>, String> {
+    let session: Value = read_json(path)?;
+    let session_id = session
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    if session_id.is_empty() {
+        return Err("OpenCode 会话文件缺少 id".to_string());
+    }
+    let Some(storage) = legacy_storage(path) else {
+        return Err("OpenCode 旧会话不在 storage/session 下".to_string());
+    };
+    let message_dir = storage.join("message").join(&session_id);
+    if !message_dir.exists() {
+        return Ok(Vec::new());
+    }
+    let mut files: Vec<PathBuf> = fs::read_dir(&message_dir)
+        .map_err(|error| format!("读取 OpenCode 旧消息目录失败：{error}"))?
+        .map(|entry| {
+            entry
+                .map(|entry| entry.path())
+                .map_err(|error| error.to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    files.sort();
+    let loc = path.to_string_lossy().into_owned();
+    let mut messages = Vec::new();
+    for file in files {
+        if file.extension() != Some(OsStr::new("json")) {
+            continue;
+        }
+        messages.push(OpencodeMessage {
+            session_id: session_id.clone(),
+            source_file: loc.clone(),
+            data: read_json(&file)?,
+        });
+    }
+    Ok(parse_opencode_messages(&messages))
+}
+
+fn read_json(path: &Path) -> Result<Value, String> {
+    let raw =
+        fs::read_to_string(path).map_err(|error| format!("读取 OpenCode 会话文件失败：{error}"))?;
+    serde_json::from_str(&raw).map_err(|error| format!("OpenCode 会话 JSON 无效：{error}"))
 }
