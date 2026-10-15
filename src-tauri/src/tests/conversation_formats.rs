@@ -91,6 +91,14 @@ fn codex_jsonl_zst_feeds_catalog_detail_and_search() {
         ]
     );
     assert_conversation_index_matches_parse(&conn, home, "codex", "conv-1");
+    let referenced: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM conversation_events WHERE text_hash IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(referenced, 0, "压缩会话的正文不得外置（ADR 0025）");
 
     let search = conversation::sessions_page(
         &conn,
