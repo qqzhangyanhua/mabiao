@@ -108,7 +108,7 @@ export function OverviewLayoutControls({
       </ToggleGroup>
       <ToggleGroup
         title="额度模块中的来源"
-        note="只影响 5 小时计费窗和滚动用量里的行，不是官方配额接口。"
+        note="只影响本机估算窗口和滚动用量里的行，不是官方额度。"
         actions={
           <>
             <Button

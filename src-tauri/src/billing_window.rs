@@ -1,7 +1,7 @@
 //! 按来源把消耗记录切成 5 小时计费窗，并计算燃烧速率与窗末预测。
 //! 只使用本地 `occurred_at`，不读官方配额、不访问网络。
 
-use chrono::{DateTime, Duration, NaiveDateTime, SecondsFormat, Timelike, Utc};
+use chrono::{DateTime, Duration, Local, NaiveDateTime, SecondsFormat, TimeZone, Timelike, Utc};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cost::{derive_cost, sum_cursor_event_costs};
@@ -406,12 +406,22 @@ fn project_usage(
 }
 
 pub fn parse_occurred_at(value: &str) -> Option<DateTime<Utc>> {
+    parse_occurred_at_in(value, Local)
+}
+
+/// 无时区的 naive 时间按 `tz` 解释，再转 UTC。带偏移的 RFC3339 不受 `tz` 影响。
+/// 5 小时窗仍按 UTC 整点 floor，算法不变。
+pub fn parse_occurred_at_in<Tz: TimeZone + Copy>(value: &str, tz: Tz) -> Option<DateTime<Utc>> {
     if let Ok(parsed) = DateTime::parse_from_rfc3339(value) {
         return Some(parsed.with_timezone(&Utc));
     }
     for format in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"] {
         if let Ok(naive) = NaiveDateTime::parse_from_str(value, format) {
-            return Some(naive.and_utc());
+            return naive
+                .and_local_timezone(tz)
+                .earliest()
+                .or_else(|| naive.and_local_timezone(tz).latest())
+                .map(|dt| dt.with_timezone(&Utc));
         }
     }
     None
