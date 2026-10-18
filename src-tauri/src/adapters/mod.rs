@@ -567,7 +567,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         path_env: "OPENCLAW_STATE_DIR",
         scan_dirs: openclaw::scan_dirs,
         discover: openclaw::discover,
-        sidecar_fingerprint: empty_sidecar,
+        sidecar_fingerprint: openclaw::sidecar_fingerprint,
         parse: openclaw::parse,
         prepare_dir: None,
         prepare_file: None,

@@ -3195,6 +3195,50 @@ fn openclaw_discover_counts_reset_archives_and_skips_checkpoints() {
 }
 
 #[test]
+fn openclaw_parse_skips_reset_archive_when_live_sibling_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("main/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let live = sessions.join("sess-openclaw-1.jsonl");
+    let reset = sessions.join("sess-openclaw-1.jsonl.reset.2026-01-01T00-00-00.000Z");
+    std::fs::write(&live, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&reset, fixture("openclaw.jsonl")).unwrap();
+
+    let found = openclaw::discover(&[dir.path().to_path_buf()]).unwrap();
+    assert!(found.contains(&live));
+    assert!(
+        found.contains(&reset),
+        "归档仍须被发现，才能把已入库的叠算记录解析成空"
+    );
+
+    let live_records = openclaw::parse(&live, dir.path()).unwrap();
+    let archive_records = openclaw::parse(&reset, dir.path()).unwrap();
+    assert_eq!(live_records.len(), 2);
+    assert!(
+        archive_records.is_empty(),
+        "live 还在时同 stem 归档不得再计一遍"
+    );
+    assert_eq!(openclaw::sidecar_fingerprint(&reset, &[]), "live-sibling");
+    assert_eq!(openclaw::sidecar_fingerprint(&live, &[]), "");
+
+    std::fs::remove_file(&live).unwrap();
+    let orphan = openclaw::parse(&reset, dir.path()).unwrap();
+    assert_eq!(orphan.len(), 2, "没有 live 时归档仍计历史");
+}
+
+#[test]
+fn openclaw_parse_reads_jsonl_zst() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("sess-openclaw-1.jsonl.zst");
+    let compressed = zstd::encode_all(fixture("openclaw.jsonl").as_bytes(), 0).unwrap();
+    std::fs::write(&path, compressed).unwrap();
+    let records = openclaw::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].session_id, "sess-openclaw-1");
+    assert_eq!(records[0].input_tokens, 80);
+}
+
+#[test]
 fn codebuddy_ide_adapter_reads_latest_stats_snapshot_and_ignores_credits() {
     let dir = tempfile::tempdir().unwrap();
     write_codebuddy_ide_home(dir.path());

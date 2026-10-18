@@ -50,8 +50,34 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
+/// 同 stem 的 live `.jsonl` / `.jsonl.zst` 还在时，reset/deleted 归档解析为空。
+/// 归档文件仍被 discover 看见，避免 ADR 0004 把旧记录打成「归档仍计数」后继续叠算。
+pub(crate) fn has_live_sibling(path: &Path) -> bool {
+    is_archive_path(path) && live_sibling_path(path).is_some_and(|live| live.is_file())
+}
+
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    if has_live_sibling(path) {
+        "live-sibling".to_string()
+    } else {
+        String::new()
+    }
+}
+
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    parse_streaming_jsonl(path, parse_openclaw_jsonl)
+    if has_live_sibling(path) {
+        return Ok(Vec::new());
+    }
+    let is_zst = path.extension().and_then(|ext| ext.to_str()) == Some("zst");
+    if !is_zst {
+        return parse_streaming_jsonl(path, parse_openclaw_jsonl);
+    }
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    let decoded = zstd::decode_all(bytes.as_slice()).map_err(|error| error.to_string())?;
+    let text = String::from_utf8(decoded).map_err(|error| error.to_string())?;
+    let loc = path.to_string_lossy();
+    let factory: &crate::adapters::LineFactory<'_> = &|| Box::new(text.lines().map(str::to_string));
+    Ok(parse_openclaw_jsonl(factory, loc.as_ref()))
 }
 
 pub fn parse_openclaw_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRecord> {
@@ -159,6 +185,28 @@ pub(crate) fn is_usage_counted_transcript(path: &Path) -> bool {
         return false;
     };
     is_usage_counted_name(name)
+}
+
+fn is_archive_path(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+        return false;
+    };
+    let normalized = name.strip_suffix(".zst").unwrap_or(name);
+    has_archive_suffix(normalized, "reset") || has_archive_suffix(normalized, "deleted")
+}
+
+fn live_sibling_path(path: &Path) -> Option<PathBuf> {
+    let stem = session_id_from_path(&path.to_string_lossy());
+    if stem.is_empty() {
+        return None;
+    }
+    let parent = path.parent()?;
+    let jsonl = parent.join(format!("{stem}.jsonl"));
+    if jsonl.is_file() {
+        return Some(jsonl);
+    }
+    let zst = parent.join(format!("{stem}.jsonl.zst"));
+    zst.is_file().then_some(zst)
 }
 
 fn is_usage_counted_name(name: &str) -> bool {
