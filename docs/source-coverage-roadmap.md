@@ -9,6 +9,7 @@
 > **进度更新（2026-10-18）**：**Goose**（`~/.local/share/goose/sessions/sessions.db`）已作为独立 Usage Source 接入，见「已实现」小节。
 >
 > **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Roo 已落地；Cline 扩展与 Kilo 仍待接入。
+> **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Kilo 已落地；Cline 扩展与 Roo 仍待接入（Roo 另 PR）。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -69,6 +70,10 @@
 
 - **本机路径**：VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae / vscode-server 的 `User/globalStorage/rooveterinaryinc.roo-cline/tasks/<id>/`；`ROO_TASKS_DIR` 直接指向 tasks 目录
 - **实现**：`src-tauri/src/adapters/roo.rs` + 共用 `adapters/extension_tasks.rs` + `conversation/roo.rs`，注册为 `Source::Roo`，coverage「轮级 Token（input 不含 cache）」；`say == "api_req_started"` 嵌套 JSON 的 `tokensIn` 是含 cache 的 `totalInputTokens`（Roo PR #8954），入账 `input = tokensIn − cacheReads − cacheWrites`；模型按 `api_conversation_history.json` 用户消息里的 `<model>` 标签顺序配对；`cost > 0` 写入 `native_cost`；对话读同目录 `api_conversation_history.json`，剥 `<environment_details>`
+### Kilo Code ✅
+
+- **本机路径**：VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae / vscode-server 的 `User/globalStorage/kilocode.kilo-code/tasks/<id>/`；`KILO_TASKS_DIR` 直接指向 tasks 目录
+- **实现**：`src-tauri/src/adapters/kilo.rs` + 共用 `adapters/extension_tasks.rs` + `conversation/kilo.rs`，注册为 `Source::Kilo`，coverage「轮级 Token（input 不含 cache）」；`tokensIn` 含 cache，入账时拆出；`usageMissing=true` 跳过该轮；无 `apiProtocol` 时回落 `inferenceProvider`；对话读 `api_conversation_history.json`
 
 ## Tier 3 — 本轮不投入
 

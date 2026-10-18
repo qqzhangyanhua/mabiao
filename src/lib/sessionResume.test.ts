@@ -107,6 +107,7 @@ describe("sessionResumeHint", () => {
     expect(sessionResumeHint("hermes", "h-1").command).toBeNull();
     expect(sessionResumeHint("agy", "g-1").command).toBeNull();
     expect(sessionResumeHint("roo", "task-roo-1").command).toBeNull();
+    expect(sessionResumeHint("kilo", "task-kilo-1").command).toBeNull();
     expect(sessionResumeHint("unknown", "sess-1").command).toBeNull();
   });
 

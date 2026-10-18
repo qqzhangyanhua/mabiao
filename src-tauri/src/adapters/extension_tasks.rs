@@ -5,9 +5,11 @@
 //! `cacheWrites` / `cost` / `apiProtocol`。
 //!
 //! `tokensIn` 是含 cache 的 `totalInputTokens`（Roo Code PR #8954、Kilo
-//! `src/shared/cost.ts`）：入账时拆出 cache，避免和 `cacheReads`/`cacheWrites`
-//! 重复计数。模型名从同目录 `api_conversation_history.json` 的
-//! `<model>` 环境标签按请求顺序配对。
+//! `src/shared/cost.ts` / `openai-native.ts` / Gemini `uncachedInputTokens =
+//! inputTokens - cacheReadTokens`）：入账时拆出 cache，避免和
+//! `cacheReads`/`cacheWrites` 重复计数。模型名从同目录
+//! `api_conversation_history.json` 的 `<model>` 环境标签按请求顺序配对。
+//! Kilo 另有 `usageMissing`：为 true 时该轮没有用量，跳过。
 
 use std::path::{Path, PathBuf};
 
@@ -18,6 +20,7 @@ use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
 pub(crate) const ROO_EXTENSION_ID: &str = "rooveterinaryinc.roo-cline";
+pub(crate) const KILO_EXTENSION_ID: &str = "kilocode.kilo-code";
 pub(crate) const UI_MESSAGES: &str = "ui_messages.json";
 pub(crate) const API_HISTORY: &str = "api_conversation_history.json";
 pub(crate) const HISTORY_ITEM: &str = "history_item.json";
@@ -125,6 +128,9 @@ pub(crate) fn parse_ui_messages(content: &str, path: &Path, source: Source) -> V
         let Some(info) = api_req_info(message) else {
             continue;
         };
+        if info.get("usageMissing").and_then(Value::as_bool) == Some(true) {
+            continue;
+        }
         let cache_read = i64_field(&info, &["cacheReads", "cache_reads"]).max(0);
         let cache_write = i64_field(&info, &["cacheWrites", "cache_writes"]).max(0);
         let raw_input = i64_field(&info, &["tokensIn", "tokens_in"]).max(0);
@@ -274,14 +280,15 @@ pub(crate) fn content_blob(content: &Value) -> String {
 
 fn provider_from_info(info: &Value) -> String {
     let protocol = text_field(info, &["apiProtocol", "api_protocol"]);
-    if protocol.is_empty() {
+    let raw = if protocol.is_empty() {
+        text_field(info, &["inferenceProvider", "inference_provider"])
+    } else {
+        protocol
+    };
+    if raw.is_empty() {
         return String::new();
     }
-    protocol
-        .split(['/', ':'])
-        .next()
-        .unwrap_or(&protocol)
-        .to_string()
+    raw.split(['/', ':']).next().unwrap_or(&raw).to_string()
 }
 
 fn native_cost_from_info(info: &Value) -> Option<f64> {

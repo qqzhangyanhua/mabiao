@@ -254,6 +254,9 @@ fn row_note(source: Source) -> String {
         Source::Roo => {
             "扫 VS Code / Cursor / Windsurf 等 globalStorage/rooveterinaryinc.roo-cline/tasks。ROO_TASKS_DIR 直接指向 tasks 目录。".to_string()
         }
+        Source::Kilo => {
+            "扫 VS Code / Cursor / Windsurf 等 globalStorage/kilocode.kilo-code/tasks。KILO_TASKS_DIR 直接指向 tasks 目录。".to_string()
+        }
         _ => String::new(),
     }
 }

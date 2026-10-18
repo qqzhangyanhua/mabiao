@@ -40,6 +40,7 @@ mod grok_inject;
 mod hermes;
 mod hydrate;
 mod incremental;
+mod kilo;
 mod kimi;
 mod line_direct;
 mod merge;
@@ -409,6 +410,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: roo::index,
         index_suffix: None,
         detail: roo::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Kilo,
+        discover: kilo::discover,
+        index: kilo::index,
+        index_suffix: None,
+        detail: kilo::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
         reuse_unchanged_index: true,

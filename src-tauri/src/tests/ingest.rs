@@ -1197,6 +1197,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
     let roo_dirs = ingest::source_scan_dirs_with(&overrides, home, Source::Roo);
     assert!(roo_dirs
         .contains(&home.join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks")));
+    let kilo_dirs = ingest::source_scan_dirs_with(&overrides, home, Source::Kilo);
+    assert!(
+        kilo_dirs.contains(&home.join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks"))
+    );
 }
 
 #[test]
@@ -1241,6 +1245,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("TRAE_HOME", vec![PathBuf::from("/custom/trae")]),
         ("GOOSE_PATH_ROOT", vec![PathBuf::from("/custom/goose")]),
         ("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")]),
+        ("KILO_TASKS_DIR", vec![PathBuf::from("/custom/kilo-tasks")]),
     ]);
 
     assert_eq!(
@@ -1324,6 +1329,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Roo),
         vec![PathBuf::from("/custom/roo-tasks")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Kilo),
+        vec![PathBuf::from("/custom/kilo-tasks")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1455,7 +1464,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 25);
+    assert_eq!(Source::ALL.len(), 26);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1564,6 +1573,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const ROO_FILES: u64 = 1;
     const ROO_RECORDS: usize = 2;
     const ROO_TOKENS: i64 = 1820;
+    const KILO_FILES: u64 = 1;
+    const KILO_RECORDS: usize = 2;
+    const KILO_TOKENS: i64 = 1820;
 
     let opencode = first
         .sources
@@ -1640,6 +1652,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Roo.as_str())
         .unwrap();
+    let kilo = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Kilo.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1670,6 +1687,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(goose.records_written, GOOSE_RECORDS as u64);
     assert_eq!(roo.files_parsed, ROO_FILES);
     assert_eq!(roo.records_written, ROO_RECORDS as u64);
+    assert_eq!(kilo.files_parsed, KILO_FILES);
+    assert_eq!(kilo.records_written, KILO_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1731,6 +1750,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Roo)
         .collect();
+    let kilo_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Kilo)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1746,6 +1769,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(trae_rows.len(), TRAE_RECORDS);
     assert_eq!(goose_rows.len(), GOOSE_RECORDS);
     assert_eq!(roo_rows.len(), ROO_RECORDS);
+    assert_eq!(kilo_rows.len(), KILO_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1851,6 +1875,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         ROO_TOKENS
     );
+    assert_eq!(
+        kilo_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        KILO_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -1868,6 +1899,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + TRAE_FILES
         + GOOSE_FILES
         + ROO_FILES
+        + KILO_FILES
         + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
@@ -1885,6 +1917,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + TRAE_RECORDS
         + GOOSE_RECORDS
         + ROO_RECORDS
+        + KILO_RECORDS
         + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
@@ -1902,6 +1935,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + TRAE_TOKENS
         + GOOSE_TOKENS
         + ROO_TOKENS
+        + KILO_TOKENS
         + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
@@ -1982,14 +2016,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 26);
+    assert_eq!(report.files_seen, 27);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 26);
+    assert_eq!(report.files_parsed, 27);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 46);
+    assert_eq!(report.records_written, 48);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 46);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 671241);
+    assert_eq!(stored.len(), 48);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 673061);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2022,7 +2056,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Alma
             | Source::CodeBuddy
             | Source::Trae
-            | Source::Roo => (1, 0, 1, 2, 0, 0),
+            | Source::Roo
+            | Source::Kilo => (1, 0, 1, 2, 0, 0),
             Source::Opencode | Source::Gemini | Source::Factory | Source::Goose => {
                 (1, 0, 1, 1, 0, 0)
             }
@@ -2536,6 +2571,13 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     );
     assert_eq!(roo.path_env, "ROO_TASKS_DIR");
     assert_eq!(roo.coverage, "轮级 Token（input 不含 cache）");
+    let kilo = usage_adapter(Source::Kilo);
+    assert!(
+        !kilo.append_log,
+        "Kilo Code ui_messages.json 整份重写，不是追加型日志"
+    );
+    assert_eq!(kilo.path_env, "KILO_TASKS_DIR");
+    assert_eq!(kilo.coverage, "轮级 Token（input 不含 cache）");
 }
 
 #[test]

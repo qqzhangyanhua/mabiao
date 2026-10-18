@@ -1491,6 +1491,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Roo.application_name(), "Roo Code");
     assert_eq!(Source::Roo.as_str(), "roo");
     assert_eq!(Source::parse("roo"), Some(Source::Roo));
+    assert_eq!(Source::Kilo.application_name(), "Kilo Code");
+    assert_eq!(Source::Kilo.as_str(), "kilo");
+    assert_eq!(Source::parse("kilo"), Some(Source::Kilo));
 }
 
 #[test]
@@ -3199,5 +3202,82 @@ fn roo_scan_dirs_cover_vscode_family_and_env_override() {
     assert_eq!(
         roo::scan_dirs(&overrides, home),
         vec![PathBuf::from("/custom/roo-tasks")]
+    );
+}
+
+fn write_kilo_task(home: &std::path::Path, id: &str) -> PathBuf {
+    let dir = home
+        .join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks")
+        .join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("ui_messages.json"),
+        fixture("kilo.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("api_conversation_history.json"),
+        fixture("kilo.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("history_item.json"),
+        fixture("kilo.history_item.json"),
+    )
+    .unwrap();
+    dir.join("ui_messages.json")
+}
+
+#[test]
+fn kilo_adapter_subtracts_cache_skips_usage_missing_and_pairs_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_kilo_task(dir.path(), "task-kilo-1");
+    let records = kilo::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Kilo);
+    assert_eq!(records[0].model, "anthropic/claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].project, "/work/kilo");
+    assert_eq!(records[0].session_id, "task-kilo-1");
+    assert_eq!(records[0].input_tokens, 1000);
+    assert_eq!(records[0].output_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 400);
+    assert_eq!(records[0].cache_creation_tokens, 100);
+    assert_eq!(records[0].total_tokens, 1580);
+    assert_eq!(records[0].native_cost, Some(0.012));
+    assert_eq!(records[1].model, "openai/gpt-4.1");
+    assert_eq!(records[1].provider, "OpenAI");
+    assert_eq!(records[1].input_tokens, 200);
+    assert_eq!(records[1].output_tokens, 40);
+    assert_eq!(records[1].cache_read_tokens, 0);
+    assert_eq!(records[1].total_tokens, 240);
+    assert_eq!(records[1].native_cost, Some(0.003));
+    let summed: i64 = records.iter().map(|r| r.total_tokens).sum();
+    assert_eq!(summed, 1820);
+    assert_ne!(
+        summed,
+        1500 + 80 + 400 + 100 + 200 + 40,
+        "must not keep cache inside input"
+    );
+}
+
+#[test]
+fn kilo_scan_dirs_cover_vscode_family_and_env_override() {
+    let home = std::path::Path::new("/home/example");
+    let dirs = kilo::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(dirs.contains(&home.join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks")));
+    assert!(dirs
+        .contains(&home.join(
+            "Library/Application Support/Cursor/User/globalStorage/kilocode.kilo-code/tasks"
+        )));
+    assert!(dirs
+        .contains(&home.join(".vscode-server/data/User/globalStorage/kilocode.kilo-code/tasks")));
+    let overrides = ingest::PathOverrides::from([(
+        "KILO_TASKS_DIR",
+        vec![PathBuf::from("/custom/kilo-tasks")],
+    )]);
+    assert_eq!(
+        kilo::scan_dirs(&overrides, home),
+        vec![PathBuf::from("/custom/kilo-tasks")]
     );
 }

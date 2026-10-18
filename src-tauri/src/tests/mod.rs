@@ -49,6 +49,7 @@ mod hermes_conversation;
 mod ingest;
 mod ingest_stages;
 mod instructions;
+mod kilo_conversation;
 mod kimi_grok_conversation;
 mod litellm;
 mod low_cache_hit;
