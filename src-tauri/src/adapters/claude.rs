@@ -4,8 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::adapters::project::decode_dashed_dir;
 use crate::adapters::{
-    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, parse_streaming_jsonl,
-    text_field, LineFactory,
+    finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::PathOverrides;
@@ -122,12 +121,22 @@ fn is_real_dir(path: &Path) -> bool {
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    parse_streaming_jsonl(path, parse_claude_jsonl)
+    crate::ingest::validate_jsonl_file(path)?;
+    let loc = path.to_string_lossy();
+    let parent_ids = parent_assistant_message_ids(path);
+    let factory: &LineFactory<'_> = &|| crate::ingest::open_jsonl_lines(path);
+    Ok(parse_claude_shaped_jsonl_with(
+        factory,
+        loc.as_ref(),
+        Source::Claude,
+        &parent_ids,
+    ))
 }
 
 struct ClaudeTurn {
     record: UsageRecord,
     stop_reason: Option<String>,
+    is_sidechain: bool,
 }
 
 /// 下面两轮扫描都通过 `lines()` 重新拿一份新的行迭代器，配合磁盘流式读取场景，
@@ -142,6 +151,15 @@ pub fn parse_claude_shaped_jsonl(
     lines: &LineFactory<'_>,
     source_file: &str,
     source: Source,
+) -> Vec<UsageRecord> {
+    parse_claude_shaped_jsonl_with(lines, source_file, source, &HashSet::new())
+}
+
+fn parse_claude_shaped_jsonl_with(
+    lines: &LineFactory<'_>,
+    source_file: &str,
+    source: Source,
+    parent_message_ids: &HashSet<String>,
 ) -> Vec<UsageRecord> {
     let mut project = String::new();
     let mut session_id = String::new();
@@ -176,6 +194,7 @@ pub fn parse_claude_shaped_jsonl(
         if usage.is_null() {
             continue;
         }
+        let is_sidechain = value.get("isSidechain").and_then(|v| v.as_bool()) == Some(true);
         let agent_id = text_field(&value, &["agentId", "agent_id"]);
         let record_session_id = if agent_id.is_empty() {
             session_id.clone()
@@ -207,6 +226,11 @@ pub fn parse_claude_shaped_jsonl(
             .filter(|s| !s.is_empty())
             .map(str::to_string);
         let message_id = text_field(&message, &["id"]);
+        // subagents/ 里会把父会话同一 message.id 再写一遍（含父级 cache-read）。
+        // 对齐 ccusage：有 isSidechain 且父文件已有该 id 时丢掉回放，子代理自己的 id 仍计入。
+        if is_sidechain && !message_id.is_empty() && parent_message_ids.contains(&message_id) {
+            continue;
+        }
         if message_id.is_empty() {
             anonymous.push(record);
             continue;
@@ -214,6 +238,7 @@ pub fn parse_claude_shaped_jsonl(
         let turn = ClaudeTurn {
             record,
             stop_reason,
+            is_sidechain,
         };
         let should_replace = match by_id.get(&message_id) {
             None => true,
@@ -235,12 +260,57 @@ pub fn parse_claude_shaped_jsonl(
     records
 }
 
-/// 与 cc-switch 一致：同一 `message.id` 优先保留有 stop_reason 的，否则取 output 更大的。
+/// 同一 `message.id`：有 sidechain 回放时保留非 sidechain 父条目；
+/// 否则与 cc-switch 一致，优先有 stop_reason 的，再取 output 更大的。
 fn should_replace_claude(existing: &ClaudeTurn, next: &ClaudeTurn) -> bool {
-    match (existing.stop_reason.is_some(), next.stop_reason.is_some()) {
-        (false, true) => true,
-        (true, false) => false,
-        _ => next.record.output_tokens > existing.record.output_tokens,
+    match (existing.is_sidechain, next.is_sidechain) {
+        (true, false) => true,
+        (false, true) => false,
+        _ => match (existing.stop_reason.is_some(), next.stop_reason.is_some()) {
+            (false, true) => true,
+            (true, false) => false,
+            _ => next.record.output_tokens > existing.record.output_tokens,
+        },
+    }
+}
+
+/// `…/<session>/subagents/*.jsonl` 的父会话助理 message.id，用来丢掉跨文件回放。
+fn parent_assistant_message_ids(path: &Path) -> HashSet<String> {
+    let Some(dir) = path.parent() else {
+        return HashSet::new();
+    };
+    if dir.file_name().and_then(|name| name.to_str()) != Some("subagents") {
+        return HashSet::new();
+    }
+    let Some(session_dir) = dir.parent() else {
+        return HashSet::new();
+    };
+    let Ok(entries) = fs::read_dir(session_dir) else {
+        return HashSet::new();
+    };
+    let mut ids = HashSet::new();
+    for entry in entries.flatten() {
+        let candidate = entry.path();
+        if candidate.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        collect_assistant_message_ids(&candidate, &mut ids);
+    }
+    ids
+}
+
+fn collect_assistant_message_ids(path: &Path, ids: &mut HashSet<String>) {
+    for value in parse_jsonl_value_lines(crate::ingest::open_jsonl_lines(path)) {
+        if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+            continue;
+        }
+        let id = value
+            .get("message")
+            .map(|message| text_field(message, &["id"]))
+            .unwrap_or_default();
+        if !id.is_empty() {
+            ids.insert(id);
+        }
     }
 }
 
