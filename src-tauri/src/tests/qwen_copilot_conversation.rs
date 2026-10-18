@@ -252,11 +252,18 @@ fn copilot_events_feed_lifecycle_tools_code_changes_usage_and_missing_body_statu
     .unwrap();
     assert!(message_texts(&detail).is_empty());
     let usage = usage_rows(&conn, "copilot", "c0ffee11-2222-4333-8444-555566667777");
-    assert_eq!(usage.len(), 2);
-    assert_eq!(usage[0].model, "claude-sonnet-4.5");
-    assert_eq!(usage[0].input_tokens, 21_583);
-    assert_eq!(usage[1].model, "gpt-5.4");
-    assert_eq!(usage[1].input_tokens, 244_120);
+    assert_eq!(usage.len(), 3);
+    let claude = usage
+        .iter()
+        .find(|row| row.model == "claude-sonnet-4.5")
+        .expect("claude");
+    let gpt_input: i64 = usage
+        .iter()
+        .filter(|row| row.model == "gpt-5.4")
+        .map(|row| row.input_tokens)
+        .sum();
+    assert_eq!(claude.input_tokens, 396);
+    assert_eq!(gpt_input, 42_008);
     assert!(detail
         .events
         .iter()

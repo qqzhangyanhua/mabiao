@@ -1,0 +1,3 @@
+{"type":"session.start","timestamp":"2026-08-10T09:00:00.000Z","data":{"sessionId":"sess-copilot-cache","context":{"cwd":"/work/app"}}}
+{"type":"session.shutdown","timestamp":"2026-08-10T09:30:00.000Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":100,"outputTokens":5,"cacheReadTokens":40,"cacheWriteTokens":10}}}}}
+{"type":"session.shutdown","timestamp":"2026-08-10T15:00:00.000Z","data":{"modelMetrics":{"gpt-5.4":{"usage":{"inputTokens":250,"outputTokens":15,"cacheReadTokens":90,"cacheWriteTokens":10}},"claude-sonnet-4.5":{"usage":{"inputTokens":80,"outputTokens":8,"cacheReadTokens":30,"cacheWriteTokens":0}}}}}

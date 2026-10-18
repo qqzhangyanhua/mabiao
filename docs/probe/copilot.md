@@ -49,12 +49,12 @@ token 只出现在 `session.shutdown` 事件的 `data.modelMetrics` 里，按模
 
 | Usage Record | 字段 |
 |--------------|------|
-| input | `usage.inputTokens` |
+| input | `usage.inputTokens` 减去 cache read/write 后的裸 input |
 | output | `usage.outputTokens` |
 | cache_read | `usage.cacheReadTokens` |
 | cache_creation | `usage.cacheWriteTokens` |
 | reasoning | 无 |
-| total | 无，按各口径之和 |
+| total | 无，按拆开后的各口径之和 |
 | native_cost | 无（`requests.cost` 是「高级请求」计费单位，不是 USD，不映射为 native_cost） |
 | 模型 | `modelMetrics` 的对象键 |
 | 项目 | `session.start.data.context.cwd` |
@@ -64,8 +64,9 @@ token 只出现在 `session.shutdown` 事件的 `data.modelMetrics` 里，按模
 
 一次 CLI 会话可能被多次暂停/续接，每次退出都会追加一条新的 `session.shutdown`，且
 `modelMetrics` 每次都是**从会话开始到当前**的累计值（会包含更早退出时已经统计过的用量）。
-因此适配器只取文件里**时间最晚**的一次 `session.shutdown`，而不是把每条 `session.shutdown`
-都当独立记录相加，否则会重复计入。这与 Codex 适配器「取最后一次快照、不逐条累加」的策略一致。
+因此适配器按 `(会话, 模型)` 对相邻 `session.shutdown` 做差分：第一次快照整段入账，
+之后每次减去前一次累计值，全时段合计仍等于最后一次快照，日/窗归属跟各次退出时刻走。
+`inputTokens` 已含 cache read/write，差分后再拆成裸 input，避免 `with_total` 把 cache 计两次。
 
 ## 未采纳的口径
 
