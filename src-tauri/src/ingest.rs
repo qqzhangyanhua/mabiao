@@ -510,7 +510,7 @@ fn list_watched_inputs(
     let mut files = Vec::new();
     for source in Source::ALL {
         let adapter = usage_adapter(source);
-        let dirs = (adapter.scan_dirs)(overrides, home);
+        let dirs = source_scan_dirs_with(overrides, home, source);
         for path in (adapter.discover)(&dirs)? {
             let extra_fingerprint = (adapter.sidecar_fingerprint)(&path, &dirs);
             files.push(WatchedInput {
@@ -644,7 +644,7 @@ pub(crate) fn source_diagnostics_with(
         .map(|source| {
             let adapter = usage_adapter(*source);
             let display_dirs = adapter.display_or_scan_dirs(overrides, home);
-            let scan_dirs = (adapter.scan_dirs)(overrides, home);
+            let scan_dirs = source_scan_dirs_with(overrides, home, *source);
             let (cached_files, record_count, total_tokens, archived_record_count) =
                 store::source_cache_stats(conn, *source)?;
             Ok(SourceDiagnostic {
@@ -780,7 +780,7 @@ fn ingest_source(
     report: &mut IngestReport,
 ) -> Result<(), String> {
     let adapter = usage_adapter(source);
-    let dirs = (adapter.scan_dirs)(overrides, home);
+    let dirs = source_scan_dirs_with(overrides, home, source);
     ingest_from_adapter(conn, adapter, &dirs, report)
 }
 
