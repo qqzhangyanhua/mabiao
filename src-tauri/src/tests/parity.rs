@@ -61,6 +61,10 @@ fn sql_queries_match_in_memory_aggregates() {
     let mem_days = aggregate::tokens_by_local_day(&records, &Filter::default());
     assert_eq!(sql_days, mem_days, "tokens_by_local_day 不一致");
 
+    let sql_cc = query::ccusage_daily(&conn, &Filter::default(), &prices).unwrap();
+    let mem_cc = aggregate::ccusage_daily(&records, &Filter::default(), &prices);
+    assert_ccusage_daily_eq(&sql_cc, &mem_cc);
+
     // breakdown 五个维度
     for dim in ["application", "source", "model", "provider", "project"] {
         let sql_bd = query::breakdown(&conn, &Filter::default(), &prices, dim).unwrap();
@@ -216,6 +220,51 @@ fn mixed_native_same_day() -> UsageRecord {
     extra.input_tokens = 80;
     extra.native_cost = Some(0.4);
     extra
+}
+
+fn assert_ccusage_daily_eq(
+    sql: &crate::ccusage_export::CcusageDailyJson,
+    mem: &crate::ccusage_export::CcusageDailyJson,
+) {
+    assert_eq!(sql.daily.len(), mem.daily.len(), "ccusage daily 行数不一致");
+    for (sql_row, mem_row) in sql.daily.iter().zip(mem.daily.iter()) {
+        assert_eq!(sql_row.date, mem_row.date);
+        assert_eq!(sql_row.input_tokens, mem_row.input_tokens);
+        assert_eq!(sql_row.output_tokens, mem_row.output_tokens);
+        assert_eq!(sql_row.cache_creation_tokens, mem_row.cache_creation_tokens);
+        assert_eq!(sql_row.cache_read_tokens, mem_row.cache_read_tokens);
+        assert_eq!(sql_row.total_tokens, mem_row.total_tokens);
+        assert_eq!(sql_row.models_used, mem_row.models_used);
+        assert_eq!(
+            sql_row.model_breakdowns.len(),
+            mem_row.model_breakdowns.len()
+        );
+        assert!((sql_row.total_cost - mem_row.total_cost).abs() < 1e-9);
+        for (sql_model, mem_model) in sql_row
+            .model_breakdowns
+            .iter()
+            .zip(mem_row.model_breakdowns.iter())
+        {
+            assert_eq!(sql_model.model_name, mem_model.model_name);
+            assert_eq!(sql_model.input_tokens, mem_model.input_tokens);
+            assert_eq!(sql_model.output_tokens, mem_model.output_tokens);
+            assert_eq!(
+                sql_model.cache_creation_tokens,
+                mem_model.cache_creation_tokens
+            );
+            assert_eq!(sql_model.cache_read_tokens, mem_model.cache_read_tokens);
+            assert!((sql_model.cost - mem_model.cost).abs() < 1e-9);
+        }
+    }
+    assert_eq!(sql.totals.input_tokens, mem.totals.input_tokens);
+    assert_eq!(sql.totals.output_tokens, mem.totals.output_tokens);
+    assert_eq!(
+        sql.totals.cache_creation_tokens,
+        mem.totals.cache_creation_tokens
+    );
+    assert_eq!(sql.totals.cache_read_tokens, mem.totals.cache_read_tokens);
+    assert_eq!(sql.totals.total_tokens, mem.totals.total_tokens);
+    assert!((sql.totals.total_cost - mem.totals.total_cost).abs() < 1e-9);
 }
 
 fn overview_window_records() -> Vec<UsageRecord> {

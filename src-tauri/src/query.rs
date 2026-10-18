@@ -8,6 +8,7 @@
 
 pub mod analytics;
 pub mod billing;
+pub mod ccusage;
 pub mod meta;
 pub mod overview;
 pub mod series;
@@ -17,6 +18,7 @@ pub mod windows;
 
 pub use analytics::*;
 pub use billing::*;
+pub use ccusage::*;
 pub use meta::*;
 pub use overview::*;
 pub use series::*;

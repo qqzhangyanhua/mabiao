@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Icon } from "../icons";
-import { exportCsv, exportJson } from "../lib/exportFile";
+import { exportCcusageDailyJson, exportCsv, exportJson } from "../lib/exportFile";
+import type { Filter } from "../types";
 import { Spinner } from "./Spinner";
 
-type ExportFormat = "csv" | "json";
+type ExportFormat = "csv" | "json" | "ccusage";
 type ExportRows = (string | number)[][];
 
 const FORMATS: { format: ExportFormat; label: string }[] = [
@@ -17,6 +18,7 @@ export function ExportButton({
   headers,
   rows,
   getRows,
+  ccusageFilter,
   disabled: disabledProp,
 }: {
   label?: string;
@@ -27,6 +29,8 @@ export function ExportButton({
   rows?: ExportRows;
   /** 懒加载数据源，用于服务端分页场景：点击时才拉取完整结果集。 */
   getRows?: () => Promise<ExportRows>;
+  /** 传入当前用量筛选时，多一档与 `ccusage daily --json` 同构的导出。 */
+  ccusageFilter?: Filter;
   disabled?: boolean;
 }) {
   const [status, setStatus] = useState<string | null>(null);
@@ -36,6 +40,15 @@ export function ExportButton({
     setBusyFormat(format);
     setStatus(null);
     try {
+      if (format === "ccusage") {
+        if (!ccusageFilter) {
+          setStatus("没有可导出的数据");
+          return;
+        }
+        const saved = await exportCcusageDailyJson(`${filename}-ccusage-daily.json`, ccusageFilter);
+        setStatus(saved ? "已导出" : null);
+        return;
+      }
       const data = getRows ? await getRows() : (rows ?? []);
       if (data.length === 0) {
         setStatus("没有可导出的数据");
@@ -54,7 +67,11 @@ export function ExportButton({
   }
 
   const staticEmpty = !getRows && (rows?.length ?? 0) === 0;
-  const disabled = (disabledProp ?? staticEmpty) || busyFormat !== null;
+  const tableDisabled = (disabledProp ?? staticEmpty) || busyFormat !== null;
+  const ccusageDisabled = (disabledProp ?? false) || busyFormat !== null || !ccusageFilter;
+  const formats = ccusageFilter
+    ? [...FORMATS, { format: "ccusage" as const, label: "ccusage" }]
+    : FORMATS;
 
   return (
     <span className="export-action">
@@ -62,12 +79,12 @@ export function ExportButton({
         <span className="export-group-icon" aria-hidden>
           {busyFormat ? <Spinner size={12} /> : <Icon name="download" size={13} />}
         </span>
-        {FORMATS.map(({ format, label: formatLabel }) => (
+        {formats.map(({ format, label: formatLabel }) => (
           <button
             key={format}
             type="button"
             className={`export-btn export-btn-${format}${busyFormat === format ? " is-busy" : ""}`}
-            disabled={disabled}
+            disabled={format === "ccusage" ? ccusageDisabled : tableDisabled}
             aria-label={`${label} ${formatLabel}`}
             aria-busy={busyFormat === format}
             onClick={() => handleExport(format)}

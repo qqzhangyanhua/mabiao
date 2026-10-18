@@ -1,11 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const invokeMock = vi.fn<(...args: unknown[]) => Promise<unknown>>();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
 }));
 
-const { buildCsv, exportCsv, exportImage, exportJson } = await import("./exportFile");
+const { buildCsv, exportCsv, exportCcusageDailyJson, exportImage, exportJson } = await import("./exportFile");
+
+beforeEach(() => {
+  invokeMock.mockReset();
+});
 
 describe("buildCsv", () => {
   it("joins headers and rows with CRLF, comma-separated", () => {
@@ -41,6 +45,27 @@ describe("exportJson", () => {
     expect(invokeMock).toHaveBeenCalledWith("export_json", {
       defaultName: "out.json",
       content: JSON.stringify([{ a: 1, b: "x" }], null, 2),
+    });
+  });
+});
+
+describe("exportCcusageDailyJson", () => {
+  it("asks Rust for the daily JSON then saves it through export_json", async () => {
+    invokeMock.mockResolvedValueOnce("{}\n").mockResolvedValueOnce(true);
+    const filter = {
+      from: null,
+      to: null,
+      sources: [],
+      models: [],
+      projects: [],
+      providers: [],
+    };
+    const result = await exportCcusageDailyJson("ccusage-daily.json", filter);
+    expect(result).toBe(true);
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "get_ccusage_daily_json", { filter });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "export_json", {
+      defaultName: "ccusage-daily.json",
+      content: "{}\n",
     });
   });
 });

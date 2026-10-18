@@ -231,6 +231,12 @@
   background: var(--tone-pi-bg);
 }
 
+.export-btn-ccusage:hover:not(:disabled),
+.export-btn-ccusage.is-busy {
+  color: var(--purple-fg);
+  background: var(--tone-claude-bg);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

@@ -190,6 +190,15 @@ fn local_hour_of_day(occurred_at: &str) -> Option<u8> {
     )
 }
 
+/// 与 `ccusage daily --json` 同构。按本地日历日切，不叠 Cursor 账号用量。
+pub(crate) fn ccusage_daily(
+    records: &[UsageRecord],
+    filter: &Filter,
+    prices: &PriceTable,
+) -> crate::ccusage_export::CcusageDailyJson {
+    crate::ccusage_export::from_records(&apply_filter(records, filter), prices)
+}
+
 /// 按本地日历日汇总 token。与 `query::tokens_by_local_day` 同口径。
 pub(crate) fn tokens_by_local_day(records: &[UsageRecord], filter: &Filter) -> Vec<(String, i64)> {
     let mut days: BTreeMap<String, i64> = BTreeMap::new();
