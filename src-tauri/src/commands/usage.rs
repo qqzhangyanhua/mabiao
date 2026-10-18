@@ -65,6 +65,21 @@ pub async fn get_trend(
 }
 
 #[tauri::command]
+pub async fn get_ccusage_daily_json(
+    app: tauri::AppHandle,
+    filter: Filter,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        query::ccusage_daily_json(&conn, &filter, &prices)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn get_application_analytics(
     app: tauri::AppHandle,
     filter: Filter,

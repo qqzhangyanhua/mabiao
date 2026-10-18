@@ -196,6 +196,7 @@ export const Breakdown = memo(function Breakdown({
               row.total_tokens,
               row.cost ?? "",
             ])}
+            ccusageFilter={filter}
           />
         </div>
         {projectNames && rows.length > 0 ? (

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { Filter } from "../types";
 
 function escapeCsvCell(value: string | number): string {
   const text = String(value);
@@ -42,6 +43,18 @@ export async function exportJson(
   rows: (string | number)[][],
 ): Promise<boolean> {
   const content = buildJson(headers, rows);
+  return invoke<boolean>("export_json", { defaultName, content });
+}
+
+/**
+ * 由 Rust 按当前筛选生成与 `ccusage daily --json` 同构的 JSON，再走现有保存对话框。
+ * webview 不聚合。
+ */
+export async function exportCcusageDailyJson(
+  defaultName: string,
+  filter: Filter,
+): Promise<boolean> {
+  const content = await invoke<string>("get_ccusage_daily_json", { filter });
   return invoke<boolean>("export_json", { defaultName, content });
 }
 

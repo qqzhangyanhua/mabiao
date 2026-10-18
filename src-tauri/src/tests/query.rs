@@ -1630,3 +1630,117 @@ fn long_context_sql_threshold_matches_pricing_crate() {
         pricing::LONG_CONTEXT_THRESHOLD
     );
 }
+
+#[test]
+fn ccusage_daily_json_matches_ccusage_shape_and_excludes_reasoning() {
+    let mut morning = rec(
+        "2026-08-01T10:00:00Z",
+        Source::Claude,
+        "claude-sonnet-4",
+        "anthropic",
+        "/proj/a",
+        "s1",
+        0,
+    );
+    morning.input_tokens = 10;
+    morning.output_tokens = 4;
+    morning.cache_creation_tokens = 2;
+    morning.cache_read_tokens = 3;
+    morning.reasoning_tokens = 7;
+    morning.total_tokens = 26;
+    morning.native_cost = Some(0.11);
+
+    let mut afternoon = rec(
+        "2026-08-01T18:00:00Z",
+        Source::Claude,
+        "claude-opus-4",
+        "anthropic",
+        "/proj/a",
+        "s2",
+        0,
+    );
+    afternoon.input_tokens = 5;
+    afternoon.output_tokens = 1;
+    afternoon.cache_creation_tokens = 0;
+    afternoon.cache_read_tokens = 1;
+    afternoon.reasoning_tokens = 9;
+    afternoon.total_tokens = 16;
+    afternoon.native_cost = Some(0.04);
+
+    let mut next_day = rec(
+        "2026-08-02T01:00:00Z",
+        Source::Codex,
+        "gpt-5.1-codex",
+        "official",
+        "/proj/b",
+        "s3",
+        0,
+    );
+    next_day.input_tokens = 8;
+    next_day.output_tokens = 2;
+    next_day.total_tokens = 10;
+    next_day.native_cost = Some(0.02);
+
+    let records = vec![morning, afternoon, next_day];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    let prices = PriceTable::default();
+    let report = query::ccusage_daily(&conn, &Filter::default(), &prices).unwrap();
+    let json = query::ccusage_daily_json(&conn, &Filter::default(), &prices).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(report.daily.len(), 2);
+    assert_eq!(report.daily[0].date, "2026-08-01");
+    assert_eq!(report.daily[0].input_tokens, 15);
+    assert_eq!(report.daily[0].output_tokens, 5);
+    assert_eq!(report.daily[0].cache_creation_tokens, 2);
+    assert_eq!(report.daily[0].cache_read_tokens, 4);
+    assert_eq!(
+        report.daily[0].total_tokens, 26,
+        "ccusage totalTokens excludes reasoning"
+    );
+    assert!((report.daily[0].total_cost - 0.15).abs() < 1e-12);
+    assert_eq!(
+        report.daily[0].models_used,
+        vec!["claude-opus-4".to_string(), "claude-sonnet-4".to_string()]
+    );
+    assert_eq!(report.daily[0].model_breakdowns.len(), 2);
+    assert_eq!(report.daily[1].date, "2026-08-02");
+    assert_eq!(report.daily[1].total_tokens, 10);
+    assert_eq!(report.totals.input_tokens, 23);
+    assert_eq!(report.totals.output_tokens, 7);
+    assert_eq!(report.totals.cache_creation_tokens, 2);
+    assert_eq!(report.totals.cache_read_tokens, 4);
+    assert_eq!(report.totals.total_tokens, 36);
+    assert!((report.totals.total_cost - 0.17).abs() < 1e-12);
+
+    assert!(value.get("daily").is_some());
+    assert!(value.get("totals").is_some());
+    assert!(value["daily"][0].get("inputTokens").is_some());
+    assert!(value["daily"][0].get("cacheCreationTokens").is_some());
+    assert!(value["daily"][0].get("modelsUsed").is_some());
+    assert!(value["daily"][0].get("modelBreakdowns").is_some());
+    assert!(value["daily"][0]["modelBreakdowns"][0]
+        .get("modelName")
+        .is_some());
+    assert!(value["totals"].get("totalCost").is_some());
+    assert!(value["totals"].get("totalTokens").is_some());
+    assert!(
+        value["daily"][0].get("reasoningTokens").is_none(),
+        "ccusage daily JSON has no reasoningTokens field"
+    );
+
+    let claude_only = query::ccusage_daily(
+        &conn,
+        &Filter {
+            sources: vec!["claude".into()],
+            ..Filter::default()
+        },
+        &prices,
+    )
+    .unwrap();
+    assert_eq!(claude_only.daily.len(), 1);
+    assert_eq!(claude_only.daily[0].date, "2026-08-01");
+    assert_eq!(claude_only.totals.total_tokens, 26);
+    assert_eq!(claude_only.totals.input_tokens, 15);
+}

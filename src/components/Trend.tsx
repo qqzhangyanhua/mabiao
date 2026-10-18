@@ -196,6 +196,7 @@ export const Trend = memo(function Trend({
             filename={grainDetailTitle[grain]}
             headers={exportTable.headers}
             rows={exportTable.rows}
+            ccusageFilter={filter}
           />
         </div>
         {points.length > 0 ? (

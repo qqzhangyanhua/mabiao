@@ -4,6 +4,7 @@ pub mod aggregate;
 pub mod backup;
 pub mod billing_window;
 pub mod budget;
+pub(crate) mod ccusage_export;
 pub mod clipboard;
 mod commands;
 pub mod conversation;
@@ -420,6 +421,7 @@ pub fn run() {
             commands::delete_work_notes_history_entry,
             commands::get_billing_windows,
             commands::get_trend,
+            commands::get_ccusage_daily_json,
             commands::get_application_analytics,
             commands::get_low_cache_hit_sessions,
             commands::get_breakdown,
