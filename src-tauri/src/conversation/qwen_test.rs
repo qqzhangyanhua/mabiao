@@ -135,3 +135,32 @@ fn finish_prep_appends_declared_capability_degradation() {
         "Qwen 声明式降级同时分配原生事件 id，得到 {message_id}"
     );
 }
+
+#[test]
+fn adapter_indexes_chat_jsonl_with_assistant_and_usage() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("%2Fwork%2Fqwen/chats/session-1.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        &path,
+        concat!(
+            r#"{"sessionId":"qwen-chat-1","type":"user","timestamp":"2026-08-21T09:00:00Z","message":"hello qwen"}"#,
+            "\n",
+            r#"{"sessionId":"qwen-chat-1","type":"assistant","model":"qwen3-coder-plus","timestamp":"2026-08-21T09:00:05Z","message":"ok","usageMetadata":{"promptTokenCount":120,"candidatesTokenCount":30,"cachedContentTokenCount":40,"totalTokenCount":150}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let indexed = index(&path).unwrap();
+    assert_eq!(indexed.conversations.len(), 1);
+    let session = &indexed.conversations[0].session;
+    assert_eq!(session.session_id, "qwen-chat-1");
+    assert_eq!(session.project, "/work/qwen");
+    assert_eq!(session.model, "qwen3-coder-plus");
+    assert!(session.capabilities.iter().any(|cap| cap == "usage"));
+    assert!(session.capabilities.iter().any(|cap| cap == "messages"));
+    assert_eq!(indexed.conversations[0].messages.len(), 2);
+    assert_eq!(indexed.conversations[0].messages[0].role, "user");
+    assert_eq!(indexed.conversations[0].messages[1].role, "assistant");
+}

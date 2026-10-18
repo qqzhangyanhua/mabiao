@@ -234,7 +234,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: false,
         soft_parse_failure: false,
-        coverage: "本地无 Token",
+        coverage: "轮级 Token",
         display_dirs: None,
         detected: None,
     },

@@ -80,7 +80,7 @@
 
 | 来源 | 残缺 | 结论 |
 |---|---|---|
-| qwen | 无 token | **结构性死胡同**：本机 `~/.qwen/tmp/*/logs.json` 只有用户文本和 `sessionId`，`~/.qwen` 下其余文件都是配置/凭证，没有第二个可能藏 token 的文件。除非上游改格式，本机侧没有可挖的余地 |
+| qwen | chats jsonl 已接 | `projects/**/chats/*.jsonl` 的 `usageMetadata` 入账；`tmp/*/logs.json` 仍无 token，只作对话源 |
 | gemini | 无费用 | **不算真问题**：`native_cost` 为 `None` 是预期行为，费用推导架构本身已经有价目表/LiteLLM 快照兜底（`cost.rs` 优先级链路），不需要额外适配器改动 |
 | factory | 会话 settings 的 model；`custom:` 查 `~/.factory/settings.json`，否则剥 slot 后缀；`callingSessionId` 并入父会话 |
 | copilot | 仅会话结束累计 | **本机无法验证**：这台机器没有安装/使用过 Copilot CLI（`~/.copilot` 下没有 `session-state` 目录），现有认知来自架构文档推导，不是本机实测；维持现状 |

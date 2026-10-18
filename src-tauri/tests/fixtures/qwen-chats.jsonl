@@ -1,0 +1,3 @@
+{"sessionId":"qwen-chat-1","type":"user","timestamp":"2026-08-21T09:00:00Z","message":"hello qwen"}
+{"sessionId":"qwen-chat-1","type":"assistant","model":"qwen3-coder-plus","timestamp":"2026-08-21T09:00:05Z","message":"ok","usageMetadata":{"promptTokenCount":120,"candidatesTokenCount":30,"thoughtsTokenCount":8,"cachedContentTokenCount":40,"totalTokenCount":150}}
+{"sessionId":"qwen-chat-1","type":"assistant","model":"qwen3-coder-plus","timestamp":"2026-08-21T09:01:00Z","message":"next","usageMetadata":{"promptTokenCount":80,"candidatesTokenCount":10,"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":90}}

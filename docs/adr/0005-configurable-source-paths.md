@@ -20,7 +20,7 @@
 | dsh | `DSH_HOME` | `~/.dsh`（扫 `sessions/`） |
 | Gemini | `GEMINI_DATA_DIR` | `~/.gemini/tmp` |
 | Grok | `GROK_HOME` | `~/.grok`（扫 `sessions/`） |
-| Qwen | `QWEN_DATA_DIR` | `~/.qwen`（扫 `tmp/`） |
+| Qwen | `QWEN_DATA_DIR` | `~/.qwen`（扫 `projects/**/chats/*.jsonl` 的 `usageMetadata`，以及 `tmp/*/logs.json` 对话） |
 | Factory/droid | `FACTORY_SESSIONS_DIR` | `~/.factory/sessions` |
 | cursor-agent | `CURSOR_AGENT_USAGE_DIR` | token 包装默认 `~/.cursor-agent-usage`（可选）。会话与 IDE 共用 `~/.cursor/chats`、`~/.cursor/projects`，不由此变量改 |
 | GitHub Copilot CLI | `COPILOT_HOME` | `~/.copilot`（扫 `session-state/`） |
