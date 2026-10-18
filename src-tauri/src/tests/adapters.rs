@@ -1171,6 +1171,52 @@ fn qwen_adapter_returns_empty_when_no_tokens() {
 }
 
 #[test]
+fn qwen_adapter_reads_chat_jsonl_usage_metadata_and_splits_cached_prompt() {
+    let records = qwen::parse_qwen_jsonl(
+        &fixture_lines(&fixture("qwen-chats.jsonl")),
+        "/Users/me/.qwen/projects/%2Fwork%2Fqwen/chats/session-1.jsonl",
+    );
+    // 修前 0 条（只扫 logs.json 且解析恒空）。修后 2 条：
+    // 第 1 条 total=prompt+candidates，从 prompt 拆出 cache。
+    assert_eq!(records.len(), 2, "{records:?}");
+    assert_eq!(records[0].source, Source::Qwen);
+    assert_eq!(records[0].model, "qwen3-coder-plus");
+    assert_eq!(records[0].session_id, "qwen-chat-1");
+    assert_eq!(records[0].project, "/work/qwen");
+    assert_eq!(records[0].input_tokens, 80);
+    assert_eq!(records[0].output_tokens, 30);
+    assert_eq!(records[0].cache_read_tokens, 40);
+    assert_eq!(records[0].reasoning_tokens, 8);
+    assert_eq!(records[0].total_tokens, 150);
+    assert_eq!(records[1].input_tokens, 80);
+    assert_eq!(records[1].output_tokens, 10);
+    assert_eq!(records[1].cache_read_tokens, 0);
+    assert_eq!(records[1].total_tokens, 90);
+}
+
+#[test]
+fn qwen_scan_dirs_discovers_chat_jsonl_under_projects() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let chats = home.join(".qwen/projects/-work-qwen/chats");
+    std::fs::create_dir_all(&chats).unwrap();
+    std::fs::create_dir_all(home.join(".qwen/tmp/hash")).unwrap();
+    std::fs::write(home.join(".qwen/tmp/hash/logs.json"), b"[]").unwrap();
+    std::fs::write(chats.join("session-1.jsonl"), b"{}\n").unwrap();
+    std::fs::write(home.join(".qwen/notes.jsonl"), b"{}\n").unwrap();
+    let dirs = qwen::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert_eq!(dirs, vec![home.join(".qwen")]);
+    let found = qwen::discover(&dirs).unwrap();
+    let names: Vec<_> = found
+        .iter()
+        .filter_map(|path| path.file_name()?.to_str())
+        .collect();
+    assert!(names.contains(&"logs.json"), "{names:?}");
+    assert!(names.contains(&"session-1.jsonl"), "{names:?}");
+    assert!(!names.contains(&"notes.jsonl"), "{names:?}");
+}
+
+#[test]
 fn factory_adapter_maps_session_token_usage() {
     let records = factory::parse_factory_settings(
         &fixture("factory.settings.json"),

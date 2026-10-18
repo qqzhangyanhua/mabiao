@@ -869,7 +869,7 @@ fn source_diagnostics_explain_detection_cache_and_usage_coverage() {
     assert_eq!(codex.total_tokens, 19113);
     assert_eq!(codex.coverage, "轮级 Token");
     assert!(!qwen.detected);
-    assert_eq!(qwen.coverage, "本地无 Token");
+    assert_eq!(qwen.coverage, "轮级 Token");
     let kimi = diagnostics
         .iter()
         .find(|diagnostic| diagnostic.source == "kimi")
@@ -1508,6 +1508,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const PREV_FILES: u64 = 10;
     const PREV_RECORDS: usize = 17;
     const PREV_TOKENS: i64 = 605147;
+    const QWEN_CHAT_FILES: u64 = 1;
+    const QWEN_CHAT_RECORDS: usize = 2;
+    const QWEN_CHAT_TOKENS: i64 = 240;
     const OPENCODE_FILES: u64 = 1;
     const OPENCODE_RECORDS: usize = 1;
     const OPENCODE_TOKENS: i64 = 20;
@@ -1833,7 +1836,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ALMA_FILES
         + CODEBUDDY_FILES
         + TRAE_FILES
-        + GOOSE_FILES;
+        + GOOSE_FILES
+        + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
         + CURSOR_AGENT_RECORDS
@@ -1848,7 +1852,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ALMA_RECORDS
         + CODEBUDDY_RECORDS
         + TRAE_RECORDS
-        + GOOSE_RECORDS;
+        + GOOSE_RECORDS
+        + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
         + CURSOR_AGENT_TOKENS
@@ -1863,7 +1868,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ALMA_TOKENS
         + CODEBUDDY_TOKENS
         + TRAE_TOKENS
-        + GOOSE_TOKENS;
+        + GOOSE_TOKENS
+        + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
     assert_eq!(stored.len(), records);
@@ -1902,10 +1908,11 @@ fn heartbeat_enumeration_matches_ingested_file_cache_for_all_sources() {
             .get(source.as_str())
             .cloned()
             .unwrap_or_default();
+        let expected = if source == Source::Qwen { 2 } else { 1 };
         assert_eq!(
             source_paths.len(),
-            1,
-            "{} 全量摄取后 ingested_files 应为 1 条，实际 {:?}",
+            expected,
+            "{} 全量摄取后 ingested_files 应为 {expected} 条，实际 {:?}",
             source.as_str(),
             source_paths
         );
@@ -1942,14 +1949,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 24);
+    assert_eq!(report.files_seen, 25);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 24);
+    assert_eq!(report.files_parsed, 25);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 42);
+    assert_eq!(report.records_written, 44);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 42);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 669181);
+    assert_eq!(stored.len(), 44);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 669421);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -1985,7 +1992,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             Source::Opencode | Source::Gemini | Source::Factory | Source::Goose => {
                 (1, 0, 1, 1, 0, 0)
             }
-            Source::Qwen | Source::Agy => (1, 0, 1, 0, 0, 0),
+            Source::Qwen => (2, 0, 2, 2, 0, 0),
+            Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes | Source::Copilot => (1, 0, 1, 3, 0, 0),
         };
         let entry = report
