@@ -1515,6 +1515,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Aider.application_name(), "Aider");
     assert_eq!(Source::Aider.as_str(), "aider");
     assert_eq!(Source::parse("aider"), Some(Source::Aider));
+    assert_eq!(Source::Warp.application_name(), "Warp");
+    assert_eq!(Source::Warp.as_str(), "warp");
+    assert_eq!(Source::parse("warp"), Some(Source::Warp));
 }
 
 #[test]
@@ -3187,6 +3190,24 @@ fn codebuddy_ide_adapter_reads_latest_stats_snapshot_and_ignores_credits() {
     assert_eq!(records[0].cache_creation_tokens, 0);
     assert_eq!(records[0].reasoning_tokens, 10);
     assert_eq!(records[0].total_tokens, 290);
+}
+
+#[test]
+fn warp_adapter_reads_model_token_totals_and_skips_empty_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_warp_sqlite(&dir.path().join("warp.sqlite"));
+    let records = warp::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Warp);
+    assert_eq!(
+        records[0].session_id,
+        "545ac14f-66fc-41c6-baa3-b0c114c00607"
+    );
+    assert_eq!(records[0].model, "claude-4-5-sonnet");
+    assert_eq!(records[0].provider, "warp");
+    assert_eq!(records[0].input_tokens, 250);
+    assert_eq!(records[0].output_tokens, 0);
+    assert_eq!(records[0].total_tokens, 250);
     assert_eq!(records[0].native_cost, None);
 }
 

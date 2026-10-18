@@ -116,6 +116,10 @@
 - **本机路径**：只读用户用 `--analytics-log` 主动打开的 JSONL。默认认 `~/.aider/analytics.jsonl`；`AIDER_ANALYTICS_LOG` 可覆盖。**不读、不写** `.aider.conf.yml`
 - **实现**：`src-tauri/src/adapters/aider.rs`，注册为 `Source::Aider`，coverage「轮级 Token（含原生费用）」；只收 `event=message_send`；跳过 `main_model` 为 `None` 或 `*/REDACTED`；`cost` 写入 `native_cost`。analytics JSONL 没有会话正文，对话目录为空
 - **证据**：Aider-AI/aider `aider/analytics.py` 的 `event()` 落盘格式，以及官方 `website/assets/sample-analytics.jsonl`
+### Warp ✅
+
+- **本机路径**：`warp.sqlite` 的 `agent_conversations`。Linux `~/.local/state/warp-terminal`；macOS Group Container Stable/Preview；Windows `%LOCALAPPDATA%/warp/Warp/data`。`WARP_HOME` 覆盖目录或库文件
+- **实现**：`src-tauri/src/adapters/warp.rs`，注册为 `Source::Warp`，coverage「会话级 Token（无 input/output 拆分）」；`token_usage[].warp_tokens`（旧 `total_tokens`）+ `byok_tokens` + `custom_endpoint_tokens` 记入 input/total；`credits_spent` 不是 USD，不写入 `native_cost`。本机不存助手回复，对话目录为空
 
 ## Tier 3 — 本轮不投入
 

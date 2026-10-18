@@ -33,6 +33,7 @@ pub mod qoder_cn;
 pub mod qwen;
 pub mod roo;
 pub mod trae;
+pub mod warp;
 pub mod workbuddy;
 pub mod zcode;
 pub mod zed;
@@ -604,6 +605,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "轮级 Token（含原生费用）",
         display_dirs: None,
         detected: Some(aider::detected),
+    },
+    UsageAdapter {
+        source: Source::Warp,
+        path_env: "WARP_HOME",
+        scan_dirs: warp::scan_dirs,
+        discover: warp::discover,
+        sidecar_fingerprint: warp::sidecar_fingerprint,
+        parse: warp::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "会话级 Token（无 input/output 拆分）",
+        display_dirs: None,
+        detected: None,
     },
 ];
 
