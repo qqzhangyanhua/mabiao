@@ -75,6 +75,7 @@ fn records_from_snapshot(value: &Value, source_file: &str) -> Vec<UsageRecord> {
             if !tokens.is_object() {
                 return None;
             }
+            let cached = i64_field(&tokens, &["cached"]).max(0);
             let record = finish(UsageRecord {
                 occurred_at: text_field(&msg, &["timestamp"]),
                 source: Source::Gemini,
@@ -83,9 +84,9 @@ fn records_from_snapshot(value: &Value, source_file: &str) -> Vec<UsageRecord> {
                 project: project.clone(),
                 session_id: session_id.clone(),
                 source_file: source_file.to_string(),
-                input_tokens: i64_field(&tokens, &["input"]),
+                input_tokens: exclusive_gemini_input(&tokens, cached),
                 output_tokens: i64_field(&tokens, &["output"]),
-                cache_read_tokens: i64_field(&tokens, &["cached"]),
+                cache_read_tokens: cached,
                 cache_creation_tokens: 0,
                 reasoning_tokens: i64_field(&tokens, &["thoughts"]),
                 total_tokens: i64_field(&tokens, &["total"]),
@@ -179,6 +180,35 @@ fn put_message(message: &Value, order: &mut Vec<String>, messages: &mut HashMap<
         order.push(id.clone());
     }
     messages.insert(id, message.clone());
+}
+
+/// Gemini `tokens.input` 常常已经含 `cached`。对齐 ccusage `normalize_session_input`：
+/// 若 `total == input+output+thoughts+tool`（不等于再加 cached），从 input 减去 cached。
+/// 没有 total 时按 headless jsonl 默认拆（tokscale 对 headless 直接减）。
+fn exclusive_gemini_input(tokens: &Value, cached: i64) -> i64 {
+    let input = i64_field(tokens, &["input"]).max(0);
+    if cached <= 0 {
+        return input;
+    }
+    let output = i64_field(tokens, &["output"]).max(0);
+    let thoughts = i64_field(tokens, &["thoughts"]).max(0);
+    let tool = i64_field(tokens, &["tool"]).max(0);
+    let inclusive = input + output + thoughts + tool;
+    let total = tokens.get("total").and_then(|value| {
+        value
+            .as_i64()
+            .or_else(|| value.as_u64().map(|n| n as i64))
+            .or_else(|| value.as_f64().map(|n| n.round() as i64))
+    });
+    let should_subtract = match total {
+        Some(total) if total > 0 => total == inclusive && total != inclusive + cached,
+        _ => true,
+    };
+    if should_subtract {
+        input.saturating_sub(cached.min(input))
+    } else {
+        input
+    }
 }
 
 fn project_from_path(source_file: &str) -> String {

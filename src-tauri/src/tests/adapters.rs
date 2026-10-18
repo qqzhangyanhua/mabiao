@@ -941,6 +941,30 @@ fn gemini_adapter_maps_chat_tokens() {
 }
 
 #[test]
+fn gemini_adapter_splits_cached_tokens_out_of_input() {
+    let records = gemini::parse_gemini_session(
+        &fixture("gemini-cached.json"),
+        "/Users/dev/.gemini/tmp/demo-app/chats/session-cached.json",
+    );
+    // g1：total == input+output+thoughts+tool，cached 含在 input 里（ccusage 启发式）。
+    // 修前 input=10000 与 cache_read=4000 重叠；修后裸 input=6000。
+    assert_eq!(records.len(), 3);
+    assert_eq!(records[0].input_tokens, 6000);
+    assert_eq!(records[0].cache_read_tokens, 4000);
+    assert_eq!(records[0].output_tokens, 100);
+    assert_eq!(records[0].reasoning_tokens, 50);
+    assert_eq!(records[0].total_tokens, 10150);
+    // g2：total == input+output+thoughts+cached，input 已是裸值，不减。
+    assert_eq!(records[1].input_tokens, 200);
+    assert_eq!(records[1].cache_read_tokens, 50);
+    assert_eq!(records[1].total_tokens, 275);
+    // g3：没有 total，jsonl/headless 默认按 cached 含在 input 里拆。
+    assert_eq!(records[2].input_tokens, 50);
+    assert_eq!(records[2].cache_read_tokens, 30);
+    assert_eq!(records[2].total_tokens, 90);
+}
+
+#[test]
 fn gemini_adapter_reads_jsonl_and_honors_rewind() {
     let records = gemini::parse_gemini_jsonl(
         &fixture_lines(&fixture("gemini-session.jsonl")),
