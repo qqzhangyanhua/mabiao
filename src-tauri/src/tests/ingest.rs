@@ -2943,7 +2943,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     let zed = usage_adapter(Source::Zed);
     assert!(!zed.append_log, "Zed 会话库是 SQLite，不是追加型日志");
     assert_eq!(zed.path_env, "ZED_DATA_DIR");
-    assert_eq!(zed.coverage, "轮级 Token（input 不含 cache）");
+    assert_eq!(
+        zed.coverage,
+        "轮级 Token（input 不含 cache；有消息时间用消息时间，否则会话 updated_at；子线程不入账）"
+    );
     let cherry = usage_adapter(Source::Cherry);
     assert!(
         !cherry.append_log,
