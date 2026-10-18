@@ -201,6 +201,20 @@ fn parse_claude_shaped_jsonl_with(
         } else {
             agent_id
         };
+        let message_id = text_field(&message, &["id"]);
+        // subagents/ 里会把父会话同一 message.id 再写一遍（含父级 cache-read）。
+        // 对齐 ccusage：有 isSidechain 且父文件已有该 id 时丢掉回放，子代理自己的 id 仍计入。
+        if is_sidechain && !message_id.is_empty() && parent_message_ids.contains(&message_id) {
+            continue;
+        }
+        anonymous.extend(advisor_records_from_usage(
+            &usage,
+            &value,
+            source,
+            &project,
+            &record_session_id,
+            source_file,
+        ));
         let record = finish(UsageRecord {
             occurred_at: text_field(&value, &["timestamp"]),
             source,
@@ -225,12 +239,6 @@ fn parse_claude_shaped_jsonl_with(
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
             .map(str::to_string);
-        let message_id = text_field(&message, &["id"]);
-        // subagents/ 里会把父会话同一 message.id 再写一遍（含父级 cache-read）。
-        // 对齐 ccusage：有 isSidechain 且父文件已有该 id 时丢掉回放，子代理自己的 id 仍计入。
-        if is_sidechain && !message_id.is_empty() && parent_message_ids.contains(&message_id) {
-            continue;
-        }
         if message_id.is_empty() {
             anonymous.push(record);
             continue;
@@ -312,6 +320,50 @@ fn collect_assistant_message_ids(path: &Path, ids: &mut HashSet<String>) {
             ids.insert(id);
         }
     }
+}
+
+/// `message.usage.iterations` 里只有 `type=advisor_message` 单独入账；
+/// `type=message` 与顶层 usage 重复，不再加。advisor 没有 `costUSD`。
+fn advisor_records_from_usage(
+    usage: &serde_json::Value,
+    event: &serde_json::Value,
+    source: Source,
+    project: &str,
+    session_id: &str,
+    source_file: &str,
+) -> Vec<UsageRecord> {
+    let Some(iterations) = usage.get("iterations").and_then(|value| value.as_array()) else {
+        return Vec::new();
+    };
+    iterations
+        .iter()
+        .filter(|iteration| {
+            iteration.get("type").and_then(|value| value.as_str()) == Some("advisor_message")
+        })
+        .filter_map(|iteration| {
+            let model = text_field(iteration, &["model"]);
+            if model.is_empty() {
+                return None;
+            }
+            let record = finish(UsageRecord {
+                occurred_at: text_field(event, &["timestamp"]),
+                source,
+                model,
+                provider: String::new(),
+                project: project.to_string(),
+                session_id: session_id.to_string(),
+                source_file: source_file.to_string(),
+                input_tokens: i64_field(iteration, &["input_tokens"]),
+                output_tokens: i64_field(iteration, &["output_tokens"]),
+                cache_read_tokens: i64_field(iteration, &["cache_read_input_tokens"]),
+                cache_creation_tokens: i64_field(iteration, &["cache_creation_input_tokens"]),
+                reasoning_tokens: 0,
+                total_tokens: 0,
+                native_cost: None,
+            });
+            has_billable_tokens(&record).then_some(record)
+        })
+        .collect()
 }
 
 fn native_cost_from_event(value: &serde_json::Value) -> Option<f64> {

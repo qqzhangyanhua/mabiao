@@ -309,6 +309,35 @@ fn claude_adapter_drops_subagent_file_replay_of_parent_message() {
 }
 
 #[test]
+fn claude_adapter_counts_advisor_message_iterations_separately() {
+    let records = claude::parse_claude_jsonl(
+        &fixture_lines(&fixture("claude-advisor.jsonl")),
+        "/workspace/.claude/projects/-workspace-app/sess-advisor.jsonl",
+    );
+    // 顶层 usage 只算主模型；iterations 里 type=advisor_message 单独入账，
+    // type=message 的 iteration 不再加（与顶层重复）。对齐 ccusage Advisor 节。
+    assert_eq!(records.len(), 2, "{records:?}");
+    let main = records
+        .iter()
+        .find(|record| record.model == "claude-sonnet-4-20250514")
+        .expect("main model");
+    let advisor = records
+        .iter()
+        .find(|record| record.model == "claude-opus-4-5-20251101")
+        .expect("advisor model");
+    assert_eq!(main.input_tokens, 2);
+    assert_eq!(main.output_tokens, 10);
+    assert!((main.native_cost.unwrap() - 1.23).abs() < 1e-9);
+    assert_eq!(advisor.input_tokens, 159419);
+    assert_eq!(advisor.output_tokens, 80);
+    assert_eq!(advisor.cache_creation_tokens, 100);
+    assert_eq!(advisor.cache_read_tokens, 2000);
+    assert!(advisor.native_cost.is_none());
+    let input: i64 = records.iter().map(|record| record.input_tokens).sum();
+    assert_eq!(input, 159421);
+}
+
+#[test]
 fn pi_adapter_uses_native_cost() {
     let records = pi::parse_pi_jsonl(
         &fixture_lines(&fixture("pi.jsonl")),
