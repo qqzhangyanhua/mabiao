@@ -20,6 +20,19 @@ export type SourceIconId =
   | "workbuddy"
   | "zcode"
   | "alma"
+  | "codebuddy"
+  | "trae"
+  | "goose"
+  | "roo"
+  | "kilo"
+  | "amp"
+  | "zed"
+  | "cherry"
+  | "openclaw"
+  | "crush"
+  | "aider"
+  | "warp"
+  | "windsurf"
   | "unknown";
 
 const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
@@ -47,8 +60,26 @@ const SOURCE_ICON_BY_ID: Record<string, SourceIconId> = {
   workbuddy: "workbuddy",
   zcode: "zcode",
   alma: "alma",
+  codebuddy: "codebuddy",
+  codebuddy_ide: "codebuddy",
+  trae: "trae",
+  goose: "goose",
+  roo: "roo",
+  kilo: "kilo",
+  amp: "amp",
+  zed: "zed",
+  cherry: "cherry",
+  openclaw: "openclaw",
+  crush: "crush",
+  aider: "aider",
+  warp: "warp",
+  windsurf: "windsurf",
 };
 
 export function resolveSourceIconId(source: string): SourceIconId {
   return SOURCE_ICON_BY_ID[source] ?? "unknown";
+}
+
+export function listedSourceIconSlugs(): ReadonlySet<string> {
+  return new Set(Object.keys(SOURCE_ICON_BY_ID));
 }

@@ -24,9 +24,27 @@ const SOURCE_LABEL: Record<string, string> = {
   workbuddy: "WorkBuddy",
   zcode: "ZCode",
   alma: "Alma",
+  codebuddy: "CodeBuddy",
+  codebuddy_ide: "CodeBuddy IDE",
+  trae: "Trae CLI",
+  goose: "Goose",
+  roo: "Roo Code",
+  kilo: "Kilo Code",
+  amp: "Amp",
+  zed: "Zed",
+  cherry: "Cherry Studio",
+  openclaw: "OpenClaw",
+  crush: "Crush",
+  aider: "Aider",
+  warp: "Warp",
+  windsurf: "Windsurf",
   devin: "Devin",
 };
 
 export function sourceLabel(source: string): string {
   return SOURCE_LABEL[source] ?? source;
+}
+
+export function listedSourceLabels(): ReadonlySet<string> {
+  return new Set(Object.keys(SOURCE_LABEL));
 }
