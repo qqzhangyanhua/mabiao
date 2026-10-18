@@ -15,7 +15,7 @@
 | Claude Code | `CLAUDE_CONFIG_DIR` | `~/.claude` **和** `~/.config/claude`（都扫 `projects/`）。另在已存在时追加 Claude Desktop / Cowork 嵌套 `local-agent-mode-sessions/*/*/local_*/.claude/projects`（macOS `~/Library/Application Support/Claude[+ -3p]`、Linux `~/.config/Claude[+ -3p]`、Windows `%APPDATA%` / `%LOCALAPPDATA%` / MSIX `Packages/Claude_*`）。`CLAUDE_CONFIG_DIR` 只替换 Code 根，不关掉 Desktop 发现 |
 | Pi | `PI_AGENT_DIR` | `~/.pi/agent/sessions` |
 | OMP | `OMP_AGENT_DIR` | `~/.omp/agent/sessions` |
-| OpenCode | `OPENCODE_DATA_DIR` | `~/.local/share/opencode`（扫 `opencode.db`；未设置时改用 `$XDG_DATA_HOME/opencode`。`OPENCODE_DB` 可把库文件换成别的名字或绝对路径。库文件不存在时才读 `storage/session/<项目>/<id>.json` 及同级 `message/`、`part/`，库在时不再读这些旧文件） |
+| OpenCode | `OPENCODE_DATA_DIR` | `~/.local/share/opencode`（扫 `opencode.db` 与 `opencode-*.db`；未设置时改用 `$XDG_DATA_HOME/opencode`。`OPENCODE_DB` 可把库文件换成别的名字或绝对路径并覆盖这一发现。库文件不存在时才读 `storage/session/<项目>/<id>.json` 及同级 `message/`、`part/`，库在时不再读这些旧文件） |
 | Kimi | `KIMI_DATA_DIR` | `~/.kimi` 与 `~/.kimi-code`（都扫 `sessions/**/wire.jsonl`，旁路 `kimi.json`；新布局另读会话目录里的 `state.json`）。`KIMI_DATA_DIR` 整体替换这两个默认根，不另读 `KIMI_CODE_HOME` |
 | dsh | `DSH_HOME` | `~/.dsh`（扫 `sessions/`） |
 | Gemini | `GEMINI_DATA_DIR` | `~/.gemini/tmp` |

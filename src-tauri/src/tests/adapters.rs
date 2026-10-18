@@ -661,6 +661,72 @@ fn opencode_adapter_reads_unmigrated_v1_beside_session_v2() {
 }
 
 #[test]
+fn opencode_adapter_skips_fork_inherited_messages_at_boundary() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("opencode.db");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        "CREATE TABLE session_v2 (
+             id TEXT PRIMARY KEY,
+             directory TEXT,
+             fork_session_id TEXT,
+             fork_boundary INTEGER
+         );
+         CREATE TABLE session_message (
+             id TEXT PRIMARY KEY,
+             session_id TEXT NOT NULL,
+             type TEXT NOT NULL,
+             seq INTEGER NOT NULL,
+             time_created INTEGER NOT NULL,
+             time_updated INTEGER NOT NULL,
+             data TEXT NOT NULL
+         );
+         INSERT INTO session_v2 VALUES ('ses-fork', '/work/oc', 'ses-parent', 2);
+         INSERT INTO session_message VALUES (
+             'msg-inherited-1', 'ses-fork', 'assistant', 1, 1, 2,
+             '{\"model\":{\"id\":\"old\"},\"tokens\":{\"input\":100,\"output\":10,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":1,\"completed\":2}}'
+         );
+         INSERT INTO session_message VALUES (
+             'msg-inherited-2', 'ses-fork', 'assistant', 2, 3, 4,
+             '{\"model\":{\"id\":\"old\"},\"tokens\":{\"input\":200,\"output\":20,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":3,\"completed\":4}}'
+         );
+         INSERT INTO session_message VALUES (
+             'msg-new', 'ses-fork', 'assistant', 3, 5, 6,
+             '{\"model\":{\"id\":\"new\"},\"cost\":0.03,\"tokens\":{\"input\":7,\"output\":8,\"cache\":{\"read\":0,\"write\":0}},\"time\":{\"created\":5,\"completed\":6}}'
+         );",
+    )
+    .unwrap();
+    let records = crate::adapters::opencode::parse(&path, dir.path()).unwrap();
+    // 修前 3 条（继承行也计）。修后只留 seq>fork_boundary 的 1 条。
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0].model, "new");
+    assert_eq!(records[0].input_tokens, 7);
+    assert_eq!(records[0].output_tokens, 8);
+    assert!((records[0].native_cost.unwrap() - 0.03).abs() < 1e-9);
+}
+
+#[test]
+fn opencode_scan_dirs_discovers_suffixed_db_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let data = home.join(".local/share/opencode");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::write(data.join("opencode.db"), b"main").unwrap();
+    std::fs::write(data.join("opencode-work.db"), b"work").unwrap();
+    std::fs::write(data.join("opencode-work.db-wal"), b"wal").unwrap();
+    std::fs::write(data.join("notes.db"), b"unrelated").unwrap();
+    let dirs = crate::adapters::opencode::scan_dirs(&ingest::PathOverrides::new(), home);
+    let names: Vec<_> = dirs
+        .iter()
+        .filter_map(|path| path.file_name()?.to_str())
+        .collect();
+    assert!(names.contains(&"opencode.db"), "{names:?}");
+    assert!(names.contains(&"opencode-work.db"), "{names:?}");
+    assert!(!names.iter().any(|name| name.contains("wal")), "{names:?}");
+    assert!(!names.contains(&"notes.db"), "{names:?}");
+}
+
+#[test]
 fn opencode_discover_reads_legacy_json_only_when_database_is_absent() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("opencode");
