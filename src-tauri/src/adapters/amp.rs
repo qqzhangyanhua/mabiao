@@ -55,7 +55,9 @@ pub(crate) fn parse_thread(content: &str, source_file: &str) -> Vec<UsageRecord>
         .and_then(|ledger| ledger.get("events"))
         .and_then(Value::as_array);
     if let Some(events) = ledger_events {
-        return parse_ledger_events(events, &messages, &session_id, &project, source_file);
+        if !events.is_empty() {
+            return parse_ledger_events(events, &messages, &session_id, &project, source_file);
+        }
     }
     parse_message_usage(&messages, &session_id, &project, source_file)
 }
