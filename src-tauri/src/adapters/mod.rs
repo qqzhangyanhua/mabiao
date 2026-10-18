@@ -12,6 +12,7 @@ pub mod cursor_session;
 pub mod dsh;
 pub mod factory;
 pub mod gemini;
+pub mod goose;
 pub mod grok;
 pub mod hermes;
 pub mod kimi;
@@ -429,6 +430,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Goose,
+        path_env: "GOOSE_PATH_ROOT",
+        scan_dirs: goose::scan_dirs,
+        discover: goose::discover,
+        sidecar_fingerprint: goose::sidecar_fingerprint,
+        parse: goose::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "会话级 Token",
         display_dirs: None,
         detected: None,
     },

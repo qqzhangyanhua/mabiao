@@ -2,6 +2,7 @@ mod agy_fixture;
 mod alma_fixture;
 pub mod conversation_boundary;
 mod cursor_store;
+mod goose_fixture;
 mod helpers;
 mod hermes_fixture;
 pub mod http_stub;
@@ -10,6 +11,7 @@ mod work_notes_conn;
 pub use agy_fixture::*;
 pub use alma_fixture::*;
 pub use cursor_store::*;
+pub use goose_fixture::*;
 pub use helpers::*;
 pub use hermes_fixture::*;
 pub use work_notes_conn::*;
@@ -21,7 +23,7 @@ pub use crate::adapters::cursor_account;
 pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
     agy, alma, claude, cline, codebuddy, codex, copilot, cursor, cursor_agent, dsh, factory,
-    gemini, grok, hermes, kimi, omp, pi, qoder, qoder_cn, qwen, trae, workbuddy, zcode,
+    gemini, goose, grok, hermes, kimi, omp, pi, qoder, qoder_cn, qwen, trae, workbuddy, zcode,
 };
 pub use crate::aggregate;
 pub use crate::backup;

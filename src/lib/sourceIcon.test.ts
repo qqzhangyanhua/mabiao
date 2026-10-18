@@ -28,6 +28,7 @@ const KNOWN_SOURCES = [
   "alma",
   "codebuddy",
   "trae",
+  "goose",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -54,6 +55,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("alma")).toBe("alma");
     expect(resolveSourceIconId("codebuddy")).toBe("codebuddy");
     expect(resolveSourceIconId("trae")).toBe("trae");
+    expect(resolveSourceIconId("goose")).toBe("goose");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {

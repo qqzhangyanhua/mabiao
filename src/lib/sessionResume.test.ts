@@ -75,6 +75,9 @@ describe("sessionResumeHint", () => {
     expect(sessionResumeHint("cline", "cl-1").command).toBe("cline --id cl-1");
     expect(sessionResumeHint("codebuddy", "cb-1").command).toBe("codebuddy --resume cb-1");
     expect(sessionResumeHint("trae", "trae-1").command).toBe("traex resume trae-1");
+    expect(sessionResumeHint("goose", "20261017_1").command).toBe(
+      "goose session --resume --session-id 20261017_1",
+    );
   });
 
   it("prefixes cwd when the session has a project directory", () => {

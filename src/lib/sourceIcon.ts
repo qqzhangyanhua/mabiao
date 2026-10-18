@@ -26,6 +26,7 @@ const BRAND_TONE = {
   alma: "tone-alma",
   codebuddy: "tone-codebuddy",
   trae: "tone-trae",
+  goose: "tone-goose",
 } as const satisfies Record<BrandId, string>;
 
 export function brandToneClass(brand: BrandId): string {

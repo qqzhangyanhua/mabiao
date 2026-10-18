@@ -1066,6 +1066,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Trae.application_name(), "Trae CLI");
     assert_eq!(Source::Trae.as_str(), "trae");
     assert_eq!(Source::parse("trae"), Some(Source::Trae));
+    assert_eq!(Source::Goose.application_name(), "Goose");
+    assert_eq!(Source::Goose.as_str(), "goose");
+    assert_eq!(Source::parse("goose"), Some(Source::Goose));
 }
 
 #[test]
@@ -2439,6 +2442,22 @@ fn trae_adapter_reuses_codex_rollout_tokens_under_trae_source() {
             .sum::<i64>(),
         19113
     );
+}
+
+#[test]
+fn goose_adapter_reads_session_tokens_and_skips_hidden() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_goose_sessions_db(&dir.path().join("sessions.db"));
+    let records = goose::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Goose);
+    assert_eq!(records[0].session_id, "20261017_1");
+    assert_eq!(records[0].project, "/work/goose");
+    assert_eq!(records[0].model, "claude-sonnet-4-20250514");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].input_tokens, 1000);
+    assert_eq!(records[0].output_tokens, 200);
+    assert_eq!(records[0].total_tokens, 1200);
 }
 
 #[test]

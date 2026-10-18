@@ -34,6 +34,7 @@ mod event_storage;
 mod event_tables;
 mod export;
 mod gemini;
+mod goose;
 mod grok;
 mod grok_inject;
 mod hermes;
@@ -369,6 +370,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: trae::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Goose,
+        discover: goose::discover,
+        index: goose::index,
+        index_suffix: None,
+        detail: goose::detail,
+        revision: goose::source_revision,
+        raw_extension: None,
         reuse_unchanged_index: true,
     },
     ConversationAdapter {

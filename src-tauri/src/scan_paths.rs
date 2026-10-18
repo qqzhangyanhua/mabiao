@@ -248,6 +248,9 @@ fn row_note(source: Source) -> String {
         Source::Opencode => {
             "未设 OPENCODE_DATA_DIR 时用 XDG_DATA_HOME/opencode。OPENCODE_DB 替换库文件名；没有库才读 storage/ 下的旧 JSON。".to_string()
         }
+        Source::Goose => {
+            "扫 sessions.db。GOOSE_PATH_ROOT 指向 goose 根，拼 data/sessions；未覆盖时扫 XDG / Application Support 与 Block 旧路径。".to_string()
+        }
         _ => String::new(),
     }
 }
