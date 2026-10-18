@@ -642,3 +642,17 @@ fn cherry_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Cherry);
     assert_conversation_index_matches_parse(&conn, home, "cherry", CHERRY_TOPIC_ID);
 }
+
+#[test]
+fn openclaw_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".openclaw/agents/main/sessions/sess-openclaw-1.jsonl",
+        "openclaw.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::OpenClaw);
+    assert_conversation_index_matches_parse(&conn, home, "openclaw", "sess-openclaw-1");
+}

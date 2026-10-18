@@ -47,6 +47,7 @@ mod kimi;
 mod line_direct;
 mod merge;
 mod omp;
+mod openclaw;
 mod opencode;
 mod persist;
 mod pi;
@@ -415,6 +416,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: cherry::detail,
         revision: cherry::source_revision,
         raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::OpenClaw,
+        discover: openclaw::discover,
+        index: openclaw::index,
+        index_suffix: None,
+        detail: openclaw::detail,
+        revision: openclaw::source_revision,
+        raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
     },
     ConversationAdapter {

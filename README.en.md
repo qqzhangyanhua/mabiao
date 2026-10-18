@@ -32,6 +32,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |
 | Zed | ✅ | ❌ | `threads.db` zstd/json threads; remainder tops the per-request map up to cumulative |
 | Cherry Studio | ✅ | ✅ | sqlite `ai_usage_record`; USD cost only |
+| OpenClaw | ✅ | ✅ | jsonl `agents/*/sessions`; native `usage.cost.total` |
 | Factory / droid | ✅ | ❌ | Session totals; model from settings; subagents merge into parent |
 | Cursor | ⚠️ | ❌ | Code volume + account usage (reads the local client's login state) |
 | cursor-agent | ⚠️ | ❌ | Tokens only after a wrapper writes them to disk |

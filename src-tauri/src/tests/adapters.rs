@@ -1503,6 +1503,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Cherry.application_name(), "Cherry Studio");
     assert_eq!(Source::Cherry.as_str(), "cherry");
     assert_eq!(Source::parse("cherry"), Some(Source::Cherry));
+    assert_eq!(Source::OpenClaw.application_name(), "OpenClaw");
+    assert_eq!(Source::OpenClaw.as_str(), "openclaw");
+    assert_eq!(Source::parse("openclaw"), Some(Source::OpenClaw));
 }
 
 #[test]
@@ -3074,6 +3077,66 @@ fn cherry_adapter_reads_usage_and_skips_missing_model() {
             .sum::<i64>(),
         CHERRY_TOKENS
     );
+}
+
+#[test]
+fn openclaw_adapter_reads_turns_and_skips_mirror_and_zero() {
+    let records = openclaw::parse_openclaw_jsonl(
+        &fixture_lines(&fixture("openclaw.jsonl")),
+        "/home/dev/.openclaw/agents/main/sessions/sess-openclaw-1.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert!(records
+        .iter()
+        .all(|record| record.source == Source::OpenClaw));
+    assert_eq!(records[0].session_id, "sess-openclaw-1");
+    assert_eq!(records[0].project, "/work/openclaw");
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].input_tokens, 80);
+    assert_eq!(records[0].output_tokens, 20);
+    assert_eq!(records[0].cache_read_tokens, 40);
+    assert_eq!(records[0].cache_creation_tokens, 10);
+    assert_eq!(records[0].reasoning_tokens, 5);
+    assert_eq!(records[0].native_cost, Some(0.02));
+    assert_eq!(records[1].input_tokens, 30);
+    assert_eq!(records[1].output_tokens, 10);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        195
+    );
+}
+
+#[test]
+fn openclaw_discover_counts_reset_archives_and_skips_checkpoints() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("main/sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let live = sessions.join("sess-openclaw-1.jsonl");
+    let reset = sessions.join("old.jsonl.reset.2026-01-01T00-00-00.000Z");
+    let deleted = sessions.join("gone.jsonl.deleted.2026-01-01T00-00-00.000Z");
+    let bak = sessions.join("sess-openclaw-1.jsonl.bak.2026-01-01T00-00-00.000Z");
+    let checkpoint =
+        sessions.join("sess-openclaw-1.checkpoint.11111111-1111-4111-8111-111111111111.jsonl");
+    let trajectory = sessions.join("sess-openclaw-1.trajectory.jsonl");
+    std::fs::write(&live, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&reset, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&deleted, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&bak, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&checkpoint, fixture("openclaw.jsonl")).unwrap();
+    std::fs::write(&trajectory, fixture("openclaw.jsonl")).unwrap();
+
+    let found = openclaw::discover(&[dir.path().to_path_buf()]).unwrap();
+    assert_eq!(found.len(), 3);
+    assert!(found.contains(&live));
+    assert!(found.contains(&reset));
+    assert!(found.contains(&deleted));
+    assert!(!found.contains(&bak));
+    assert!(!found.contains(&checkpoint));
+    assert!(!found.contains(&trajectory));
 }
 
 #[test]

@@ -105,6 +105,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Amp), "threads");
     assert_eq!(scan_paths::join_leaf(Source::Zed), "threads");
     assert_eq!(scan_paths::join_leaf(Source::Cherry), "");
+    assert_eq!(scan_paths::join_leaf(Source::OpenClaw), "agents");
 }
 
 #[test]
