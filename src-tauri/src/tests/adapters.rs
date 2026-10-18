@@ -1292,6 +1292,7 @@ fn factory_adapter_maps_session_token_usage() {
     assert_eq!(records[0].cache_read_tokens, 11084);
     assert_eq!(records[0].reasoning_tokens, 0);
     assert_eq!(records[0].total_tokens, 20234);
+    assert_eq!(records[0].occurred_at, "2025-10-24T06:12:17.268Z");
 }
 
 #[test]
@@ -3020,4 +3021,103 @@ fn factory_resolves_custom_model_and_merges_subagent() {
     assert_eq!(records[0].input_tokens, 4);
     assert_eq!(records[0].output_tokens, 8);
     assert_eq!(records[0].project, "/workspace/project");
+}
+
+#[test]
+fn factory_cumulative_uses_last_jsonl_timestamp() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let settings = sessions.join("sess.settings.json");
+    std::fs::write(
+        &settings,
+        r#"{"model":"claude-sonnet-4","providerLock":"anthropic","providerLockTimestamp":"2026-08-23T00:00:03Z","tokenUsage":{"inputTokens":20,"outputTokens":7,"cacheCreationTokens":3,"cacheReadTokens":5,"thinkingTokens":2}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        sessions.join("sess.jsonl"),
+        concat!(
+            r#"{"role":"user","timestamp":"2026-08-22T23:00:00Z","content":[{"type":"text","text":"hi"}]}"#,
+            "\n",
+            r#"{"type":"assistant","timestamp":"2026-08-23T00:00:02Z","message":{"role":"assistant","model":"claude-sonnet-4","content":[{"type":"text","text":"ok"}]}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let records = factory::parse(&settings, &sessions).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].occurred_at, "2026-08-23T00:00:02Z");
+    assert_eq!(records[0].input_tokens, 20);
+    assert_eq!(records[0].output_tokens, 7);
+    assert_eq!(records[0].cache_creation_tokens, 3);
+    assert_eq!(records[0].cache_read_tokens, 5);
+    assert_eq!(records[0].reasoning_tokens, 2);
+    assert_eq!(records[0].total_tokens, 37);
+}
+
+#[test]
+fn factory_emits_per_turn_usage_from_jsonl_when_present() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions/-workspace-project");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let settings = sessions.join("sess.settings.json");
+    std::fs::write(
+        &settings,
+        r#"{"model":"claude-sonnet-4","providerLock":"anthropic","providerLockTimestamp":"2026-08-23T00:00:09Z","tokenUsage":{"inputTokens":30,"outputTokens":12,"cacheCreationTokens":4,"cacheReadTokens":6,"thinkingTokens":3}}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        sessions.join("sess.jsonl"),
+        concat!(
+            r#"{"type":"session_start","id":"sess","callingSessionId":"parent-id"}"#,
+            "\n",
+            r#"{"type":"assistant","timestamp":"2026-08-23T00:00:01Z","message":{"role":"assistant","model":"claude-sonnet-4"},"tokenUsage":{"inputTokens":10,"outputTokens":4,"cacheCreationTokens":1,"cacheReadTokens":2,"thinkingTokens":1}}"#,
+            "\n",
+            r#"{"type":"assistant","timestamp":"2026-08-23T00:00:05Z","usage":{"inputTokens":20,"outputTokens":8,"cacheCreationTokens":3,"cacheReadTokens":4,"thinkingTokens":2}}"#,
+            "\n",
+        ),
+    )
+    .unwrap();
+
+    let records = factory::parse(&settings, &sessions).unwrap();
+    assert_eq!(
+        records.len(),
+        2,
+        "per-turn usage must replace the session cumulative"
+    );
+    assert_eq!(records[0].occurred_at, "2026-08-23T00:00:01Z");
+    assert_eq!(records[0].session_id, "parent-id");
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].project, "/workspace/project");
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 4);
+    assert_eq!(records[0].cache_creation_tokens, 1);
+    assert_eq!(records[0].cache_read_tokens, 2);
+    assert_eq!(records[0].reasoning_tokens, 1);
+    assert_eq!(records[0].total_tokens, 18);
+    assert_eq!(records[1].occurred_at, "2026-08-23T00:00:05Z");
+    assert_eq!(records[1].input_tokens, 20);
+    assert_eq!(records[1].output_tokens, 8);
+    assert_eq!(records[1].total_tokens, 37);
+    let summed: i64 = records.iter().map(|r| r.total_tokens).sum();
+    assert_eq!(summed, 55);
+    assert_ne!(summed, 55 + 55, "must not also emit settings tokenUsage");
+}
+
+#[test]
+fn factory_sidecar_fingerprint_tracks_jsonl_sibling() {
+    let dir = tempfile::tempdir().unwrap();
+    let sessions = dir.path().join("sessions");
+    std::fs::create_dir_all(&sessions).unwrap();
+    let settings = sessions.join("sess.settings.json");
+    std::fs::write(&settings, "{}").unwrap();
+
+    let missing = factory::sidecar_fingerprint(&settings, &[]);
+    std::fs::write(sessions.join("sess.jsonl"), "{\"role\":\"user\"}\n").unwrap();
+    let present = factory::sidecar_fingerprint(&settings, &[]);
+    assert_eq!(missing, "missing");
+    assert_ne!(present, missing);
+    assert_ne!(present, "missing");
 }

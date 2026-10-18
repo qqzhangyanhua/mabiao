@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use crate::adapters::project::decode_dashed_dir;
-use crate::adapters::{discover_suffix, finish, i64_field, text_field};
+use crate::adapters::{
+    discover_suffix, finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field,
+};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
@@ -23,37 +24,37 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     discover_suffix(roots, ".settings.json")
 }
 
+pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
+    ingest::metadata_fingerprint(&jsonl_sibling(path))
+}
+
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let content = std::str::from_utf8(&bytes).map_err(|error| error.to_string())?;
     serde_json::from_str::<serde::de::IgnoredAny>(content).map_err(|error| error.to_string())?;
     let custom = load_custom_models(path);
-    let calling = read_calling_session_id(path);
+    let jsonl = scan_jsonl(&jsonl_sibling(path));
     Ok(parse_factory_session(
         content,
         path.to_string_lossy().as_ref(),
         custom.as_ref(),
-        calling.as_deref(),
+        &jsonl,
     ))
 }
 
 pub fn parse_factory_settings(content: &str, source_file: &str) -> Vec<UsageRecord> {
-    parse_factory_session(content, source_file, None, None)
+    parse_factory_session(content, source_file, None, &JsonlScan::default())
 }
 
 fn parse_factory_session(
     content: &str,
     source_file: &str,
     custom_models: Option<&HashMap<String, String>>,
-    calling: Option<&str>,
+    jsonl: &JsonlScan,
 ) -> Vec<UsageRecord> {
     let value: Value = match serde_json::from_str(content) {
         Ok(v) => v,
         Err(_) => return Vec::new(),
-    };
-    let usage = match value.get("tokenUsage") {
-        Some(v) if !v.is_null() => v.clone(),
-        _ => return Vec::new(),
     };
     let file_name = std::path::Path::new(source_file)
         .file_name()
@@ -63,7 +64,7 @@ fn parse_factory_session(
         .strip_suffix(".settings.json")
         .unwrap_or(file_name)
         .to_string();
-    let session_id = match calling {
+    let session_id = match jsonl.calling_session_id.as_deref() {
         Some(parent) if !parent.is_empty() && parent != file_session_id => parent.to_string(),
         _ => file_session_id,
     };
@@ -77,23 +78,197 @@ fn parse_factory_session(
     } else {
         String::new()
     };
+    let settings_model = resolve_model(&text_field(&value, &["model"]), custom_models);
+    let provider = text_field(&value, &["providerLock"]);
+    let turns: Vec<UsageRecord> = jsonl
+        .turns
+        .iter()
+        .map(|turn| {
+            finish(UsageRecord {
+                occurred_at: turn.occurred_at.clone(),
+                source: Source::Factory,
+                model: if turn.model.is_empty() {
+                    settings_model.clone()
+                } else {
+                    resolve_model(&turn.model, custom_models)
+                },
+                provider: provider.clone(),
+                project: project.clone(),
+                session_id: session_id.clone(),
+                source_file: source_file.to_string(),
+                input_tokens: turn.input_tokens,
+                output_tokens: turn.output_tokens,
+                cache_read_tokens: turn.cache_read_tokens,
+                cache_creation_tokens: turn.cache_creation_tokens,
+                cache_creation_1h_tokens: 0,
+                reasoning_tokens: turn.reasoning_tokens,
+                total_tokens: 0,
+                native_cost: None,
+            })
+        })
+        .filter(has_billable_tokens)
+        .collect();
+    if !turns.is_empty() {
+        return turns;
+    }
+    let usage = match value.get("tokenUsage") {
+        Some(v) if !v.is_null() => v,
+        _ => return Vec::new(),
+    };
+    let occurred_at = if jsonl.last_timestamp.is_empty() {
+        text_field(&value, &["providerLockTimestamp"])
+    } else {
+        jsonl.last_timestamp.clone()
+    };
     vec![finish(UsageRecord {
-        occurred_at: text_field(&value, &["providerLockTimestamp"]),
+        occurred_at,
         source: Source::Factory,
-        model: resolve_model(&text_field(&value, &["model"]), custom_models),
-        provider: text_field(&value, &["providerLock"]),
+        model: settings_model,
+        provider,
         project,
         session_id,
         source_file: source_file.to_string(),
-        input_tokens: i64_field(&usage, &["inputTokens"]),
-        output_tokens: i64_field(&usage, &["outputTokens"]),
-        cache_read_tokens: i64_field(&usage, &["cacheReadTokens"]),
-        cache_creation_tokens: i64_field(&usage, &["cacheCreationTokens"]),
+        input_tokens: i64_field(usage, &["inputTokens", "input_tokens"]),
+        output_tokens: i64_field(usage, &["outputTokens", "output_tokens"]),
+        cache_read_tokens: i64_field(usage, &["cacheReadTokens", "cache_read_tokens"]),
+        cache_creation_tokens: i64_field(usage, &["cacheCreationTokens", "cache_creation_tokens"]),
         cache_creation_1h_tokens: 0,
-        reasoning_tokens: i64_field(&usage, &["thinkingTokens"]),
+        reasoning_tokens: i64_field(usage, &["thinkingTokens", "reasoning_tokens"]),
         total_tokens: 0,
         native_cost: None,
     })]
+}
+
+#[derive(Default)]
+struct JsonlScan {
+    calling_session_id: Option<String>,
+    last_timestamp: String,
+    turns: Vec<TurnUsage>,
+}
+
+struct TurnUsage {
+    occurred_at: String,
+    model: String,
+    input_tokens: i64,
+    output_tokens: i64,
+    cache_read_tokens: i64,
+    cache_creation_tokens: i64,
+    reasoning_tokens: i64,
+}
+
+fn jsonl_sibling(settings_path: &Path) -> PathBuf {
+    let stem = settings_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(|name| name.strip_suffix(".settings.json"))
+        .unwrap_or("");
+    settings_path.with_file_name(format!("{stem}.jsonl"))
+}
+
+fn scan_jsonl(path: &Path) -> JsonlScan {
+    let mut scan = JsonlScan::default();
+    for value in parse_jsonl_value_lines(ingest::open_jsonl_lines(path)) {
+        if scan.calling_session_id.is_none()
+            && value.get("type").and_then(Value::as_str) == Some("session_start")
+        {
+            if let Some(calling) = value
+                .get("callingSessionId")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|id| !id.is_empty())
+            {
+                scan.calling_session_id = Some(calling.to_string());
+            }
+        }
+        let occurred_at = event_timestamp(&value);
+        if !occurred_at.is_empty() {
+            scan.last_timestamp = occurred_at.clone();
+        }
+        let Some(usage) = token_usage_object(&value) else {
+            continue;
+        };
+        scan.turns.push(TurnUsage {
+            occurred_at,
+            model: event_model(&value),
+            input_tokens: i64_field(usage, &["inputTokens", "input_tokens"]),
+            output_tokens: i64_field(usage, &["outputTokens", "output_tokens"]),
+            cache_read_tokens: i64_field(usage, &["cacheReadTokens", "cache_read_tokens"]),
+            cache_creation_tokens: i64_field(
+                usage,
+                &["cacheCreationTokens", "cache_creation_tokens"],
+            ),
+            reasoning_tokens: i64_field(usage, &["thinkingTokens", "reasoning_tokens"]),
+        });
+    }
+    scan
+}
+
+fn token_usage_object(value: &Value) -> Option<&Value> {
+    [
+        value.get("tokenUsage"),
+        value.get("usage"),
+        value.pointer("/message/tokenUsage"),
+        value.pointer("/message/usage"),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|candidate| is_token_usage(candidate))
+}
+
+fn is_token_usage(value: &Value) -> bool {
+    value.is_object()
+        && [
+            "inputTokens",
+            "outputTokens",
+            "cacheReadTokens",
+            "cacheCreationTokens",
+            "thinkingTokens",
+            "input_tokens",
+            "output_tokens",
+            "cache_read_tokens",
+            "cache_creation_tokens",
+            "reasoning_tokens",
+        ]
+        .iter()
+        .any(|key| value.get(*key).is_some())
+}
+
+fn event_model(value: &Value) -> String {
+    let top = text_field(value, &["model"]);
+    if !top.is_empty() {
+        return top;
+    }
+    value
+        .get("message")
+        .map(|message| text_field(message, &["model"]))
+        .unwrap_or_default()
+}
+
+fn event_timestamp(value: &Value) -> String {
+    for candidate in [
+        value.get("timestamp"),
+        value.get("created_at"),
+        value.get("createdAt"),
+        value.get("time"),
+        value.pointer("/message/timestamp"),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(timestamp) = candidate
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return timestamp.to_string();
+        }
+        if let Some(milliseconds) = candidate.as_i64() {
+            return chrono::DateTime::from_timestamp_millis(milliseconds)
+                .map(|timestamp| timestamp.to_rfc3339())
+                .unwrap_or_default();
+        }
+    }
+    String::new()
 }
 
 /// 会话 `model`：空则回落 `droid`；`custom:<id>` 先查 `~/.factory/settings.json`
@@ -182,24 +357,6 @@ fn load_custom_models(session_file: &Path) -> Option<HashMap<String, String>> {
     } else {
         Some(map)
     }
-}
-
-fn read_calling_session_id(settings_path: &Path) -> Option<String> {
-    let name = settings_path.file_name()?.to_str()?;
-    let stem = name.strip_suffix(".settings.json")?;
-    let jsonl = settings_path.with_file_name(format!("{stem}.jsonl"));
-    let file = std::fs::File::open(jsonl).ok()?;
-    let first = std::io::BufReader::new(file).lines().next()?.ok()?;
-    let value: Value = serde_json::from_str(first.trim()).ok()?;
-    if value.get("type").and_then(Value::as_str) != Some("session_start") {
-        return None;
-    }
-    let calling = value
-        .get("callingSessionId")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|id| !id.is_empty())?;
-    Some(calling.to_string())
 }
 
 #[cfg(test)]

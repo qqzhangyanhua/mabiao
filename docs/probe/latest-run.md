@@ -81,16 +81,17 @@
 
 ## factory
 
-- 有 token：是（会话累计，非每轮）
-- 口径：`<id>.settings.json` 的 `tokenUsage`
+- 有 token：是（本机实测为会话累计；jsonl 若带 usage 则按行拆）
+- 口径：优先同名 `<id>.jsonl` 行级 `tokenUsage`/`usage`；没有才用 `<id>.settings.json` 的 `tokenUsage`
   - input ← `inputTokens`
   - output ← `outputTokens`
   - cache_read ← `cacheReadTokens`
   - cache_creation ← `cacheCreationTokens`
   - reasoning ← `thinkingTokens`
   - total：各口径之和
-- 模型：settings 中不存在
+  - 时间：有行级 usage 用该行时间戳；否则累计记录用 jsonl 最后一条时间戳，再回落 `providerLockTimestamp`
+- 模型：settings `model`，行级可覆盖
 - provider：`providerLock`
 - 项目：会话目录 dashed 名解码（根级 settings 则空）
-- 会话：文件名前缀 uuid
-- 原始文件：该 `<id>.settings.json`
+- 会话：`callingSessionId` 或文件名前缀 uuid
+- 原始文件：该 `<id>.settings.json`（jsonl 作 sidecar）
