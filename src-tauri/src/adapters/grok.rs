@@ -126,6 +126,7 @@ fn parse_turn_completed(
             if input == 0 && output == 0 && cache_read == 0 && reported_total == 0 {
                 continue;
             }
+            let spent = grok_spent(input, output, cache_read, cache_creation, reasoning);
             let key = (prompt_id.clone(), model.clone());
             if !last_by_key.contains_key(&key) {
                 order.push(key.clone());
@@ -140,12 +141,12 @@ fn parse_turn_completed(
                     project: project.to_string(),
                     session_id: session_id.to_string(),
                     source_file: source_file.to_string(),
-                    input_tokens: input,
-                    output_tokens: output,
-                    cache_read_tokens: cache_read,
-                    cache_creation_tokens: cache_creation,
+                    input_tokens: spent.input,
+                    output_tokens: spent.output,
+                    cache_read_tokens: spent.cache_read,
+                    cache_creation_tokens: spent.cache_creation,
                     cache_creation_1h_tokens: 0,
-                    reasoning_tokens: reasoning,
+                    reasoning_tokens: spent.reasoning,
                     total_tokens: if reported_total > 0 {
                         reported_total
                     } else {
@@ -247,6 +248,37 @@ fn model_usages(usage: &Value) -> Vec<(String, Value)> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// `inputTokens` 含 cache read/write；`reasoningTokens` ⊆ `outputTokens`。
+/// 拆成互斥档后再入账；`costUsdTicks` 仍走 native_cost，不按拆后分项重算。
+fn grok_spent(
+    input: i64,
+    output: i64,
+    cache_read: i64,
+    cache_creation: i64,
+    reasoning: i64,
+) -> GrokSpent {
+    let input = input.max(0);
+    let cache_read = cache_read.max(0).min(input);
+    let cache_creation = cache_creation.max(0).min(input - cache_read);
+    let output = output.max(0);
+    let reasoning = reasoning.max(0).min(output);
+    GrokSpent {
+        input: input - cache_read - cache_creation,
+        output: output - reasoning,
+        cache_read,
+        cache_creation,
+        reasoning,
+    }
+}
+
+struct GrokSpent {
+    input: i64,
+    output: i64,
+    cache_read: i64,
+    cache_creation: i64,
+    reasoning: i64,
 }
 
 fn ticks_to_usd(usage: &Value) -> Option<f64> {

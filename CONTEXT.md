@@ -116,7 +116,7 @@ _Avoid_: 规则、rules（会和本仓库的项目规则撞名）；记忆、mem
 | opencode | sqlite+json `~/.local/share/opencode`（`OPENCODE_DATA_DIR`，否则 `$XDG_DATA_HOME/opencode`；库文件默认 `opencode.db`，`OPENCODE_DB` 可改）。`message` 与 OpenCode 2 的 `session_v2` / `session_message`。没有库时才读 `storage/session` 旧 JSON | ✅ | ✅ 自带 |
 | kimi | jsonl `~/.kimi` 与 `~/.kimi-code` 的 `sessions/**/wire.jsonl` | ✅ | ❌ |
 | gemini | json / jsonl `~/.gemini/tmp/*/chats/session-*`（`GEMINI_DATA_DIR` 可覆盖） | ✅ | ❌ |
-| grok | `~/.grok/sessions` | ✅（`turn_completed.usage`） | ✅ 自带 `costUsdTicks` |
+| grok | `~/.grok/sessions` | ✅（`turn_completed.usage`；input 含 cache、reasoning ⊂ output，入账时拆开） | ✅ 自带 `costUsdTicks` |
 | Hermes | sqlite `~/.hermes/state.db` 与 `~/.hermes/profiles/*/state.db`（`HERMES_HOME` 若在 `profiles/<name>` 则回到根） | ✅（模型级累计） | ✅ 自带 `actual_cost_usd` |
 | Antigravity | 每会话一个 SQLite、裸 protobuf BLOB；CLI `~/.gemini/antigravity-cli` + IDE `~/.gemini/antigravity-ide`（各进 `conversations/`；`AGY_DATA_DIR` 可整体覆盖） | ✅（轮级六元组：input / output / cache 读写 / thinking） | ❌（无原生费用，靠价目快照兜底） |
 | qwen | jsonl `~/.qwen/projects/**/chats`（`usageMetadata`）；`tmp/*/logs.json` 仅对话 | ✅ | ❌ |

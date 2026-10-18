@@ -183,8 +183,8 @@ fn overview_from_grok_turn_completed_uses_usage_not_context_total() {
     let stored = store::load_all(&conn).unwrap();
     let dto = aggregate::overview(&stored, &Filter::default(), &PriceTable::default());
     assert_eq!(dto.total_tokens, 452282);
-    assert_eq!(dto.input_tokens, 447530);
-    assert_eq!(dto.output_tokens, 4752);
+    assert_eq!(dto.input_tokens, 37413);
+    assert_eq!(dto.output_tokens, 1182);
     assert_eq!(dto.cache_read_tokens, 410117);
     assert_eq!(dto.reasoning_tokens, 3570);
     assert_eq!(dto.session_count, 1);

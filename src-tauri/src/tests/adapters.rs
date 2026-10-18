@@ -1202,16 +1202,17 @@ fn grok_adapter_reads_turn_completed_usage_not_context_total() {
     assert_eq!(records[0].project, "/Users/zhangyanhua/AI/TradingAgents-CN");
     assert_eq!(records[0].session_id, "019fd235");
     assert_eq!(records[0].model, "grok-4.6-build");
-    assert_eq!(records[0].input_tokens, 447430);
-    assert_eq!(records[0].output_tokens, 4742);
+    // 修前 input=447430 含 cache、output=4742 含 reasoning。修后互斥拆分。
+    assert_eq!(records[0].input_tokens, 37318);
+    assert_eq!(records[0].output_tokens, 1175);
     assert_eq!(records[0].cache_read_tokens, 410112);
     assert_eq!(records[0].cache_creation_tokens, 0);
     assert_eq!(records[0].reasoning_tokens, 3567);
     assert_eq!(records[0].total_tokens, 452172);
     assert_ne!(records[0].total_tokens, 15681);
     assert!((records[0].native_cost.unwrap() - 0.308144).abs() < 1e-9);
-    assert_eq!(records[1].input_tokens, 100);
-    assert_eq!(records[1].output_tokens, 10);
+    assert_eq!(records[1].input_tokens, 95);
+    assert_eq!(records[1].output_tokens, 7);
     assert_eq!(records[1].cache_read_tokens, 5);
     assert_eq!(records[1].reasoning_tokens, 3);
     assert_eq!(records[1].total_tokens, 110);
