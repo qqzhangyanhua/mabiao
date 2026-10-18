@@ -44,6 +44,8 @@
 
 设置页「扫描路径」可以为每个 Source 填写绝对根目录，语义与环境变量相同（整体替换、逗号分隔、再按原规则拼接叶子路径）。优先级：设置页覆盖 > 环境变量 > 默认路径。从 Dock / Finder 打开时读不到用户 shell 里 export 的值，这是漏数的真实原因；环境变量仍保留给终端启动和脚本，设置页用来给 GUI 一份绝对路径。
 
+Windows 在未覆盖默认路径时，额外只读扫描 `\\wsl.localhost` 与 `\\wsl$` 下各发行版的 `/home/<user>`，把同一套默认相对路径（`.claude/projects`、`.codex/sessions` 等）再扫一遍。UNC 枚举失败、超时或未安装 WSL 时静默跳过。设置页/环境变量覆盖某一来源后，该来源不再附加 WSL 家目录。非 Windows 平台不生效。
+
 ## Consequences
 
 - 环境变量只在应用启动/摄取时读取一次性生效；桌面 App 从 Dock/Finder 打开时，用户 shell 里的 export 经常读不到。设置页把绝对路径写进 `scan_paths.json`，不依赖进程环境。

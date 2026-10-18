@@ -21,7 +21,10 @@ pub(crate) fn catalog_roots(
     source: Source,
 ) -> Vec<PathBuf> {
     if source == Source::CursorAgent {
-        vec![home.join(".cursor/projects")]
+        crate::wsl::scan_homes(home)
+            .into_iter()
+            .map(|scan_home| scan_home.join(".cursor/projects"))
+            .collect()
     } else {
         ingest::source_scan_dirs_with(overrides, home, source)
     }

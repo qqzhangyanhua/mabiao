@@ -102,12 +102,25 @@ pub(crate) fn resolve_dirs(
 }
 
 /// 每个来源实际要扫描的目录（可能不止一个），一律从表里取。
+/// 未覆盖默认路径时，Windows 还会并上各 WSL 发行版用户家目录里的同一相对路径。
 pub(crate) fn source_scan_dirs_with(
     overrides: &PathOverrides,
     home: &Path,
     source: Source,
 ) -> Vec<PathBuf> {
-    (usage_adapter(source).scan_dirs)(overrides, home)
+    let adapter = usage_adapter(source);
+    if overrides.contains_key(adapter.path_env) {
+        return (adapter.scan_dirs)(overrides, home);
+    }
+    let mut dirs = Vec::new();
+    for scan_home in crate::wsl::scan_homes(home) {
+        for path in (adapter.scan_dirs)(overrides, &scan_home) {
+            if !dirs.contains(&path) {
+                dirs.push(path);
+            }
+        }
+    }
+    dirs
 }
 
 /// 用量阶段与对话目录阶段串行同步跑完，结果与一次完整摄取相同。
