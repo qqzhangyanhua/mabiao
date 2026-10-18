@@ -1488,6 +1488,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Goose.application_name(), "Goose");
     assert_eq!(Source::Goose.as_str(), "goose");
     assert_eq!(Source::parse("goose"), Some(Source::Goose));
+    assert_eq!(Source::Roo.application_name(), "Roo Code");
+    assert_eq!(Source::Roo.as_str(), "roo");
+    assert_eq!(Source::parse("roo"), Some(Source::Roo));
 }
 
 #[test]
@@ -3120,4 +3123,81 @@ fn factory_sidecar_fingerprint_tracks_jsonl_sibling() {
     assert_eq!(missing, "missing");
     assert_ne!(present, missing);
     assert_ne!(present, "missing");
+}
+
+fn write_roo_task(home: &std::path::Path, id: &str) -> PathBuf {
+    let dir = home
+        .join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks")
+        .join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("ui_messages.json"),
+        fixture("roo.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("api_conversation_history.json"),
+        fixture("roo.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("history_item.json"),
+        fixture("roo.history_item.json"),
+    )
+    .unwrap();
+    dir.join("ui_messages.json")
+}
+
+#[test]
+fn roo_adapter_subtracts_cache_from_tokens_in_and_pairs_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_roo_task(dir.path(), "task-roo-1");
+    let records = roo::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Roo);
+    assert_eq!(records[0].model, "anthropic/claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].project, "/work/roo");
+    assert_eq!(records[0].session_id, "task-roo-1");
+    assert_eq!(records[0].input_tokens, 1000);
+    assert_eq!(records[0].output_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 400);
+    assert_eq!(records[0].cache_creation_tokens, 100);
+    assert_eq!(records[0].total_tokens, 1580);
+    assert_eq!(records[0].native_cost, Some(0.012));
+    assert_eq!(records[1].model, "openai/gpt-4.1");
+    assert_eq!(records[1].provider, "openai");
+    assert_eq!(records[1].input_tokens, 200);
+    assert_eq!(records[1].output_tokens, 40);
+    assert_eq!(records[1].cache_read_tokens, 0);
+    assert_eq!(records[1].total_tokens, 240);
+    assert_eq!(records[1].native_cost, Some(0.003));
+    let summed: i64 = records.iter().map(|r| r.total_tokens).sum();
+    assert_eq!(summed, 1820);
+    // tokensIn 本身已含 cache；若不拆出，再叠加 cache 口径会变成 2320。
+    assert_ne!(
+        summed,
+        1500 + 80 + 400 + 100 + 200 + 40,
+        "must not keep cache inside input"
+    );
+}
+
+#[test]
+fn roo_scan_dirs_cover_vscode_family_and_env_override() {
+    let home = std::path::Path::new("/home/example");
+    let dirs = roo::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(dirs
+        .contains(&home.join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks")));
+    assert!(dirs.contains(&home.join(
+        "Library/Application Support/Cursor/User/globalStorage/rooveterinaryinc.roo-cline/tasks"
+    )));
+    assert!(dirs.contains(
+        &home.join(".vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/tasks")
+    ));
+    let overrides =
+        ingest::PathOverrides::from([("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")])]);
+    assert_eq!(
+        roo::scan_dirs(&overrides, home),
+        vec![PathBuf::from("/custom/roo-tasks")]
+    );
 }

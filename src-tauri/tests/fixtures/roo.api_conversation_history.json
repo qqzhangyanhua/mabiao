@@ -1,0 +1,41 @@
+[
+  {
+    "role": "user",
+    "ts": 1760000000000,
+    "content": [
+      {
+        "type": "text",
+        "text": "Implement the adapter\n\n<environment_details>\n# Current Mode\n<slug>code</slug>\n<name>Code</name>\n<model>anthropic/claude-sonnet-4</model>\n# Current Workspace Directory (/work/roo) Files\n</environment_details>"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "ts": 1760000001500,
+    "content": [
+      { "type": "text", "text": "Working on it" },
+      {
+        "type": "tool_use",
+        "id": "toolu_1",
+        "name": "read_file",
+        "input": { "path": "/work/roo/src.rs" }
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "ts": 1760000002500,
+    "content": [
+      { "type": "tool_result", "tool_use_id": "toolu_1", "content": "ok" },
+      {
+        "type": "text",
+        "text": "<environment_details>\n# Current Mode\n<slug>code</slug>\n<name>Code</name>\n<model>openai/gpt-4.1</model>\n</environment_details>"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "ts": 1760000003500,
+    "content": [{ "type": "text", "text": "Done" }]
+  }
+]

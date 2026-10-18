@@ -7,6 +7,8 @@
 > **进度更新（2026-10-10）**：**Cline CLI**（`~/.cline/data/sessions/<id>/<id>.messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」仍指 VS Code 扩展的 `ui_messages.json` 路径，与 Cline CLI 不是同一套落地文件。
 >
 > **进度更新（2026-10-18）**：**Goose**（`~/.local/share/goose/sessions/sessions.db`）已作为独立 Usage Source 接入，见「已实现」小节。
+>
+> **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Roo 已落地；Cline 扩展与 Kilo 仍待接入。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -62,6 +64,11 @@
 
 - **本机路径**：`~/.local/share/goose/sessions/sessions.db`（另扫 macOS Application Support 与 Block 旧路径）；`GOOSE_PATH_ROOT` 覆盖根并拼 `data/sessions`
 - **实现**：`src-tauri/src/adapters/goose.rs` + `conversation/goose.rs`，注册为 `Source::Goose`，coverage「会话级 Token」；取 `accumulated_*`（缺则回落会话级 input/output/total）；`session_type = hidden` 不入账；对话读 `messages.content_json` 的 text / toolRequest / toolResponse
+
+### Roo Code ✅
+
+- **本机路径**：VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae / vscode-server 的 `User/globalStorage/rooveterinaryinc.roo-cline/tasks/<id>/`；`ROO_TASKS_DIR` 直接指向 tasks 目录
+- **实现**：`src-tauri/src/adapters/roo.rs` + 共用 `adapters/extension_tasks.rs` + `conversation/roo.rs`，注册为 `Source::Roo`，coverage「轮级 Token（input 不含 cache）」；`say == "api_req_started"` 嵌套 JSON 的 `tokensIn` 是含 cache 的 `totalInputTokens`（Roo PR #8954），入账 `input = tokensIn − cacheReads − cacheWrites`；模型按 `api_conversation_history.json` 用户消息里的 `<model>` 标签顺序配对；`cost > 0` 写入 `native_cost`；对话读同目录 `api_conversation_history.json`，剥 `<environment_details>`
 
 ## Tier 3 — 本轮不投入
 

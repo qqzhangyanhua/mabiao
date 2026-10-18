@@ -152,6 +152,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("codebuddy")).toBe("CodeBuddy");
     expect(sourceLabel("trae")).toBe("Trae CLI");
     expect(sourceLabel("goose")).toBe("Goose");
+    expect(sourceLabel("roo")).toBe("Roo Code");
   });
 
   it("always offers Cursor in the source filter list", () => {

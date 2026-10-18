@@ -1,0 +1,26 @@
+[
+  {
+    "ts": 1760000000000,
+    "type": "say",
+    "say": "text",
+    "text": "Implement the adapter"
+  },
+  {
+    "ts": 1760000001000,
+    "type": "say",
+    "say": "api_req_started",
+    "text": "{\"tokensIn\":1500,\"tokensOut\":80,\"cacheReads\":400,\"cacheWrites\":100,\"cost\":0.012,\"apiProtocol\":\"anthropic\"}"
+  },
+  {
+    "ts": 1760000002000,
+    "type": "say",
+    "say": "text",
+    "text": "Working on it"
+  },
+  {
+    "ts": 1760000003000,
+    "type": "say",
+    "say": "api_req_started",
+    "text": "{\"tokensIn\":200,\"tokensOut\":40,\"cacheReads\":0,\"cacheWrites\":0,\"cost\":0.003,\"apiProtocol\":\"openai\"}"
+  }
+]
