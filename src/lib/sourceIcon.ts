@@ -25,6 +25,7 @@ const BRAND_TONE = {
   zcode: "tone-zcode",
   alma: "tone-alma",
   codebuddy: "tone-codebuddy",
+  trae: "tone-trae",
 } as const satisfies Record<BrandId, string>;
 
 export function brandToneClass(brand: BrandId): string {

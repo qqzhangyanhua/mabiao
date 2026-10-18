@@ -98,6 +98,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Zcode), "cli/db/db.sqlite");
     assert_eq!(scan_paths::join_leaf(Source::Alma), "");
     assert_eq!(scan_paths::join_leaf(Source::CodeBuddy), "projects");
+    assert_eq!(scan_paths::join_leaf(Source::Trae), "cli/sessions");
 }
 
 #[test]

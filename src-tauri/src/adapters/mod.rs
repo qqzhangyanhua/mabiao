@@ -22,6 +22,7 @@ pub mod project;
 pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
+pub mod trae;
 pub mod workbuddy;
 pub mod zcode;
 
@@ -413,6 +414,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Trae,
+        path_env: "TRAE_HOME",
+        scan_dirs: trae::scan_dirs,
+        discover: trae::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: trae::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        soft_parse_failure: false,
+        coverage: "轮级 Token",
         display_dirs: None,
         detected: None,
     },

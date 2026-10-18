@@ -15,7 +15,14 @@ const CODEX_REQUEST_MARKER: &str = "my request for codex";
 mod tests;
 
 pub(super) fn index(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    parse_file_mode(path, false, false).map(|conversation| ConversationIndexBatch {
+    index_as(Source::Codex, path)
+}
+
+pub(super) fn index_as(
+    source: Source,
+    path: &Path,
+) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
+    parse_file_mode(source, path, false, false).map(|conversation| ConversationIndexBatch {
         conversations: vec![conversation],
         diagnostics: Vec::new(),
     })
@@ -30,23 +37,35 @@ pub(super) fn detail(
 }
 
 fn parse_file_mode(
+    source: Source,
     path: &Path,
     tolerate_incomplete_tail: bool,
     include_deferred_content: bool,
 ) -> Result<ParsedConversation, ConversationIndexIssue> {
     let content = read_codex_text(path)?;
-    parse_content(
+    parse_content(ParseContentOpts {
+        source,
         path,
-        &content,
-        0,
-        0,
+        content: &content,
+        start_byte: 0,
+        start_line: 0,
         tolerate_incomplete_tail,
         include_deferred_content,
-        None,
-    )
+        session_hint: None,
+    })
 }
 
 pub(super) fn index_suffix(
+    path: &Path,
+    byte_offset: u64,
+    start_line: u32,
+    session_id: &str,
+) -> Result<ParsedConversation, ConversationIndexIssue> {
+    index_suffix_as(Source::Codex, path, byte_offset, start_line, session_id)
+}
+
+pub(super) fn index_suffix_as(
+    source: Source,
     path: &Path,
     byte_offset: u64,
     start_line: u32,
@@ -61,15 +80,16 @@ pub(super) fn index_suffix(
         });
     }
     let content = read_file_suffix(path, byte_offset)?;
-    parse_content(
+    parse_content(ParseContentOpts {
+        source,
         path,
-        &content,
-        byte_offset,
+        content: &content,
+        start_byte: byte_offset,
         start_line,
-        true,
-        false,
-        Some(session_id.to_string()),
-    )
+        tolerate_incomplete_tail: true,
+        include_deferred_content: false,
+        session_hint: Some(session_id.to_string()),
+    })
 }
 
 fn is_codex_zst(path: &Path) -> bool {
@@ -108,14 +128,28 @@ fn read_codex_text(path: &Path) -> Result<String, ConversationIndexIssue> {
     })
 }
 
+pub(super) struct ParseContentOpts<'a> {
+    pub source: Source,
+    pub path: &'a Path,
+    pub content: &'a str,
+    pub start_byte: u64,
+    pub start_line: u32,
+    pub tolerate_incomplete_tail: bool,
+    pub include_deferred_content: bool,
+    pub session_hint: Option<String>,
+}
+
 pub(super) fn parse_content(
-    path: &Path,
-    content: &str,
-    start_byte: u64,
-    start_line: u32,
-    tolerate_incomplete_tail: bool,
-    include_deferred_content: bool,
-    session_hint: Option<String>,
+    ParseContentOpts {
+        source,
+        path,
+        content,
+        start_byte,
+        start_line,
+        tolerate_incomplete_tail,
+        include_deferred_content,
+        session_hint,
+    }: ParseContentOpts<'_>,
 ) -> Result<ParsedConversation, ConversationIndexIssue> {
     let mut session_id = session_hint.clone().unwrap_or_default();
     let mut title = String::new();
@@ -315,7 +349,7 @@ pub(super) fn parse_content(
         (content.len() as i64, i64::from(next_line_index(content)))
     };
     let mut parsed = finish_source_conversation(
-        Source::Codex,
+        source,
         path,
         session_id,
         title,
@@ -342,7 +376,15 @@ pub(super) fn parse_content(
 }
 
 fn parse_file(path: &Path, include_deferred_content: bool) -> Result<ParsedConversation, String> {
-    parse_file_mode(path, true, include_deferred_content).map_err(|issue| issue.message)
+    parse_file_as(Source::Codex, path, include_deferred_content)
+}
+
+pub(super) fn parse_file_as(
+    source: Source,
+    path: &Path,
+    include_deferred_content: bool,
+) -> Result<ParsedConversation, String> {
+    parse_file_mode(source, path, true, include_deferred_content).map_err(|issue| issue.message)
 }
 
 fn read_file_suffix(path: &Path, byte_offset: u64) -> Result<String, ConversationIndexIssue> {

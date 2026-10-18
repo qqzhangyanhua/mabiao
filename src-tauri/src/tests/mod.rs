@@ -76,6 +76,7 @@ mod rollup_split;
 mod scan_paths;
 mod staged;
 mod store;
+mod trae_conversation;
 mod tray;
 mod tray_popup;
 mod work_notes;

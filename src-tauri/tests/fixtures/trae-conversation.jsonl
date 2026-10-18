@@ -1,0 +1,4 @@
+{"type":"session_meta","timestamp":"2026-08-20T00:00:00Z","payload":{"id":"trae-conv-1","cwd":"/work/trae","model_provider":"trae"}}
+{"type":"turn_context","timestamp":"2026-08-20T00:00:02Z","payload":{"cwd":"/work/trae","model":"gpt-5.6-sol"}}
+{"type":"response_item","timestamp":"2026-08-20T00:00:03Z","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Draft the trae notes"}]}}
+{"type":"response_item","timestamp":"2026-08-20T00:00:10Z","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Notes drafted."}]}}

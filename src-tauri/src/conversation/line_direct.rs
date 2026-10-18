@@ -22,7 +22,13 @@ use crate::domain::{
 pub(super) fn source_maps_line_to_events(source: Source) -> bool {
     matches!(
         source,
-        Source::Codex | Source::Claude | Source::Qoder | Source::QoderCn | Source::Pi | Source::Omp
+        Source::Codex
+            | Source::Trae
+            | Source::Claude
+            | Source::Qoder
+            | Source::QoderCn
+            | Source::Pi
+            | Source::Omp
     )
 }
 
@@ -57,7 +63,8 @@ pub(super) fn rebuild_events_from_raw(
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
     match source {
-        Source::Codex => rebuild_codex(
+        Source::Codex | Source::Trae => rebuild_codex(
+            source,
             path,
             session_id,
             source_sequence,
@@ -278,21 +285,23 @@ fn try_resolve_attachment(
 }
 
 fn rebuild_codex(
+    source: Source,
     path: &Path,
     session_id: &str,
     source_sequence: u32,
     raw: &str,
     include_deferred_content: bool,
 ) -> Result<Vec<ConversationEvent>, String> {
-    let parsed = super::codex::parse_content(
+    let parsed = super::codex::parse_content(super::codex::ParseContentOpts {
+        source,
         path,
-        &format!("{raw}\n"),
-        0,
-        source_sequence,
-        false,
+        content: &format!("{raw}\n"),
+        start_byte: 0,
+        start_line: source_sequence,
+        tolerate_incomplete_tail: false,
         include_deferred_content,
-        Some(session_id.to_string()),
-    )
+        session_hint: Some(session_id.to_string()),
+    })
     .map_err(|issue| issue.message)?;
     Ok(parsed.events)
 }
