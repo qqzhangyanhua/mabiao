@@ -86,17 +86,21 @@ impl CodexUsage {
     }
 
     /// `input_tokens` 是整段 prompt，缓存读和 cache write 都算在里面。
-    /// 先做高水位差分，再拆成互斥的三段，避免输入和缓存各计一次。
+    /// `reasoning_output_tokens` ⊆ `output_tokens`（tokscale / Codex 快照：
+    /// `total == input + output`，推理不另加）。先做高水位差分，再拆成互斥档，
+    /// 避免输入和缓存、输出和推理各计一次。
     fn spent(self) -> Self {
         let input = self.input.max(0);
         let cached = self.cached.max(0).min(input);
         let cache_write = self.cache_write.max(0).min(input - cached);
+        let output = self.output.max(0);
+        let reasoning = self.reasoning.max(0).min(output);
         Self {
             input: input - cached - cache_write,
             cached,
             cache_write,
-            output: self.output,
-            reasoning: self.reasoning,
+            output: output - reasoning,
+            reasoning,
             total: self.total,
         }
     }

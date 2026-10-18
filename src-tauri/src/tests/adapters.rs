@@ -26,7 +26,7 @@ fn codex_adapter_counts_last_token_usage_not_cumulative() {
     assert_eq!(records[1].input_tokens, 8485);
     assert_eq!(records[1].cache_read_tokens, 1024);
     assert_eq!(records[1].cache_creation_tokens, 0);
-    assert_eq!(records[1].output_tokens, 108);
+    assert_eq!(records[1].output_tokens, 44);
     assert_eq!(records[1].reasoning_tokens, 64);
     assert_eq!(records[1].total_tokens, 9617);
     let summed: i64 = records.iter().map(|r| r.total_tokens).sum();
@@ -51,6 +51,35 @@ fn codex_adapter_falls_back_to_total_token_usage_delta() {
     assert_eq!(records[1].total_tokens, 55);
     let summed: i64 = records.iter().map(|r| r.input_tokens).sum();
     assert_eq!(summed, 75);
+}
+
+#[test]
+fn codex_adapter_splits_reasoning_out_of_output() {
+    let with_total = r#"{"type":"session_meta","timestamp":"2026-01-01T00:00:00Z","payload":{"id":"s","cwd":"/work","model_provider":"codex"}}
+{"type":"turn_context","timestamp":"2026-01-01T00:00:00Z","payload":{"model":"gpt-5.1-codex"}}
+{"type":"event_msg","timestamp":"2026-01-01T00:00:01Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":10,"total_tokens":40}}}}"#;
+    let records = codex::parse_codex_jsonl(&fixture_lines(with_total), "/tmp/rollout.jsonl");
+    // reasoning ⊆ output。修前 output=30 且 reasoning=10，五档之和 50 > 厂商 total 40。
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 20);
+    assert_eq!(records[0].reasoning_tokens, 10);
+    assert_eq!(records[0].total_tokens, 40);
+    assert_eq!(
+        records[0].input_tokens
+            + records[0].output_tokens
+            + records[0].cache_read_tokens
+            + records[0].cache_creation_tokens
+            + records[0].reasoning_tokens,
+        records[0].total_tokens
+    );
+
+    let no_total = r#"{"type":"event_msg","timestamp":"2026-01-01T00:00:01Z","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":10,"output_tokens":30,"reasoning_output_tokens":10}}}}"#;
+    let records = codex::parse_codex_jsonl(&fixture_lines(no_total), "/tmp/rollout.jsonl");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].output_tokens, 20);
+    assert_eq!(records[0].reasoning_tokens, 10);
+    assert_eq!(records[0].total_tokens, 40);
 }
 
 #[test]
