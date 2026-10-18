@@ -69,7 +69,7 @@ export const OfficialQuotaPanel = memo(function OfficialQuotaPanel({
       <div className="panel-head">
         <div className="official-quota-heading">
           <h2>官方额度</h2>
-          <span className="muted">账号级订阅限额，与上方本机估计窗不是同一口径</span>
+          <span className="muted">账号级订阅限额，与本机估算窗口不是同一口径</span>
           {data ? (
             <span className="muted official-quota-refresh-hint">
               {officialQuotaRefreshHint(staleAfterMinutes)}

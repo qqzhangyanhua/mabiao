@@ -322,3 +322,21 @@ fn billing_windows_lookback_predicate_uses_occurred_at_index() {
         "billing_windows lookback must use an occurred_at index, query plan: {plan:?}"
     );
 }
+
+#[test]
+fn parse_occurred_at_treats_naive_time_as_local_offset_not_utc() {
+    let offset = chrono::FixedOffset::east_opt(8 * 3600).expect("utc+8");
+    let parsed = billing_window::parse_occurred_at_in("2026-03-01T00:30:00", offset)
+        .expect("naive timestamp");
+    // 修前 naive 当 UTC → 2026-03-01T00:30:00Z，东八区日历日切错到下一天。
+    assert_eq!(
+        parsed.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        "2026-02-28T16:30:00Z"
+    );
+    let zoned =
+        billing_window::parse_occurred_at_in("2026-03-01T00:30:00Z", offset).expect("rfc3339");
+    assert_eq!(
+        zoned.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        "2026-03-01T00:30:00Z"
+    );
+}

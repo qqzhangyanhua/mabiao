@@ -104,11 +104,11 @@ export function OverviewPanels({
       {showBilling ? (
         <CollapsibleSection
           sectionId="billing"
-          title="5 小时计费窗"
+          title="本机估算窗口（5 小时）"
           className="panel billing-panel"
           extra={
             <span className="muted">
-              由本地时间戳估计，非官方配额 · 始终展示最近窗口，不受时间范围筛选影响
+              按本机消耗记录时间戳估计，与官方额度不是同一口径 · 始终展示最近窗口，不受时间范围筛选影响
             </span>
           }
           collapsedSummary={
@@ -125,8 +125,8 @@ export function OverviewPanels({
           className="panel weekly-panel"
           extra={
             <span className="muted">
-              按来源统计最近 {weeklyDays} 天的累计消耗；Cursor 来自账号用量，费用按价目 / LiteLLM
-              估算，非官方配额
+              本机滚动 {weeklyDays}×24h，不是厂商周重置；Cursor 来自账号用量，费用按价目 /
+              LiteLLM 估算，与官方额度不是同一口径
             </span>
           }
           collapsedSummary={`${weeklyCount} 个 ${weeklyDays} 天窗口`}
