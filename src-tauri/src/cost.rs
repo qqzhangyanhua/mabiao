@@ -76,6 +76,7 @@ pub fn overview_costs(
             output_tokens: record.output_tokens,
             cache_read_tokens: record.cache_read_tokens,
             cache_creation_tokens: record.cache_creation_tokens,
+            cache_creation_1h_tokens: record.cache_creation_1h_tokens,
             native_cost: record.native_cost,
         };
         if usage.native_cost.is_some() {
@@ -95,6 +96,7 @@ pub fn derive_cost(record: &UsageRecord, prices: &PriceTable) -> DerivedCost {
             output_tokens: record.output_tokens,
             cache_read_tokens: record.cache_read_tokens,
             cache_creation_tokens: record.cache_creation_tokens,
+            cache_creation_1h_tokens: record.cache_creation_1h_tokens,
             native_cost: record.native_cost,
         },
         prices,
@@ -182,6 +184,7 @@ pub fn sum_costs(records: &[&UsageRecord], prices: &PriceTable) -> (Option<f64>,
             output_tokens: record.output_tokens,
             cache_read_tokens: record.cache_read_tokens,
             cache_creation_tokens: record.cache_creation_tokens,
+            cache_creation_1h_tokens: record.cache_creation_1h_tokens,
             native_cost: record.native_cost,
         };
         if usage.native_cost.is_some() {
@@ -207,6 +210,7 @@ pub fn sum_cursor_event_costs(
             output_tokens: event.output_tokens,
             cache_read_tokens: event.cache_read_tokens,
             cache_creation_tokens: event.cache_creation_tokens,
+            cache_creation_1h_tokens: 0,
             native_cost: None,
         };
         let entry = cache.resolve(&event.model, "", true);

@@ -98,6 +98,7 @@ pub fn rec(
         output_tokens: 0,
         cache_read_tokens: 0,
         cache_creation_tokens: 0,
+        cache_creation_1h_tokens: 0,
         reasoning_tokens: 0,
         total_tokens: total,
         native_cost: None,
@@ -368,6 +369,7 @@ pub fn diverse_prices() -> crate::domain::PriceTable {
                 cache_read: 0.0005,
                 cache_creation: 0.003,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "claude-sonnet-5".into(),
@@ -377,6 +379,7 @@ pub fn diverse_prices() -> crate::domain::PriceTable {
                 cache_read: 0.001,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "gpt-5.5".into(),
@@ -386,6 +389,7 @@ pub fn diverse_prices() -> crate::domain::PriceTable {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "gpt-5.5".into(),
@@ -395,6 +399,7 @@ pub fn diverse_prices() -> crate::domain::PriceTable {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
         ],
     }

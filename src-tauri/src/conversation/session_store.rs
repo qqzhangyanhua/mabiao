@@ -212,7 +212,7 @@ pub(crate) fn load_usage_records(
             r#"
             SELECT occurred_at, model, provider, project, session_id, source_file,
                    input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                   reasoning_tokens, total_tokens, native_cost
+                   cache_creation_1h_tokens, reasoning_tokens, total_tokens, native_cost
             FROM usage_records
             WHERE source = ?1 AND session_id = ?2
             ORDER BY occurred_at ASC, source_file ASC, rowid ASC
@@ -233,9 +233,10 @@ pub(crate) fn load_usage_records(
                 output_tokens: row.get(7)?,
                 cache_read_tokens: row.get(8)?,
                 cache_creation_tokens: row.get(9)?,
-                reasoning_tokens: row.get(10)?,
-                total_tokens: row.get(11)?,
-                native_cost: row.get(12)?,
+                cache_creation_1h_tokens: row.get(10)?,
+                reasoning_tokens: row.get(11)?,
+                total_tokens: row.get(12)?,
+                native_cost: row.get(13)?,
             })
         })
         .map_err(|error| error.to_string())?;

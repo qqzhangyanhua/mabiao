@@ -17,8 +17,41 @@ pub struct RollupSource {
     pub params: Vec<Value>,
 }
 
+/// 与 `pricing::LONG_CONTEXT_THRESHOLD` 同步；`sql.rs` 有对账测试。
+pub(crate) const LONG_CONTEXT_SQL: i64 = 200_000;
+
+/// 单行 1h 缓存创建（夹在 cache_creation 总额内）。
+pub(crate) const RAW_ONE_H: &str =
+    "MIN(MAX(r.cache_creation_1h_tokens, 0), MAX(r.cache_creation_tokens, 0))";
+pub(crate) const RAW_FIVE_M: &str =
+    "(MAX(r.cache_creation_tokens, 0) - MIN(MAX(r.cache_creation_1h_tokens, 0), MAX(r.cache_creation_tokens, 0)))";
+
+pub(crate) fn above_200k_sql(tokens: &str) -> String {
+    format!(
+        "CASE WHEN ({tokens}) > {LONG_CONTEXT_SQL} THEN ({tokens}) - {LONG_CONTEXT_SQL} ELSE 0 END"
+    )
+}
+
+pub(crate) fn raw_input_above() -> String {
+    above_200k_sql("r.input_tokens")
+}
+pub(crate) fn raw_output_above() -> String {
+    above_200k_sql("r.output_tokens")
+}
+pub(crate) fn raw_cache_read_above() -> String {
+    above_200k_sql("r.cache_read_tokens")
+}
+pub(crate) fn raw_cache_creation_above() -> String {
+    above_200k_sql(RAW_FIVE_M)
+}
+pub(crate) fn raw_cache_creation_1h_above() -> String {
+    above_200k_sql(RAW_ONE_H)
+}
+
 /// 明细一行一记录的重命名投影，列顺序与 `usage_rollup` 建表一致。
-const RAW_PROJECTION: &str = "
+fn raw_projection() -> String {
+    format!(
+        "
     substr(r.occurred_at, 1, 10) AS day,
     r.source AS source,
     r.model AS model,
@@ -30,13 +63,26 @@ const RAW_PROJECTION: &str = "
     r.output_tokens AS output_tokens,
     r.cache_read_tokens AS cache_read_tokens,
     r.cache_creation_tokens AS cache_creation_tokens,
+    {RAW_ONE_H} AS cache_creation_1h_tokens,
+    {input_above} AS input_tokens_above_200k,
+    {output_above} AS output_tokens_above_200k,
+    {cache_read_above} AS cache_read_tokens_above_200k,
+    {cache_creation_above} AS cache_creation_tokens_above_200k,
+    {cache_creation_1h_above} AS cache_creation_1h_tokens_above_200k,
     r.reasoning_tokens AS reasoning_tokens,
     r.total_tokens AS total_tokens,
     COALESCE(r.native_cost, 0) AS native_cost,
     1 AS record_count,
     r.occurred_at AS first_at,
     r.occurred_at AS last_at,
-    CASE WHEN r.source_file != '' THEN r.occurred_at || char(31) || r.source_file END AS file_key";
+    CASE WHEN r.source_file != '' THEN r.occurred_at || char(31) || r.source_file END AS file_key",
+        input_above = raw_input_above(),
+        output_above = raw_output_above(),
+        cache_read_above = raw_cache_read_above(),
+        cache_creation_above = raw_cache_creation_above(),
+        cache_creation_1h_above = raw_cache_creation_1h_above(),
+    )
+}
 
 /// 按切分判定产出的形态拼出子查询。
 pub fn rollup_source(plan: &RollupPlan, filter: &Filter) -> RollupSource {
@@ -62,7 +108,7 @@ fn raw_source(filter: &Filter) -> RollupSource {
     clauses.extend(dim_clauses);
     params.extend(dim_params);
     RollupSource {
-        sql: select_sql(RAW_PROJECTION, "usage_records r", &clauses),
+        sql: select_sql(&raw_projection(), "usage_records r", &clauses),
         params,
     }
 }
@@ -120,7 +166,7 @@ fn partial_raw_source(split: &RollupSplit, filter: &Filter) -> Option<RollupSour
     clauses.extend(dim_clauses);
     params.extend(dim_params);
     Some(RollupSource {
-        sql: select_sql(RAW_PROJECTION, "usage_records r", &clauses),
+        sql: select_sql(&raw_projection(), "usage_records r", &clauses),
         params,
     })
 }

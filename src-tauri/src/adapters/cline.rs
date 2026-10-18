@@ -90,6 +90,7 @@ pub fn parse_cline_messages(content: &str, source_file: &str) -> Vec<UsageRecord
             output_tokens: i64_field(metrics, &["outputTokens"]),
             cache_read_tokens: cache_read,
             cache_creation_tokens: cache_write,
+            cache_creation_1h_tokens: 0,
             reasoning_tokens: 0,
             total_tokens: 0,
             native_cost: native_cost_from_metrics(metrics),

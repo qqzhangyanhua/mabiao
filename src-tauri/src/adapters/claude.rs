@@ -195,6 +195,7 @@ fn parse_claude_shaped_jsonl_with(
             continue;
         }
         let is_sidechain = value.get("isSidechain").and_then(|v| v.as_bool()) == Some(true);
+        let cache_creation = cache_creation_from_usage(&usage);
         let agent_id = text_field(&value, &["agentId", "agent_id"]);
         let record_session_id = if agent_id.is_empty() {
             session_id.clone()
@@ -226,7 +227,8 @@ fn parse_claude_shaped_jsonl_with(
             input_tokens: i64_field(&usage, &["input_tokens"]),
             output_tokens: i64_field(&usage, &["output_tokens"]),
             cache_read_tokens: i64_field(&usage, &["cache_read_input_tokens"]),
-            cache_creation_tokens: i64_field(&usage, &["cache_creation_input_tokens"]),
+            cache_creation_tokens: cache_creation.0,
+            cache_creation_1h_tokens: cache_creation.1,
             reasoning_tokens: 0,
             total_tokens: 0,
             native_cost: native_cost_from_event(&value),
@@ -345,6 +347,7 @@ fn advisor_records_from_usage(
             if model.is_empty() {
                 return None;
             }
+            let cache_creation = cache_creation_from_usage(iteration);
             let record = finish(UsageRecord {
                 occurred_at: text_field(event, &["timestamp"]),
                 source,
@@ -356,7 +359,8 @@ fn advisor_records_from_usage(
                 input_tokens: i64_field(iteration, &["input_tokens"]),
                 output_tokens: i64_field(iteration, &["output_tokens"]),
                 cache_read_tokens: i64_field(iteration, &["cache_read_input_tokens"]),
-                cache_creation_tokens: i64_field(iteration, &["cache_creation_input_tokens"]),
+                cache_creation_tokens: cache_creation.0,
+                cache_creation_1h_tokens: cache_creation.1,
                 reasoning_tokens: 0,
                 total_tokens: 0,
                 native_cost: None,
@@ -364,6 +368,27 @@ fn advisor_records_from_usage(
             has_billable_tokens(&record).then_some(record)
         })
         .collect()
+}
+
+/// KPI 的 `cache_creation_tokens` 仍是 5m+1h 合计（优先 `cache_creation_input_tokens`，
+/// 缺失时用嵌套 5m+1h）；1h 部分另记，计价时乘 1h 单价。
+fn cache_creation_from_usage(usage: &serde_json::Value) -> (i64, i64) {
+    let listed = i64_field(usage, &["cache_creation_input_tokens"]).max(0);
+    let nested = usage.get("cache_creation");
+    let one_h = nested
+        .map(|value| i64_field(value, &["ephemeral_1h_input_tokens"]))
+        .unwrap_or(0)
+        .max(0);
+    let five_m = nested
+        .map(|value| i64_field(value, &["ephemeral_5m_input_tokens"]))
+        .unwrap_or(0)
+        .max(0);
+    let total = if listed > 0 {
+        listed
+    } else {
+        five_m.saturating_add(one_h)
+    };
+    (total, one_h.min(total))
 }
 
 fn native_cost_from_event(value: &serde_json::Value) -> Option<f64> {

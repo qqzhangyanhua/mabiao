@@ -212,6 +212,7 @@ pub fn parse_codex_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usag
                     output_tokens: usage.output,
                     cache_read_tokens: usage.cached,
                     cache_creation_tokens: usage.cache_write,
+                    cache_creation_1h_tokens: 0,
                     reasoning_tokens: usage.reasoning,
                     total_tokens: usage.total,
                     native_cost: None,

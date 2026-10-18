@@ -88,6 +88,7 @@ fn records_from_snapshot(value: &Value, source_file: &str) -> Vec<UsageRecord> {
                 output_tokens: i64_field(&tokens, &["output"]),
                 cache_read_tokens: cached,
                 cache_creation_tokens: 0,
+                cache_creation_1h_tokens: 0,
                 reasoning_tokens: i64_field(&tokens, &["thoughts"]),
                 total_tokens: i64_field(&tokens, &["total"]),
                 native_cost: None,

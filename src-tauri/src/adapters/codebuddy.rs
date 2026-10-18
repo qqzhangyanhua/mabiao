@@ -171,6 +171,7 @@ fn record_from_line(
         ),
         cache_read_tokens: cache_read,
         cache_creation_tokens: cache_write,
+        cache_creation_1h_tokens: 0,
         reasoning_tokens: i64_field(
             usage,
             &[

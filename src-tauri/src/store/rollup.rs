@@ -2,6 +2,53 @@ use std::collections::BTreeSet;
 
 use rusqlite::{params, Connection};
 
+use crate::rollup_source::{
+    raw_cache_creation_1h_above, raw_cache_creation_above, raw_cache_read_above, raw_input_above,
+    raw_output_above, RAW_ONE_H,
+};
+
+/// 预聚合 INSERT 的列与 SELECT 列表。与 `usage_rollup` 建表、`RAW_PROJECTION` 同序。
+const ROLLUP_INSERT_HEAD: &str = r#"
+            INSERT INTO usage_rollup (
+                day, source, model, provider, project, session_id, has_native,
+                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
+                cache_creation_1h_tokens,
+                input_tokens_above_200k, output_tokens_above_200k,
+                cache_read_tokens_above_200k, cache_creation_tokens_above_200k,
+                cache_creation_1h_tokens_above_200k,
+                reasoning_tokens, total_tokens, native_cost, record_count,
+                first_at, last_at, file_key
+            )
+            SELECT
+                substr(r.occurred_at, 1, 10),
+                r.source, r.model, r.provider, r.project, r.session_id,
+                CASE WHEN r.native_cost IS NOT NULL THEN 1 ELSE 0 END,
+                SUM(r.input_tokens), SUM(r.output_tokens), SUM(r.cache_read_tokens),
+                SUM(r.cache_creation_tokens),
+                SUM({one_h}),
+                SUM({input_above}),
+                SUM({output_above}),
+                SUM({cache_read_above}),
+                SUM({cache_creation_above}),
+                SUM({cache_creation_1h_above}),
+                SUM(r.reasoning_tokens), SUM(r.total_tokens),
+                COALESCE(SUM(r.native_cost), 0),
+                COUNT(*),
+                MIN(r.occurred_at), MAX(r.occurred_at),
+                MAX(CASE WHEN r.source_file != '' THEN r.occurred_at || char(31) || r.source_file END)
+            FROM usage_records r
+"#;
+
+fn rollup_insert_select() -> String {
+    ROLLUP_INSERT_HEAD
+        .replace("{one_h}", RAW_ONE_H)
+        .replace("{input_above}", &raw_input_above())
+        .replace("{output_above}", &raw_output_above())
+        .replace("{cache_read_above}", &raw_cache_read_above())
+        .replace("{cache_creation_above}", &raw_cache_creation_above())
+        .replace("{cache_creation_1h_above}", &raw_cache_creation_1h_above())
+}
+
 pub fn rollup_is_ready(conn: &Connection) -> bool {
     conn.query_row("SELECT ready FROM rollup_state WHERE id = 1", [], |row| {
         row.get::<_, i64>(0)
@@ -74,27 +121,10 @@ pub fn rebuild_rollup_days(conn: &Connection, days: &BTreeSet<String>) -> Result
             )
         };
         let sql = format!(
-            r#"
-            INSERT INTO usage_rollup (
-                day, source, model, provider, project, session_id, has_native,
-                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                reasoning_tokens, total_tokens, native_cost, record_count,
-                first_at, last_at, file_key
-            )
-            SELECT
-                substr(r.occurred_at, 1, 10),
-                r.source, r.model, r.provider, r.project, r.session_id,
-                CASE WHEN r.native_cost IS NOT NULL THEN 1 ELSE 0 END,
-                SUM(r.input_tokens), SUM(r.output_tokens), SUM(r.cache_read_tokens),
-                SUM(r.cache_creation_tokens), SUM(r.reasoning_tokens), SUM(r.total_tokens),
-                COALESCE(SUM(r.native_cost), 0),
-                COUNT(*),
-                MIN(r.occurred_at), MAX(r.occurred_at),
-                MAX(CASE WHEN r.source_file != '' THEN r.occurred_at || char(31) || r.source_file END)
-            FROM usage_records r
+            "{}
             WHERE {predicate}
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
-            "#
+            GROUP BY 1, 2, 3, 4, 5, 6, 7",
+            rollup_insert_select()
         );
         conn.execute(&sql, rusqlite::params_from_iter(bounds.iter()))
             .map_err(|e| e.to_string())?;
@@ -113,26 +143,11 @@ pub fn rebuild_rollup(conn: &Connection) -> Result<u64, String> {
         .map_err(|e| e.to_string())?;
     let written = conn
         .execute(
-            r#"
-            INSERT INTO usage_rollup (
-                day, source, model, provider, project, session_id, has_native,
-                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                reasoning_tokens, total_tokens, native_cost, record_count,
-                first_at, last_at, file_key
-            )
-            SELECT
-                substr(r.occurred_at, 1, 10),
-                r.source, r.model, r.provider, r.project, r.session_id,
-                CASE WHEN r.native_cost IS NOT NULL THEN 1 ELSE 0 END,
-                SUM(r.input_tokens), SUM(r.output_tokens), SUM(r.cache_read_tokens),
-                SUM(r.cache_creation_tokens), SUM(r.reasoning_tokens), SUM(r.total_tokens),
-                COALESCE(SUM(r.native_cost), 0),
-                COUNT(*),
-                MIN(r.occurred_at), MAX(r.occurred_at),
-                MAX(CASE WHEN r.source_file != '' THEN r.occurred_at || char(31) || r.source_file END)
-            FROM usage_records r
-            GROUP BY 1, 2, 3, 4, 5, 6, 7
-            "#,
+            &format!(
+                "{}
+            GROUP BY 1, 2, 3, 4, 5, 6, 7",
+                rollup_insert_select()
+            ),
             [],
         )
         .map_err(|e| e.to_string())?;

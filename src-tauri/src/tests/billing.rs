@@ -182,6 +182,7 @@ fn weekly_window_includes_cursor_account_usage_priced_by_snapshot() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::Snapshot,
+            ..Default::default()
         }],
     };
 

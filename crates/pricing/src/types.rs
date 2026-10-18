@@ -69,6 +69,19 @@ pub struct PriceEntry {
     pub output: f64,
     pub cache_read: f64,
     pub cache_creation: f64,
+    /// 1h 缓存创建单价。0 表示未配置，计价时回落到 `2 × input`（对齐 ccusage）。
+    #[serde(default)]
+    pub cache_creation_1h: f64,
+    #[serde(default)]
+    pub input_above_200k: f64,
+    #[serde(default)]
+    pub output_above_200k: f64,
+    #[serde(default)]
+    pub cache_read_above_200k: f64,
+    #[serde(default)]
+    pub cache_creation_above_200k: f64,
+    #[serde(default)]
+    pub cache_creation_1h_above_200k: f64,
     /// 旧文件没有该字段时视为用户单价。
     #[serde(default, skip_serializing_if = "PriceOrigin::is_user")]
     pub origin: PriceOrigin,

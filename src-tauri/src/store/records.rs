@@ -13,8 +13,8 @@ pub fn insert_records(conn: &Connection, records: &[UsageRecord]) -> Result<u64,
             INSERT INTO usage_records (
                 occurred_at, source, model, provider, project, session_id, source_file,
                 input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                reasoning_tokens, total_tokens, native_cost
-            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)
+                cache_creation_1h_tokens, reasoning_tokens, total_tokens, native_cost
+            ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)
             "#,
         )
         .map_err(|e| e.to_string())?;
@@ -32,6 +32,7 @@ pub fn insert_records(conn: &Connection, records: &[UsageRecord]) -> Result<u64,
             record.output_tokens,
             record.cache_read_tokens,
             record.cache_creation_tokens,
+            record.cache_creation_1h_tokens,
             record.reasoning_tokens,
             record.total_tokens,
             record.native_cost,
@@ -303,7 +304,7 @@ pub fn load_all(conn: &Connection) -> Result<Vec<UsageRecord>, String> {
             r#"
             SELECT occurred_at, source, model, provider, project, session_id, source_file,
                    input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-                   reasoning_tokens, total_tokens, native_cost
+                   cache_creation_1h_tokens, reasoning_tokens, total_tokens, native_cost
             FROM usage_records
             "#,
         )
@@ -330,9 +331,10 @@ pub fn load_all(conn: &Connection) -> Result<Vec<UsageRecord>, String> {
                 output_tokens: row.get(8)?,
                 cache_read_tokens: row.get(9)?,
                 cache_creation_tokens: row.get(10)?,
-                reasoning_tokens: row.get(11)?,
-                total_tokens: row.get(12)?,
-                native_cost: row.get(13)?,
+                cache_creation_1h_tokens: row.get(11)?,
+                reasoning_tokens: row.get(12)?,
+                total_tokens: row.get(13)?,
+                native_cost: row.get(14)?,
             })
         })
         .map_err(|e| e.to_string())?;

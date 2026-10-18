@@ -46,6 +46,7 @@ fn backup_and_restore_round_trips_records_and_user_config() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     std::fs::write(&prices_path, serde_json::to_string_pretty(&prices).unwrap()).unwrap();

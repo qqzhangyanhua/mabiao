@@ -37,7 +37,7 @@ pub fn load_usage_in_range(
         r#"
         SELECT occurred_at, source, model, provider, project, session_id, source_file,
                input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-               reasoning_tokens, total_tokens, native_cost
+               cache_creation_1h_tokens, reasoning_tokens, total_tokens, native_cost
         FROM usage_records
         {filter}
         ORDER BY occurred_at ASC, source_file ASC, rowid ASC
@@ -62,9 +62,10 @@ pub fn load_usage_in_range(
                 output_tokens: row.get(8)?,
                 cache_read_tokens: row.get(9)?,
                 cache_creation_tokens: row.get(10)?,
-                reasoning_tokens: row.get(11)?,
-                total_tokens: row.get(12)?,
-                native_cost: row.get(13)?,
+                cache_creation_1h_tokens: row.get(11)?,
+                reasoning_tokens: row.get(12)?,
+                total_tokens: row.get(13)?,
+                native_cost: row.get(14)?,
             }))
         })
         .map_err(|e| e.to_string())?;

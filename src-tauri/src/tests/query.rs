@@ -754,6 +754,7 @@ fn sessions_page_computes_cost_only_when_requested() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
 
@@ -803,6 +804,7 @@ fn cost_prefers_native_and_marks_unpriced() {
             cache_read: 0.0005,
             cache_creation: 0.003,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let derived = derive_cost(&priced, &table);
@@ -854,6 +856,7 @@ fn cost_prefers_native_and_marks_unpriced() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "gpt-5.5".into(),
@@ -863,6 +866,7 @@ fn cost_prefers_native_and_marks_unpriced() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
         ],
     };
@@ -897,6 +901,7 @@ fn cost_matches_model_and_provider_case_insensitively() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let derived = derive_cost(&record, &table);
@@ -913,6 +918,7 @@ fn cost_matches_model_and_provider_case_insensitively() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let derived_bare = derive_cost(&record, &table_bare);
@@ -941,6 +947,7 @@ fn sql_overview_matches_memory_when_price_table_case_differs() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let conn = store::open_memory().unwrap();
@@ -1003,6 +1010,7 @@ fn overview_and_turns_use_price_table_and_flag_unpriced() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
 
@@ -1128,6 +1136,7 @@ fn overview_splits_cost_buckets_and_sources_without_pricing_reasoning() {
                 cache_read: 0.001,
                 cache_creation: 0.015,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "snap-model".into(),
@@ -1137,6 +1146,7 @@ fn overview_splits_cost_buckets_and_sources_without_pricing_reasoning() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
         ],
     };
@@ -1225,6 +1235,7 @@ fn price_table_changes_take_effect_on_the_same_connection() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let filter = Filter::default();
@@ -1405,6 +1416,7 @@ fn unpriced_diagnosis_groups_unpriced_parts_and_splits_reasons() {
         cache_read: 0.0,
         cache_creation: 0.0,
         origin: PriceOrigin::User,
+        ..Default::default()
     });
     let after = query::unpriced_diagnosis(&conn, &filled).unwrap();
     assert_eq!(after, aggregate::unpriced_diagnosis(&records, &filled));
@@ -1435,6 +1447,7 @@ fn unpriced_diagnosis_attaches_signature_candidate_without_pricing_usage() {
             cache_read: 0.3 / 1_000_000.0,
             cache_creation: 3.75 / 1_000_000.0,
             origin: PriceOrigin::Snapshot,
+            ..Default::default()
         }],
     };
     let mem = aggregate::unpriced_diagnosis(&[record.clone()], &prices);
@@ -1467,10 +1480,153 @@ fn unpriced_diagnosis_attaches_signature_candidate_without_pricing_usage() {
         cache_read: 0.3 / 1_000_000.0,
         cache_creation: 3.75 / 1_000_000.0,
         origin: PriceOrigin::User,
+        ..Default::default()
     });
     let after = query::unpriced_diagnosis(&conn, &filled).unwrap();
     assert!(after.is_empty());
     let priced = query::overview(&conn, &Filter::default(), &filled).unwrap();
     assert!(!priced.unpriced);
     assert!(priced.cost.is_some());
+}
+
+fn claude_snapshot_prices() -> PriceTable {
+    PriceTable {
+        prices: vec![PriceEntry {
+            model: "claude-sonnet-4-5".into(),
+            provider: None,
+            input: 3e-6,
+            output: 15e-6,
+            cache_read: 0.3e-6,
+            cache_creation: 3.75e-6,
+            origin: PriceOrigin::Snapshot,
+            ..Default::default()
+        }],
+    }
+}
+
+#[test]
+fn sql_one_hour_cache_creation_matches_apply_and_ccusage_default() {
+    let mut record = rec(
+        "2026-04-01T10:00:08Z",
+        Source::Claude,
+        "claude-sonnet-4-5",
+        "",
+        "/Users/example/app",
+        "sess-cache-1h",
+        0,
+    );
+    record.input_tokens = 100;
+    record.output_tokens = 50;
+    record.cache_creation_tokens = 2000;
+    record.cache_creation_1h_tokens = 500;
+    record.total_tokens = 2150;
+    let prices = claude_snapshot_prices();
+    let expected = derive_cost(&record, &prices).amount.unwrap();
+    // 100*3e-6 + 50*15e-6 + 1500*3.75e-6 + 500*(2*3e-6) = 0.009675
+    assert!((expected - 0.009675).abs() < 1e-12);
+    let without_split = {
+        let mut flat = record.clone();
+        flat.cache_creation_1h_tokens = 0;
+        derive_cost(&flat, &prices).amount.unwrap()
+    };
+    // 修前把 1h 也按 5m 单价：2000*3.75e-6，少计 500*(6e-6-3.75e-6)=0.001125
+    assert!((without_split - 0.00855).abs() < 1e-12);
+
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, std::slice::from_ref(&record)).unwrap();
+    store::rebuild_rollup(&conn).unwrap();
+    conn.execute("UPDATE rollup_state SET ready = 1 WHERE id = 1", [])
+        .unwrap();
+    let dto = query::overview(&conn, &Filter::default(), &prices).unwrap();
+    assert!((dto.cost.unwrap() - expected).abs() < 1e-12);
+    assert_eq!(dto.cache_creation_tokens, 2000);
+}
+
+#[test]
+fn sql_above_200k_is_marginal_per_record_not_on_rolled_sum() {
+    let prices = PriceTable {
+        prices: vec![PriceEntry {
+            model: "claude-sonnet-4-5".into(),
+            provider: None,
+            input: 3e-6,
+            output: 15e-6,
+            cache_read: 0.0,
+            cache_creation: 0.0,
+            input_above_200k: 6e-6,
+            origin: PriceOrigin::Snapshot,
+            ..Default::default()
+        }],
+    };
+    let mut long = rec(
+        "2026-04-01T10:00:00Z",
+        Source::Claude,
+        "claude-sonnet-4-5",
+        "",
+        "/p",
+        "s-long",
+        0,
+    );
+    long.input_tokens = 250_000;
+    long.output_tokens = 10;
+    long.total_tokens = 250_010;
+    let expected_long = 200_000.0 * 3e-6 + 50_000.0 * 6e-6 + 10.0 * 15e-6;
+    assert!((derive_cost(&long, &prices).amount.unwrap() - expected_long).abs() < 1e-12);
+    let linear = 250_000.0 * 3e-6 + 10.0 * 15e-6;
+    assert!(linear < expected_long);
+
+    let mut a = rec(
+        "2026-04-02T10:00:00Z",
+        Source::Claude,
+        "claude-sonnet-4-5",
+        "",
+        "/p",
+        "s-split",
+        0,
+    );
+    a.input_tokens = 150_000;
+    a.total_tokens = 150_000;
+    let mut b = a.clone();
+    b.occurred_at = "2026-04-02T11:00:00Z".into();
+    b.session_id = "s-split-b".into();
+
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &[long, a, b]).unwrap();
+    store::rebuild_rollup(&conn).unwrap();
+    conn.execute("UPDATE rollup_state SET ready = 1 WHERE id = 1", [])
+        .unwrap();
+
+    let long_dto = query::overview(
+        &conn,
+        &Filter {
+            from: Some("2026-04-01T00:00:00Z".into()),
+            to: Some("2026-04-01T23:59:59Z".into()),
+            ..Filter::default()
+        },
+        &prices,
+    )
+    .unwrap();
+    assert!((long_dto.cost.unwrap() - expected_long).abs() < 1e-9);
+
+    let split_dto = query::overview(
+        &conn,
+        &Filter {
+            from: Some("2026-04-02T00:00:00Z".into()),
+            to: Some("2026-04-02T23:59:59Z".into()),
+            ..Filter::default()
+        },
+        &prices,
+    )
+    .unwrap();
+    // 两笔各 150k，合计 300k，但不应按聚合后的 300k 走 above 档。
+    let expected_split = 300_000.0 * 3e-6;
+    assert!((split_dto.cost.unwrap() - expected_split).abs() < 1e-9);
+    assert_eq!(split_dto.input_tokens, 300_000);
+}
+
+#[test]
+fn long_context_sql_threshold_matches_pricing_crate() {
+    assert_eq!(
+        crate::rollup_source::LONG_CONTEXT_SQL,
+        pricing::LONG_CONTEXT_THRESHOLD
+    );
 }

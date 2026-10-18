@@ -13,7 +13,8 @@ mod types;
 
 pub use apply::{
     apply_entry, apply_entry_attribution, derive_priced, price_usage, price_usage_cached,
-    CostAttribution, PricedCost, PricedUsage, PricingBasis,
+    CostAttribution, PricedCost, PricedUsage, PricingBasis, CACHE_CREATE_1H_MULTIPLIER,
+    LONG_CONTEXT_THRESHOLD,
 };
 pub use lookup::{find_price, find_price_by_signature, resolve_entry, PriceCache};
 pub use types::{CostSource, DerivedCost, PriceEntry, PriceOrigin, PriceTable};

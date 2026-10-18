@@ -144,6 +144,7 @@ fn parse_turn_completed(
                     output_tokens: output,
                     cache_read_tokens: cache_read,
                     cache_creation_tokens: cache_creation,
+                    cache_creation_1h_tokens: 0,
                     reasoning_tokens: reasoning,
                     total_tokens: if reported_total > 0 {
                         reported_total
@@ -212,6 +213,7 @@ fn parse_context_totals(
                 output_tokens: 0,
                 cache_read_tokens: 0,
                 cache_creation_tokens: 0,
+                cache_creation_1h_tokens: 0,
                 reasoning_tokens: 0,
                 total_tokens: total.unwrap_or(0),
                 native_cost: None,

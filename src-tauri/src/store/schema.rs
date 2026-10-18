@@ -22,6 +22,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             output_tokens INTEGER NOT NULL,
             cache_read_tokens INTEGER NOT NULL,
             cache_creation_tokens INTEGER NOT NULL,
+            cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0,
             reasoning_tokens INTEGER NOT NULL,
             total_tokens INTEGER NOT NULL,
             native_cost REAL
@@ -63,6 +64,12 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             output_tokens INTEGER NOT NULL,
             cache_read_tokens INTEGER NOT NULL,
             cache_creation_tokens INTEGER NOT NULL,
+            cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0,
+            input_tokens_above_200k INTEGER NOT NULL DEFAULT 0,
+            output_tokens_above_200k INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens_above_200k INTEGER NOT NULL DEFAULT 0,
+            cache_creation_tokens_above_200k INTEGER NOT NULL DEFAULT 0,
+            cache_creation_1h_tokens_above_200k INTEGER NOT NULL DEFAULT 0,
             reasoning_tokens INTEGER NOT NULL,
             total_tokens INTEGER NOT NULL,
             native_cost REAL NOT NULL DEFAULT 0,
@@ -230,6 +237,13 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     )?;
     // 源文件被工具自身清理后不再物理删除历史记录，只打时间戳归档（ADR 0004）。
     ensure_column(conn, "usage_records", "archived_at", "TEXT")?;
+    ensure_column(
+        conn,
+        "usage_records",
+        "cache_creation_1h_tokens",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+    ensure_rollup_pricing_columns(conn)?;
     ensure_column(
         conn,
         "conversation_sessions",
@@ -721,6 +735,29 @@ fn migrate_conversation_session_files_key(conn: &Connection) -> Result<(), Strin
     Ok(())
 }
 
+/// 老库的 `usage_rollup` 在这些列加入前就建好了；补列后默认全 0，分层计价会对不上，
+/// 所以只要新加了任何一列就把预聚合标成未就绪，下次查询走明细、后台再补建。
+fn ensure_rollup_pricing_columns(conn: &Connection) -> Result<(), String> {
+    let mut added = false;
+    for column in [
+        "cache_creation_1h_tokens",
+        "input_tokens_above_200k",
+        "output_tokens_above_200k",
+        "cache_read_tokens_above_200k",
+        "cache_creation_tokens_above_200k",
+        "cache_creation_1h_tokens_above_200k",
+    ] {
+        if ensure_column_added(conn, "usage_rollup", column, "INTEGER NOT NULL DEFAULT 0")? {
+            added = true;
+        }
+    }
+    if added {
+        conn.execute("UPDATE rollup_state SET ready = 0 WHERE id = 1", [])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn table_columns(conn: &Connection, table: &str) -> Result<Vec<String>, String> {
     let mut stmt = conn
         .prepare(&format!("PRAGMA table_info({table})"))
@@ -739,12 +776,22 @@ fn ensure_column(
     column: &str,
     definition: &str,
 ) -> Result<(), String> {
+    ensure_column_added(conn, table, column, definition).map(|_| ())
+}
+
+fn ensure_column_added(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<bool, String> {
     let columns = table_columns(conn, table)?;
-    if !columns.iter().any(|name| name == column) {
-        conn.execute_batch(&format!(
-            "ALTER TABLE {table} ADD COLUMN {column} {definition}"
-        ))
-        .map_err(|e| e.to_string())?;
+    if columns.iter().any(|name| name == column) {
+        return Ok(false);
     }
-    Ok(())
+    conn.execute_batch(&format!(
+        "ALTER TABLE {table} ADD COLUMN {column} {definition}"
+    ))
+    .map_err(|e| e.to_string())?;
+    Ok(true)
 }

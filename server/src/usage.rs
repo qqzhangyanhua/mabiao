@@ -53,6 +53,7 @@ pub async fn insert_new(
                         output_tokens: r.tokens.output,
                         cache_read_tokens: r.tokens.cache_read,
                         cache_creation_tokens: r.tokens.cache_creation,
+                        cache_creation_1h_tokens: 0,
                         native_cost: r.native_cost,
                     },
                 )

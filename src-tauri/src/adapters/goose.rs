@@ -156,6 +156,7 @@ impl ParsedSession {
             output_tokens: output,
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
+            cache_creation_1h_tokens: 0,
             reasoning_tokens: 0,
             total_tokens: total,
             native_cost: None,

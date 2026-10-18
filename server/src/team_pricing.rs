@@ -245,6 +245,7 @@ pub async fn load_table(conn: &mut PgConnection) -> Result<PriceTable, AppError>
             cache_read: row.cache_read,
             cache_creation: row.cache_creation,
             origin: PriceOrigin::User,
+            ..Default::default()
         })
         .collect();
     Ok(effective_table(&team, &builtin_snapshot().entries))
@@ -321,6 +322,7 @@ pub async fn recompute(
                     output_tokens: row.output_tokens,
                     cache_read_tokens: row.cache_read_tokens,
                     cache_creation_tokens: row.cache_creation_tokens,
+                    cache_creation_1h_tokens: 0,
                     native_cost: row.native_cost,
                 },
             );
@@ -378,6 +380,7 @@ mod tests {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }
     }
 
@@ -389,6 +392,7 @@ mod tests {
             output_tokens: 0,
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
+            cache_creation_1h_tokens: 0,
             native_cost: native,
         }
     }

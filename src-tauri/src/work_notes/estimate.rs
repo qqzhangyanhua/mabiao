@@ -112,6 +112,7 @@ pub fn price_tokens(
             output_tokens,
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
+            cache_creation_1h_tokens: 0,
             reasoning_tokens: 0,
             total_tokens: input_tokens + output_tokens,
             native_cost: None,

@@ -120,6 +120,7 @@ fn record_from_line(
         output_tokens: i64_field(usage, &["outputTokens", "output_tokens"]),
         cache_read_tokens: cache_read,
         cache_creation_tokens: cache_write,
+        cache_creation_1h_tokens: 0,
         reasoning_tokens: 0,
         total_tokens: 0,
         native_cost: None,
