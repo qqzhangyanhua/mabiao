@@ -202,7 +202,7 @@ jobs:
       # 默认只把 vulnerability 当失败；unmaintained / unsound / yanked
       # 保持 warning，避免 gtk / unic-* 一类上游告警把 CI 打成红。
       # 若某条 advisory 暂时无法在不升 major 的前提下修复，把 ID 写进
-      # src-tauri/audit.toml 的 [advisories] ignore，并注明原因。
+      # src-tauri/.cargo/audit.toml 的 [advisories] ignore，并注明原因。
       - name: cargo audit
         working-directory: src-tauri
         run: cargo audit
