@@ -3514,6 +3514,24 @@ fn crush_discover_reads_crush_db_when_override_is_data_dir() {
 }
 
 #[test]
+fn crush_ingest_does_not_double_count_registry_and_data_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_default_crush_home(home);
+    let conn = store::open_memory().unwrap();
+    let report =
+        ingest::ingest_all_with_overrides(&conn, home, &ingest::PathOverrides::new()).unwrap();
+    let crush = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Crush.as_str())
+        .unwrap();
+    assert_eq!(crush.files_seen, 1);
+    assert_eq!(crush.files_parsed, 1);
+    assert_eq!(crush.records_written, 1);
+}
+
+#[test]
 fn windsurf_adapter_skips_adaptive_and_empty_model() {
     let adaptive = windsurf::parse_windsurf_ndjson(
         &fixture_lines(

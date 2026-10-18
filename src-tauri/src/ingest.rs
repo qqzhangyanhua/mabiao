@@ -927,7 +927,10 @@ fn ingest_from_adapter(
             }
         }
         for path in (adapter.discover)(std::slice::from_ref(root))? {
-            seen.insert(path.to_string_lossy().to_string());
+            // 同一文件可能被多个扫描根命中（例如 Crush 的 registry + data_dir）。
+            if !seen.insert(path.to_string_lossy().to_string()) {
+                continue;
+            }
             if let Some(prepare_file) = adapter.prepare_file {
                 if let Err((fail_path, error)) = prepare_file(&path) {
                     record_failure(report, adapter.source, &fail_path.to_string_lossy(), &error);
