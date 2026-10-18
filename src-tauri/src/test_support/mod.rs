@@ -8,6 +8,7 @@ mod goose_fixture;
 mod helpers;
 mod hermes_fixture;
 pub mod http_stub;
+mod warp_fixture;
 mod work_notes_conn;
 mod zed_fixture;
 
@@ -19,6 +20,7 @@ pub use cursor_store::*;
 pub use goose_fixture::*;
 pub use helpers::*;
 pub use hermes_fixture::*;
+pub use warp_fixture::*;
 pub use work_notes_conn::*;
 pub use zed_fixture::*;
 
@@ -30,7 +32,7 @@ pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
     agy, aider, alma, amp, cherry, claude, cline, codebuddy, codebuddy_ide, codex, copilot, crush,
     cursor, cursor_agent, dsh, factory, gemini, goose, grok, hermes, kilo, kimi, omp, openclaw, pi,
-    qoder, qoder_cn, qwen, roo, trae, workbuddy, zcode, zed,
+    qoder, qoder_cn, qwen, roo, trae, warp, workbuddy, zcode, zed,
 };
 pub use crate::aggregate;
 pub use crate::backup;

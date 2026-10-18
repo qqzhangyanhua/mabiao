@@ -37,6 +37,7 @@ export const SOURCE_SLUGS = [
   "openclaw",
   "crush",
   "aider",
+  "warp",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -85,6 +86,7 @@ export const BRAND_IDS = [
   "openclaw",
   "crush",
   "aider",
+  "warp",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -122,6 +124,7 @@ export const DISPLAY_NAMES = {
   openclaw: "OpenClaw",
   crush: "Crush",
   aider: "Aider",
+  warp: "Warp",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -163,6 +166,7 @@ export const BRAND_BY_SLUG = {
   openclaw: "openclaw",
   crush: "crush",
   aider: "aider",
+  warp: "warp",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -204,6 +208,7 @@ export const RESUME_TEMPLATES = {
   openclaw: null,
   crush: null,
   aider: null,
+  warp: null,
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];

@@ -278,6 +278,9 @@ fn row_note(source: Source) -> String {
         Source::Aider => {
             "只读 --analytics-log 的 JSONL。默认认 ~/.aider/analytics.jsonl；AIDER_ANALYTICS_LOG 可指向该文件或目录。不读、不写 .aider.conf.yml。".to_string()
         }
+        Source::Warp => {
+            "扫 warp.sqlite 的 agent_conversations。WARP_HOME 指向含该库的目录或库文件本身。默认扫 Linux ~/.local/state/warp-terminal、macOS Group Container Stable/Preview、Windows %LOCALAPPDATA%/warp/Warp/data。Token 只有按模型总量，没有 input/output 拆分。".to_string()
+        }
         _ => String::new(),
     }
 }

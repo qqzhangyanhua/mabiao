@@ -65,6 +65,7 @@ mod session_store;
 mod toolbox;
 mod trae;
 pub(crate) mod trusted_path;
+mod warp;
 mod workbuddy;
 mod zcode;
 mod zed;
@@ -418,6 +419,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: zed::detail,
         revision: zed::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Warp,
+        discover: warp::discover,
+        index: warp::index,
+        index_suffix: None,
+        detail: warp::detail,
+        revision: warp::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },
