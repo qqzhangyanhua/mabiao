@@ -1,6 +1,7 @@
 pub mod agy;
 pub mod alma;
 pub mod amp;
+pub mod cherry;
 pub mod claude;
 pub mod cline;
 pub mod codebuddy;
@@ -517,6 +518,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: zed::discover,
         sidecar_fingerprint: zed::sidecar_fingerprint,
         parse: zed::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Cherry,
+        path_env: "CHERRY_STUDIO_DATA_DIR",
+        scan_dirs: cherry::scan_dirs,
+        discover: cherry::discover,
+        sidecar_fingerprint: cherry::sidecar_fingerprint,
+        parse: cherry::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: false,

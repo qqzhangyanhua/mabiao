@@ -1500,6 +1500,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Zed.application_name(), "Zed");
     assert_eq!(Source::Zed.as_str(), "zed");
     assert_eq!(Source::parse("zed"), Some(Source::Zed));
+    assert_eq!(Source::Cherry.application_name(), "Cherry Studio");
+    assert_eq!(Source::Cherry.as_str(), "cherry");
+    assert_eq!(Source::parse("cherry"), Some(Source::Cherry));
 }
 
 #[test]
@@ -3041,6 +3044,36 @@ fn goose_adapter_reads_session_tokens_and_skips_hidden() {
     assert_eq!(records[0].input_tokens, 1000);
     assert_eq!(records[0].output_tokens, 200);
     assert_eq!(records[0].total_tokens, 1200);
+}
+
+#[test]
+fn cherry_adapter_reads_usage_and_skips_missing_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_cherry_studio_db(&dir.path().join("cherrystudio.sqlite"));
+    let records = cherry::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().all(|record| record.source == Source::Cherry));
+    assert_eq!(records[0].session_id, "msg-a");
+    assert_eq!(records[0].project, "/work/cherry");
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].cache_creation_tokens, 40);
+    assert_eq!(records[0].reasoning_tokens, 10);
+    assert_eq!(records[0].native_cost, Some(0.02));
+    assert_eq!(records[1].model, "gpt-4.1");
+    assert_eq!(records[1].input_tokens, 20);
+    assert_eq!(records[1].output_tokens, 10);
+    assert_eq!(records[1].native_cost, None);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        CHERRY_TOKENS
+    );
 }
 
 #[test]

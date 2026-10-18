@@ -31,6 +31,7 @@ const BRAND_TONE = {
   kilo: "tone-kilo",
   amp: "tone-amp",
   zed: "tone-zed",
+  cherry: "tone-cherry",
 } as const satisfies Record<BrandId, string>;
 
 export function brandToneClass(brand: BrandId): string {

@@ -12,6 +12,7 @@
 > **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Kilo 已落地；Cline 扩展仍待接入。
 > **进度更新（2026-10-18）**：**Amp**（`~/.local/share/amp/threads/*.json`）已作为独立 Usage Source 接入，见「已实现」小节。字段对齐 ccusage Amp parser 与 `amp threads export` 的线程 JSON。
 > **进度更新（2026-10-18）**：**Zed**（`threads.db` 的 zstd/json 线程 blob）已作为独立 Usage Source 接入，见「已实现」小节。原 Tier 3「本机未安装」结论被上游源码与 codeburn 口径推翻。
+> **进度更新（2026-10-18）**：**Cherry Studio**（Electron userData `cherrystudio.sqlite` 的 `ai_usage_record`）已作为独立 Usage Source 接入；原 Tier 3「IndexedDB」结论过时，v2 已落 sqlite。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -88,18 +89,22 @@
 - **实现**：`src-tauri/src/adapters/zed.rs` + `conversation/zed.rs`，注册为 `Source::Zed`，coverage「轮级 Token（input 不含 cache）」；`data_type` 为 `zstd`/`json` 才解 blob，未知类型跳过；`request_token_usage` 按用户消息键出轮，累计大于 map 时补 `cumulative-remainder`（codeburn 在真实线程上观察到 map 可能只有累计的约 1/3）；input 已不含 cache（Anthropic 形）；对话读外部标签 `User`/`Agent`（text / thinking / tool_use / tool_results），`parent_id` 非空不算顶层
 - **证据**：上游 `crates/agent/src/db.rs` 的 `DbThread` / `TokenUsage` / `DataType`，以及 codeburn `src/providers/zed.ts`
 
+### Cherry Studio ✅
+
+- **本机路径**：Electron userData `cherrystudio.sqlite`（Linux `~/.config/{CherryStudio,Cherry Studio}`，macOS Application Support，Windows `%APPDATA%`）；`CHERRY_STUDIO_DATA_DIR` 覆盖 userData 根
+- **实现**：`src-tauri/src/adapters/cherry.rs` + `conversation/cherry.rs`，注册为 `Source::Cherry`，coverage「轮级 Token（input 不含 cache）」；读 v2 `ai_usage_record`（PR CherryHQ/cherry-studio#15992）；优先 `no_cache_tokens`，否则从 `input_tokens` 拆 cache；`cost_currency = USD` 才入 `native_cost`；无模型名跳过。对话读 `topic` + `message`（AI SDK `parts`；`role = root` 与 `deleted_at` 非空不进目录）
+
 ## Tier 3 — 本轮不投入
 
 | 来源 | 原因 |
 |---|---|
-| Cherry Studio | 数据在 Electron `IndexedDB`/`WebStorage`/`File System` 里，没有干净的会话文件；只有 `config.json`（应用配置，非用量） |
 | Windsurf | 同上，`Session Storage` 是 LevelDB；`User/workspaceStorage` 下没找到独立于 VS Code 标准结构的 AI 对话文件 |
 | Trae CN / Trae IDE | IDE 会话在 SQLCipher 加密库里，国际版用量走云端 API；**Trae CLI**（`~/.trae/cli/sessions` Codex rollout）已作为独立 Usage Source 接入 |
 | CodeBuddy IDE | `CodeBuddyExtension/Data/Public/auth` 只有鉴权数据，没有会话数据。**CodeBuddy CLI**（`~/.codebuddy/projects/**/*.jsonl`）已作为独立 Usage Source 接入 |
 | Antigravity 本地 transcript | 同上，`Session Storage`/`blob_storage` 是 LevelDB（注意：Antigravity 的**官方额度**已经作为 `OfficialQuotaProvider` 接入，这里指的是本机会话明细，是另一件事） |
 | Zed | 已作为独立 Usage Source 接入（`adapters/zed.rs`，读 `threads.db`） |
 
-以上 Electron 系来源的共同问题是数据在 LevelDB/IndexedDB 里，需要引入第三方 leveldb 解析库 + 逆向 IndexedDB 内部序列化结构，工程成本远高于 Tier 1；如果之后有人验证到这几个工具会把会话导出为文件（比如某个「导出」功能），可以重新评估。
+以上 Electron 系来源的共同问题是数据在 LevelDB/IndexedDB 里，需要引入第三方 leveldb 解析库 + 逆向 IndexedDB 内部序列化结构，工程成本远高于 Tier 1；如果之后有人验证到这几个工具会把会话导出为文件（比如某个「导出」功能），可以重新评估。Cherry Studio v2 已改写 sqlite，不再属于这一档。
 
 ## 已接入但字段残缺的四个来源 — 本轮结论
 

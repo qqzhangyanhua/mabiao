@@ -32,6 +32,7 @@ export const SOURCE_SLUGS = [
   "kilo",
   "amp",
   "zed",
+  "cherry",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -76,6 +77,7 @@ export const BRAND_IDS = [
   "kilo",
   "amp",
   "zed",
+  "cherry",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -108,6 +110,7 @@ export const DISPLAY_NAMES = {
   kilo: "Kilo Code",
   amp: "Amp",
   zed: "Zed",
+  cherry: "Cherry Studio",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -144,6 +147,7 @@ export const BRAND_BY_SLUG = {
   kilo: "kilo",
   amp: "amp",
   zed: "zed",
+  cherry: "cherry",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -180,6 +184,7 @@ export const RESUME_TEMPLATES = {
   kilo: null,
   amp: "amp threads continue {id}",
   zed: null,
+  cherry: null,
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];

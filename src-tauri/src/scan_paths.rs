@@ -263,6 +263,9 @@ fn row_note(source: Source) -> String {
         Source::Zed => {
             "扫 threads.db。ZED_DATA_DIR 指向 Zed 数据根，拼 threads/；未覆盖时扫 XDG、macOS Application Support 与 Windows LocalAppData。".to_string()
         }
+        Source::Cherry => {
+            "扫 cherrystudio.sqlite。CHERRY_STUDIO_DATA_DIR 覆盖 Electron userData 根；未覆盖时同时扫 CherryStudio 与 Cherry Studio。".to_string()
+        }
         _ => String::new(),
     }
 }

@@ -632,3 +632,13 @@ fn zed_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Zed);
     assert_conversation_index_matches_parse(&conn, home, "zed", ZED_THREAD_ID);
 }
+
+#[test]
+fn cherry_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_default_cherry_home(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Cherry);
+    assert_conversation_index_matches_parse(&conn, home, "cherry", CHERRY_TOPIC_ID);
+}

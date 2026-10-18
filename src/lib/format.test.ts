@@ -156,6 +156,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("kilo")).toBe("Kilo Code");
     expect(sourceLabel("amp")).toBe("Amp");
     expect(sourceLabel("zed")).toBe("Zed");
+    expect(sourceLabel("cherry")).toBe("Cherry Studio");
   });
 
   it("always offers Cursor in the source filter list", () => {

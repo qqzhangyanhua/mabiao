@@ -33,6 +33,7 @@ const KNOWN_SOURCES = [
   "kilo",
   "amp",
   "zed",
+  "cherry",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -64,6 +65,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("kilo")).toBe("kilo");
     expect(resolveSourceIconId("amp")).toBe("amp");
     expect(resolveSourceIconId("zed")).toBe("zed");
+    expect(resolveSourceIconId("cherry")).toBe("cherry");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {
