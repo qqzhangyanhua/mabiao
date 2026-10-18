@@ -99,6 +99,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Alma), "");
     assert_eq!(scan_paths::join_leaf(Source::CodeBuddy), "projects");
     assert_eq!(scan_paths::join_leaf(Source::Trae), "cli/sessions");
+    assert_eq!(scan_paths::join_leaf(Source::Goose), "data/sessions");
 }
 
 #[test]

@@ -5,6 +5,8 @@
 > **进度更新（2026-09-03）**：原 Tier 1 第一名 **Hermes 已实现并合并**（PR #145，`adapters/hermes.rs` + `USAGE_ADAPTERS` 表 `Source::Hermes`，coverage「模型级 Token（含原生费用）」），已从下方待新增列表移除，见「已实现」小节。当前 Tier 1 待新增顺序为 VS Code 系 Cline/Roo/Kilo → ZCode → WorkBuddy。
 >
 > **进度更新（2026-10-10）**：**Cline CLI**（`~/.cline/data/sessions/<id>/<id>.messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」仍指 VS Code 扩展的 `ui_messages.json` 路径，与 Cline CLI 不是同一套落地文件。
+>
+> **进度更新（2026-10-18）**：**Goose**（`~/.local/share/goose/sessions/sessions.db`）已作为独立 Usage Source 接入，见「已实现」小节。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -55,6 +57,11 @@
 - **本机路径**：`~/.cline/data/sessions/<id>/<id>.messages.json`，侧车 `<id>.json` 提供 `cwd` / `metadata.fork.forkedAt`；环境变量 `CLINE_SESSION_DATA_DIR` 直接覆盖会话目录
 - **实现**：`src-tauri/src/adapters/cline.rs`，注册为 `Source::Cline`，coverage「轮级 Token（input 不含 cache）」；`input = max(0, inputTokens - cacheRead - cacheWrite)`，`metrics.cost > 0` 写入 `native_cost`；`ts < forkedAt` 的消息跳过
 - **与 VS Code Cline 的区别**：这是 Cline CLI 的本机会话目录，不是扩展 `globalStorage/.../tasks/*/ui_messages.json`
+
+### Goose ✅
+
+- **本机路径**：`~/.local/share/goose/sessions/sessions.db`（另扫 macOS Application Support 与 Block 旧路径）；`GOOSE_PATH_ROOT` 覆盖根并拼 `data/sessions`
+- **实现**：`src-tauri/src/adapters/goose.rs` + `conversation/goose.rs`，注册为 `Source::Goose`，coverage「会话级 Token」；取 `accumulated_*`（缺则回落会话级 input/output/total）；`session_type = hidden` 不入账；对话读 `messages.content_json` 的 text / toolRequest / toolResponse
 
 ## Tier 3 — 本轮不投入
 

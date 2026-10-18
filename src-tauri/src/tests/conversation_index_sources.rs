@@ -580,3 +580,13 @@ fn claude_event_index_matches_full_parse_across_split_source_files() {
         .collect::<Vec<_>>();
     assert_eq!(texts, vec!["early", "shared", "late"]);
 }
+
+#[test]
+fn goose_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_default_goose_home(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Goose);
+    assert_conversation_index_matches_parse(&conn, home, "goose", "20261017_1");
+}

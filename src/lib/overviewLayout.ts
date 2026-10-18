@@ -54,6 +54,7 @@ export const QUOTA_SOURCE_IDS = [
   "zcode",
   "alma",
   "trae",
+  "goose",
 ] as const;
 
 export type QuotaSourceId = (typeof QUOTA_SOURCE_IDS)[number];

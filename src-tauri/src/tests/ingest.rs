@@ -1184,6 +1184,16 @@ fn source_scan_dirs_default_to_home_relative_paths() {
             home.join(".trae/cli/archived_sessions"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Goose),
+        vec![
+            home.join(".local/share/goose/sessions"),
+            home.join("Library/Application Support/goose/sessions"),
+            home.join("Library/Application Support/Block/goose/sessions"),
+            home.join(".local/share/Block/goose/sessions"),
+            home.join("AppData/Roaming/Block/goose/data/sessions"),
+        ],
+    );
 }
 
 #[test]
@@ -1226,6 +1236,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("ALMA_HOME", vec![PathBuf::from("/custom/alma")]),
         ("CODEBUDDY_DIR", vec![PathBuf::from("/custom/codebuddy")]),
         ("TRAE_HOME", vec![PathBuf::from("/custom/trae")]),
+        ("GOOSE_PATH_ROOT", vec![PathBuf::from("/custom/goose")]),
     ]);
 
     assert_eq!(
@@ -1301,6 +1312,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
             PathBuf::from("/custom/trae/cli/sessions"),
             PathBuf::from("/custom/trae/cli/archived_sessions"),
         ],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Goose),
+        vec![PathBuf::from("/custom/goose/data/sessions")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1432,7 +1447,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 23);
+    assert_eq!(Source::ALL.len(), 24);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1532,6 +1547,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const TRAE_FILES: u64 = 1;
     const TRAE_RECORDS: usize = 2;
     const TRAE_TOKENS: i64 = 19113;
+    const GOOSE_FILES: u64 = 1;
+    const GOOSE_RECORDS: usize = 1;
+    const GOOSE_TOKENS: i64 = 1200;
 
     let opencode = first
         .sources
@@ -1598,6 +1616,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Trae.as_str())
         .unwrap();
+    let goose = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Goose.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1624,6 +1647,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(codebuddy.records_written, CODEBUDDY_RECORDS as u64);
     assert_eq!(trae.files_parsed, TRAE_FILES);
     assert_eq!(trae.records_written, TRAE_RECORDS as u64);
+    assert_eq!(goose.files_parsed, GOOSE_FILES);
+    assert_eq!(goose.records_written, GOOSE_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1677,6 +1702,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Trae)
         .collect();
+    let goose_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Goose)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1690,6 +1719,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(alma_rows.len(), ALMA_RECORDS);
     assert_eq!(codebuddy_rows.len(), CODEBUDDY_RECORDS);
     assert_eq!(trae_rows.len(), TRAE_RECORDS);
+    assert_eq!(goose_rows.len(), GOOSE_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1781,6 +1811,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         TRAE_TOKENS
     );
+    assert_eq!(
+        goose_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        GOOSE_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -1795,7 +1832,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ZCODE_FILES
         + ALMA_FILES
         + CODEBUDDY_FILES
-        + TRAE_FILES;
+        + TRAE_FILES
+        + GOOSE_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
         + CURSOR_AGENT_RECORDS
@@ -1809,7 +1847,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ZCODE_RECORDS
         + ALMA_RECORDS
         + CODEBUDDY_RECORDS
-        + TRAE_RECORDS;
+        + TRAE_RECORDS
+        + GOOSE_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
         + CURSOR_AGENT_TOKENS
@@ -1823,7 +1862,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ZCODE_TOKENS
         + ALMA_TOKENS
         + CODEBUDDY_TOKENS
-        + TRAE_TOKENS;
+        + TRAE_TOKENS
+        + GOOSE_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
     assert_eq!(stored.len(), records);
@@ -1902,14 +1942,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 23);
+    assert_eq!(report.files_seen, 24);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 23);
+    assert_eq!(report.files_parsed, 24);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 40);
+    assert_eq!(report.records_written, 41);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 40);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 891280);
+    assert_eq!(stored.len(), 41);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 892480);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -1943,7 +1983,9 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Alma
             | Source::CodeBuddy
             | Source::Trae => (1, 0, 1, 2, 0, 0),
-            Source::Opencode | Source::Gemini | Source::Factory => (1, 0, 1, 1, 0, 0),
+            Source::Opencode | Source::Gemini | Source::Factory | Source::Goose => {
+                (1, 0, 1, 1, 0, 0)
+            }
             Source::Qwen | Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes => (1, 0, 1, 3, 0, 0),
         };
@@ -2440,6 +2482,11 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     assert!(trae.append_log, "Trae CLI 会话 jsonl 是追加型日志");
     assert_eq!(trae.path_env, "TRAE_HOME");
     assert_eq!(trae.coverage, "轮级 Token");
+
+    let goose = usage_adapter(Source::Goose);
+    assert!(!goose.append_log, "Goose 会话库是 SQLite，不是追加型日志");
+    assert_eq!(goose.path_env, "GOOSE_PATH_ROOT");
+    assert_eq!(goose.coverage, "会话级 Token");
 }
 
 #[test]

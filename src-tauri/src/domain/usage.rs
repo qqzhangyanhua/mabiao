@@ -28,10 +28,11 @@ pub enum Source {
     Alma,
     CodeBuddy,
     Trae,
+    Goose,
 }
 
 impl Source {
-    pub const ALL: [Source; 23] = [
+    pub const ALL: [Source; 24] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -55,6 +56,7 @@ impl Source {
         Source::Alma,
         Source::CodeBuddy,
         Source::Trae,
+        Source::Goose,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -82,6 +84,7 @@ impl Source {
             Source::Alma => "alma",
             Source::CodeBuddy => "codebuddy",
             Source::Trae => "trae",
+            Source::Goose => "goose",
         }
     }
 
@@ -110,6 +113,7 @@ impl Source {
             Source::Alma => "Alma",
             Source::CodeBuddy => "CodeBuddy",
             Source::Trae => "Trae CLI",
+            Source::Goose => "Goose",
         }
     }
 
@@ -139,6 +143,7 @@ impl Source {
             Source::Alma => Brand::Alma,
             Source::CodeBuddy => Brand::CodeBuddy,
             Source::Trae => Brand::Trae,
+            Source::Goose => Brand::Goose,
         }
     }
 
@@ -168,6 +173,7 @@ impl Source {
             Source::Alma => None,
             Source::CodeBuddy => Some("codebuddy --resume {id}"),
             Source::Trae => Some("traex resume {id}"),
+            Source::Goose => Some("goose session --resume --session-id {id}"),
         }
     }
 
@@ -196,6 +202,7 @@ impl Source {
             "alma" => Some(Source::Alma),
             "codebuddy" => Some(Source::CodeBuddy),
             "trae" => Some(Source::Trae),
+            "goose" => Some(Source::Goose),
             _ => None,
         }
     }
