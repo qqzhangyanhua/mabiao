@@ -1,9 +1,13 @@
 use std::path::Path;
 
+use base64::prelude::*;
 use rusqlite::params;
 
 use crate::conversation;
-use crate::domain::{ConversationEventKind, ConversationQuery};
+use crate::domain::{
+    ConversationAttachmentKind, ConversationAttachmentStatus, ConversationEventKind,
+    ConversationQuery,
+};
 use crate::test_support::*;
 
 fn write_text(path: &Path, content: &str) {
@@ -58,6 +62,62 @@ fn gemini_jsonl_session_honors_rewind_and_feeds_search() {
         .rows
         .iter()
         .any(|row| row.source == "gemini" && row.session_id == "sess-g-jsonl"));
+}
+
+fn test_png_bytes() -> Vec<u8> {
+    let pixels = image::RgbaImage::from_pixel(2, 2, image::Rgba([24, 160, 200, 255]));
+    let mut output = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(pixels)
+        .write_to(&mut output, image::ImageFormat::Png)
+        .unwrap();
+    output.into_inner()
+}
+
+#[test]
+fn gemini_jsonl_inline_image_loads_as_local_data_url() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let png = test_png_bytes();
+    let path = home.join(".gemini/tmp/proj/chats/session-sess-img.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let payload = serde_json::json!({
+        "id": "u1",
+        "timestamp": "2026-09-03T08:00:00Z",
+        "type": "user",
+        "content": [{
+            "inlineData": {
+                "mimeType": "image/png",
+                "data": BASE64_STANDARD.encode(&png)
+            }
+        }]
+    });
+    std::fs::write(
+        &path,
+        format!("{}\n{}\n", r#"{"sessionId":"sess-img"}"#, payload),
+    )
+    .unwrap();
+
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "gemini", "sess-img").unwrap();
+    let event = detail
+        .events
+        .iter()
+        .find(|event| !event.attachments.is_empty())
+        .unwrap();
+    assert_eq!(event.attachments[0].kind, ConversationAttachmentKind::Image);
+    assert_eq!(
+        event.attachments[0].status,
+        ConversationAttachmentStatus::Embedded
+    );
+    let image =
+        conversation::load_attachment(&conn, home, "gemini", "sess-img", &event.attachments[0].id)
+            .unwrap();
+    assert!(image.data_url.starts_with("data:image/png;base64,"));
+    assert!(
+        !image.data_url.contains("http://") && !image.data_url.contains("https://"),
+        "attachment loader must not emit remote URLs"
+    );
 }
 
 #[test]

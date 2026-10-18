@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Icon } from "../icons";
 import { chatStepCount, type ChatPart, type ChatToolStep, type ChatTurn } from "../lib/conversationChat";
-import { actorLabel } from "../lib/conversationEventDisplay";
+import { actorLabel, compactionBoundaryLabel } from "../lib/conversationEventDisplay";
 import { conversationSourceLabel } from "../lib/conversationDisplay";
 import { formatClock } from "../lib/format";
 import type { ConversationAgentLink, ConversationEventContentDto } from "../types";
@@ -111,6 +111,13 @@ function PartBody({
       />
     );
   }
+  if (part.type === "boundary") {
+    return (
+      <div className="conversation-compaction-boundary" role="separator">
+        <span>{compactionBoundaryLabel(part.event)}</span>
+      </div>
+    );
+  }
   const event = part.event;
   return (
     <div className={part.type === "notice" ? "conversation-chat-notice" : undefined}>
@@ -163,8 +170,29 @@ export function ConversationChatTurn({
   const steps = chatStepCount(turn);
   const [stepsOpen, setStepsOpen] = useState(true);
   const speaker =
-    turn.role === "user" ? actorLabel("user") : conversationSourceLabel(source);
+    turn.role === "user"
+      ? actorLabel("user")
+      : turn.role === "system"
+        ? "压缩边界"
+        : conversationSourceLabel(source);
   const highlighted = turn.eventIds.includes(highlightEventId ?? "");
+  const boundary = turn.role === "system" ? turn.parts.find((part) => part.type === "boundary") : null;
+
+  if (boundary?.type === "boundary") {
+    return (
+      <div
+        className={["conversation-chat-turn", "is-system", highlighted ? "is-hit" : ""]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <div className="conversation-compaction-boundary" role="separator" data-event-id={boundary.event.event_id}>
+          <time dateTime={turn.occurredAt ?? undefined}>{clockLabel(turn.occurredAt)}</time>
+          <span>{compactionBoundaryLabel(boundary.event)}</span>
+        </div>
+        {turn.eventIds.flatMap((eventId) => renderLinks(linksFor(eventId)))}
+      </div>
+    );
+  }
 
   return (
     <article

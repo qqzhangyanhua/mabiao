@@ -62,4 +62,16 @@ describe("groupConversationTurns", () => {
     const turns = groupConversationTurns([event("m", "message", null)]);
     expect(turns[0]?.role).toBe("user");
   });
+
+  it("把压缩边界拆成独立的系统分隔轮次", () => {
+    const turns = groupConversationTurns([
+      event("u", "message", "user"),
+      event("c", "system_status", null, "compression"),
+      event("a", "message", "assistant"),
+    ]);
+    expect(turns.map((turn) => turn.role)).toEqual(["user", "system", "assistant"]);
+    expect(turns[1]?.parts).toEqual([
+      { type: "boundary", event: event("c", "system_status", null, "compression") },
+    ]);
+  });
 });

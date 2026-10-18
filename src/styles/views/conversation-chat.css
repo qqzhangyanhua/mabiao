@@ -214,3 +214,31 @@
 .conversation-chat-notice-label.kind-plan {
   color: var(--purple-fg);
 }
+
+.conversation-chat-turn.is-system {
+  justify-content: center;
+  padding: 4px 2px 10px;
+}
+
+.conversation-compaction-boundary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  width: 100%;
+  margin: 4px 0;
+  padding: 6px 0;
+  border: 0;
+  border-top: 1px dashed var(--line-strong);
+  border-bottom: 1px dashed var(--line-strong);
+  color: var(--cyan-fg);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.conversation-compaction-boundary time {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}

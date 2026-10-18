@@ -8,7 +8,9 @@ import {
   attachmentSignature,
   attachmentStatusText,
   capabilityStatusLabel,
+  compactionBoundaryLabel,
   EVENT_LABELS,
+  isCompactionBoundary,
   formatAttachmentBytes,
   hasEventDetails,
   prettyDetails,
@@ -179,7 +181,8 @@ export function ConversationEventItem({
     );
   }
 
-  const label = EVENT_LABELS[event.kind];
+  const compaction = isCompactionBoundary(event);
+  const label = compaction ? "压缩边界" : EVENT_LABELS[event.kind];
   const showDetails =
     event.kind === "unadapted" ||
     ((event.kind === "plan" || event.kind === "tool_call" || event.kind === "tool_result") &&
@@ -197,6 +200,7 @@ export function ConversationEventItem({
   const eventClass = [
     "conversation-event",
     `event-${event.kind.replaceAll("_", "-")}`,
+    compaction ? "is-compaction-boundary" : "",
     highlighted ? "conversation-event-hit" : "",
     chrome === "body" ? "is-body" : "",
   ]
@@ -245,7 +249,9 @@ export function ConversationEventItem({
             </div>
           ) : null}
           {event.text ? (
-            usesMarkdown ? (
+            compaction ? (
+              <p className="conversation-compaction-copy">{compactionBoundaryLabel(event)}</p>
+            ) : usesMarkdown ? (
               <ConversationMarkdown markdown={event.text} />
             ) : (
               <pre className="conversation-event-text conversation-event-command">
@@ -256,6 +262,8 @@ export function ConversationEventItem({
                 )}
               </pre>
             )
+          ) : compaction ? (
+            <p className="conversation-compaction-copy">{compactionBoundaryLabel(event)}</p>
           ) : null}
           {isDeferred ? (
             <div className="conversation-deferred" aria-live="polite">
