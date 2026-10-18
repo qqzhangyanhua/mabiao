@@ -1107,33 +1107,86 @@ fn cursor_agent_adapter_maps_result_usage_per_turn() {
 }
 
 #[test]
+fn copilot_adapter_splits_cache_out_of_input_and_diffs_shutdowns() {
+    let records = copilot::parse_copilot_jsonl(
+        &fixture_lines(&fixture("copilot-cache-intervals.jsonl")),
+        "/Users/dev/.copilot/session-state/sess-copilot-cache/events.jsonl",
+    );
+    // session-state 的 inputTokens 已含 cache read/write；多次 shutdown 是累计快照。
+    // 修前：只留最后一次，input=250 与 cache 重叠，total=250+15+90+10=365（cache 计两次）。
+    // 修后：先按模型做相邻快照差分，再拆出裸 input；全时段合计对齐最后一次快照。
+    assert_eq!(records.len(), 3, "{records:?}");
+    let gpt: Vec<_> = records
+        .iter()
+        .filter(|record| record.model == "gpt-5.4")
+        .collect();
+    let claude = records
+        .iter()
+        .find(|record| record.model == "claude-sonnet-4.5")
+        .expect("claude");
+    assert_eq!(gpt.len(), 2);
+    assert_eq!(gpt[0].occurred_at, "2026-08-10T09:30:00.000Z");
+    assert_eq!(gpt[0].input_tokens, 50);
+    assert_eq!(gpt[0].cache_read_tokens, 40);
+    assert_eq!(gpt[0].cache_creation_tokens, 10);
+    assert_eq!(gpt[0].output_tokens, 5);
+    assert_eq!(gpt[0].total_tokens, 105);
+    assert_eq!(gpt[1].occurred_at, "2026-08-10T15:00:00.000Z");
+    assert_eq!(gpt[1].input_tokens, 100);
+    assert_eq!(gpt[1].cache_read_tokens, 50);
+    assert_eq!(gpt[1].cache_creation_tokens, 0);
+    assert_eq!(gpt[1].output_tokens, 10);
+    assert_eq!(gpt[1].total_tokens, 160);
+    assert_eq!(claude.input_tokens, 50);
+    assert_eq!(claude.cache_read_tokens, 30);
+    assert_eq!(claude.output_tokens, 8);
+    assert_eq!(claude.total_tokens, 88);
+    let gpt_input: i64 = gpt.iter().map(|record| record.input_tokens).sum();
+    let gpt_total: i64 = gpt.iter().map(|record| record.total_tokens).sum();
+    assert_eq!(gpt_input, 150);
+    assert_eq!(gpt_total, 265);
+}
+
+#[test]
 fn copilot_adapter_only_uses_the_last_shutdown_snapshot_per_session() {
     let records = copilot::parse_copilot_jsonl(
         &fixture_lines(&fixture("copilot-events.jsonl")),
         "/Users/dev/.copilot/session-state/c0ffee11-2222-4333-8444-555566667777/events.jsonl",
     );
-    // 文件里有两次 session.shutdown（会话续接两次）；只应采信最后一次的累计用量，
-    // 否则会把第一次 shutdown 的 gpt-5.4 用量重复计入。
-    assert_eq!(records.len(), 2);
+    // 文件里有两次 session.shutdown（会话续接两次）；累计快照做差分，不能把第一次
+    // 的 gpt-5.4 再加一遍。合计等于最后一次快照拆 cache 之后。
+    assert_eq!(records.len(), 3);
     assert_eq!(records[0].source, Source::Copilot);
-    assert_eq!(records[0].model, "claude-sonnet-4.5");
-    assert_eq!(records[0].provider, "");
-    assert_eq!(records[0].project, "/Users/dev/ai-usage-stats");
+    assert_eq!(records[0].model, "gpt-5.4");
+    assert_eq!(records[0].occurred_at, "2026-08-10T09:30:00.000Z");
+    assert_eq!(records[0].input_tokens, 10_000);
+    assert_eq!(records[0].output_tokens, 900);
+    assert_eq!(records[0].cache_read_tokens, 40_000);
+
+    assert_eq!(records[1].model, "claude-sonnet-4.5");
+    assert_eq!(records[1].provider, "");
+    assert_eq!(records[1].project, "/Users/dev/ai-usage-stats");
     assert_eq!(
-        records[0].session_id,
+        records[1].session_id,
         "c0ffee11-2222-4333-8444-555566667777"
     );
-    assert_eq!(records[0].occurred_at, "2026-08-10T15:12:30.500Z");
-    assert_eq!(records[0].input_tokens, 21583);
-    assert_eq!(records[0].output_tokens, 1064);
-    assert_eq!(records[0].cache_read_tokens, 21187);
-    assert_eq!(records[0].cache_creation_tokens, 0);
-    assert_eq!(records[0].total_tokens, 21583 + 1064 + 21187);
+    assert_eq!(records[1].occurred_at, "2026-08-10T15:12:30.500Z");
+    assert_eq!(records[1].input_tokens, 396);
+    assert_eq!(records[1].output_tokens, 1064);
+    assert_eq!(records[1].cache_read_tokens, 21187);
+    assert_eq!(records[1].cache_creation_tokens, 0);
+    assert_eq!(records[1].total_tokens, 396 + 1064 + 21187);
 
-    assert_eq!(records[1].model, "gpt-5.4");
-    assert_eq!(records[1].input_tokens, 244120);
-    assert_eq!(records[1].output_tokens, 2383);
-    assert_eq!(records[1].cache_read_tokens, 202112);
+    assert_eq!(records[2].model, "gpt-5.4");
+    assert_eq!(records[2].input_tokens, 32_008);
+    assert_eq!(records[2].output_tokens, 1483);
+    assert_eq!(records[2].cache_read_tokens, 162_112);
+    let gpt_input: i64 = records
+        .iter()
+        .filter(|record| record.model == "gpt-5.4")
+        .map(|record| record.input_tokens)
+        .sum();
+    assert_eq!(gpt_input, 42_008);
 }
 
 #[test]
