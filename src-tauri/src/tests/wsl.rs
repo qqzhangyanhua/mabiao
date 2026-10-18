@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use crate::domain::Source;
 use crate::ingest;
@@ -67,6 +68,13 @@ fn source_scan_dirs_append_wsl_homes_unless_path_is_overridden() {
             ]
         );
     });
+}
+
+#[test]
+fn missing_share_with_timeout_returns_empty() {
+    let missing = PathBuf::from("/definitely-missing-wsl-share");
+    let homes = wsl::homes_from_share_roots_timed(&[missing], Some(Duration::from_millis(50)));
+    assert!(homes.is_empty());
 }
 
 #[test]

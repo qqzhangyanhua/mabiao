@@ -2,10 +2,15 @@
 //!
 //! 未安装 WSL、UNC 枚举失败或超时都静默跳过，不拖慢摄取。非 Windows 平台恒为空。
 
-use std::fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(any(windows, test))]
+use std::fs;
+#[cfg(any(windows, test))]
 use std::sync::mpsc;
+#[cfg(any(windows, test))]
 use std::thread;
+#[cfg(any(windows, test))]
 use std::time::Duration;
 
 #[cfg(test)]
@@ -46,6 +51,7 @@ pub(crate) fn scan_homes(home: &Path) -> Vec<PathBuf> {
     homes
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn unc_share_candidates() -> Vec<PathBuf> {
     #[cfg(windows)]
     {
@@ -58,11 +64,13 @@ pub(crate) fn unc_share_candidates() -> Vec<PathBuf> {
 }
 
 /// 从已经列出来的 WSL 共享根（`\\wsl.localhost` / 测试夹具）收集各发行版 `/home/<user>`。
+#[cfg(any(windows, test))]
 pub(crate) fn homes_from_share_roots(share_roots: &[PathBuf]) -> Vec<PathBuf> {
     homes_from_share_roots_timed(share_roots, None)
 }
 
-fn homes_from_share_roots_timed(
+#[cfg(any(windows, test))]
+pub(crate) fn homes_from_share_roots_timed(
     share_roots: &[PathBuf],
     timeout: Option<Duration>,
 ) -> Vec<PathBuf> {
@@ -91,6 +99,7 @@ fn discover_wsl_homes() -> Vec<PathBuf> {
     homes_from_share_roots_timed(&unc_share_candidates(), Some(SHARE_TIMEOUT))
 }
 
+#[cfg(any(windows, test))]
 fn read_dirs(path: &Path, timeout: Option<Duration>) -> Vec<PathBuf> {
     match timeout {
         Some(limit) => read_dirs_timeout(path, limit),
@@ -98,6 +107,7 @@ fn read_dirs(path: &Path, timeout: Option<Duration>) -> Vec<PathBuf> {
     }
 }
 
+#[cfg(any(windows, test))]
 fn collect_dir_entries(path: &Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(path) else {
         return Vec::new();
@@ -109,6 +119,7 @@ fn collect_dir_entries(path: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+#[cfg(any(windows, test))]
 fn read_dirs_timeout(path: &Path, timeout: Duration) -> Vec<PathBuf> {
     let path = path.to_path_buf();
     let (tx, rx) = mpsc::channel();
