@@ -229,21 +229,29 @@ pub(crate) fn usage_entries(thread: &Value) -> Vec<(String, ZedTokens)> {
 }
 
 fn records_from_thread(thread: &LoadedThread, path: &Path) -> Vec<UsageRecord> {
-    let occurred_at = parse_sql_timestamp(&thread.updated_at);
-    if occurred_at.is_empty() {
+    if !thread.parent_id.trim().is_empty() {
         return Vec::new();
     }
+    let fallback_at = parse_sql_timestamp(&thread.updated_at);
+    if fallback_at.is_empty() {
+        return Vec::new();
+    }
+    let request_times = request_timestamps(&thread.json);
     let model = model_from_thread(&thread.json);
     let provider = model_provider(&thread.json);
     let project = project_from_thread(&thread.json);
     let source_file = path.to_string_lossy().into_owned();
     let mut records = Vec::new();
-    for (_request_key, usage) in usage_entries(&thread.json) {
+    for (request_key, usage) in usage_entries(&thread.json) {
         if usage.is_empty() {
             continue;
         }
+        let occurred_at = request_times
+            .get(&request_key)
+            .cloned()
+            .unwrap_or_else(|| fallback_at.clone());
         let record = finish(UsageRecord {
-            occurred_at: occurred_at.clone(),
+            occurred_at,
             source: Source::Zed,
             model: model.clone(),
             provider: provider.clone(),
@@ -264,6 +272,44 @@ fn records_from_thread(thread: &LoadedThread, path: &Path) -> Vec<UsageRecord> {
         }
     }
     records
+}
+
+fn request_timestamps(thread: &Value) -> BTreeMap<String, String> {
+    let mut times = BTreeMap::new();
+    let Some(messages) = thread.get("messages").and_then(Value::as_array) else {
+        return times;
+    };
+    for message in messages {
+        let inner = message
+            .get("User")
+            .or_else(|| message.get("Agent"))
+            .or_else(|| message.get("Resume"));
+        let Some(inner) = inner else {
+            continue;
+        };
+        let Some(id) = inner.get("id").and_then(Value::as_str) else {
+            continue;
+        };
+        if id.is_empty() {
+            continue;
+        }
+        if let Some(ts) = message_timestamp(inner).or_else(|| message_timestamp(message)) {
+            times.insert(id.to_string(), ts);
+        }
+    }
+    times
+}
+
+fn message_timestamp(value: &Value) -> Option<String> {
+    for key in ["created_at", "updated_at", "timestamp"] {
+        if let Some(raw) = value.get(key).and_then(Value::as_str) {
+            let ts = parse_sql_timestamp(raw);
+            if !ts.is_empty() {
+                return Some(ts);
+            }
+        }
+    }
+    None
 }
 
 pub(crate) fn model_from_thread(thread: &Value) -> String {
