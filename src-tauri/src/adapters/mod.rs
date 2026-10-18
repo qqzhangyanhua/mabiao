@@ -8,6 +8,7 @@ pub mod codebuddy;
 pub mod codebuddy_ide;
 pub mod codex;
 pub mod copilot;
+pub mod crush;
 pub mod cursor;
 pub mod cursor_account;
 pub mod cursor_agent;
@@ -570,6 +571,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Crush,
+        path_env: "CRUSH_GLOBAL_DATA",
+        scan_dirs: crush::scan_dirs,
+        discover: crush::discover,
+        sidecar_fingerprint: crush::sidecar_fingerprint,
+        parse: crush::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "会话级 Token（含原生费用）",
         display_dirs: None,
         detected: None,
     },

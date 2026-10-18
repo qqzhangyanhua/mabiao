@@ -25,6 +25,7 @@ mod context_content;
 mod context_first_use;
 mod context_manifest;
 mod copilot;
+mod crush;
 mod cursor;
 mod cursor_bridge;
 mod cursor_inject;
@@ -416,6 +417,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: zed::detail,
         revision: zed::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Crush,
+        discover: crush::discover,
+        index: crush::index,
+        index_suffix: None,
+        detail: crush::detail,
+        revision: crush::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },

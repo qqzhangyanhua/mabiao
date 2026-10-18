@@ -107,6 +107,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Cherry), "");
     assert_eq!(scan_paths::join_leaf(Source::OpenClaw), "agents");
     assert_eq!(scan_paths::join_leaf(Source::CodeBuddyIde), "");
+    assert_eq!(scan_paths::join_leaf(Source::Crush), "");
 }
 
 #[test]

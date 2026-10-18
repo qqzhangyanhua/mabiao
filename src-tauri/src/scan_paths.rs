@@ -272,6 +272,9 @@ fn row_note(source: Source) -> String {
         Source::CodeBuddyIde => {
             "扫 CodeBuddyExtension/Data 下 history/*/messages/*.json 的累计 statsSnapshot。CODEBUDDY_IDE_DIR 覆盖 Data 根。".to_string()
         }
+        Source::Crush => {
+            "读 projects.json 再打开各项目 crush.db。CRUSH_GLOBAL_DATA 覆盖全局数据目录；未覆盖时扫 ~/.local/share/crush 与 %LOCALAPPDATA%/crush。不遍历家目录下的 .crush。".to_string()
+        }
         _ => String::new(),
     }
 }

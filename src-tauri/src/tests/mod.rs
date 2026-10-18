@@ -36,6 +36,7 @@ mod conversation_sources;
 mod conversation_text_reference;
 mod copilot_quota;
 mod cost;
+mod crush_conversation;
 mod cursor_account;
 mod cursor_conversation;
 mod cursor_credentials;
