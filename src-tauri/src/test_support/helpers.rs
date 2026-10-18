@@ -181,7 +181,7 @@ pub fn assert_rollups_match_overview(
 /// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode / Hermes 写 sqlite，
 /// Cursor Agent 写 token 包装目录下的 jsonl。
 pub fn write_all_source_fixtures(home: &std::path::Path) {
-    let paths: [(&str, &str); 14] = [
+    let paths: [(&str, &str); 15] = [
         (".codex/sessions/one.jsonl", "codex.jsonl"),
         (
             ".claude/projects/-Users-zhangyanhua-AI-TradingAgents-CN/04868551-34c3-4588-b984-6ae9a5d95f8a.jsonl",
@@ -231,6 +231,10 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
         (
             ".workbuddy/projects/-work-wb/sess-wb-1.jsonl",
             "workbuddy.jsonl",
+        ),
+        (
+            ".codebuddy/projects/-work-cb/sess-cb-1.jsonl",
+            "codebuddy.jsonl",
         ),
     ];
     for (rel, name) in paths {

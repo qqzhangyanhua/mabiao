@@ -1173,6 +1173,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
             home.join("AppData/Roaming/alma"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::CodeBuddy),
+        vec![home.join(".codebuddy/projects")],
+    );
 }
 
 #[test]
@@ -1213,6 +1217,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ),
         ("ZCODE_HOME", vec![PathBuf::from("/custom/zcode")]),
         ("ALMA_HOME", vec![PathBuf::from("/custom/alma")]),
+        ("CODEBUDDY_DIR", vec![PathBuf::from("/custom/codebuddy")]),
     ]);
 
     assert_eq!(
@@ -1277,6 +1282,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Alma),
         vec![PathBuf::from("/custom/alma")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::CodeBuddy),
+        vec![PathBuf::from("/custom/codebuddy/projects")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1408,7 +1417,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 21);
+    assert_eq!(Source::ALL.len(), 22);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1502,6 +1511,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const ALMA_FILES: u64 = 1;
     const ALMA_RECORDS: usize = 2;
     const ALMA_TOKENS: i64 = 1570;
+    const CODEBUDDY_FILES: u64 = 1;
+    const CODEBUDDY_RECORDS: usize = 2;
+    const CODEBUDDY_TOKENS: i64 = 6650;
 
     let opencode = first
         .sources
@@ -1558,6 +1570,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Alma.as_str())
         .unwrap();
+    let codebuddy = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::CodeBuddy.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1580,6 +1597,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(zcode.records_written, ZCODE_RECORDS as u64);
     assert_eq!(alma.files_parsed, ALMA_FILES);
     assert_eq!(alma.records_written, ALMA_RECORDS as u64);
+    assert_eq!(codebuddy.files_parsed, CODEBUDDY_FILES);
+    assert_eq!(codebuddy.records_written, CODEBUDDY_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1625,6 +1644,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Alma)
         .collect();
+    let codebuddy_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::CodeBuddy)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1636,6 +1659,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(workbuddy_rows.len(), WORKBUDDY_RECORDS);
     assert_eq!(zcode_rows.len(), ZCODE_RECORDS);
     assert_eq!(alma_rows.len(), ALMA_RECORDS);
+    assert_eq!(codebuddy_rows.len(), CODEBUDDY_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1713,6 +1737,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         ALMA_TOKENS
     );
+    assert_eq!(
+        codebuddy_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        CODEBUDDY_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -1725,7 +1756,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CLINE_FILES
         + WORKBUDDY_FILES
         + ZCODE_FILES
-        + ALMA_FILES;
+        + ALMA_FILES
+        + CODEBUDDY_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
         + CURSOR_AGENT_RECORDS
@@ -1737,7 +1769,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CLINE_RECORDS
         + WORKBUDDY_RECORDS
         + ZCODE_RECORDS
-        + ALMA_RECORDS;
+        + ALMA_RECORDS
+        + CODEBUDDY_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
         + CURSOR_AGENT_TOKENS
@@ -1749,7 +1782,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CLINE_TOKENS
         + WORKBUDDY_TOKENS
         + ZCODE_TOKENS
-        + ALMA_TOKENS;
+        + ALMA_TOKENS
+        + CODEBUDDY_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
     assert_eq!(stored.len(), records);
@@ -1828,14 +1862,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 21);
+    assert_eq!(report.files_seen, 22);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 21);
+    assert_eq!(report.files_parsed, 22);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 36);
+    assert_eq!(report.records_written, 38);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 36);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 865517);
+    assert_eq!(stored.len(), 38);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 872167);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -1866,7 +1900,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Cline
             | Source::WorkBuddy
             | Source::Zcode
-            | Source::Alma => (1, 0, 1, 2, 0, 0),
+            | Source::Alma
+            | Source::CodeBuddy => (1, 0, 1, 2, 0, 0),
             Source::Opencode | Source::Gemini | Source::Factory => (1, 0, 1, 1, 0, 0),
             Source::Qwen | Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes => (1, 0, 1, 3, 0, 0),
@@ -2354,6 +2389,11 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     assert!(!alma.append_log, "Alma 会话库是 SQLite，不是追加型日志");
     assert_eq!(alma.path_env, "ALMA_HOME");
     assert_eq!(alma.coverage, "轮级 Token（input 不含 cache）");
+
+    let codebuddy = usage_adapter(Source::CodeBuddy);
+    assert!(codebuddy.append_log, "CodeBuddy 会话 jsonl 是追加型日志");
+    assert_eq!(codebuddy.path_env, "CODEBUDDY_DIR");
+    assert_eq!(codebuddy.coverage, "轮级 Token（input 不含 cache）");
 }
 
 #[test]

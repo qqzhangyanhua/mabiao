@@ -15,6 +15,7 @@ mod catalog;
 mod catalog_search;
 mod claude;
 mod cline;
+mod codebuddy;
 mod codex;
 mod context_cache;
 mod context_content;
@@ -347,6 +348,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: alma::detail,
         revision: alma::source_revision,
         raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::CodeBuddy,
+        discover: discover_jsonl,
+        index: codebuddy::index,
+        index_suffix: None,
+        detail: codebuddy::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
     },
     ConversationAdapter {

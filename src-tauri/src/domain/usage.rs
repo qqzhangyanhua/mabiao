@@ -26,10 +26,11 @@ pub enum Source {
     WorkBuddy,
     Zcode,
     Alma,
+    CodeBuddy,
 }
 
 impl Source {
-    pub const ALL: [Source; 21] = [
+    pub const ALL: [Source; 22] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -51,6 +52,7 @@ impl Source {
         Source::WorkBuddy,
         Source::Zcode,
         Source::Alma,
+        Source::CodeBuddy,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -76,6 +78,7 @@ impl Source {
             Source::WorkBuddy => "workbuddy",
             Source::Zcode => "zcode",
             Source::Alma => "alma",
+            Source::CodeBuddy => "codebuddy",
         }
     }
 
@@ -102,6 +105,7 @@ impl Source {
             Source::WorkBuddy => "WorkBuddy",
             Source::Zcode => "ZCode",
             Source::Alma => "Alma",
+            Source::CodeBuddy => "CodeBuddy",
         }
     }
 
@@ -129,6 +133,7 @@ impl Source {
             Source::WorkBuddy => Brand::WorkBuddy,
             Source::Zcode => Brand::Zcode,
             Source::Alma => Brand::Alma,
+            Source::CodeBuddy => Brand::CodeBuddy,
         }
     }
 
@@ -156,6 +161,7 @@ impl Source {
             Source::WorkBuddy => None,
             Source::Zcode => None,
             Source::Alma => None,
+            Source::CodeBuddy => Some("codebuddy --resume {id}"),
         }
     }
 
@@ -182,6 +188,7 @@ impl Source {
             "workbuddy" => Some(Source::WorkBuddy),
             "zcode" => Some(Source::Zcode),
             "alma" => Some(Source::Alma),
+            "codebuddy" => Some(Source::CodeBuddy),
             _ => None,
         }
     }

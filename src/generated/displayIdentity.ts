@@ -25,6 +25,7 @@ export const SOURCE_SLUGS = [
   "workbuddy",
   "zcode",
   "alma",
+  "codebuddy",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -62,6 +63,7 @@ export const BRAND_IDS = [
   "workbuddy",
   "zcode",
   "alma",
+  "codebuddy",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -87,6 +89,7 @@ export const DISPLAY_NAMES = {
   workbuddy: "WorkBuddy",
   zcode: "ZCode",
   alma: "Alma",
+  codebuddy: "CodeBuddy",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -116,6 +119,7 @@ export const BRAND_BY_SLUG = {
   workbuddy: "workbuddy",
   zcode: "zcode",
   alma: "alma",
+  codebuddy: "codebuddy",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -145,6 +149,7 @@ export const RESUME_TEMPLATES = {
   workbuddy: null,
   zcode: null,
   alma: null,
+  codebuddy: "codebuddy --resume {id}",
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];
