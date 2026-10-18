@@ -1765,6 +1765,7 @@ fn priced(model: &str, input: f64) -> PriceTable {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     }
 }

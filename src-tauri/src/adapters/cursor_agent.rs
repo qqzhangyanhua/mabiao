@@ -98,6 +98,7 @@ pub fn parse_cursor_agent_jsonl(lines: &LineFactory<'_>, source_file: &str) -> V
             output_tokens: i64_field(usage, &["outputTokens"]),
             cache_read_tokens: i64_field(usage, &["cacheReadTokens"]),
             cache_creation_tokens: i64_field(usage, &["cacheWriteTokens"]),
+            cache_creation_1h_tokens: 0,
             reasoning_tokens: 0,
             total_tokens: 0,
             native_cost: None,

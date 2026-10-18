@@ -493,6 +493,7 @@ fn billing_windows_query_appends_cursor_weekly_from_account_cache() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::Snapshot,
+            ..Default::default()
         }],
     };
 

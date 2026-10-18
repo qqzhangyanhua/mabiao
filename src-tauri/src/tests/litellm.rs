@@ -16,7 +16,23 @@ const LITELLM_RAW_SAMPLE: &str = r#"{
         "mode": "chat",
         "input_cost_per_token": 3e-06,
         "output_cost_per_token": 1.5e-05,
-        "cache_creation_input_token_cost": 3.75e-06
+        "cache_creation_input_token_cost": 3.75e-06,
+        "cache_creation_input_token_cost_above_1hr": 6e-06,
+        "input_cost_per_token_above_200k_tokens": 6e-06,
+        "output_cost_per_token_above_200k_tokens": 2.25e-05
+    },
+    "claude-sonnet-4-5": {
+        "litellm_provider": "anthropic",
+        "mode": "chat",
+        "input_cost_per_token": 3e-06,
+        "output_cost_per_token": 1.5e-05,
+        "cache_creation_input_token_cost": 3.75e-06,
+        "cache_creation_input_token_cost_above_1hr": 6e-06,
+        "input_cost_per_token_above_200k_tokens": 6e-06,
+        "output_cost_per_token_above_200k_tokens": 2.25e-05,
+        "cache_read_input_token_cost_above_200k_tokens": 6e-07,
+        "cache_creation_input_token_cost_above_200k_tokens": 7.5e-06,
+        "cache_creation_input_token_cost_above_1hr_above_200k_tokens": 1.2e-05
     },
     "claude-3-5-sonnet": {
         "litellm_provider": "anthropic",
@@ -66,6 +82,17 @@ fn litellm_snapshot_normalizes_upstream_and_skips_noise() {
     let claude = by_model.get("claude-3-5-sonnet").expect("claude present");
     assert_eq!(claude.provider, None);
     assert_eq!(claude.cache_creation, 0.0);
+    // 裸键没有 cache 分层字段，带前缀的那条被丢掉。
+    let sonnet = by_model
+        .get("claude-sonnet-4-5")
+        .expect("sonnet 4.5 present");
+    assert_eq!(sonnet.cache_creation, 3.75e-06);
+    assert_eq!(sonnet.cache_creation_1h, 6e-06);
+    assert_eq!(sonnet.input_above_200k, 6e-06);
+    assert_eq!(sonnet.output_above_200k, 2.25e-05);
+    assert_eq!(sonnet.cache_read_above_200k, 6e-07);
+    assert_eq!(sonnet.cache_creation_above_200k, 7.5e-06);
+    assert_eq!(sonnet.cache_creation_1h_above_200k, 1.2e-05);
     // 去重后每个模型只有一条。
     assert_eq!(
         snapshot
@@ -89,6 +116,7 @@ fn litellm_merge_lets_user_prices_win_and_fills_the_rest() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let merged = crate::litellm::merge(&user, &snapshot);
@@ -172,6 +200,7 @@ fn cost_source_labels_native_user_snapshot_and_none_on_sql_and_memory() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::User,
+            ..Default::default()
         }],
     };
     let prices = crate::litellm::merge(&user, &snapshot);

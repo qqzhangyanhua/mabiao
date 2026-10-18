@@ -68,6 +68,7 @@ pub fn parse_pi_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<UsageRe
                     output_tokens: i64_field(&usage, &["output"]),
                     cache_read_tokens: i64_field(&usage, &["cacheRead"]),
                     cache_creation_tokens: i64_field(&usage, &["cacheWrite"]),
+                    cache_creation_1h_tokens: 0,
                     reasoning_tokens: i64_field(&usage, &["reasoning"]),
                     total_tokens: i64_field(&usage, &["totalTokens"]),
                     native_cost,

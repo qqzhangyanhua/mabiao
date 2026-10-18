@@ -221,6 +221,9 @@ pub struct UsageRecord {
     pub output_tokens: i64,
     pub cache_read_tokens: i64,
     pub cache_creation_tokens: i64,
+    /// 1h 缓存创建，已含在 `cache_creation_tokens` 里（KPI 仍是 5m+1h）。
+    #[serde(default)]
+    pub cache_creation_1h_tokens: i64,
     pub reasoning_tokens: i64,
     pub total_tokens: i64,
     pub native_cost: Option<f64>,

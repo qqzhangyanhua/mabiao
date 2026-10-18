@@ -102,6 +102,7 @@ fn parse_one(row: &ZcodeMessage) -> Option<UsageRecord> {
         output_tokens: i64_field(&tokens, &["output"]),
         cache_read_tokens: cache_read,
         cache_creation_tokens: cache_write,
+        cache_creation_1h_tokens: 0,
         reasoning_tokens: i64_field(&tokens, &["reasoning"]),
         total_tokens: 0,
         native_cost,

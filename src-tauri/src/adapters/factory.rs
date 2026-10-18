@@ -89,6 +89,7 @@ fn parse_factory_session(
         output_tokens: i64_field(&usage, &["outputTokens"]),
         cache_read_tokens: i64_field(&usage, &["cacheReadTokens"]),
         cache_creation_tokens: i64_field(&usage, &["cacheCreationTokens"]),
+        cache_creation_1h_tokens: 0,
         reasoning_tokens: i64_field(&usage, &["thinkingTokens"]),
         total_tokens: 0,
         native_cost: None,

@@ -114,6 +114,7 @@ pub fn parse_dsh_jsonl(content: &str, source_file: &str) -> Vec<UsageRecord> {
                         &usage,
                         &["cacheWriteTokens", "cacheCreationTokens"],
                     ),
+                    cache_creation_1h_tokens: 0,
                     reasoning_tokens: i64_field(&usage, &["reasoningTokens"]),
                     total_tokens: 0,
                     native_cost: None,

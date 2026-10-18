@@ -5,16 +5,143 @@ use rusqlite::{params, params_from_iter, types::Value, Connection};
 use crate::domain::{Filter, PriceTable};
 use crate::rollup_source::dimension_clauses;
 
-pub(crate) const COST_EXPR: &str = "
+/// `COALESCE(pe.col, pf.col)`：精确条目优先，否则兜底。
+macro_rules! p {
+    ($col:ident) => {
+        concat!(
+            "COALESCE(pe.",
+            stringify!($col),
+            ", pf.",
+            stringify!($col),
+            ")"
+        )
+    };
+}
+macro_rules! p0 {
+    ($col:ident) => {
+        concat!(
+            "COALESCE(pe.",
+            stringify!($col),
+            ", pf.",
+            stringify!($col),
+            ", 0)"
+        )
+    };
+}
+
+macro_rules! one_h_rate {
+    () => {
+        concat!(
+            "(CASE WHEN ",
+            p0!(cache_creation_1h),
+            " > 0 THEN ",
+            p!(cache_creation_1h),
+            " ELSE ",
+            p!(input),
+            " * 2.0 END)"
+        )
+    };
+}
+macro_rules! one_h_above_rate {
+    () => {
+        concat!(
+            "(CASE WHEN ",
+            p0!(cache_creation_1h_above_200k),
+            " > 0 THEN ",
+            p!(cache_creation_1h_above_200k),
+            " ELSE ",
+            p0!(input_above_200k),
+            " * 2.0 END)"
+        )
+    };
+}
+
+/// 与 `rollup_source::RAW_ONE_H` / `RAW_FIVE_M` 同文，给 concat! 用字面量。
+macro_rules! raw_one_h {
+    () => {
+        "MIN(MAX(r.cache_creation_1h_tokens, 0), MAX(r.cache_creation_tokens, 0))"
+    };
+}
+macro_rules! raw_five_m {
+    () => {
+        "(MAX(r.cache_creation_tokens, 0) - MIN(MAX(r.cache_creation_1h_tokens, 0), MAX(r.cache_creation_tokens, 0)))"
+    };
+}
+
+/// 逐行分层：未配置 above 单价时整段走基价。阈值与 `pricing::LONG_CONTEXT_THRESHOLD` 同步。
+macro_rules! tiered_raw {
+    ($tokens:expr, $base:expr, $above:expr) => {
+        concat!(
+            "(CASE WHEN (",
+            $above,
+            ") > 0 AND (",
+            $tokens,
+            ") > 200000 THEN 200000.0 * (",
+            $base,
+            ") + ((",
+            $tokens,
+            ") - 200000) * (",
+            $above,
+            ") ELSE (",
+            $base,
+            ") * (",
+            $tokens,
+            ") END)"
+        )
+    };
+}
+
+/// 预聚合分层：`above_tokens` 已是逐行 `max(0, tokens-200k)` 的和，与逐行计价等价。
+macro_rules! tiered_split {
+    ($tokens:expr, $above_tokens:expr, $base:expr, $above:expr) => {
+        concat!(
+            "(CASE WHEN (",
+            $above,
+            ") > 0 THEN (",
+            $base,
+            ") * ((",
+            $tokens,
+            ") - (",
+            $above_tokens,
+            ")) + (",
+            $above,
+            ") * (",
+            $above_tokens,
+            ") ELSE (",
+            $base,
+            ") * (",
+            $tokens,
+            ") END)"
+        )
+    };
+}
+
+pub(crate) const COST_EXPR: &str = concat!(
+    "
     CASE
         WHEN r.native_cost IS NOT NULL THEN r.native_cost
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.input, pf.input) * r.input_tokens
-            + COALESCE(pe.output, pf.output) * r.output_tokens
-            + COALESCE(pe.cache_read, pf.cache_read) * r.cache_read_tokens
-            + COALESCE(pe.cache_creation, pf.cache_creation) * r.cache_creation_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_raw!("r.input_tokens", p!(input), p0!(input_above_200k)),
+    " + ",
+    tiered_raw!("r.output_tokens", p!(output), p0!(output_above_200k)),
+    " + ",
+    tiered_raw!(
+        "r.cache_read_tokens",
+        p!(cache_read),
+        p0!(cache_read_above_200k)
+    ),
+    " + ",
+    tiered_raw!(
+        raw_five_m!(),
+        p!(cache_creation),
+        p0!(cache_creation_above_200k)
+    ),
+    " + ",
+    tiered_raw!(raw_one_h!(), one_h_rate!(), one_h_above_rate!()),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
 /// 未定价标志（每行 0/1）。
 pub(crate) const UNPRICED_EXPR: &str = "
@@ -59,6 +186,12 @@ pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(
              output REAL NOT NULL DEFAULT 0,
              cache_read REAL NOT NULL DEFAULT 0,
              cache_creation REAL NOT NULL DEFAULT 0,
+             cache_creation_1h REAL NOT NULL DEFAULT 0,
+             input_above_200k REAL NOT NULL DEFAULT 0,
+             output_above_200k REAL NOT NULL DEFAULT 0,
+             cache_read_above_200k REAL NOT NULL DEFAULT 0,
+             cache_creation_above_200k REAL NOT NULL DEFAULT 0,
+             cache_creation_1h_above_200k REAL NOT NULL DEFAULT 0,
              origin TEXT NOT NULL DEFAULT 'user'
          );
          CREATE INDEX price_rows_model_provider ON price_rows(model, provider);",
@@ -69,8 +202,11 @@ pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(
     }
     let mut stmt = conn
         .prepare(
-            "INSERT INTO price_rows (model, provider, input, output, cache_read, cache_creation, origin)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO price_rows (
+                model, provider, input, output, cache_read, cache_creation, cache_creation_1h,
+                input_above_200k, output_above_200k, cache_read_above_200k,
+                cache_creation_above_200k, cache_creation_1h_above_200k, origin
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )
         .map_err(|e| e.to_string())?;
     for entry in &prices.prices {
@@ -84,6 +220,12 @@ pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(
             entry.output,
             entry.cache_read,
             entry.cache_creation,
+            entry.cache_creation_1h,
+            entry.input_above_200k,
+            entry.output_above_200k,
+            entry.cache_read_above_200k,
+            entry.cache_creation_above_200k,
+            entry.cache_creation_1h_above_200k,
             entry.origin.as_str(),
         ])
         .map_err(|e| e.to_string())?;
@@ -203,16 +345,49 @@ pub(crate) fn ratio(numerator: i64, denominator: i64) -> Option<f64> {
 /// 「每行乘完单价再相加」。数学上等价，浮点下不是——实测两者的费用差在 1e-14 量级
 /// （token 数与占比完全一致）。金额以美元计，这个差比一分钱的十亿分之一还小，
 /// 界面上取不到；但比对两条路径的测试得用容差，不能要求 f64 逐位相等。
-pub(crate) const ROLLUP_COST_EXPR: &str = "
+pub(crate) const ROLLUP_COST_EXPR: &str = concat!(
+    "
     CASE
         WHEN d.has_native = 1 THEN d.native_cost
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.input, pf.input) * d.input_tokens
-            + COALESCE(pe.output, pf.output) * d.output_tokens
-            + COALESCE(pe.cache_read, pf.cache_read) * d.cache_read_tokens
-            + COALESCE(pe.cache_creation, pf.cache_creation) * d.cache_creation_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_split!(
+        "d.input_tokens",
+        "d.input_tokens_above_200k",
+        p!(input),
+        p0!(input_above_200k)
+    ),
+    " + ",
+    tiered_split!(
+        "d.output_tokens",
+        "d.output_tokens_above_200k",
+        p!(output),
+        p0!(output_above_200k)
+    ),
+    " + ",
+    tiered_split!(
+        "d.cache_read_tokens",
+        "d.cache_read_tokens_above_200k",
+        p!(cache_read),
+        p0!(cache_read_above_200k)
+    ),
+    " + ",
+    tiered_split!(
+        "(MAX(d.cache_creation_tokens, 0) - MAX(d.cache_creation_1h_tokens, 0))",
+        "d.cache_creation_tokens_above_200k",
+        p!(cache_creation),
+        p0!(cache_creation_above_200k)
+    ),
+    " + ",
+    tiered_split!(
+        "MAX(d.cache_creation_1h_tokens, 0)",
+        "d.cache_creation_1h_tokens_above_200k",
+        one_h_rate!(),
+        one_h_above_rate!()
+    ),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
 /// 未定价计数。逐行版每行贡献 0/1，聚合版一组贡献 `record_count`，求和结果一致。
 pub(crate) const ROLLUP_UNPRICED_EXPR: &str = "
@@ -236,37 +411,76 @@ pub(crate) const ROLLUP_COST_SOURCE_EXPR: &str = "
     END";
 
 /// 用户单价 / 快照按口径拆出的费用。native 整笔不进这四档。
-pub(crate) const ROLLUP_COST_INPUT_EXPR: &str = "
+pub(crate) const ROLLUP_COST_INPUT_EXPR: &str = concat!(
+    "
     CASE
         WHEN d.has_native = 1 THEN NULL
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.input, pf.input) * d.input_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_split!(
+        "d.input_tokens",
+        "d.input_tokens_above_200k",
+        p!(input),
+        p0!(input_above_200k)
+    ),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
-pub(crate) const ROLLUP_COST_OUTPUT_EXPR: &str = "
+pub(crate) const ROLLUP_COST_OUTPUT_EXPR: &str = concat!(
+    "
     CASE
         WHEN d.has_native = 1 THEN NULL
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.output, pf.output) * d.output_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_split!(
+        "d.output_tokens",
+        "d.output_tokens_above_200k",
+        p!(output),
+        p0!(output_above_200k)
+    ),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
-pub(crate) const ROLLUP_COST_CACHE_READ_EXPR: &str = "
+pub(crate) const ROLLUP_COST_CACHE_READ_EXPR: &str = concat!(
+    "
     CASE
         WHEN d.has_native = 1 THEN NULL
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.cache_read, pf.cache_read) * d.cache_read_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_split!(
+        "d.cache_read_tokens",
+        "d.cache_read_tokens_above_200k",
+        p!(cache_read),
+        p0!(cache_read_above_200k)
+    ),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
-pub(crate) const ROLLUP_COST_CACHE_CREATION_EXPR: &str = "
+pub(crate) const ROLLUP_COST_CACHE_CREATION_EXPR: &str = concat!(
+    "
     CASE
         WHEN d.has_native = 1 THEN NULL
-        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN
-            COALESCE(pe.cache_creation, pf.cache_creation) * d.cache_creation_tokens
+        WHEN COALESCE(pe.input, pf.input) IS NOT NULL THEN ",
+    tiered_split!(
+        "(MAX(d.cache_creation_tokens, 0) - MAX(d.cache_creation_1h_tokens, 0))",
+        "d.cache_creation_tokens_above_200k",
+        p!(cache_creation),
+        p0!(cache_creation_above_200k)
+    ),
+    " + ",
+    tiered_split!(
+        "MAX(d.cache_creation_1h_tokens, 0)",
+        "d.cache_creation_1h_tokens_above_200k",
+        one_h_rate!(),
+        one_h_above_rate!()
+    ),
+    "
         ELSE NULL
-    END";
+    END"
+);
 
 pub(crate) fn bucket_expr(grain: &str) -> &'static str {
     match grain {

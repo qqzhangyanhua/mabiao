@@ -16,7 +16,8 @@
 | `input_tokens` | i64 | 输入 |
 | `output_tokens` | i64 | 输出 |
 | `cache_read_tokens` | i64 | 缓存读 |
-| `cache_creation_tokens` | i64 | 缓存写/创建 |
+| `cache_creation_tokens` | i64 | 缓存写/创建（5m+1h 合计，KPI 口径） |
+| `cache_creation_1h_tokens` | i64 | 1h 缓存创建，已含在上一行；计价时单独乘 1h 单价 |
 | `reasoning_tokens` | i64 | 推理 |
 | `total_tokens` | i64 | 总量；来源未给时按各口径之和 |
 | `native_cost` | f64? | 来源自带费用（pi / opencode / hermes 等） |
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS usage_records (
     output_tokens INTEGER NOT NULL,
     cache_read_tokens INTEGER NOT NULL,
     cache_creation_tokens INTEGER NOT NULL,
+    cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0,
     reasoning_tokens INTEGER NOT NULL,
     total_tokens INTEGER NOT NULL,
     native_cost REAL,
@@ -66,7 +68,7 @@ CREATE TABLE IF NOT EXISTS ingested_files (
 | Source | 本机路径 | 是否含 token | 口径映射 | 模型 / provider / 项目 / 会话 | 去重口径 |
 |--------|----------|:---:|----------|------------------------------|----------|
 | Codex | `~/.codex/sessions` 与 `~/.codex/archived_sessions` 下 `**/*.jsonl`（及无明文孪生的 `*.jsonl.zst`） | 是 | 优先 `last_token_usage`。`input_tokens` 含缓存：入账 input = 原 input − cache read − cache write。cache read 取 `cached_input_tokens` 或 `cache_read_input_tokens`，不超过原 input；cache write 取 `cache_write_input_tokens`，不超过剩余，写入 cache_creation。output / reasoning / 厂商 total 原样。无 last 时先对 `total_token_usage` 做高水位差分，再拆输入 | 模型：`turn_context.payload.model` 或 `info.model`；provider：`session_meta.payload.model_provider`；项目：`session_meta.cwd`；会话：`session_meta.id` | 优先单轮 last；相同快照去重；全零跳过 |
-| Claude Code | `~/.claude/projects/<dashed-cwd>/<session>.jsonl` | 是 | assistant `message.usage`：input_tokens / output_tokens / cache_read_input_tokens / cache_creation_input_tokens；费用：事件根级 `costUSD`（>0 才作 native_cost） | 模型：`message.model`；项目：目录名解码；会话：`sessionId` 或文件名 | 同一 `message.id` 一条（优先 stop_reason，否则 output 更大）；全零跳过 |
+| Claude Code | `~/.claude/projects/<dashed-cwd>/<session>.jsonl` | 是 | assistant `message.usage`：input_tokens / output_tokens / cache_read_input_tokens / cache_creation_input_tokens（KPI 仍是 5m+1h 合计）；嵌套 `cache_creation.ephemeral_1h_input_tokens` 写入 `cache_creation_1h_tokens` 单独按 1h 单价计。费用：事件根级 `costUSD`（>0 才作 native_cost） | 模型：`message.model`；项目：目录名解码；会话：`sessionId` 或文件名 | 同一 `message.id` 一条（优先 stop_reason，否则 output 更大）；全零跳过 |
 | pi | `~/.pi/agent/sessions/<dashed-cwd>/*.jsonl` | 是 | assistant `message.usage`：input / output / cacheRead / cacheWrite / reasoning / totalTokens；费用：`usage.cost.total` | 模型：`message.model`；provider：`message.provider` 或最近的 `model_change.provider`；项目：session.cwd 或目录名；会话：session.id | 每条 assistant 一条；采用自带 cost |
 | OMP | `~/.omp/agent/sessions/<dashed-cwd>/*.jsonl`（含子代理子目录 jsonl） | 是 | 同 Pi：assistant `message.usage`；费用：`usage.cost.total`。子代理 token 计入父会话 `session_id` | 模型：`message.model`；provider：`message.provider` 或 `model_change.model` 的 `/` 前缀；项目：session.cwd；会话：父会话 `session.id` | 每条 assistant 一条；全零跳过；对话目录不单独列子代理 |
 | opencode | `~/.local/share/opencode/opencode.db` 的 `message.data`（数据目录：`OPENCODE_DATA_DIR` > `$XDG_DATA_HOME/opencode` > 默认；库文件可被 `OPENCODE_DB` 替换。没有库时读 `storage/message/<会话>/*.json`，字段相同） | 是 | assistant `tokens.input/output/reasoning`，`tokens.cache.read/write`；费用：`cost`（>0 才作 native_cost） | 模型：`modelID`；provider：`providerID`；项目：`path.root` 或 `path.cwd`；会话：`session_id` | 仅已完成 assistant（有 `time.completed`）；全零跳过 |

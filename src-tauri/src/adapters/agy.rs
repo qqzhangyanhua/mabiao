@@ -297,6 +297,7 @@ fn record_from_step(
         output_tokens,
         cache_read_tokens,
         cache_creation_tokens,
+        cache_creation_1h_tokens: 0,
         reasoning_tokens,
         total_tokens,
         native_cost: None,

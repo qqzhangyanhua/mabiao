@@ -11,6 +11,7 @@ fn entry(model: &str, input: f64, origin: PriceOrigin) -> PriceEntry {
         cache_read: 0.0,
         cache_creation: 0.0,
         origin,
+        ..Default::default()
     }
 }
 
@@ -160,6 +161,7 @@ fn cursor_costs_match_reordered_and_suffixed_litellm_names() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
             PriceEntry {
                 model: "claude-4.5-sonnet".into(),
@@ -169,6 +171,7 @@ fn cursor_costs_match_reordered_and_suffixed_litellm_names() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
             PriceEntry {
                 model: "gpt-5".into(),
@@ -178,6 +181,7 @@ fn cursor_costs_match_reordered_and_suffixed_litellm_names() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
             PriceEntry {
                 model: "gpt-5-mini".into(),
@@ -187,6 +191,7 @@ fn cursor_costs_match_reordered_and_suffixed_litellm_names() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
         ],
     };
@@ -224,6 +229,7 @@ fn cursor_signature_match_prefers_user_price_over_snapshot() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             PriceEntry {
                 model: "claude-sonnet-4.6".into(),
@@ -233,6 +239,7 @@ fn cursor_signature_match_prefers_user_price_over_snapshot() {
                 cache_read: 0.0,
                 cache_creation: 0.0,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
         ],
     };
@@ -253,6 +260,7 @@ fn usage_record_costs_do_not_use_signature_fallback() {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin: PriceOrigin::Snapshot,
+            ..Default::default()
         }],
     };
     let mut record = rec(

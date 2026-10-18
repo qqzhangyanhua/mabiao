@@ -184,6 +184,7 @@ impl ParsedUsage {
             output_tokens: self.output_tokens,
             cache_read_tokens: self.cached_input_tokens,
             cache_creation_tokens: self.cache_write_input_tokens,
+            cache_creation_1h_tokens: 0,
             reasoning_tokens: 0,
             total_tokens: 0,
             native_cost: None,

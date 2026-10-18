@@ -10,8 +10,15 @@ pub struct PricedUsage<'a> {
     pub output_tokens: i64,
     pub cache_read_tokens: i64,
     pub cache_creation_tokens: i64,
+    /// 1h 缓存创建；计入 `cache_creation_tokens`（KPI 仍是 5m+1h），计价时单独乘 1h 单价。
+    pub cache_creation_1h_tokens: i64,
     pub native_cost: Option<f64>,
 }
+
+/// LiteLLM `*_above_200k_tokens` 的默认边际阈值。
+pub const LONG_CONTEXT_THRESHOLD: i64 = 200_000;
+/// ccusage：未配置 1h 单价时用 `2 × input`。
+pub const CACHE_CREATE_1H_MULTIPLIER: f64 = 2.0;
 
 struct CostParts {
     input: f64,
@@ -26,12 +33,55 @@ impl CostParts {
     }
 }
 
+fn tiered(tokens: i64, base: f64, above: f64) -> f64 {
+    if above > 0.0 && tokens > LONG_CONTEXT_THRESHOLD {
+        (LONG_CONTEXT_THRESHOLD as f64) * base + (tokens - LONG_CONTEXT_THRESHOLD) as f64 * above
+    } else {
+        tokens as f64 * base
+    }
+}
+
+fn cache_creation_1h_rate(entry: &PriceEntry) -> f64 {
+    if entry.cache_creation_1h > 0.0 {
+        entry.cache_creation_1h
+    } else {
+        entry.input * CACHE_CREATE_1H_MULTIPLIER
+    }
+}
+
+fn cache_creation_1h_above(entry: &PriceEntry) -> f64 {
+    if entry.cache_creation_1h_above_200k > 0.0 {
+        entry.cache_creation_1h_above_200k
+    } else if entry.input_above_200k > 0.0 {
+        entry.input_above_200k * CACHE_CREATE_1H_MULTIPLIER
+    } else {
+        0.0
+    }
+}
+
 fn priced_parts(usage: &PricedUsage<'_>, entry: &PriceEntry) -> CostParts {
+    let one_h = usage
+        .cache_creation_1h_tokens
+        .max(0)
+        .min(usage.cache_creation_tokens.max(0));
+    let five_m = usage.cache_creation_tokens.max(0) - one_h;
     CostParts {
-        input: usage.input_tokens as f64 * entry.input,
-        output: usage.output_tokens as f64 * entry.output,
-        cache_read: usage.cache_read_tokens as f64 * entry.cache_read,
-        cache_creation: usage.cache_creation_tokens as f64 * entry.cache_creation,
+        input: tiered(usage.input_tokens, entry.input, entry.input_above_200k),
+        output: tiered(usage.output_tokens, entry.output, entry.output_above_200k),
+        cache_read: tiered(
+            usage.cache_read_tokens,
+            entry.cache_read,
+            entry.cache_read_above_200k,
+        ),
+        cache_creation: tiered(
+            five_m,
+            entry.cache_creation,
+            entry.cache_creation_above_200k,
+        ) + tiered(
+            one_h,
+            cache_creation_1h_rate(entry),
+            cache_creation_1h_above(entry),
+        ),
     }
 }
 
@@ -186,6 +236,7 @@ mod tests {
             cache_read: 0.0,
             cache_creation: 0.0,
             origin,
+            ..Default::default()
         }
     }
 
@@ -197,8 +248,69 @@ mod tests {
             output_tokens: 0,
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
+            cache_creation_1h_tokens: 0,
             native_cost: native,
         }
+    }
+
+    #[test]
+    fn one_hour_cache_creation_uses_double_input_when_unpriced() {
+        let entry = PriceEntry {
+            model: "claude".into(),
+            provider: None,
+            input: 3e-6,
+            output: 0.0,
+            cache_read: 0.0,
+            cache_creation: 3.75e-6,
+            origin: PriceOrigin::Snapshot,
+            ..Default::default()
+        };
+        let cost = apply_entry(
+            &PricedUsage {
+                model: "claude",
+                provider: "",
+                input_tokens: 0,
+                output_tokens: 0,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 100,
+                cache_creation_1h_tokens: 40,
+                native_cost: None,
+            },
+            Some(&entry),
+        );
+        // 60 * 3.75e-6 + 40 * (2 * 3e-6)
+        assert!((cost.amount.unwrap() - 0.000465).abs() < 1e-12);
+    }
+
+    #[test]
+    fn above_200k_is_marginal_per_bucket() {
+        let entry = PriceEntry {
+            model: "claude".into(),
+            provider: None,
+            input: 3e-6,
+            output: 15e-6,
+            cache_read: 0.3e-6,
+            cache_creation: 3.75e-6,
+            input_above_200k: 6e-6,
+            output_above_200k: 22.5e-6,
+            origin: PriceOrigin::Snapshot,
+            ..Default::default()
+        };
+        let cost = apply_entry(
+            &PricedUsage {
+                model: "claude",
+                provider: "",
+                input_tokens: 250_000,
+                output_tokens: 10,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 0,
+                cache_creation_1h_tokens: 0,
+                native_cost: None,
+            },
+            Some(&entry),
+        );
+        let expected = 200_000.0 * 3e-6 + 50_000.0 * 6e-6 + 10.0 * 15e-6;
+        assert!((cost.amount.unwrap() - expected).abs() < 1e-12);
     }
 
     fn table(prices: Vec<PriceEntry>) -> PriceTable {

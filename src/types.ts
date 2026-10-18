@@ -699,6 +699,13 @@ export type PriceEntry = {
   output: number;
   cache_read: number;
   cache_creation: number;
+  /** 1h 缓存创建单价；缺省时计价回落到 2×input。 */
+  cache_creation_1h?: number;
+  input_above_200k?: number;
+  output_above_200k?: number;
+  cache_read_above_200k?: number;
+  cache_creation_above_200k?: number;
+  cache_creation_1h_above_200k?: number;
   origin?: PriceOrigin;
 };
 

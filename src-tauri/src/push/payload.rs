@@ -248,6 +248,7 @@ pub fn build_usage(records: &[UsageRecord], prices: &PriceTable) -> BuiltUsage {
                 output_tokens: record.output_tokens,
                 cache_read_tokens: record.cache_read_tokens,
                 cache_creation_tokens: record.cache_creation_tokens,
+                cache_creation_1h_tokens: record.cache_creation_1h_tokens,
                 native_cost: record.native_cost,
             },
             false,

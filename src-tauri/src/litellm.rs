@@ -101,6 +101,21 @@ pub fn parse_litellm_raw(raw: &str, as_of: &str) -> Result<PriceSnapshot, String
             output: output.unwrap_or(0.0),
             cache_read: num(obj, "cache_read_input_token_cost").unwrap_or(0.0),
             cache_creation: num(obj, "cache_creation_input_token_cost").unwrap_or(0.0),
+            cache_creation_1h: num(obj, "cache_creation_input_token_cost_above_1hr").unwrap_or(0.0),
+            input_above_200k: num(obj, "input_cost_per_token_above_200k_tokens").unwrap_or(0.0),
+            output_above_200k: num(obj, "output_cost_per_token_above_200k_tokens").unwrap_or(0.0),
+            cache_read_above_200k: num(obj, "cache_read_input_token_cost_above_200k_tokens")
+                .unwrap_or(0.0),
+            cache_creation_above_200k: num(
+                obj,
+                "cache_creation_input_token_cost_above_200k_tokens",
+            )
+            .unwrap_or(0.0),
+            cache_creation_1h_above_200k: num(
+                obj,
+                "cache_creation_input_token_cost_above_1hr_above_200k_tokens",
+            )
+            .unwrap_or(0.0),
             origin: PriceOrigin::Snapshot,
         };
         match chosen.get(&model) {

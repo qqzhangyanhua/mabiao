@@ -109,6 +109,7 @@ fn price_table() -> PriceTable {
                 cache_read: 0.0001,
                 cache_creation: 0.0003,
                 origin: PriceOrigin::User,
+                ..Default::default()
             },
             // provider 为 None 的兜底条目，验证 pf 那条 JOIN。
             PriceEntry {
@@ -119,6 +120,7 @@ fn price_table() -> PriceTable {
                 cache_read: 0.0005,
                 cache_creation: 0.0007,
                 origin: PriceOrigin::Snapshot,
+                ..Default::default()
             },
         ],
     }

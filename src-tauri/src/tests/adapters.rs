@@ -167,6 +167,26 @@ fn claude_adapter_maps_usage_and_project_dir() {
     assert_eq!(records[1].total_tokens, 56492);
     assert!((records[0].native_cost.unwrap() - 0.0123).abs() < 1e-9);
     assert!((records[1].native_cost.unwrap() - 0.0081).abs() < 1e-9);
+    assert_eq!(records[0].cache_creation_1h_tokens, 0);
+}
+
+#[test]
+fn claude_adapter_splits_nested_one_hour_cache_creation() {
+    let records = claude::parse_claude_jsonl(
+        &fixture_lines(&fixture("claude-cache-1h.jsonl")),
+        "/Users/example/.claude/projects/-Users-example-app/sess-cache-1h.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].cache_creation_tokens, 2000);
+    assert_eq!(
+        records[0].cache_creation_1h_tokens, 500,
+        "nested ephemeral_1h_input_tokens 必须从 cache_creation 总额里拆出来单独计价"
+    );
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[1].cache_creation_tokens, 0);
+    assert_eq!(records[1].cache_creation_1h_tokens, 0);
+    assert_eq!(records[1].cache_read_tokens, 2000);
 }
 
 #[test]

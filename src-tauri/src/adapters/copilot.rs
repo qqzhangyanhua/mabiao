@@ -144,6 +144,7 @@ pub fn parse_copilot_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Us
                 output_tokens: interval.output,
                 cache_read_tokens: interval.cache_read,
                 cache_creation_tokens: interval.cache_write,
+                cache_creation_1h_tokens: 0,
                 reasoning_tokens: 0,
                 total_tokens: 0,
                 native_cost: None,

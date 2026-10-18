@@ -11,13 +11,12 @@ export function prefillCandidatePrice(
   candidate: PriceEntry,
 ): PriceEntry[] {
   const provider = group.provider.trim() === "" ? null : group.provider;
+  const rates: PriceEntry = { ...candidate };
+  delete rates.origin;
   const nextEntry: PriceEntry = {
+    ...rates,
     model: group.model,
     provider,
-    input: candidate.input,
-    output: candidate.output,
-    cache_read: candidate.cache_read,
-    cache_creation: candidate.cache_creation,
   };
   const key = priceRowKey(nextEntry.model, nextEntry.provider);
   const index = current.findIndex((row) => priceRowKey(row.model, row.provider) === key);
