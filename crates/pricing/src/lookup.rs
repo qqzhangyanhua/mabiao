@@ -1,4 +1,5 @@
-//! 价目查找：精确匹配（model+provider，再 model 且 provider 为空），可选签名模糊匹配。
+//! 价目查找：精确匹配（model+provider，再 model 且 provider 为空），然后对本机记录做
+//! 确定性归一（去掉厂商前缀与末尾日期），可选签名模糊匹配（仅 Cursor 账号用量）。
 
 use std::collections::HashMap;
 
@@ -60,6 +61,26 @@ pub fn find_price<'a>(
     provider: &str,
     prices: &'a PriceTable,
 ) -> Option<&'a PriceEntry> {
+    let stripped = strip_vendor_affixes(model);
+    let canonical = strip_trailing_date_suffix(&stripped);
+    lookup_price(model, provider, prices)
+        .or_else(|| {
+            if stripped != model {
+                lookup_price(&stripped, provider, prices)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            if canonical != model && canonical != stripped {
+                lookup_price(&canonical, provider, prices)
+            } else {
+                None
+            }
+        })
+}
+
+fn lookup_price<'a>(model: &str, provider: &str, prices: &'a PriceTable) -> Option<&'a PriceEntry> {
     prices
         .prices
         .iter()
@@ -244,32 +265,78 @@ fn is_date_like(token: &str) -> bool {
         || matches!(token.len(), 4) && (token.starts_with("19") || token.starts_with("20"))
 }
 
+const VENDOR_PREFIXES: &[&str] = &[
+    "anthropic",
+    "openai",
+    "google",
+    "bedrock",
+    "vertex",
+    "vertexai",
+    "databricks",
+    "azure",
+    "aws",
+    "together",
+    "fireworks",
+    "groq",
+    "openrouter",
+    "apac",
+    "eu",
+    "us",
+    "au",
+    "jp",
+    "global",
+    "gov",
+];
+
+/// 确定性归一：去掉代理/厂商前缀（`anthropic/`、`openrouter/`）和 `@vendor` 后缀。
+/// 不重排家族/版本，避免把不同价位的模型配到一起。
+fn strip_vendor_affixes(model: &str) -> String {
+    let trimmed = model.trim();
+    let without_at = trimmed
+        .split_once('@')
+        .map(|(head, _)| head)
+        .unwrap_or(trimmed);
+    let mut parts: Vec<&str> = without_at
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    while parts.len() > 1 && VENDOR_PREFIXES.contains(&parts[0].to_ascii_lowercase().as_str()) {
+        parts.remove(0);
+    }
+    let joined = parts.join("/");
+    let mut tokens: Vec<String> = joined
+        .split('-')
+        .filter(|token| !token.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    while tokens.len() > 1 && VENDOR_PREFIXES.contains(&tokens[0].to_ascii_lowercase().as_str()) {
+        tokens.remove(0);
+    }
+    tokens.join("-")
+}
+
+/// 只剥末尾的 8 位日期（`claude-sonnet-4-6-20250929`）。不剥 `gpt-4o-2024-08-06` 里的 4 位年份。
+fn strip_trailing_date_suffix(model: &str) -> String {
+    let Some((head, last)) = model.rsplit_once('-') else {
+        return model.to_string();
+    };
+    if is_yyyymmdd(last) {
+        head.to_string()
+    } else {
+        model.to_string()
+    }
+}
+
+fn is_yyyymmdd(token: &str) -> bool {
+    token.len() == 8
+        && token.chars().all(|c| c.is_ascii_digit())
+        && (token.starts_with("19") || token.starts_with("20"))
+}
+
 fn strip_known_affixes(mut tokens: Vec<String>) -> Vec<String> {
-    const PREFIXES: &[&str] = &[
-        "anthropic",
-        "openai",
-        "google",
-        "bedrock",
-        "vertex",
-        "vertexai",
-        "databricks",
-        "azure",
-        "aws",
-        "together",
-        "fireworks",
-        "groq",
-        "openrouter",
-        "apac",
-        "eu",
-        "us",
-        "au",
-        "jp",
-        "global",
-        "gov",
-    ];
     while tokens
         .first()
-        .is_some_and(|token| PREFIXES.contains(&token.as_str()))
+        .is_some_and(|token| VENDOR_PREFIXES.contains(&token.as_str()))
     {
         tokens.remove(0);
     }

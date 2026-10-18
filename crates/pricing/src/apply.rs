@@ -365,6 +365,75 @@ mod tests {
     }
 
     #[test]
+    fn local_pricing_strips_date_suffix_and_vendor_prefix_without_signature() {
+        let prices = table(vec![entry(
+            "claude-sonnet-4-6",
+            None,
+            1.0,
+            PriceOrigin::Snapshot,
+        )]);
+        // 修前这两条都 unpriced（精确匹配失败，且本机不允许签名）。
+        let dated = price_usage(
+            usage("claude-sonnet-4-6-20250929", "", None),
+            &prices,
+            false,
+        );
+        assert_eq!(dated.basis, PricingBasis::Fallback);
+        assert_eq!(dated.derived.amount, Some(10.0));
+        let prefixed = price_usage(
+            usage("anthropic/claude-sonnet-4-6", "", None),
+            &prices,
+            false,
+        );
+        assert_eq!(prefixed.basis, PricingBasis::Fallback);
+        assert_eq!(prefixed.derived.amount, Some(10.0));
+        let both = price_usage(
+            usage("openrouter/anthropic/claude-sonnet-4-6-20250929", "", None),
+            &prices,
+            false,
+        );
+        assert_eq!(both.basis, PricingBasis::Fallback);
+        assert_eq!(both.derived.amount, Some(10.0));
+    }
+
+    #[test]
+    fn local_pricing_does_not_cross_match_different_price_tiers() {
+        let prices = table(vec![
+            entry("claude-sonnet-4-5", None, 3.0, PriceOrigin::Snapshot),
+            entry("claude-sonnet-4-6", None, 1.0, PriceOrigin::Snapshot),
+        ]);
+        let priced = price_usage(
+            usage("claude-sonnet-4-6-20250929", "", None),
+            &prices,
+            false,
+        );
+        assert_eq!(priced.derived.amount, Some(10.0));
+        let other = price_usage(usage("claude-sonnet-4-5", "", None), &prices, false);
+        assert_eq!(other.derived.amount, Some(30.0));
+        let reordered = price_usage(usage("claude-4.6-sonnet", "", None), &prices, false);
+        assert_eq!(reordered.basis, PricingBasis::Unpriced);
+    }
+
+    #[test]
+    fn dated_table_key_still_wins_over_stripped_generic() {
+        let prices = table(vec![
+            entry("claude-3-5-sonnet", None, 1.0, PriceOrigin::Snapshot),
+            entry(
+                "claude-3-5-sonnet-20241022",
+                None,
+                9.0,
+                PriceOrigin::Snapshot,
+            ),
+        ]);
+        let priced = price_usage(
+            usage("anthropic/claude-3-5-sonnet-20241022", "", None),
+            &prices,
+            false,
+        );
+        assert_eq!(priced.derived.amount, Some(90.0));
+    }
+
+    #[test]
     fn signature_match_is_fallback_and_only_when_allowed() {
         let prices = table(vec![entry(
             "claude-sonnet-4-6",
