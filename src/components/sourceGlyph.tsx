@@ -176,6 +176,10 @@ const brandMarks = {
       </>
     ),
   },
+  trae: {
+    viewBox: "0 0 24 24",
+    body: <path d="M4.2 5.2h15.6v2.4H14.6v11.2h-5.2V7.6H4.2V5.2Z" />,
+  },
 } satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {

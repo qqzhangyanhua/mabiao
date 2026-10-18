@@ -1063,6 +1063,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::CodeBuddy.application_name(), "CodeBuddy");
     assert_eq!(Source::CodeBuddy.as_str(), "codebuddy");
     assert_eq!(Source::parse("codebuddy"), Some(Source::CodeBuddy));
+    assert_eq!(Source::Trae.application_name(), "Trae CLI");
+    assert_eq!(Source::Trae.as_str(), "trae");
+    assert_eq!(Source::parse("trae"), Some(Source::Trae));
 }
 
 #[test]
@@ -2416,6 +2419,26 @@ fn alma_model_strips_provider_and_plugin_prefix() {
     );
     assert_eq!(alma::alma_model("ollama:qwen3:8b", "ollama"), "qwen3:8b");
     assert_eq!(alma::alma_model("gemini-2.5-pro", ""), "gemini-2.5-pro");
+}
+
+#[test]
+fn trae_adapter_reuses_codex_rollout_tokens_under_trae_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rollout-trae-sess-1.jsonl");
+    std::fs::write(&path, fixture("trae.jsonl")).unwrap();
+    let records = trae::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().all(|record| record.source == Source::Trae));
+    assert_eq!(records[0].session_id, "trae-sess-1");
+    assert_eq!(records[0].project, "/work/trae");
+    assert_eq!(records[0].model, "gpt-5.1-codex");
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        19113
+    );
 }
 
 #[test]

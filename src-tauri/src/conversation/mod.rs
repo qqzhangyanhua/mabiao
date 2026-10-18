@@ -54,6 +54,7 @@ mod refresh;
 mod scan_roots;
 mod session_store;
 mod toolbox;
+mod trae;
 pub(crate) mod trusted_path;
 mod workbuddy;
 mod zcode;
@@ -356,6 +357,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: codebuddy::index,
         index_suffix: None,
         detail: codebuddy::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Trae,
+        discover: discover_codex,
+        index: trae::index,
+        index_suffix: Some(trae::index_suffix),
+        detail: trae::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,

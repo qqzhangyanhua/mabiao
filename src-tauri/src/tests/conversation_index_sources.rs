@@ -355,6 +355,20 @@ fn gemini_jsonl_event_index_matches_full_parse() {
 }
 
 #[test]
+fn trae_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".trae/cli/sessions/2026/10/17/rollout-trae-conv-1.jsonl",
+        "trae-conversation.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Trae);
+    assert_conversation_index_matches_parse(&conn, home, "trae", "trae-conv-1");
+}
+
+#[test]
 fn copilot_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

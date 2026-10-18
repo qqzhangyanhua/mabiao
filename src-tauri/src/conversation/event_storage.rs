@@ -19,7 +19,7 @@ use super::toolbox::{event_id_for, FileIndexCursor};
 use super::CONVERSATION_ADAPTER_VERSION;
 
 /// 本机各抽 1500 条，按行重建的正文与整份解析逐条一致。Claude 会跨行合并，不在此列。
-const TEXT_REFERENCE_SOURCES: &[Source] = &[Source::Codex, Source::Pi, Source::Omp];
+const TEXT_REFERENCE_SOURCES: &[Source] = &[Source::Codex, Source::Trae, Source::Pi, Source::Omp];
 
 /// `tool_call` / `system_status` / `error` 的正文在打开详情时要被上下文清单整场读，留在库里。
 const TEXT_REFERENCE_KINDS: &[EventKind] =
