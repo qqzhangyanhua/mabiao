@@ -124,12 +124,14 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
     crate::ingest::validate_jsonl_file(path)?;
     let loc = path.to_string_lossy();
     let parent_ids = parent_assistant_message_ids(path);
+    let sibling_keys = sibling_claimed_request_keys(path);
     let factory: &LineFactory<'_> = &|| crate::ingest::open_jsonl_lines(path);
     Ok(parse_claude_shaped_jsonl_with(
         factory,
         loc.as_ref(),
         Source::Claude,
         &parent_ids,
+        &sibling_keys,
     ))
 }
 
@@ -145,14 +147,16 @@ pub fn parse_claude_jsonl(lines: &LineFactory<'_>, source_file: &str) -> Vec<Usa
     parse_claude_shaped_jsonl(lines, source_file, Source::Claude)
 }
 
-/// Claude Code 形态的 jsonl：`type=assistant` + `message.usage`，按 `message.id` 去重。
+/// Claude Code 形态的 jsonl：`type=assistant` + `message.usage`。
+/// 去重键是 `(message.id, requestId)`：有 `requestId` 时同一响应的流式块收成一条，
+/// 不同请求即使共用 message.id 也分开；跨 transcript 拷贝只留路径更前的一份。
 /// Qoder / Qoder CN 复用同一套归一化，只改 `source`。
 pub fn parse_claude_shaped_jsonl(
     lines: &LineFactory<'_>,
     source_file: &str,
     source: Source,
 ) -> Vec<UsageRecord> {
-    parse_claude_shaped_jsonl_with(lines, source_file, source, &HashSet::new())
+    parse_claude_shaped_jsonl_with(lines, source_file, source, &HashSet::new(), &HashSet::new())
 }
 
 fn parse_claude_shaped_jsonl_with(
@@ -160,6 +164,7 @@ fn parse_claude_shaped_jsonl_with(
     source_file: &str,
     source: Source,
     parent_message_ids: &HashSet<String>,
+    sibling_request_keys: &HashSet<(String, String)>,
 ) -> Vec<UsageRecord> {
     let mut project = String::new();
     let mut session_id = String::new();
@@ -181,8 +186,8 @@ fn parse_claude_shaped_jsonl_with(
         session_id = crate::adapters::project::session_id_from_source_file(source_file);
     }
 
-    let mut by_id: HashMap<String, ClaudeTurn> = HashMap::new();
-    let mut order: Vec<String> = Vec::new();
+    let mut by_id: HashMap<(String, String), ClaudeTurn> = HashMap::new();
+    let mut order: Vec<(String, String)> = Vec::new();
     let mut anonymous = Vec::new();
 
     for value in parse_jsonl_value_lines(lines()) {
@@ -203,9 +208,16 @@ fn parse_claude_shaped_jsonl_with(
             agent_id
         };
         let message_id = text_field(&message, &["id"]);
+        let request_id = text_field(&value, &["requestId", "request_id"]);
         // subagents/ 里会把父会话同一 message.id 再写一遍（含父级 cache-read）。
         // 对齐 ccusage：有 isSidechain 且父文件已有该 id 时丢掉回放，子代理自己的 id 仍计入。
         if is_sidechain && !message_id.is_empty() && parent_message_ids.contains(&message_id) {
+            continue;
+        }
+        // 跨 transcript 拷贝带同一 requestId：只让字典序更前的文件入账。
+        if !request_id.is_empty()
+            && sibling_request_keys.contains(&(message_id.clone(), request_id.clone()))
+        {
             continue;
         }
         anonymous.extend(advisor_records_from_usage(
@@ -250,17 +262,27 @@ fn parse_claude_shaped_jsonl_with(
             stop_reason,
             is_sidechain,
         };
-        let should_replace = match by_id.get(&message_id) {
+        let key = (message_id, request_id);
+        let should_replace = match by_id.get(&key) {
             None => true,
             Some(existing) => should_replace_claude(existing, &turn),
         };
         if should_replace {
-            if !by_id.contains_key(&message_id) {
-                order.push(message_id.clone());
+            if !by_id.contains_key(&key) {
+                order.push(key.clone());
             }
-            by_id.insert(message_id, turn);
+            by_id.insert(key, turn);
         }
     }
+
+    let kept_parent_ids: HashSet<String> = by_id
+        .iter()
+        .filter(|(_, turn)| !turn.is_sidechain)
+        .map(|((id, _), _)| id.clone())
+        .collect();
+    by_id.retain(|(id, _), turn| {
+        !turn.is_sidechain || (!kept_parent_ids.contains(id) && !parent_message_ids.contains(id))
+    });
 
     let mut records: Vec<UsageRecord> = order
         .into_iter()
@@ -270,7 +292,7 @@ fn parse_claude_shaped_jsonl_with(
     records
 }
 
-/// 同一 `message.id`：有 sidechain 回放时保留非 sidechain 父条目；
+/// 同一 `(message.id, requestId)`：有 sidechain 回放时保留非 sidechain 父条目；
 /// 否则与 cc-switch 一致，优先有 stop_reason 的，再取 output 更大的。
 fn should_replace_claude(existing: &ClaudeTurn, next: &ClaudeTurn) -> bool {
     match (existing.is_sidechain, next.is_sidechain) {
@@ -320,6 +342,48 @@ fn collect_assistant_message_ids(path: &Path, ids: &mut HashSet<String>) {
             .unwrap_or_default();
         if !id.is_empty() {
             ids.insert(id);
+        }
+    }
+}
+
+/// 同目录里路径更前的 jsonl 已经入账的 `(message.id, requestId)`，用来丢掉跨文件拷贝。
+fn sibling_claimed_request_keys(path: &Path) -> HashSet<(String, String)> {
+    let Some(dir) = path.parent() else {
+        return HashSet::new();
+    };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return HashSet::new();
+    };
+    let current = path.as_os_str();
+    let mut keys = HashSet::new();
+    for entry in entries.flatten() {
+        let candidate = entry.path();
+        if candidate.as_os_str() >= current {
+            continue;
+        }
+        if candidate.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+            continue;
+        }
+        collect_assistant_request_keys(&candidate, &mut keys);
+    }
+    keys
+}
+
+fn collect_assistant_request_keys(path: &Path, keys: &mut HashSet<(String, String)>) {
+    for value in parse_jsonl_value_lines(crate::ingest::open_jsonl_lines(path)) {
+        if value.get("type").and_then(|v| v.as_str()) != Some("assistant") {
+            continue;
+        }
+        let request_id = text_field(&value, &["requestId", "request_id"]);
+        if request_id.is_empty() {
+            continue;
+        }
+        let message_id = value
+            .get("message")
+            .map(|message| text_field(message, &["id"]))
+            .unwrap_or_default();
+        if !message_id.is_empty() {
+            keys.insert((message_id, request_id));
         }
     }
 }

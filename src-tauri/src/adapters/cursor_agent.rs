@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::adapters::{
@@ -35,7 +36,7 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
 /// 解析 cursor-agent 无头 stream-json 的落盘 jsonl（由 scripts/cursor-agent-usage.py 采集）。
 ///
 /// token 只出现在 `type=result` 事件的 `usage` 子对象里；model/cwd 来自开头的 `type=system` 事件。
-/// 每条 result 归一为一条 Usage Record。详见 docs/probe/cursor-agent.md。
+/// 有 `request_id` 时同一请求只留一条（更大的 output，否则后写覆盖）。详见 docs/probe/cursor-agent.md。
 ///
 /// 下面两轮扫描都通过 `lines()` 重新拿一份新的行迭代器：这样调用方可以用磁盘流式读取
 /// 而不必先把整份文件内容读进内存再扫两遍。
@@ -62,6 +63,7 @@ pub fn parse_cursor_agent_jsonl(lines: &LineFactory<'_>, source_file: &str) -> V
         .to_string();
 
     let mut records = Vec::new();
+    let mut by_request: HashMap<String, usize> = HashMap::new();
     for value in parse_jsonl_value_lines(lines()) {
         if value.get("type").and_then(|v| v.as_str()) != Some("result") {
             continue;
@@ -86,7 +88,7 @@ pub fn parse_cursor_agent_jsonl(lines: &LineFactory<'_>, source_file: &str) -> V
                 record_model
             }
         };
-        records.push(finish(UsageRecord {
+        let record = finish(UsageRecord {
             occurred_at: text_field(&value, &["captured_at"]),
             source: Source::CursorAgent,
             model: record_model,
@@ -102,7 +104,26 @@ pub fn parse_cursor_agent_jsonl(lines: &LineFactory<'_>, source_file: &str) -> V
             reasoning_tokens: 0,
             total_tokens: 0,
             native_cost: None,
-        }));
+        });
+        let request_id = text_field(&value, &["request_id"]);
+        if request_id.is_empty() {
+            records.push(record);
+            continue;
+        }
+        if let Some(&index) = by_request.get(&request_id) {
+            if should_replace_cursor_agent(&records[index], &record) {
+                records[index] = record;
+            }
+        } else {
+            by_request.insert(request_id, records.len());
+            records.push(record);
+        }
     }
     records
+}
+
+fn should_replace_cursor_agent(existing: &UsageRecord, next: &UsageRecord) -> bool {
+    next.output_tokens > existing.output_tokens
+        || (next.output_tokens == existing.output_tokens
+            && next.total_tokens > existing.total_tokens)
 }

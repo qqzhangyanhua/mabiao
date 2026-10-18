@@ -291,6 +291,60 @@ fn claude_adapter_dedups_message_id_and_skips_zero_usage() {
 }
 
 #[test]
+fn claude_adapter_keeps_same_message_id_when_request_id_differs() {
+    let records = claude::parse_claude_jsonl(
+        &fixture_lines(
+            r#"{"type":"assistant","sessionId":"s","requestId":"req_a","timestamp":"2026-04-01T10:00:01Z","message":{"id":"msg_shared","model":"claude-sonnet-4","stop_reason":"end_turn","usage":{"input_tokens":2,"output_tokens":10,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"s","requestId":"req_b","timestamp":"2026-04-01T10:00:02Z","message":{"id":"msg_shared","model":"claude-sonnet-4","stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+"#,
+        ),
+        "/tmp/sess.jsonl",
+    );
+    // 修前只按 message.id 去重：1 条、output=20。修后 (id, requestId) 两条都留。
+    assert_eq!(records.len(), 2, "{records:?}");
+    let output: i64 = records.iter().map(|record| record.output_tokens).sum();
+    let input: i64 = records.iter().map(|record| record.input_tokens).sum();
+    assert_eq!(output, 30);
+    assert_eq!(input, 5);
+}
+
+#[test]
+fn claude_adapter_collapses_streaming_chunks_with_same_request_id() {
+    let records = claude::parse_claude_jsonl(
+        &fixture_lines(
+            r#"{"type":"assistant","sessionId":"s","requestId":"req_456","timestamp":"2026-04-01T10:00:01Z","message":{"id":"msg_123","model":"claude-sonnet-4","usage":{"input_tokens":2,"output_tokens":25,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+{"type":"assistant","sessionId":"s","requestId":"req_456","timestamp":"2026-04-01T10:00:02Z","message":{"id":"msg_123","model":"claude-sonnet-4","stop_reason":"end_turn","usage":{"input_tokens":2,"output_tokens":250,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}}
+"#,
+        ),
+        "/tmp/sess.jsonl",
+    );
+    // 修前/修后都应收成 1 条；有 stop_reason 的 250 覆盖流式半截 25。
+    assert_eq!(records.len(), 1, "{records:?}");
+    assert_eq!(records[0].output_tokens, 250);
+}
+
+#[test]
+fn claude_adapter_drops_cross_transcript_copy_with_same_request_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let project = dir.path().join("projects").join("-work");
+    std::fs::create_dir_all(&project).unwrap();
+    let first = project.join("a-sess.jsonl");
+    let copy = project.join("b-sess.jsonl");
+    let line = r#"{"type":"assistant","sessionId":"s","requestId":"req_copy","timestamp":"2026-04-01T10:00:01Z","costUSD":1.5,"message":{"id":"msg_copy","model":"claude-sonnet-4","stop_reason":"end_turn","usage":{"input_tokens":8,"output_tokens":40,"cache_read_input_tokens":100,"cache_creation_input_tokens":0}}}
+"#;
+    std::fs::write(&first, line).unwrap();
+    std::fs::write(&copy, line).unwrap();
+
+    let first_records = claude::parse(&first, project.as_path()).unwrap();
+    let copy_records = claude::parse(&copy, project.as_path()).unwrap();
+    // 修前两份 transcript 各计一次：2 条 / cache_read=200。修后只留路径更前的一份。
+    assert_eq!(first_records.len(), 1);
+    assert_eq!(copy_records.len(), 0);
+    assert_eq!(first_records[0].cache_read_tokens, 100);
+    assert_eq!(first_records[0].output_tokens, 40);
+}
+
+#[test]
 fn claude_adapter_drops_sidechain_replay_of_parent_message() {
     let records = claude::parse_claude_jsonl(
         &fixture_lines(&fixture("claude-sidechain-replay.jsonl")),
@@ -1265,6 +1319,35 @@ fn cursor_agent_adapter_maps_result_usage_per_turn() {
     // 第二轮：cacheWriteTokens 映射到 cache_creation，total 为各口径之和。
     assert_eq!(records[1].cache_creation_tokens, 400);
     assert_eq!(records[1].total_tokens, 1000);
+}
+
+#[test]
+fn cursor_agent_adapter_dedups_repeated_result_by_request_id() {
+    let records = cursor_agent::parse_cursor_agent_jsonl(
+        &fixture_lines(
+            r#"{"type":"system","model":"Cursor Grok","cwd":"/work","session_id":"sess"}
+{"type":"result","session_id":"sess","request_id":"req-dup","usage":{"inputTokens":10,"outputTokens":4,"cacheReadTokens":0,"cacheWriteTokens":0},"captured_at":"2026-08-17T05:31:13Z"}
+{"type":"result","session_id":"sess","request_id":"req-dup","usage":{"inputTokens":10,"outputTokens":40,"cacheReadTokens":0,"cacheWriteTokens":0},"captured_at":"2026-08-17T05:31:14Z"}
+{"type":"result","session_id":"sess","request_id":"req-other","usage":{"inputTokens":3,"outputTokens":1,"cacheReadTokens":0,"cacheWriteTokens":0},"captured_at":"2026-08-17T05:32:00Z"}
+"#,
+        ),
+        "/tmp/cursor-agent.jsonl",
+    );
+    // 修前 3 条（两次 req-dup 都计）。修后按 request_id 去重，保留更大 output 的那次。
+    assert_eq!(records.len(), 2, "{records:?}");
+    let dup = records
+        .iter()
+        .find(|record| record.output_tokens == 40)
+        .expect("kept larger dup");
+    assert_eq!(dup.input_tokens, 10);
+    assert_eq!(dup.total_tokens, 50);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.output_tokens)
+            .sum::<i64>(),
+        41
+    );
 }
 
 #[test]

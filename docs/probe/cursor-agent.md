@@ -38,7 +38,7 @@ token 只出现在最后一条 `result`：
 | 模型 | `system.model`（`result` 上没有） |
 | 项目 | `system.cwd` |
 | 会话 | `session_id` |
-| 去重 | `request_id`；只计 `type=result` |
+| 去重 | `request_id`（同一请求只留 output 更大的一条）；只计 `type=result` |
 
 本次数字：input 18851 / output 35 / cacheRead 0 / cacheWrite 0。`assistant`、`thinking` 均无 usage。
 
