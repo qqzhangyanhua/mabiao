@@ -102,6 +102,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Goose), "data/sessions");
     assert_eq!(scan_paths::join_leaf(Source::Roo), "");
     assert_eq!(scan_paths::join_leaf(Source::Kilo), "");
+    assert_eq!(scan_paths::join_leaf(Source::Amp), "threads");
 }
 
 #[test]

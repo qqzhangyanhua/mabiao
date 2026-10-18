@@ -154,6 +154,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("goose")).toBe("Goose");
     expect(sourceLabel("roo")).toBe("Roo Code");
     expect(sourceLabel("kilo")).toBe("Kilo Code");
+    expect(sourceLabel("amp")).toBe("Amp");
   });
 
   it("always offers Cursor in the source filter list", () => {

@@ -33,7 +33,8 @@
 | Factory / droid | ✅ | ❌ | 会话累计（jsonl 有 usage 则轮级）；模型名来自 settings，子代理并入父会话 |
 | Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（读本机客户端登录态） |
 | cursor-agent | ⚠️ | ❌ | Token 仅在包装落盘后可读 |
-| qwen / amp | ❌ | ❌ | 本机无 Token（amp 用量在云端） |
+| qwen | ✅ | ❌ | |
+| Amp | ✅ | ❌ | `threads/*.json`；credits 不是美元 |
 
 口径、默认路径与限制见 [`CONTEXT.md`](CONTEXT.md)。
 

@@ -257,6 +257,9 @@ fn row_note(source: Source) -> String {
         Source::Kilo => {
             "扫 VS Code / Cursor / Windsurf 等 globalStorage/kilocode.kilo-code/tasks。KILO_TASKS_DIR 直接指向 tasks 目录。".to_string()
         }
+        Source::Amp => {
+            "扫 threads/*.json。AMP_DATA_DIR 指向 Amp 数据根，拼 threads/；未覆盖时扫 ~/.local/share/amp/threads，以及 macOS Application Support 与 Windows AppData。credits 不是美元，不写入 native_cost。".to_string()
+        }
         _ => String::new(),
     }
 }

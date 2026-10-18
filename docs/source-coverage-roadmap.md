@@ -8,8 +8,9 @@
 >
 > **进度更新（2026-10-18）**：**Goose**（`~/.local/share/goose/sessions/sessions.db`）已作为独立 Usage Source 接入，见「已实现」小节。
 >
-> **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Roo 已落地；Cline 扩展与 Kilo 仍待接入。
-> **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Kilo 已落地；Cline 扩展与 Roo 仍待接入（Roo 另 PR）。
+> **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Roo 已落地；Cline 扩展仍待接入。
+> **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Kilo 已落地；Cline 扩展仍待接入。
+> **进度更新（2026-10-18）**：**Amp**（`~/.local/share/amp/threads/*.json`）已作为独立 Usage Source 接入，见「已实现」小节。字段对齐 ccusage Amp parser 与 `amp threads export` 的线程 JSON。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -54,6 +55,12 @@
 - **实现**：`src-tauri/src/adapters/hermes.rs`，在 `USAGE_ADAPTERS` 表注册为 `Source::Hermes`，coverage「模型级 Token（含原生费用）」；按 `session_model_usage`（`session_id + model + billing_provider` 维度）累计 token，取 `actual_cost_usd` 为原生费用；缺列时回落默认值，不让整个来源失败
 - **为什么当时排第一**：所有候选里唯一自带原生费用字段（`actual_cost_usd`）的来源，且是结构化 SQLite，直接 SQL 映射到 `UsageRecord`
 - **落地时的取舍**：以模型级累计（`session_model_usage`）为准，未按会话级（`sessions`）再计一遍，避免会话级 vs 模型级重复计数；`cost_source` 枚举仍以本机样本为限，后续拿到更多真实会话可再校验
+
+### Amp ✅
+
+- **本机路径**：`~/.local/share/amp/threads/**/*.json`（另扫 macOS Application Support 与 Windows AppData）；`AMP_DATA_DIR` 覆盖根并拼 `threads/`
+- **实现**：`src-tauri/src/adapters/amp.rs` + `conversation/amp.rs`，注册为 `Source::Amp`，coverage「轮级 Token（input 不含 cache）」；优先 `usageLedger.events`，缺则回落 `messages[].usage`；ledger cache 经 `toMessageId` 对助手消息；credits 不是美元，不写 `native_cost`
+- **说明**：当前 Amp CLI 以云端线程为准，本机 `threads/` 来自仍落盘的本地优先版本或 `amp threads export`。没有文件时只是未检测到，不报失败
 
 ### Cline CLI ✅
 

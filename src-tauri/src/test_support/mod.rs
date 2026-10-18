@@ -22,7 +22,7 @@ pub use crate::adapters::cursor::{
 pub use crate::adapters::cursor_account;
 pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
-    agy, alma, claude, cline, codebuddy, codex, copilot, cursor, cursor_agent, dsh, factory,
+    agy, alma, amp, claude, cline, codebuddy, codex, copilot, cursor, cursor_agent, dsh, factory,
     gemini, goose, grok, hermes, kilo, kimi, omp, pi, qoder, qoder_cn, qwen, roo, trae, workbuddy,
     zcode,
 };

@@ -1494,6 +1494,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Kilo.application_name(), "Kilo Code");
     assert_eq!(Source::Kilo.as_str(), "kilo");
     assert_eq!(Source::parse("kilo"), Some(Source::Kilo));
+    assert_eq!(Source::Amp.application_name(), "Amp");
+    assert_eq!(Source::Amp.as_str(), "amp");
+    assert_eq!(Source::parse("amp"), Some(Source::Amp));
 }
 
 #[test]
@@ -2867,6 +2870,125 @@ fn trae_adapter_reuses_codex_rollout_tokens_under_trae_source() {
             .sum::<i64>(),
         19113
     );
+}
+
+#[test]
+fn amp_adapter_reads_ledger_and_joins_cache_from_to_message_id() {
+    let records = amp::parse_thread(
+        &fixture("amp.thread.json"),
+        "/home/dev/.local/share/amp/threads/T-amp-1.json",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::Amp);
+    assert_eq!(records[0].session_id, "T-amp-1");
+    assert_eq!(records[0].project, "/work/amp");
+    assert_eq!(records[0].model, "claude-haiku-4-5-20251001");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].cache_creation_tokens, 500);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].total_tokens, 850);
+    assert_eq!(records[0].native_cost, None);
+    assert_eq!(records[1].model, "gpt-5");
+    assert_eq!(records[1].input_tokens, 10);
+    assert_eq!(records[1].output_tokens, 5);
+    assert_eq!(records[1].total_tokens, 15);
+    let summed: i64 = records.iter().map(|record| record.total_tokens).sum();
+    assert_eq!(summed, 865);
+    assert_ne!(
+        summed,
+        100 + 50 + 500 + 200 + 10 + 5 + 500 + 200,
+        "ledger tokens.input 已不含 cache，不能再把 cache 加进 input"
+    );
+}
+
+#[test]
+fn amp_adapter_falls_back_to_message_usage_when_ledger_is_absent() {
+    let content = r#"{
+      "id": "T-thread-a",
+      "env": {"initial": {"trees": [{"uri": "file:///work/amp-msg"}]}},
+      "messages": [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "usage": {
+          "model": "claude-haiku-4-5-20251001",
+          "inputTokens": 10,
+          "outputTokens": 178,
+          "cacheCreationInputTokens": 986,
+          "cacheReadInputTokens": 11372,
+          "credits": 9.9,
+          "timestamp": "2026-01-19T11:42:10.652Z"
+        }}
+      ]
+    }"#;
+    let records = amp::parse_thread(content, "/tmp/T-thread-a.json");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].session_id, "T-thread-a");
+    assert_eq!(records[0].project, "/work/amp-msg");
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 178);
+    assert_eq!(records[0].cache_creation_tokens, 986);
+    assert_eq!(records[0].cache_read_tokens, 11372);
+    assert_eq!(records[0].total_tokens, 12546);
+    assert_eq!(records[0].native_cost, None, "Amp credits 不是美元");
+}
+
+#[test]
+fn amp_adapter_empty_ledger_object_falls_back_to_messages() {
+    let content = r#"{
+      "id": "T-thread-a",
+      "usageLedger": {},
+      "messages": [
+        {"role": "assistant", "usage": {
+          "model": "claude-haiku-4-5-20251001",
+          "inputTokens": 10,
+          "outputTokens": 178,
+          "timestamp": "2026-01-19T11:42:10.652Z"
+        }}
+      ]
+    }"#;
+    let records = amp::parse_thread(content, "/tmp/T-thread-a.json");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 178);
+}
+
+#[test]
+fn amp_adapter_ledger_takes_precedence_and_skips_missing_model() {
+    let content = r#"{
+      "id": "thread-a",
+      "usageLedger": {"events": [
+        {"id": "event-a", "timestamp": "2026-01-02T00:00:00.000Z", "model": "gpt-5", "tokens": {"input": 1, "output": 2}},
+        {"id": "event-skip", "timestamp": "2026-01-02T00:00:01.000Z", "tokens": {"input": 9, "output": 9}}
+      ]},
+      "messages": [
+        {"role": "assistant", "usage": {
+          "model": "claude-haiku-4-5-20251001",
+          "inputTokens": 99,
+          "outputTokens": 99,
+          "timestamp": "2026-01-19T11:42:10.652Z"
+        }}
+      ]
+    }"#;
+    let records = amp::parse_thread(content, "/tmp/thread-a.json");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "gpt-5");
+    assert_eq!(records[0].input_tokens, 1);
+    assert_eq!(records[0].output_tokens, 2);
+}
+
+#[test]
+fn amp_adapter_puts_undifferentiated_total_into_output() {
+    let content = r#"{
+      "id": "thread-a",
+      "usageLedger": {"events": [
+        {"id": "event-a", "timestamp": "2026-01-02T00:00:00.000Z", "model": "gpt-5", "tokens": {"total": 345}}
+      ]}
+    }"#;
+    let records = amp::parse_thread(content, "/tmp/thread-a.json");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].output_tokens, 345);
+    assert_eq!(records[0].input_tokens, 0);
+    assert_eq!(records[0].total_tokens, 345);
 }
 
 #[test]

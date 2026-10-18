@@ -78,6 +78,7 @@ describe("sessionResumeHint", () => {
     expect(sessionResumeHint("goose", "20261017_1").command).toBe(
       "goose session --resume --session-id 20261017_1",
     );
+    expect(sessionResumeHint("amp", "T-amp-1").command).toBe("amp threads continue T-amp-1");
   });
 
   it("prefixes cwd when the session has a project directory", () => {

@@ -1,5 +1,6 @@
 pub mod agy;
 pub mod alma;
+pub mod amp;
 pub mod claude;
 pub mod cline;
 pub mod codebuddy;
@@ -485,6 +486,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: kilo::discover,
         sidecar_fingerprint: kilo::sidecar_fingerprint,
         parse: kilo::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Amp,
+        path_env: "AMP_DATA_DIR",
+        scan_dirs: amp::scan_dirs,
+        discover: amp::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: amp::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: false,

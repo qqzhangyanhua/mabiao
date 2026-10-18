@@ -9,6 +9,7 @@ use crate::domain::{
 mod agent_graph;
 mod agy;
 mod alma;
+mod amp;
 pub(crate) mod attachments;
 mod backfill;
 mod catalog;
@@ -382,6 +383,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: goose::detail,
         revision: goose::source_revision,
         raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Amp,
+        discover: amp::discover,
+        index: amp::index,
+        index_suffix: None,
+        detail: amp::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
         reuse_unchanged_index: true,
     },
     ConversationAdapter {
