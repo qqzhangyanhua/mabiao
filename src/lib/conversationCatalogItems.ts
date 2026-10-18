@@ -33,15 +33,35 @@ export function conversationIndexIncomplete(
   return progress != null && progress.total > 0 && progress.indexed < progress.total;
 }
 
+/** 本机不存会话正文，对话目录按设计为空。 */
+export const BODYLESS_CONVERSATION_SOURCES = ["aider", "warp", "windsurf"] as const;
+
+export function isBodylessConversationFilter(sources: string[]): boolean {
+  return (
+    sources.length > 0 &&
+    sources.every((source) =>
+      (BODYLESS_CONVERSATION_SOURCES as readonly string[]).includes(source),
+    )
+  );
+}
+
 export function conversationCatalogEmptyCopy({
   searching,
   query,
   indexIncomplete,
+  sources = [],
 }: {
   searching: boolean;
   query: string;
   indexIncomplete: boolean;
+  sources?: string[];
 }): { title: string; hint: string } {
+  if (!searching && isBodylessConversationFilter(sources)) {
+    return {
+      title: "该来源没有本机会话正文",
+      hint: "Aider / Warp / Windsurf 只记消耗，本机不存对话正文，目录为空是预期。",
+    };
+  }
   if (!searching) {
     return {
       title: "当前条件下暂无对话记录",

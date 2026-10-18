@@ -6,6 +6,7 @@ import {
   replaceLocationHash,
 } from "../hooks/viewCache";
 import { conversationKey } from "../lib/conversationCache";
+import { conversationSourcesFromUsageFilter } from "../lib/conversationDisplay";
 import {
   currentConversationFrame,
   initialConversationNavigationState,
@@ -319,6 +320,7 @@ export function Conversations({
         setSummaryTarget(null);
         setViewTarget(row);
       }}
+      sources={conversationSourcesFromUsageFilter(filter.sources)}
     />
   );
 
