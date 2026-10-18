@@ -1506,8 +1506,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
 
     // 旧夹具覆盖 10 个来源时的常量；差值必须能归因到新增来源。
     const PREV_FILES: u64 = 10;
-    const PREV_RECORDS: usize = 16;
-    const PREV_TOKENS: i64 = 828446;
+    const PREV_RECORDS: usize = 17;
+    const PREV_TOKENS: i64 = 605147;
     const OPENCODE_FILES: u64 = 1;
     const OPENCODE_RECORDS: usize = 1;
     const OPENCODE_TOKENS: i64 = 20;
@@ -1946,10 +1946,10 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     assert_eq!(report.files_skipped, 0);
     assert_eq!(report.files_parsed, 24);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 41);
+    assert_eq!(report.records_written, 42);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 41);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 892480);
+    assert_eq!(stored.len(), 42);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 669181);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -1974,7 +1974,6 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Dsh
             | Source::Grok
             | Source::CursorAgent
-            | Source::Copilot
             | Source::Qoder
             | Source::QoderCn
             | Source::Cline
@@ -1987,7 +1986,7 @@ fn all_source_ingest_report_matches_behavior_baseline() {
                 (1, 0, 1, 1, 0, 0)
             }
             Source::Qwen | Source::Agy => (1, 0, 1, 0, 0, 0),
-            Source::Hermes => (1, 0, 1, 3, 0, 0),
+            Source::Hermes | Source::Copilot => (1, 0, 1, 3, 0, 0),
         };
         let entry = report
             .sources
