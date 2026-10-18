@@ -242,6 +242,73 @@ fn claude_adapter_dedups_message_id_and_skips_zero_usage() {
 }
 
 #[test]
+fn claude_adapter_drops_sidechain_replay_of_parent_message() {
+    let records = claude::parse_claude_jsonl(
+        &fixture_lines(&fixture("claude-sidechain-replay.jsonl")),
+        "/workspace/.claude/projects/-workspace-app/sess-parent.jsonl",
+    );
+    // 父响应 msg_shared 被 sidechain 再写一遍（同 message.id、不同 requestId、带
+    // isSidechain）。回放故意带更大 output 和 stop_reason，旧口径会留下回放。
+    // 应对齐 ccusage：丢掉回放，只留父条目 + 子代理自己的 msg_unique。
+    let input: i64 = records.iter().map(|record| record.input_tokens).sum();
+    let output: i64 = records.iter().map(|record| record.output_tokens).sum();
+    let cache_read: i64 = records.iter().map(|record| record.cache_read_tokens).sum();
+    let cost: f64 = records.iter().filter_map(|record| record.native_cost).sum();
+    assert_eq!(records.len(), 2, "{records:?}");
+    assert_eq!(input, 5);
+    assert_eq!(output, 12);
+    assert_eq!(cache_read, 1000);
+    assert!((cost - 1.27).abs() < 1e-9);
+    assert_eq!(records[0].session_id, "sess-parent");
+    assert_eq!(records[0].output_tokens, 10);
+    assert_eq!(records[0].cache_read_tokens, 1000);
+    assert_eq!(records[1].session_id, "agent-a");
+    assert_eq!(records[1].input_tokens, 3);
+}
+
+#[test]
+fn claude_adapter_drops_subagent_file_replay_of_parent_message() {
+    let dir = tempfile::tempdir().unwrap();
+    let session = dir.path().join("sess-parent");
+    let subagents = session.join("subagents");
+    std::fs::create_dir_all(&subagents).unwrap();
+    let parent = session.join("chat.jsonl");
+    let child = subagents.join("agent-a.jsonl");
+    std::fs::write(
+        &parent,
+        r#"{"type":"assistant","sessionId":"sess-parent","requestId":"req_parent","timestamp":"2026-03-10T06:00:01.000Z","costUSD":1.23,"message":{"id":"msg_shared","model":"claude-sonnet-4-20250514","stop_reason":"end_turn","usage":{"input_tokens":2,"output_tokens":10,"cache_creation_input_tokens":100,"cache_read_input_tokens":1000}}}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        &child,
+        r#"{"type":"assistant","sessionId":"sess-parent","requestId":"req_replay","isSidechain":true,"timestamp":"2026-03-10T06:00:01.000Z","costUSD":1.23,"message":{"id":"msg_shared","model":"claude-sonnet-4-20250514","usage":{"input_tokens":2,"output_tokens":10,"cache_creation_input_tokens":100,"cache_read_input_tokens":1000}}}
+{"type":"assistant","sessionId":"sess-parent","agentId":"agent-a","isSidechain":true,"requestId":"req_unique","timestamp":"2026-03-10T06:00:02.000Z","costUSD":0.04,"message":{"id":"msg_unique","model":"claude-haiku-4-5-20251001","stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":2,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+"#,
+    )
+    .unwrap();
+
+    let parent_records = claude::parse(&parent, dir.path()).unwrap();
+    let child_records = claude::parse(&child, dir.path()).unwrap();
+    let cache_read: i64 = parent_records
+        .iter()
+        .chain(child_records.iter())
+        .map(|record| record.cache_read_tokens)
+        .sum();
+    let input: i64 = parent_records
+        .iter()
+        .chain(child_records.iter())
+        .map(|record| record.input_tokens)
+        .sum();
+
+    assert_eq!(parent_records.len(), 1);
+    assert_eq!(child_records.len(), 1);
+    assert_eq!(child_records[0].session_id, "agent-a");
+    assert_eq!(input, 5);
+    assert_eq!(cache_read, 1000);
+}
+
+#[test]
 fn pi_adapter_uses_native_cost() {
     let records = pi::parse_pi_jsonl(
         &fixture_lines(&fixture("pi.jsonl")),
