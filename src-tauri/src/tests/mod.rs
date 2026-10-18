@@ -88,3 +88,4 @@ mod work_timeline;
 mod workbuddy_conversation;
 mod wsl;
 mod zcode_conversation;
+mod zed_conversation;

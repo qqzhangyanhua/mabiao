@@ -62,6 +62,7 @@ mod trae;
 pub(crate) mod trusted_path;
 mod workbuddy;
 mod zcode;
+mod zed;
 
 use merge::merge_parsed_conversations;
 use toolbox::{FileIndexCursor, ParsedConversation};
@@ -393,6 +394,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: amp::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Zed,
+        discover: zed::discover,
+        index: zed::index,
+        index_suffix: None,
+        detail: zed::detail,
+        revision: zed::source_revision,
+        raw_extension: None,
         reuse_unchanged_index: true,
     },
     ConversationAdapter {

@@ -204,6 +204,12 @@ const brandMarks = {
       <path d="M13.2 2.2 4.6 13.4h6.2l-1.1 8.4 9.4-11.8h-6.3l.4-7.8Z" />
     ),
   },
+  zed: {
+    viewBox: "0 0 24 24",
+    body: (
+      <path d="M5 5.2h14v2.6l-8.4 8.4H19V19H5v-2.6l8.4-8.4H5V5.2Z" />
+    ),
+  },
 } satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {

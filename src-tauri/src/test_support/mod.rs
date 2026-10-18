@@ -7,6 +7,7 @@ mod helpers;
 mod hermes_fixture;
 pub mod http_stub;
 mod work_notes_conn;
+mod zed_fixture;
 
 pub use agy_fixture::*;
 pub use alma_fixture::*;
@@ -15,6 +16,7 @@ pub use goose_fixture::*;
 pub use helpers::*;
 pub use hermes_fixture::*;
 pub use work_notes_conn::*;
+pub use zed_fixture::*;
 
 pub use crate::adapters::cursor::{
     parse_cursor_commits, summarize_code_volume, with_cost_roi, CursorCommitRow,
@@ -24,7 +26,7 @@ pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
     agy, alma, amp, claude, cline, codebuddy, codex, copilot, cursor, cursor_agent, dsh, factory,
     gemini, goose, grok, hermes, kilo, kimi, omp, pi, qoder, qoder_cn, qwen, roo, trae, workbuddy,
-    zcode,
+    zcode, zed,
 };
 pub use crate::aggregate;
 pub use crate::backup;

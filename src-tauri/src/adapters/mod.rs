@@ -30,6 +30,7 @@ pub mod roo;
 pub mod trae;
 pub mod workbuddy;
 pub mod zcode;
+pub mod zed;
 
 use std::path::{Path, PathBuf};
 
@@ -501,6 +502,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: amp::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: amp::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Zed,
+        path_env: "ZED_DATA_DIR",
+        scan_dirs: zed::scan_dirs,
+        discover: zed::discover,
+        sidecar_fingerprint: zed::sidecar_fingerprint,
+        parse: zed::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: false,

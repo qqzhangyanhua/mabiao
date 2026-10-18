@@ -622,3 +622,13 @@ fn amp_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Amp);
     assert_conversation_index_matches_parse(&conn, home, "amp", "T-amp-1");
 }
+
+#[test]
+fn zed_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_default_zed_home(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Zed);
+    assert_conversation_index_matches_parse(&conn, home, "zed", ZED_THREAD_ID);
+}
