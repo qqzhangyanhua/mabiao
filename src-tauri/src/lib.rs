@@ -39,6 +39,7 @@ pub mod user_files;
 pub mod vscode_state;
 pub mod work_notes;
 pub mod work_timeline;
+pub(crate) mod wsl;
 
 use std::fs;
 use std::path::PathBuf;

@@ -75,7 +75,19 @@ impl UsageAdapter {
         overrides: &PathOverrides,
         home: &Path,
     ) -> Vec<PathBuf> {
-        self.display_dirs.unwrap_or(self.scan_dirs)(overrides, home)
+        let scan = self.display_dirs.unwrap_or(self.scan_dirs);
+        if overrides.contains_key(self.path_env) {
+            return scan(overrides, home);
+        }
+        let mut dirs = Vec::new();
+        for scan_home in crate::wsl::scan_homes(home) {
+            for path in scan(overrides, &scan_home) {
+                if !dirs.contains(&path) {
+                    dirs.push(path);
+                }
+            }
+        }
+        dirs
     }
 
     pub(crate) fn roots_detected(&self, dirs: &[PathBuf]) -> bool {
