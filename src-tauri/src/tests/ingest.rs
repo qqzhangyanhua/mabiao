@@ -1241,6 +1241,13 @@ fn source_scan_dirs_default_to_home_relative_paths() {
         ingest::source_scan_dirs_with(&overrides, home, Source::OpenClaw),
         vec![home.join(".openclaw/agents"), home.join(".clawdbot/agents"),],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Crush),
+        vec![
+            home.join(".local/share/crush"),
+            home.join("AppData/Local/crush"),
+        ],
+    );
 }
 
 #[test]
@@ -1300,6 +1307,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
             "OPENCLAW_STATE_DIR",
             vec![PathBuf::from("/custom/openclaw")],
         ),
+        ("CRUSH_GLOBAL_DATA", vec![PathBuf::from("/custom/crush")]),
     ]);
 
     assert_eq!(
@@ -1407,6 +1415,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::OpenClaw),
         vec![PathBuf::from("/custom/openclaw/agents")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Crush),
+        vec![PathBuf::from("/custom/crush")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1538,7 +1550,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 31);
+    assert_eq!(Source::ALL.len(), 32);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1663,6 +1675,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const CODEBUDDY_IDE_FILES: u64 = 1;
     const CODEBUDDY_IDE_RECORDS: usize = 1;
     const CODEBUDDY_IDE_TOKENS: i64 = 290;
+    const CRUSH_FILES: u64 = 1;
+    const CRUSH_RECORDS: usize = 1;
+    const CRUSH_TOKENS: i64 = 250;
 
     let opencode = first
         .sources
@@ -1769,6 +1784,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::CodeBuddyIde.as_str())
         .unwrap();
+    let crush = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Crush.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1811,6 +1831,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(openclaw.records_written, OPENCLAW_RECORDS as u64);
     assert_eq!(codebuddy_ide.files_parsed, CODEBUDDY_IDE_FILES);
     assert_eq!(codebuddy_ide.records_written, CODEBUDDY_IDE_RECORDS as u64);
+    assert_eq!(crush.files_parsed, CRUSH_FILES);
+    assert_eq!(crush.records_written, CRUSH_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1896,6 +1918,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::CodeBuddyIde)
         .collect();
+    let crush_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Crush)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1917,6 +1943,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(cherry_rows.len(), CHERRY_RECORDS);
     assert_eq!(openclaw_rows.len(), OPENCLAW_RECORDS);
     assert_eq!(codebuddy_ide_rows.len(), CODEBUDDY_IDE_RECORDS);
+    assert_eq!(crush_rows.len(), CRUSH_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -2064,6 +2091,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         CODEBUDDY_IDE_TOKENS
     );
+    assert_eq!(
+        crush_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        CRUSH_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -2087,6 +2121,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CHERRY_FILES
         + OPENCLAW_FILES
         + CODEBUDDY_IDE_FILES
+        + CRUSH_FILES
         + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
@@ -2110,6 +2145,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CHERRY_RECORDS
         + OPENCLAW_RECORDS
         + CODEBUDDY_IDE_RECORDS
+        + CRUSH_RECORDS
         + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
@@ -2133,6 +2169,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CHERRY_TOKENS
         + OPENCLAW_TOKENS
         + CODEBUDDY_IDE_TOKENS
+        + CRUSH_TOKENS
         + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
@@ -2213,14 +2250,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 32);
+    assert_eq!(report.files_seen, 33);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 32);
+    assert_eq!(report.files_parsed, 33);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 57);
+    assert_eq!(report.records_written, 58);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 57);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 675661);
+    assert_eq!(stored.len(), 58);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 675911);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2263,7 +2300,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Gemini
             | Source::Factory
             | Source::Goose
-            | Source::CodeBuddyIde => (1, 0, 1, 1, 0, 0),
+            | Source::CodeBuddyIde
+            | Source::Crush => (1, 0, 1, 1, 0, 0),
             Source::Qwen => (2, 0, 2, 2, 0, 0),
             Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes | Source::Copilot => (1, 0, 1, 3, 0, 0),
@@ -2807,6 +2845,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     );
     assert_eq!(codebuddy_ide.path_env, "CODEBUDDY_IDE_DIR");
     assert_eq!(codebuddy_ide.coverage, "会话级 Token（input 不含 cache）");
+    let crush = usage_adapter(Source::Crush);
+    assert!(!crush.append_log, "Crush 会话库是 SQLite，不是追加型日志");
+    assert_eq!(crush.path_env, "CRUSH_GLOBAL_DATA");
+    assert_eq!(crush.coverage, "会话级 Token（含原生费用）");
 }
 
 #[test]

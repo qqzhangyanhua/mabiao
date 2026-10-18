@@ -36,6 +36,7 @@ const KNOWN_SOURCES = [
   "zed",
   "cherry",
   "openclaw",
+  "crush",
 ] as const;
 
 describe("resolveSourceIconId", () => {
@@ -69,6 +70,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("zed")).toBe("zed");
     expect(resolveSourceIconId("cherry")).toBe("cherry");
     expect(resolveSourceIconId("openclaw")).toBe("openclaw");
+    expect(resolveSourceIconId("crush")).toBe("crush");
   });
 
   it("uses one Cursor face for Cursor and Cursor Agent", () => {

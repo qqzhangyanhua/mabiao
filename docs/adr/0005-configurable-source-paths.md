@@ -43,6 +43,7 @@
 | Cherry Studio | `CHERRY_STUDIO_DATA_DIR` | 覆盖 Electron userData 根并扫 `cherrystudio.sqlite`；默认同时扫 `CherryStudio`（package.json `name`）与 `Cherry Studio`（productName）在 Linux `~/.config`、macOS Application Support、Windows `%APPDATA%` |
         ),
 | OpenClaw | `OPENCLAW_STATE_DIR` | 覆盖状态根并扫 `<root>/agents/*/sessions`；默认 `~/.openclaw/agents` 与升级前的 `~/.clawdbot/agents` |
+| Crush | `CRUSH_GLOBAL_DATA` | 覆盖全局数据目录（内含 `projects.json`）；默认扫 `~/.local/share/crush` 与 Windows `%LOCALAPPDATA%/crush`。发现各项目 `{data_dir}/crush.db`，不遍历家目录下的 `.crush` |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径、Kimi 的 `~/.kimi` 与 `~/.kimi-code`）在显式设置对应环境变量后也不再自动附加。
 

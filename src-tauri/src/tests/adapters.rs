@@ -1509,6 +1509,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::OpenClaw.application_name(), "OpenClaw");
     assert_eq!(Source::OpenClaw.as_str(), "openclaw");
     assert_eq!(Source::parse("openclaw"), Some(Source::OpenClaw));
+    assert_eq!(Source::Crush.application_name(), "Crush");
+    assert_eq!(Source::Crush.as_str(), "crush");
+    assert_eq!(Source::parse("crush"), Some(Source::Crush));
 }
 
 #[test]
@@ -3176,6 +3179,28 @@ fn codebuddy_ide_adapter_skips_conversation_without_model() {
     .unwrap();
     let records = codebuddy_ide::parse(messages.parent().unwrap(), dir.path()).unwrap();
     assert!(records.is_empty());
+}
+
+#[test]
+fn crush_adapter_reads_root_session_tokens_and_skips_children() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let path = write_default_crush_home(home);
+    let registry = home.join(".local/share/crush");
+    let records = crush::parse(&path, &registry).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Crush);
+    assert_eq!(records[0].session_id, "sess-crush-1");
+    assert_eq!(
+        records[0].project,
+        home.join("work/crush-demo").to_string_lossy().as_ref()
+    );
+    assert_eq!(records[0].model, "claude-sonnet-4-20250514");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].input_tokens, 200);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].total_tokens, 250);
+    assert_eq!(records[0].native_cost, Some(0.012));
 }
 
 #[test]

@@ -2,6 +2,7 @@ mod agy_fixture;
 mod alma_fixture;
 mod cherry_fixture;
 pub mod conversation_boundary;
+mod crush_fixture;
 mod cursor_store;
 mod goose_fixture;
 mod helpers;
@@ -13,6 +14,7 @@ mod zed_fixture;
 pub use agy_fixture::*;
 pub use alma_fixture::*;
 pub use cherry_fixture::*;
+pub use crush_fixture::*;
 pub use cursor_store::*;
 pub use goose_fixture::*;
 pub use helpers::*;
@@ -26,7 +28,7 @@ pub use crate::adapters::cursor::{
 pub use crate::adapters::cursor_account;
 pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
-    agy, alma, amp, cherry, claude, cline, codebuddy, codebuddy_ide, codex, copilot, cursor,
+    agy, alma, amp, cherry, claude, cline, codebuddy, codebuddy_ide, codex, copilot, crush, cursor,
     cursor_agent, dsh, factory, gemini, goose, grok, hermes, kilo, kimi, omp, openclaw, pi, qoder,
     qoder_cn, qwen, roo, trae, workbuddy, zcode, zed,
 };
