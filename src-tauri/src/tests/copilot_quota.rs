@@ -32,7 +32,12 @@ fn copilot_quota_inverts_remaining_into_used_percent() {
     assert_eq!(windows[0].used_percent, Some(75.0));
     // 没有 percent_remaining 时按 remaining / entitlement 算。
     assert_eq!(windows[1].used_percent, Some(25.0));
-    assert!(windows[0].resets_at.is_some());
+    // GitHub 文档：高级请求计数器每月 1 日 00:00:00 UTC 重置。纯日期按 UTC 零点，不是本机日切。
+    assert_eq!(
+        windows[0].resets_at.as_deref(),
+        Some("2026-09-01T00:00:00Z")
+    );
+    assert_eq!(windows[1].resets_at, windows[0].resets_at);
 }
 
 #[test]

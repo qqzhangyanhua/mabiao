@@ -5,7 +5,7 @@ import type {
   OfficialQuotaWindow,
   QuotaExhaustDto,
 } from "../types";
-import { formatClock, formatWindowClock, relativeTime } from "./format";
+import { formatClock, formatUtcClock, formatWindowClock, relativeTime } from "./format";
 import { officialQuotaProviderLabel } from "./overviewLayout";
 
 export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, string> = {
@@ -67,6 +67,30 @@ export function formatQuotaAmount(value: number, currency: string | null): strin
 
 export const OFFICIAL_QUOTA_EXHAUST_TITLE =
   "按最近两次官方快照估计，不是官方给出的时间";
+
+/** Copilot 高级请求按 GitHub 文档每月 1 日 00:00:00 UTC 重置，不是本机时区日切。 */
+export const COPILOT_RESET_TITLE =
+  "GitHub 官方按 UTC 零点重置（每月 1 日 00:00:00 UTC），不是本机时区日切";
+
+export function officialQuotaResetLabel(
+  provider: string,
+  resetsAt: string | null,
+  compact = false,
+): { text: string; title?: string } {
+  if (!resetsAt) {
+    return { text: "重置时间未知" };
+  }
+  if (provider === "copilot") {
+    return {
+      text: `重置 ${formatUtcClock(resetsAt, compact)}`,
+      title: COPILOT_RESET_TITLE,
+    };
+  }
+  return {
+    text: `重置 ${compact ? formatWindowClock(resetsAt) : formatClock(resetsAt)}`,
+    title: formatClock(resetsAt),
+  };
+}
 
 export function officialQuotaExhaustLabel(
   exhaust: QuotaExhaustDto | null | undefined,

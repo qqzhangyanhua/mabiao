@@ -3,7 +3,6 @@ import { memo, useEffect, useState, type PointerEvent } from "react";
 import { useTickingNow } from "../hooks/useTickingNow";
 import { useTrayQuotaArrange } from "../hooks/useTrayQuotaArrange";
 import { Icon } from "../icons";
-import { formatClock, formatWindowClock } from "../lib/format";
 import {
   OFFICIAL_QUOTA_EXHAUST_TITLE,
   officialQuotaAgeLabel,
@@ -14,6 +13,7 @@ import {
   officialQuotaNotice,
   officialQuotaPlanClass,
   officialQuotaRefreshHint,
+  officialQuotaResetLabel,
   officialQuotaRowTone,
   officialQuotaStatusLabel,
   officialQuotaUndetectedNote,
@@ -311,7 +311,11 @@ function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactRes
   }
   return (
     <>
-      <OfficialQuotaWindows windows={row.windows} compactReset={compactReset} />
+      <OfficialQuotaWindows
+        provider={row.provider}
+        windows={row.windows}
+        compactReset={compactReset}
+      />
       {notice ? <QuotaNotice notice={notice} /> : null}
     </>
   );
@@ -341,9 +345,11 @@ function QuotaNotice({
  * 另画一套的话，两边哪天分岔，测试确认的就不再是首页会显示的东西。
  */
 export function OfficialQuotaWindows({
+  provider = "",
   windows,
   compactReset = false,
 }: {
+  provider?: string;
   windows: OfficialQuotaWindow[];
   compactReset?: boolean;
 }) {
@@ -356,6 +362,7 @@ export function OfficialQuotaWindows({
         // 只有余额时那一行就是这个窗口的全部内容。
         const amount = officialQuotaAmountLabel(window);
         const exhaust = officialQuotaExhaustLabel(window.exhaust, nowMs, compactReset);
+        const reset = officialQuotaResetLabel(provider, window.resets_at, compactReset);
         return (
           <div
             className={exhaust ? "official-quota-window has-exhaust" : "official-quota-window"}
@@ -369,13 +376,8 @@ export function OfficialQuotaWindows({
                 <i style={{ width: `${Math.min(100, Math.max(0, percent))}%` }} />
               </div>
             )}
-            <span
-              className="muted"
-              title={window.resets_at ? formatClock(window.resets_at) : undefined}
-            >
-              {window.resets_at
-                ? `重置 ${compactReset ? formatWindowClock(window.resets_at) : formatClock(window.resets_at)}`
-                : "重置时间未知"}
+            <span className="muted" title={reset.title}>
+              {reset.text}
             </span>
             {percent != null && amount ? (
               <span className="muted official-quota-amount">{amount}</span>

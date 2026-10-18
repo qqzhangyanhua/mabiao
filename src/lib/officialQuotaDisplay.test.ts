@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OfficialQuotaDto } from "../types";
 import {
+  COPILOT_RESET_TITLE,
   OFFICIAL_QUOTA_EXHAUST_TITLE,
   OFFICIAL_QUOTA_FRESHNESS_STATUS,
   formatQuotaAmount,
@@ -13,6 +14,7 @@ import {
   officialQuotaPlanClass,
   officialQuotaPlanKind,
   officialQuotaRefreshHint,
+  officialQuotaResetLabel,
   officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaStatusLabel,
@@ -302,5 +304,23 @@ describe("officialQuotaNotice", () => {
 
   it("returns null when there is nothing to say", () => {
     expect(officialQuotaNotice({ todo: null, error: null })).toBeNull();
+  });
+});
+
+describe("officialQuotaResetLabel", () => {
+  it("labels Copilot resets as UTC midnight, not the local clock", () => {
+    const reset = officialQuotaResetLabel("copilot", "2026-09-01T00:00:00Z");
+    expect(reset.text).toBe("重置 2026-09-01 00:00:00 UTC");
+    expect(reset.title).toBe(COPILOT_RESET_TITLE);
+    expect(officialQuotaResetLabel("copilot", "2026-09-01T00:00:00Z", true).text).toBe(
+      "重置 09-01 00:00 UTC",
+    );
+  });
+
+  it("keeps other providers on the local clock", () => {
+    const reset = officialQuotaResetLabel("claude", "2026-08-22T04:00:00Z");
+    expect(reset.text.startsWith("重置 ")).toBe(true);
+    expect(reset.text).not.toContain("UTC");
+    expect(officialQuotaResetLabel("claude", null).text).toBe("重置时间未知");
   });
 });
