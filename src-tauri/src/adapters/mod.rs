@@ -21,6 +21,7 @@ pub mod hermes;
 pub mod kilo;
 pub mod kimi;
 pub mod omp;
+pub mod openclaw;
 pub mod opencode;
 pub mod pi;
 pub mod project;
@@ -536,6 +537,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_dir: None,
         prepare_file: None,
         append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::OpenClaw,
+        path_env: "OPENCLAW_STATE_DIR",
+        scan_dirs: openclaw::scan_dirs,
+        discover: openclaw::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: openclaw::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,

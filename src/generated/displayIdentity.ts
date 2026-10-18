@@ -33,6 +33,7 @@ export const SOURCE_SLUGS = [
   "amp",
   "zed",
   "cherry",
+  "openclaw",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -78,6 +79,7 @@ export const BRAND_IDS = [
   "amp",
   "zed",
   "cherry",
+  "openclaw",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -111,6 +113,7 @@ export const DISPLAY_NAMES = {
   amp: "Amp",
   zed: "Zed",
   cherry: "Cherry Studio",
+  openclaw: "OpenClaw",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -148,6 +151,7 @@ export const BRAND_BY_SLUG = {
   amp: "amp",
   zed: "zed",
   cherry: "cherry",
+  openclaw: "openclaw",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -185,6 +189,7 @@ export const RESUME_TEMPLATES = {
   amp: "amp threads continue {id}",
   zed: null,
   cherry: null,
+  openclaw: null,
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];

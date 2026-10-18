@@ -266,6 +266,9 @@ fn row_note(source: Source) -> String {
         Source::Cherry => {
             "扫 cherrystudio.sqlite。CHERRY_STUDIO_DATA_DIR 覆盖 Electron userData 根；未覆盖时同时扫 CherryStudio 与 Cherry Studio。".to_string()
         }
+        Source::OpenClaw => {
+            "扫 agents/*/sessions 下 jsonl（含 .reset / .deleted 归档，跳过 checkpoint / bak / trajectory）。OPENCLAW_STATE_DIR 覆盖状态根并拼 agents；未覆盖时另扫 ~/.clawdbot。".to_string()
+        }
         _ => String::new(),
     }
 }

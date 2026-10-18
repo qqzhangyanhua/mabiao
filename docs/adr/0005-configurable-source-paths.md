@@ -40,6 +40,8 @@
 | Amp | `AMP_DATA_DIR` | 覆盖时扫 `<root>/threads/*.json`；默认扫 `~/.local/share/amp/threads`、macOS Application Support、Windows AppData |
 | Zed | `ZED_DATA_DIR` | 覆盖时扫 `<root>/threads/threads.db`；默认扫 `~/.local/share/zed/threads`、macOS `~/Library/Application Support/Zed/threads`、Windows `%LOCALAPPDATA%/Zed/threads` |
 | Cherry Studio | `CHERRY_STUDIO_DATA_DIR` | 覆盖 Electron userData 根并扫 `cherrystudio.sqlite`；默认同时扫 `CherryStudio`（package.json `name`）与 `Cherry Studio`（productName）在 Linux `~/.config`、macOS Application Support、Windows `%APPDATA%` |
+        ),
+| OpenClaw | `OPENCLAW_STATE_DIR` | 覆盖状态根并扫 `<root>/agents/*/sessions`；默认 `~/.openclaw/agents` 与升级前的 `~/.clawdbot/agents` |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径、Kimi 的 `~/.kimi` 与 `~/.kimi-code`）在显式设置对应环境变量后也不再自动附加。
 
