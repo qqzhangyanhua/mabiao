@@ -30,6 +30,7 @@ export const SOURCE_SLUGS = [
   "goose",
   "roo",
   "kilo",
+  "amp",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -72,6 +73,7 @@ export const BRAND_IDS = [
   "goose",
   "roo",
   "kilo",
+  "amp",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -102,6 +104,7 @@ export const DISPLAY_NAMES = {
   goose: "Goose",
   roo: "Roo Code",
   kilo: "Kilo Code",
+  amp: "Amp",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -136,6 +139,7 @@ export const BRAND_BY_SLUG = {
   goose: "goose",
   roo: "roo",
   kilo: "kilo",
+  amp: "amp",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -170,6 +174,7 @@ export const RESUME_TEMPLATES = {
   goose: "goose session --resume --session-id {id}",
   roo: null,
   kilo: null,
+  amp: "amp threads continue {id}",
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];

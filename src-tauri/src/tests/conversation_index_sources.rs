@@ -610,3 +610,15 @@ fn kilo_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Kilo);
     assert_conversation_index_matches_parse(&conn, home, "kilo", "task-kilo-1");
 }
+
+#[test]
+fn amp_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = home.join(".local/share/amp/threads/T-amp-1.json");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, fixture("amp.thread.json")).unwrap();
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Amp);
+    assert_conversation_index_matches_parse(&conn, home, "amp", "T-amp-1");
+}

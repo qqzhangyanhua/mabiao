@@ -4,6 +4,7 @@ mod adapters;
 mod aggregate_boundary;
 mod agy_conversation;
 mod alma_conversation;
+mod amp_conversation;
 mod antigravity_quota;
 mod backup;
 mod billing;
