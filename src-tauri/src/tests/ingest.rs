@@ -1261,6 +1261,17 @@ fn source_scan_dirs_default_to_home_relative_paths() {
             home.join("AppData/Local/warp/Warp/data"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Windsurf),
+        vec![
+            home.join(".config/Devin/User/acp-events"),
+            home.join("Library/Application Support/Devin/User/acp-events"),
+            home.join("AppData/Roaming/Devin/User/acp-events"),
+            home.join(".config/Windsurf/User/acp-events"),
+            home.join("Library/Application Support/Windsurf/User/acp-events"),
+            home.join("AppData/Roaming/Windsurf/User/acp-events"),
+        ],
+    );
 }
 
 #[test]
@@ -1323,6 +1334,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("CRUSH_GLOBAL_DATA", vec![PathBuf::from("/custom/crush")]),
         ("AIDER_ANALYTICS_LOG", vec![PathBuf::from("/custom/aider")]),
         ("WARP_HOME", vec![PathBuf::from("/custom/warp")]),
+        ("WINDSURF_ACP_HOME", vec![PathBuf::from("/custom/windsurf")]),
     ]);
 
     assert_eq!(
@@ -1442,6 +1454,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Warp),
         vec![PathBuf::from("/custom/warp")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Windsurf),
+        vec![PathBuf::from("/custom/windsurf")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1573,7 +1589,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 34);
+    assert_eq!(Source::ALL.len(), 35);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1707,6 +1723,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const WARP_FILES: u64 = 1;
     const WARP_RECORDS: usize = 1;
     const WARP_TOKENS: i64 = 250;
+    const WINDSURF_FILES: u64 = 1;
+    const WINDSURF_RECORDS: usize = 1;
+    const WINDSURF_TOKENS: i64 = 470;
 
     let opencode = first
         .sources
@@ -1828,6 +1847,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Warp.as_str())
         .unwrap();
+    let windsurf = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Windsurf.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1876,6 +1900,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(aider.records_written, AIDER_RECORDS as u64);
     assert_eq!(warp.files_parsed, WARP_FILES);
     assert_eq!(warp.records_written, WARP_RECORDS as u64);
+    assert_eq!(windsurf.files_parsed, WINDSURF_FILES);
+    assert_eq!(windsurf.records_written, WINDSURF_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1973,6 +1999,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Warp)
         .collect();
+    let windsurf_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Windsurf)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1997,6 +2027,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(crush_rows.len(), CRUSH_RECORDS);
     assert_eq!(aider_rows.len(), AIDER_RECORDS);
     assert_eq!(warp_rows.len(), WARP_RECORDS);
+    assert_eq!(windsurf_rows.len(), WINDSURF_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -2165,6 +2196,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         WARP_TOKENS
     );
+    assert_eq!(
+        windsurf_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        WINDSURF_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -2191,6 +2229,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CRUSH_FILES
         + AIDER_FILES
         + WARP_FILES
+        + WINDSURF_FILES
         + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
@@ -2217,6 +2256,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CRUSH_RECORDS
         + AIDER_RECORDS
         + WARP_RECORDS
+        + WINDSURF_RECORDS
         + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
@@ -2243,6 +2283,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + CRUSH_TOKENS
         + AIDER_TOKENS
         + WARP_TOKENS
+        + WINDSURF_TOKENS
         + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
@@ -2323,14 +2364,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 35);
+    assert_eq!(report.files_seen, 36);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 35);
+    assert_eq!(report.files_parsed, 36);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 60);
+    assert_eq!(report.records_written, 61);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 60);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 676411);
+    assert_eq!(stored.len(), 61);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 676881);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2376,7 +2417,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::CodeBuddyIde
             | Source::Crush
             | Source::Aider
-            | Source::Warp => (1, 0, 1, 1, 0, 0),
+            | Source::Warp
+            | Source::Windsurf => (1, 0, 1, 1, 0, 0),
             Source::Qwen => (2, 0, 2, 2, 0, 0),
             Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes | Source::Copilot => (1, 0, 1, 3, 0, 0),
@@ -2936,6 +2978,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     assert!(!warp.append_log, "Warp 会话库是 SQLite，不是追加型日志");
     assert_eq!(warp.path_env, "WARP_HOME");
     assert_eq!(warp.coverage, "会话级 Token（无 input/output 拆分）");
+    let windsurf = usage_adapter(Source::Windsurf);
+    assert!(windsurf.append_log, "Windsurf ACP ndjson 是追加型事件流");
+    assert_eq!(windsurf.path_env, "WINDSURF_ACP_HOME");
+    assert_eq!(windsurf.coverage, "会话级 Token（ACP usage_update）");
 }
 
 #[test]

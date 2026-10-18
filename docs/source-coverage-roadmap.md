@@ -120,12 +120,16 @@
 
 - **本机路径**：`warp.sqlite` 的 `agent_conversations`。Linux `~/.local/state/warp-terminal`；macOS Group Container Stable/Preview；Windows `%LOCALAPPDATA%/warp/Warp/data`。`WARP_HOME` 覆盖目录或库文件
 - **实现**：`src-tauri/src/adapters/warp.rs`，注册为 `Source::Warp`，coverage「会话级 Token（无 input/output 拆分）」；`token_usage[].warp_tokens`（旧 `total_tokens`）+ `byok_tokens` + `custom_endpoint_tokens` 记入 input/total；`credits_spent` 不是 USD，不写入 `native_cost`。本机不存助手回复，对话目录为空
+### Windsurf ✅
+
+- **本机路径**：Devin Desktop / Windsurf 的 `User/acp-events/*.ndjson`；`WINDSURF_ACP_HOME` 覆盖该目录
+- **实现**：`src-tauri/src/adapters/windsurf.rs`，注册为 `Source::Windsurf`，coverage「会话级 Token（ACP usage_update）」；input 累计含 cache read，入账时拆出；output 逐步相加。无模型名跳过。不读加密 Cascade `.pb`；额度%走已有 Devin 官方额度，不在本适配器
 
 ## Tier 3 — 本轮不投入
 
 | 来源 | 原因 |
 |---|---|
-| Windsurf | 同上，`Session Storage` 是 LevelDB；`User/workspaceStorage` 下没找到独立于 VS Code 标准结构的 AI 对话文件 |
+| Windsurf Cascade `.pb` / LevelDB | ACP `usage_update` ndjson 已作为独立 Usage Source 接入；加密 Cascade 与 Session Storage 仍不读 |
 | Trae CN / Trae IDE | IDE 会话在 SQLCipher 加密库里，国际版用量走云端 API；**Trae CLI**（`~/.trae/cli/sessions` Codex rollout）已作为独立 Usage Source 接入 |
 | Antigravity 本地 transcript | 同上，`Session Storage`/`blob_storage` 是 LevelDB（注意：Antigravity 的**官方额度**已经作为 `OfficialQuotaProvider` 接入，这里指的是本机会话明细，是另一件事） |
 | Zed | 已作为独立 Usage Source 接入（`adapters/zed.rs`，读 `threads.db`） |

@@ -66,6 +66,7 @@ mod toolbox;
 mod trae;
 pub(crate) mod trusted_path;
 mod warp;
+mod windsurf;
 mod workbuddy;
 mod zcode;
 mod zed;
@@ -470,6 +471,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: aider::detail,
         revision: aider::source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Windsurf,
+        discover: windsurf::discover,
+        index: windsurf::index,
+        index_suffix: None,
+        detail: windsurf::detail,
+        revision: windsurf::source_revision,
+        raw_extension: Some("ndjson"),
         reuse_unchanged_index: true,
     },
     ConversationAdapter {
