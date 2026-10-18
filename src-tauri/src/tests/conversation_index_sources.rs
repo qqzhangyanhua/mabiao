@@ -313,6 +313,20 @@ fn cline_event_index_matches_full_parse() {
 }
 
 #[test]
+fn codebuddy_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".codebuddy/projects/-work-cb/sess-cb-1.jsonl",
+        "codebuddy.jsonl",
+    );
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::CodeBuddy);
+    assert_conversation_index_matches_parse(&conn, home, "codebuddy", "sess-cb-1");
+}
+
+#[test]
 fn workbuddy_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

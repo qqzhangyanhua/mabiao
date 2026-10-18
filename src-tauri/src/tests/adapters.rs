@@ -1060,6 +1060,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Alma.application_name(), "Alma");
     assert_eq!(Source::Alma.as_str(), "alma");
     assert_eq!(Source::parse("alma"), Some(Source::Alma));
+    assert_eq!(Source::CodeBuddy.application_name(), "CodeBuddy");
+    assert_eq!(Source::CodeBuddy.as_str(), "codebuddy");
+    assert_eq!(Source::parse("codebuddy"), Some(Source::CodeBuddy));
 }
 
 #[test]
@@ -1196,6 +1199,43 @@ fn cline_adapter_skips_messages_before_forked_at() {
     assert_eq!(records[0].output_tokens, 12);
     assert_eq!(records[0].cache_read_tokens, 30);
     assert_eq!(records[0].total_tokens, 102);
+}
+
+#[test]
+fn codebuddy_adapter_subtracts_cache_from_raw_usage_and_keeps_last_per_message() {
+    let records = codebuddy::parse_codebuddy_jsonl(
+        &fixture_lines(&fixture("codebuddy.jsonl")),
+        "/home/dev/.codebuddy/projects/-work-cb/sess-cb-1.jsonl",
+    );
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::CodeBuddy);
+    assert_eq!(records[0].model, "MaaS_Cl_Opus");
+    assert_eq!(records[0].project, "/work/cb");
+    assert_eq!(records[0].session_id, "sess-cb-1");
+    assert_eq!(records[0].input_tokens, 300);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].cache_read_tokens, 1200);
+    assert_eq!(records[0].cache_creation_tokens, 0);
+    assert_eq!(records[0].total_tokens, 1550);
+    assert_eq!(records[1].input_tokens, 950);
+    assert_eq!(records[1].output_tokens, 100);
+    assert_eq!(records[1].cache_read_tokens, 4000);
+    assert_eq!(records[1].cache_creation_tokens, 50);
+    assert_eq!(records[1].total_tokens, 5100);
+}
+
+#[test]
+fn codebuddy_adapter_uses_cache_miss_field_when_present() {
+    let content = r#"{"timestamp":1790503200000,"type":"message","role":"assistant","status":"completed","sessionId":"sess-cb-miss","cwd":"/work/cb","providerData":{"messageId":"m1","model":"glm-5.1","rawUsage":{"cachedMissTokens":273,"completion_tokens":12,"cache_read_input_tokens":27000}}}"#;
+    let records = codebuddy::parse_codebuddy_jsonl(
+        &fixture_lines(content),
+        "/home/dev/.codebuddy/projects/-work-cb/sess-cb-miss.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 273);
+    assert_eq!(records[0].output_tokens, 12);
+    assert_eq!(records[0].cache_read_tokens, 27000);
+    assert_eq!(records[0].total_tokens, 27285);
 }
 
 #[test]

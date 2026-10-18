@@ -63,7 +63,7 @@
 | Cherry Studio | 数据在 Electron `IndexedDB`/`WebStorage`/`File System` 里，没有干净的会话文件；只有 `config.json`（应用配置，非用量） |
 | Windsurf | 同上，`Session Storage` 是 LevelDB；`User/workspaceStorage` 下没找到独立于 VS Code 标准结构的 AI 对话文件 |
 | Trae CN | 同上，本机只看到 `extensions`/`skills`/`argv.json`，没有会话数据落地文件 |
-| CodeBuddy | `CodeBuddyExtension/Data/Public/auth` 只有鉴权数据，没有会话数据 |
+| CodeBuddy IDE | `CodeBuddyExtension/Data/Public/auth` 只有鉴权数据，没有会话数据。**CodeBuddy CLI**（`~/.codebuddy/projects/**/*.jsonl`）已作为独立 Usage Source 接入 |
 | Antigravity 本地 transcript | 同上，`Session Storage`/`blob_storage` 是 LevelDB（注意：Antigravity 的**官方额度**已经作为 `OfficialQuotaProvider` 接入，这里指的是本机会话明细，是另一件事） |
 | Zed | 本机 **未安装**（`/Applications/Zed.app` 不存在），`~/.config/zed/conversations` 是 2024-07 的残留数据，工具本身已经不在用，优先级低于「格式过时」 |
 

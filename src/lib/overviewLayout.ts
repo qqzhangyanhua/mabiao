@@ -50,6 +50,7 @@ export const QUOTA_SOURCE_IDS = [
   "qoder_cn",
   "cline",
   "workbuddy",
+  "codebuddy",
   "zcode",
   "alma",
 ] as const;

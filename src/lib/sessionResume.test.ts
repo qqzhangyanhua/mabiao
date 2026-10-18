@@ -73,6 +73,7 @@ describe("sessionResumeHint", () => {
     expect(sessionResumeHint("qoder", "q-1").command).toBe("qodercli --resume q-1");
     expect(sessionResumeHint("qoder_cn", "qcn-1").command).toBe("qoderclicn --resume qcn-1");
     expect(sessionResumeHint("cline", "cl-1").command).toBe("cline --id cl-1");
+    expect(sessionResumeHint("codebuddy", "cb-1").command).toBe("codebuddy --resume cb-1");
   });
 
   it("prefixes cwd when the session has a project directory", () => {

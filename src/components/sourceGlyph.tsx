@@ -161,6 +161,21 @@ const brandMarks = {
   workbuddy: { src: workbuddyIcon, plate: true },
   zcode: { src: zcodeIcon, plate: true },
   alma: { src: almaIcon, plate: true },
+  codebuddy: {
+    viewBox: "0 0 24 24",
+    body: (
+      <>
+        <path d="M4.2 6.4c0-1.5 1.2-2.7 2.7-2.7h10.2c1.5 0 2.7 1.2 2.7 2.7v8.4c0 1.5-1.2 2.7-2.7 2.7H9.1L4.2 20.6V6.4Z" />
+        <path
+          d="M8.2 10.1h7.6M8.2 13.2h5.2"
+          fill="none"
+          stroke="var(--bg, #0b0d12)"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </>
+    ),
+  },
 } satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {

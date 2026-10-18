@@ -148,6 +148,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("workbuddy")).toBe("WorkBuddy");
     expect(sourceLabel("zcode")).toBe("ZCode");
     expect(sourceLabel("alma")).toBe("Alma");
+    expect(sourceLabel("codebuddy")).toBe("CodeBuddy");
   });
 
   it("always offers Cursor in the source filter list", () => {

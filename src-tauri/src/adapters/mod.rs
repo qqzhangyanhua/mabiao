@@ -2,6 +2,7 @@ pub mod agy;
 pub mod alma;
 pub mod claude;
 pub mod cline;
+pub mod codebuddy;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
@@ -395,6 +396,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_dir: None,
         prepare_file: None,
         append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::CodeBuddy,
+        path_env: "CODEBUDDY_DIR",
+        scan_dirs: codebuddy::scan_dirs,
+        discover: discover_jsonl,
+        sidecar_fingerprint: codebuddy::sidecar_fingerprint,
+        parse: codebuddy::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,
