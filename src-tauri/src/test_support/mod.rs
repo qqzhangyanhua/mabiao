@@ -32,7 +32,7 @@ pub use crate::adapters::opencode::{parse_opencode_messages, OpencodeMessage};
 pub use crate::adapters::{
     agy, aider, alma, amp, cherry, claude, cline, codebuddy, codebuddy_ide, codex, copilot, crush,
     cursor, cursor_agent, dsh, factory, gemini, goose, grok, hermes, kilo, kimi, omp, openclaw, pi,
-    qoder, qoder_cn, qwen, roo, trae, warp, workbuddy, zcode, zed,
+    qoder, qoder_cn, qwen, roo, trae, warp, windsurf, workbuddy, zcode, zed,
 };
 pub use crate::aggregate;
 pub use crate::backup;

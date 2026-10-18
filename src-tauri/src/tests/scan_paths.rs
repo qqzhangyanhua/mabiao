@@ -110,6 +110,7 @@ fn join_leaf_matches_adapter_scan_rule() {
     assert_eq!(scan_paths::join_leaf(Source::Crush), "");
     assert_eq!(scan_paths::join_leaf(Source::Aider), "");
     assert_eq!(scan_paths::join_leaf(Source::Warp), "");
+    assert_eq!(scan_paths::join_leaf(Source::Windsurf), "");
 }
 
 #[test]

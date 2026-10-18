@@ -249,6 +249,10 @@ const brandMarks = {
       <path d="M3.4 4.6h3.4l3.4 9.6 1.8-5.2h3.2l1.8 5.2 3.4-9.6h3.4L17.4 19.4h-3.4L12 13.2l-2 6.2H6.6L3.4 4.6z" />
     ),
   },
+  windsurf: {
+    viewBox: "0 0 24 24",
+    body: <path d="M4 18.5 12 5.5l8 13H4zm3.6-2h8.8L12 9.4 7.6 16.5z" />,
+  },
 } satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {

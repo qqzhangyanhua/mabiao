@@ -1518,6 +1518,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Warp.application_name(), "Warp");
     assert_eq!(Source::Warp.as_str(), "warp");
     assert_eq!(Source::parse("warp"), Some(Source::Warp));
+    assert_eq!(Source::Windsurf.application_name(), "Windsurf");
+    assert_eq!(Source::Windsurf.as_str(), "windsurf");
+    assert_eq!(Source::parse("windsurf"), Some(Source::Windsurf));
 }
 
 #[test]
@@ -3208,6 +3211,24 @@ fn warp_adapter_reads_model_token_totals_and_skips_empty_models() {
     assert_eq!(records[0].input_tokens, 250);
     assert_eq!(records[0].output_tokens, 0);
     assert_eq!(records[0].total_tokens, 250);
+}
+
+#[test]
+fn windsurf_adapter_aggregates_acp_usage_update_and_splits_cache() {
+    let records = windsurf::parse_windsurf_ndjson(
+        &fixture_lines(&fixture("windsurf-acp.ndjson")),
+        "/home/dev/.config/Devin/User/acp-events/sess-windsurf-1.ndjson",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Windsurf);
+    assert_eq!(records[0].session_id, "sess-windsurf-1");
+    assert_eq!(records[0].model, "claude-sonnet-4-5");
+    assert_eq!(records[0].provider, "cognition");
+    assert_eq!(records[0].input_tokens, 320);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].cache_read_tokens, 80);
+    assert_eq!(records[0].cache_creation_tokens, 20);
+    assert_eq!(records[0].total_tokens, 470);
     assert_eq!(records[0].native_cost, None);
 }
 
@@ -3245,6 +3266,25 @@ fn crush_adapter_reads_root_session_tokens_and_skips_children() {
     assert_eq!(records[0].output_tokens, 50);
     assert_eq!(records[0].total_tokens, 250);
     assert_eq!(records[0].native_cost, Some(0.012));
+}
+
+#[test]
+fn windsurf_adapter_skips_adaptive_and_empty_model() {
+    let adaptive = windsurf::parse_windsurf_ndjson(
+        &fixture_lines(
+            r#"{"notification":{"sessionUpdate":"usage_update","_meta":{"cognition.ai/inputTokens":10,"cognition.ai/outputTokens":2,"cognition.ai/model":"adaptive"}}}"#,
+        ),
+        "/tmp/sess-adaptive.ndjson",
+    );
+    assert!(adaptive.is_empty());
+
+    let empty = windsurf::parse_windsurf_ndjson(
+        &fixture_lines(
+            r#"{"notification":{"sessionUpdate":"usage_update","_meta":{"cognition.ai/inputTokens":10,"cognition.ai/outputTokens":2}}}"#,
+        ),
+        "/tmp/sess-no-model.ndjson",
+    );
+    assert!(empty.is_empty());
 }
 
 #[test]

@@ -34,6 +34,7 @@ pub mod qwen;
 pub mod roo;
 pub mod trae;
 pub mod warp;
+pub mod windsurf;
 pub mod workbuddy;
 pub mod zcode;
 pub mod zed;
@@ -618,6 +619,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token（无 input/output 拆分）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Windsurf,
+        path_env: "WINDSURF_ACP_HOME",
+        scan_dirs: windsurf::scan_dirs,
+        discover: windsurf::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: windsurf::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        soft_parse_failure: false,
+        coverage: "会话级 Token（ACP usage_update）",
         display_dirs: None,
         detected: None,
     },

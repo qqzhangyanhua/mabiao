@@ -65,6 +65,7 @@ export const QUOTA_SOURCE_IDS = [
   "crush",
   "aider",
   "warp",
+  "windsurf",
 ] as const;
 
 export type QuotaSourceId = (typeof QUOTA_SOURCE_IDS)[number];
