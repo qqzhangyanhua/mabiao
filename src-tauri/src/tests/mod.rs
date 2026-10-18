@@ -9,6 +9,7 @@ mod antigravity_quota;
 mod backup;
 mod billing;
 mod budget;
+mod cherry_conversation;
 mod claude_quota;
 mod claude_usage;
 mod cline_conversation;

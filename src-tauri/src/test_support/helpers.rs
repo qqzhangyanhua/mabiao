@@ -179,7 +179,7 @@ pub fn assert_rollups_match_overview(
     assert_eq!(overview.total_tokens, session_total);
 }
 
-/// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode / Hermes 写 sqlite，
+/// 把 `Source::ALL` 的每个来源各写一份夹具到临时 home。OpenCode / Hermes / Goose / Cherry Studio 写 sqlite，
 /// Cursor Agent 写 token 包装目录下的 jsonl。
 pub fn write_all_source_fixtures(home: &std::path::Path) {
     let paths: [(&str, &str); 18] = [
@@ -270,6 +270,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     super::write_default_hermes_home(home);
     super::write_default_goose_home(home);
     super::write_default_zed_home(home);
+    super::write_default_cherry_home(home);
     // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");

@@ -14,6 +14,7 @@ pub(crate) mod attachments;
 mod backfill;
 mod catalog;
 mod catalog_search;
+mod cherry;
 mod claude;
 mod cline;
 mod codebuddy;
@@ -403,6 +404,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: zed::detail,
         revision: zed::source_revision,
+        raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Cherry,
+        discover: cherry::discover,
+        index: cherry::index,
+        index_suffix: None,
+        detail: cherry::detail,
+        revision: cherry::source_revision,
         raw_extension: None,
         reuse_unchanged_index: true,
     },

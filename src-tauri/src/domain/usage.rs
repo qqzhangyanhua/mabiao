@@ -33,10 +33,11 @@ pub enum Source {
     Kilo,
     Amp,
     Zed,
+    Cherry,
 }
 
 impl Source {
-    pub const ALL: [Source; 28] = [
+    pub const ALL: [Source; 29] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -65,6 +66,7 @@ impl Source {
         Source::Kilo,
         Source::Amp,
         Source::Zed,
+        Source::Cherry,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -97,6 +99,7 @@ impl Source {
             Source::Kilo => "kilo",
             Source::Amp => "amp",
             Source::Zed => "zed",
+            Source::Cherry => "cherry",
         }
     }
 
@@ -130,6 +133,7 @@ impl Source {
             Source::Kilo => "Kilo Code",
             Source::Amp => "Amp",
             Source::Zed => "Zed",
+            Source::Cherry => "Cherry Studio",
         }
     }
 
@@ -164,6 +168,7 @@ impl Source {
             Source::Kilo => Brand::Kilo,
             Source::Amp => Brand::Amp,
             Source::Zed => Brand::Zed,
+            Source::Cherry => Brand::Cherry,
         }
     }
 
@@ -198,6 +203,7 @@ impl Source {
             Source::Kilo => None,
             Source::Amp => Some("amp threads continue {id}"),
             Source::Zed => None,
+            Source::Cherry => None,
         }
     }
 
@@ -231,6 +237,7 @@ impl Source {
             "kilo" => Some(Source::Kilo),
             "amp" => Some(Source::Amp),
             "zed" => Some(Source::Zed),
+            "cherry" => Some(Source::Cherry),
             _ => None,
         }
     }

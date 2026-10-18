@@ -51,6 +51,7 @@
 .tone-kilo,
 .tone-amp,
 .tone-zed,
+.tone-cherry,
 .tone-other {
   background: var(--tone-other-bg);
   color: var(--tone-other-fg);
