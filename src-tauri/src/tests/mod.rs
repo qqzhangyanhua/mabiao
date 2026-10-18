@@ -74,6 +74,7 @@ mod report;
 mod rollup;
 mod rollup_source;
 mod rollup_split;
+mod roo_conversation;
 mod scan_paths;
 mod staged;
 mod store;

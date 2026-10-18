@@ -52,6 +52,7 @@ mod qoder;
 mod qwen;
 mod read;
 mod refresh;
+mod roo;
 mod scan_roots;
 mod session_store;
 mod toolbox;
@@ -400,6 +401,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: agy::detail,
         revision: agy::source_revision,
         raw_extension: None,
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Roo,
+        discover: roo::discover,
+        index: roo::index,
+        index_suffix: None,
+        detail: roo::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
         reuse_unchanged_index: true,
     },
 ];

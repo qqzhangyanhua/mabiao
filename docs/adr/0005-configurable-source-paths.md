@@ -35,6 +35,7 @@
 | CodeBuddy | `CODEBUDDY_DIR` | `~/.codebuddy`（扫 `projects/`） |
 | Trae CLI | `TRAE_HOME` | `~/.trae`（扫 `cli/sessions/` 与 `cli/archived_sessions/` 下 `*.jsonl` 与 `*.jsonl.zst`） |
 | Goose | `GOOSE_PATH_ROOT` | 覆盖时扫 `<root>/data/sessions/sessions.db`；默认扫 `~/.local/share/goose/sessions`、macOS Application Support、以及 Block 旧路径 |
+| Roo Code | `ROO_TASKS_DIR` | 覆盖时直接扫该目录（应指向 `…/tasks`）；默认扫 VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae 以及 vscode-server 的 `User/globalStorage/rooveterinaryinc.roo-cline/tasks` |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径、Kimi 的 `~/.kimi` 与 `~/.kimi-code`）在显式设置对应环境变量后也不再自动附加。
 

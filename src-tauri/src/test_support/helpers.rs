@@ -273,6 +273,24 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     let cline_manifest = home.join(".cline/data/sessions/sess-cline-1/sess-cline-1.json");
     std::fs::create_dir_all(cline_manifest.parent().unwrap()).unwrap();
     std::fs::write(&cline_manifest, fixture("cline.manifest.json")).unwrap();
+    let roo =
+        home.join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/task-roo-1");
+    std::fs::create_dir_all(&roo).unwrap();
+    std::fs::write(
+        roo.join("ui_messages.json"),
+        fixture("roo.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        roo.join("api_conversation_history.json"),
+        fixture("roo.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        roo.join("history_item.json"),
+        fixture("roo.history_item.json"),
+    )
+    .unwrap();
 }
 
 fn write_opencode_fixture_db(home: &std::path::Path) {

@@ -10,6 +10,7 @@ pub mod cursor_account;
 pub mod cursor_agent;
 pub mod cursor_session;
 pub mod dsh;
+pub(crate) mod extension_tasks;
 pub mod factory;
 pub mod gemini;
 pub mod goose;
@@ -23,6 +24,7 @@ pub mod project;
 pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
+pub mod roo;
 pub mod trae;
 pub mod workbuddy;
 pub mod zcode;
@@ -457,6 +459,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Roo,
+        path_env: "ROO_TASKS_DIR",
+        scan_dirs: roo::scan_dirs,
+        discover: roo::discover,
+        sidecar_fingerprint: roo::sidecar_fingerprint,
+        parse: roo::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
         display_dirs: None,
         detected: None,
     },

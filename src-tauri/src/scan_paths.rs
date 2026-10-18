@@ -251,6 +251,9 @@ fn row_note(source: Source) -> String {
         Source::Goose => {
             "扫 sessions.db。GOOSE_PATH_ROOT 指向 goose 根，拼 data/sessions；未覆盖时扫 XDG / Application Support 与 Block 旧路径。".to_string()
         }
+        Source::Roo => {
+            "扫 VS Code / Cursor / Windsurf 等 globalStorage/rooveterinaryinc.roo-cline/tasks。ROO_TASKS_DIR 直接指向 tasks 目录。".to_string()
+        }
         _ => String::new(),
     }
 }

@@ -590,3 +590,13 @@ fn goose_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Goose);
     assert_conversation_index_matches_parse(&conn, home, "goose", "20261017_1");
 }
+
+#[test]
+fn roo_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_all_source_fixtures(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::Roo);
+    assert_conversation_index_matches_parse(&conn, home, "roo", "task-roo-1");
+}
