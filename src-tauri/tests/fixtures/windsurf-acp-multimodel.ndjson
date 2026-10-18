@@ -1,0 +1,4 @@
+{"notification":{"sessionUpdate":"session_info_update","title":"Inspect Windsurf"}}
+{"notification":{"sessionUpdate":"usage_update","created_at":"2026-10-17T08:05:00Z","_meta":{"cognition.ai/inputTokens":100,"cognition.ai/cachedReadTokens":10,"cognition.ai/cachedWriteTokens":5,"cognition.ai/outputTokens":10,"cognition.ai/model":"claude-sonnet-4-5"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"update":{"sessionUpdate":"usage_update","created_at":"2026-10-17T08:06:00Z","_meta":{"cognition.ai/inputTokens":250,"cognition.ai/cachedReadTokens":40,"cognition.ai/cachedWriteTokens":8,"cognition.ai/outputTokens":20,"cognition.ai/model":"adaptive"}}}}
+{"params":{"update":{"sessionUpdate":"usage_update","created_at":"2026-10-17T08:07:00Z","_meta":{"cognition.ai/inputTokens":400,"cognition.ai/cachedReadTokens":80,"cognition.ai/cachedWriteTokens":20,"cognition.ai/outputTokens":30,"cognition.ai/model":"gpt-5"}}}}

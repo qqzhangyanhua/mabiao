@@ -96,10 +96,11 @@ pub fn parse_windsurf_ndjson(lines: &LineFactory<'_>, source_file: &str) -> Vec<
             cache_write = value;
         }
         if let Some(value) = next_output {
+            // outputTokens 是逐步增量，不是会话累计。改成「取最后一次」会少计。
             output = output.saturating_add(value);
         }
-        if model.is_empty() {
-            model = usable_model(&notification, meta);
+        if let Some(name) = usable_model_name(&usable_model(&notification, meta)) {
+            model = name;
         }
         if let Some(ts) = event_time(&notification) {
             occurred_at = ts;
@@ -158,7 +159,11 @@ fn usable_model_name(model: &str) -> Option<String> {
 }
 
 fn notification_of(value: &Value) -> Option<Value> {
-    value.get("notification").cloned()
+    value
+        .get("notification")
+        .cloned()
+        .or_else(|| value.pointer("/params/update").cloned())
+        .or_else(|| value.pointer("/params/notification").cloned())
 }
 
 fn optional_tokens(meta: &Value, key: &str) -> Option<i64> {
