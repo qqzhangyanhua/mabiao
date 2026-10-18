@@ -8,7 +8,7 @@
 
 - Kimi：`wire.jsonl` + `kimi.json`；新布局会话目录下的 `state.json`（文件存在时才进入指纹）
 - Grok：`updates.jsonl` + `summary.json`
-- OpenCode：`opencode.db` + `opencode.db-wal`。没有库、改读 `storage/` 旧 JSON 时，辅助指纹是该会话的 `message/` 与 `part/` 文件元数据
+- OpenCode：`opencode.db` / `opencode-*.db` + 对应 `-wal`。没有库、改读 `storage/` 旧 JSON 时，辅助指纹是该会话的 `message/` 与 `part/` 文件元数据
 - OMP：子代理 jsonl + 同名父会话 `{stem}.jsonl`（存在与否改变 `session_id` / `is_top_level`）
 - dsh：旧版 `session.jsonl.zstd` 同目录是否存在 v4 副本 `session.v4.jsonl.zstd`（存在则旧文件解析为空，避免重复计数）
 - Hermes：`state.db` + `state.db-wal` / `state.db-shm`

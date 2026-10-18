@@ -246,7 +246,7 @@ fn row_note(source: Source) -> String {
             "CLAUDE_CONFIG_DIR 只替换 Claude Code 根；已存在的 Desktop / Cowork 嵌套 projects 仍会追加。".to_string()
         }
         Source::Opencode => {
-            "未设 OPENCODE_DATA_DIR 时用 XDG_DATA_HOME/opencode。OPENCODE_DB 替换库文件名；没有库才读 storage/ 下的旧 JSON。".to_string()
+            "未设 OPENCODE_DATA_DIR 时用 XDG_DATA_HOME/opencode。默认扫 opencode.db 与 opencode-*.db；OPENCODE_DB 替换库文件名；没有库才读 storage/ 下的旧 JSON。".to_string()
         }
         Source::Goose => {
             "扫 sessions.db。GOOSE_PATH_ROOT 指向 goose 根，拼 data/sessions；未覆盖时扫 XDG / Application Support 与 Block 旧路径。".to_string()

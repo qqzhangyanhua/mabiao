@@ -16,6 +16,17 @@ pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> 
         .cloned()
         .unwrap_or_else(|| vec![home.join(".local/share/opencode")]);
     let db = overrides.get("OPENCODE_DB").and_then(|paths| paths.first());
+    if db.is_none() {
+        let mut found: Vec<PathBuf> = roots
+            .iter()
+            .flat_map(|root| list_opencode_dbs(root))
+            .collect();
+        found.sort();
+        found.dedup();
+        if !found.is_empty() {
+            return found;
+        }
+    }
     let mut planned: Vec<PathBuf> = roots.iter().map(|root| db_file(root, db)).collect();
     planned.sort();
     planned.dedup();
@@ -70,8 +81,8 @@ pub(crate) fn apply_env_values(
     }
 }
 
-/// 有 `opencode.db`（或 `OPENCODE_DB`）就只读它。库不在时才读 1.2 以前留在
-/// `storage/session/<项目>/<id>.json` 的会话；库是从这些文件迁出来的，两边都在时只读库。
+/// 有 `opencode.db` / `opencode-*.db`（或 `OPENCODE_DB`）就只读库。库不在时才读
+/// 1.2 以前留在 `storage/session/<项目>/<id>.json` 的会话；库是从这些文件迁出来的，两边都在时只读库。
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();
     for root in roots {
@@ -257,13 +268,24 @@ fn read_v1_messages(
 
 fn read_v2_messages(db: &Connection, loc: &str) -> Result<Vec<OpencodeMessage>, String> {
     let has_session_v2 = table_exists(db, "session_v2");
-    let sql = if has_session_v2 {
-        "SELECT m.session_id, m.type, m.data, COALESCE(s.directory, '')
+    let has_seq = column_exists(db, "session_message", "seq");
+    let has_fork = has_session_v2
+        && column_exists(db, "session_v2", "fork_session_id")
+        && column_exists(db, "session_v2", "fork_boundary");
+    let sql = if has_session_v2 && has_seq && has_fork {
+        "SELECT m.session_id, m.type, m.data, COALESCE(s.directory, ''),
+                m.seq, COALESCE(s.fork_session_id, ''), COALESCE(s.fork_boundary, -1)
+         FROM session_message m
+         LEFT JOIN session_v2 s ON s.id = m.session_id
+         WHERE m.type IN ('assistant', 'compaction')"
+    } else if has_session_v2 {
+        "SELECT m.session_id, m.type, m.data, COALESCE(s.directory, ''),
+                0, '', -1
          FROM session_message m
          LEFT JOIN session_v2 s ON s.id = m.session_id
          WHERE m.type IN ('assistant', 'compaction')"
     } else {
-        "SELECT session_id, type, data, '' FROM session_message
+        "SELECT session_id, type, data, '', 0, '', -1 FROM session_message
          WHERE type IN ('assistant', 'compaction')"
     };
     let mut stmt = db.prepare(sql).map_err(|e| e.to_string())?;
@@ -274,12 +296,19 @@ fn read_v2_messages(db: &Connection, loc: &str) -> Result<Vec<OpencodeMessage>, 
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })
         .map_err(|e| e.to_string())?;
     let mut messages = Vec::new();
     for row in rows {
-        let (session_id, typ, raw, directory) = row.map_err(|e| e.to_string())?;
+        let (session_id, typ, raw, directory, seq, fork_session_id, fork_boundary) =
+            row.map_err(|e| e.to_string())?;
+        if !fork_session_id.is_empty() && fork_boundary >= 0 && seq <= fork_boundary {
+            continue;
+        }
         let mut data: Value = serde_json::from_str(&raw)
             .map_err(|error| format!("OpenCode session_message JSON 无效：{error}"))?;
         if let Some(object) = data.as_object_mut() {
@@ -334,6 +363,42 @@ fn table_exists(db: &Connection, name: &str) -> bool {
     )
     .ok()
     .is_some_and(|n| n > 0)
+}
+
+fn column_exists(db: &Connection, table: &str, column: &str) -> bool {
+    let sql = match table {
+        "session_message" => "PRAGMA table_info(session_message)",
+        "session_v2" => "PRAGMA table_info(session_v2)",
+        _ => return false,
+    };
+    let Ok(mut stmt) = db.prepare(sql) else {
+        return false;
+    };
+    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) else {
+        return false;
+    };
+    let names: Vec<String> = rows.flatten().collect();
+    names.iter().any(|name| name == column)
+}
+
+fn list_opencode_dbs(root: &Path) -> Vec<PathBuf> {
+    if root.is_file() {
+        return vec![root.to_path_buf()];
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut files = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(OsStr::to_str) else {
+            continue;
+        };
+        if name == "opencode.db" || (name.starts_with("opencode-") && name.ends_with(".db")) {
+            files.push(path);
+        }
+    }
+    files
 }
 
 fn migration_completed(db: &Connection) -> bool {
