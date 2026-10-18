@@ -1,3 +1,4 @@
+import { isCompactionBoundary } from "./conversationEventDisplay";
 import type { ConversationEvent } from "../types";
 
 export type ChatToolStep = {
@@ -8,11 +9,12 @@ export type ChatToolStep = {
 export type ChatPart =
   | { type: "prose"; event: ConversationEvent }
   | { type: "tools"; steps: ChatToolStep[] }
-  | { type: "notice"; event: ConversationEvent };
+  | { type: "notice"; event: ConversationEvent }
+  | { type: "boundary"; event: ConversationEvent };
 
 export type ChatTurn = {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   occurredAt: string | null;
   eventIds: string[];
   parts: ChatPart[];
@@ -87,6 +89,14 @@ export function groupConversationTurns(events: readonly ConversationEvent[]): Ch
 
   for (const event of events) {
     if (event.kind === "unadapted") {
+      continue;
+    }
+    if (isCompactionBoundary(event)) {
+      closeAssistant();
+      const turn = beginTurn("system", event);
+      remember(turn, event);
+      turn.parts.push({ type: "boundary", event });
+      turns.push(turn);
       continue;
     }
     if (isUserMessage(event)) {

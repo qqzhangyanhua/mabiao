@@ -47,9 +47,18 @@ pub(super) fn read_source_payload(
     sequence: u32,
 ) -> Result<Value, String> {
     if source == Source::Gemini {
-        let file = fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
-        let root: Value = serde_json::from_reader(BufReader::new(file))
-            .map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?;
+        let root = if path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("jsonl"))
+        {
+            super::gemini::fold_gemini_jsonl(path)?
+        } else {
+            let file =
+                fs::File::open(path).map_err(|error| format!("读取原始文件失败：{error}"))?;
+            serde_json::from_reader(BufReader::new(file))
+                .map_err(|error| format!("附件所在事件 JSON 无效：{error}"))?
+        };
         return root
             .get("messages")
             .and_then(Value::as_array)

@@ -116,6 +116,30 @@ export function groupTimelineEvents(
   return groups;
 }
 
+const COMPACTION_EVENT_NAMES = new Set([
+  "compression",
+  "compaction",
+  "compacted",
+  "context_compacted",
+  "compaction_state",
+  "auto_compact_started",
+  "auto_compact_completed",
+  "compaction_checkpoint",
+]);
+
+export function isCompactionBoundary(event: ConversationEvent): boolean {
+  return (
+    event.kind === "system_status" &&
+    event.name != null &&
+    COMPACTION_EVENT_NAMES.has(event.name)
+  );
+}
+
+export function compactionBoundaryLabel(event: ConversationEvent): string {
+  const text = event.text?.trim();
+  return text ? text : "上下文已压缩";
+}
+
 export function unadaptedGroupLabel(events: ConversationEvent[]): string {
   const names = [
     ...new Set(events.map((event) => event.name).filter((name): name is string => Boolean(name))),

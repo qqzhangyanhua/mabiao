@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationEvent } from "../types";
-import { groupTimelineEvents, unadaptedGroupLabel } from "./conversationEventDisplay";
+import {
+  compactionBoundaryLabel,
+  groupTimelineEvents,
+  isCompactionBoundary,
+  unadaptedGroupLabel,
+} from "./conversationEventDisplay";
 
 function event(
   kind: ConversationEvent["kind"],
@@ -45,6 +50,26 @@ describe("groupTimelineEvents", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("isCompactionBoundary", () => {
+  it("recognizes Gemini compression and other compact system events", () => {
+    expect(isCompactionBoundary(event("system_status", "c1", "compression"))).toBe(true);
+    expect(isCompactionBoundary(event("system_status", "c2", "compaction_state"))).toBe(true);
+    expect(isCompactionBoundary(event("system_status", "s1", "session_started"))).toBe(false);
+    expect(isCompactionBoundary(event("message", "m1"))).toBe(false);
+  });
+});
+
+describe("compactionBoundaryLabel", () => {
+  it("prefers event text and falls back to a generic boundary label", () => {
+    const withText = event("system_status", "c1", "compression");
+    withText.text = "上下文已压缩：120000 → 18000 tokens";
+    expect(compactionBoundaryLabel(withText)).toBe("上下文已压缩：120000 → 18000 tokens");
+    expect(compactionBoundaryLabel(event("system_status", "c2", "compression"))).toBe(
+      "上下文已压缩",
+    );
   });
 });
 

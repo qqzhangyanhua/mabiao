@@ -48,9 +48,24 @@
 
 .conversation-image-thumb,
 .conversation-image-placeholder {
-  flex: 0 0 112px;
-  width: 112px;
-  height: 76px;
+  flex: 0 0 144px;
+  width: 144px;
+  height: 96px;
+}
+
+.conversation-event.is-compaction-boundary {
+  grid-template-columns: 118px minmax(0, 1fr);
+}
+
+.conversation-event.is-compaction-boundary .conversation-event-meta strong {
+  color: var(--cyan-fg);
+}
+
+.conversation-compaction-copy {
+  margin: 0;
+  color: var(--cyan-fg);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .conversation-image-thumb {

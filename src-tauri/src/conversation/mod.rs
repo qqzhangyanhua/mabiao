@@ -106,7 +106,7 @@ pub(crate) use export::{export_default_name, write_conversation_export};
 pub(super) const DEFAULT_PAGE_SIZE: u32 = 20;
 pub(super) const MAX_PAGE_SIZE: u32 = 200;
 pub(crate) const DETAIL_READ_ATTEMPTS: usize = 3;
-pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 19;
+pub(crate) const CONVERSATION_ADAPTER_VERSION: i64 = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConversationIndexIssue {

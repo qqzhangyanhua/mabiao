@@ -166,7 +166,7 @@ pub(crate) fn push_projected_message(
     events: &mut Vec<ConversationEvent>,
 ) {
     let text = content_text(content);
-    if text.is_empty() {
+    if text.is_empty() && !payload_has_local_media(content) && !payload_has_local_media(&details) {
         return;
     }
     let message = ConversationMessage {
@@ -781,6 +781,8 @@ fn is_lifecycle_kind(kind: &str) -> bool {
             | "compacted"
             | "session_info"
             | "compaction"
+            | "compression"
+            | "compact"
             | "branch_summary"
             | "custom"
             | "custom_message"
@@ -823,6 +825,9 @@ fn lifecycle_status_text(kind: &str, payload: &Value) -> Option<String> {
                     .join(", ")
             })
             .filter(|text| !text.is_empty()),
+        "compression" | "compact" | "compaction" | "compacted" | "context_compacted" => {
+            Some(compression_boundary_text(payload))
+        }
         "custom_message" => optional_text(payload, &["content", "text", "message"]),
         "custom" => payload
             .get("data")
@@ -844,6 +849,39 @@ fn lifecycle_status_text(kind: &str, payload: &Value) -> Option<String> {
             payload,
             &["message", "reason", "text", "summary", "explanation"],
         ),
+    }
+}
+
+pub(crate) fn compression_boundary_text(payload: &Value) -> String {
+    let compression = payload.get("compression").unwrap_or(payload);
+    if compression
+        .get("isPending")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return "正在压缩上下文".to_string();
+    }
+    let original = compression
+        .get("originalTokenCount")
+        .or_else(|| compression.get("original_token_count"))
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    let new_count = compression
+        .get("newTokenCount")
+        .or_else(|| compression.get("new_token_count"))
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
+    if original > 0 && new_count > 0 {
+        return format!("上下文已压缩：{original} → {new_count} tokens");
+    }
+    let text = first_text(
+        payload,
+        &["content", "message", "summary", "text", "summaryText"],
+    );
+    if text.is_empty() {
+        "上下文已压缩".to_string()
+    } else {
+        text
     }
 }
 
@@ -1062,6 +1100,9 @@ pub(crate) fn strip_message_bodies_from_details(events: &mut [ConversationEvent]
             object.remove("content");
             object.remove("message");
             object.remove("attachments");
+            object.remove("parts");
+            object.remove("inlineData");
+            object.remove("inline_data");
         }
     }
 }
@@ -1072,7 +1113,7 @@ pub(crate) fn attachment_candidates(
     project: &str,
 ) -> Vec<AttachmentCandidate> {
     let mut values = Vec::new();
-    for key in ["content", "attachments"] {
+    for key in ["content", "attachments", "parts"] {
         match payload.get(key) {
             Some(Value::Array(items)) => values.extend(items),
             Some(value @ Value::Object(_)) => values.push(value),
@@ -1090,19 +1131,103 @@ pub(crate) fn attachment_candidates(
         .collect()
 }
 
+fn payload_has_local_media(value: &Value) -> bool {
+    match value {
+        Value::Array(items) => items.iter().any(payload_has_local_media),
+        Value::Object(_) => {
+            if attachment_candidate(value, "").is_some() {
+                return true;
+            }
+            ["content", "attachments", "parts"]
+                .iter()
+                .any(|key| value.get(*key).is_some_and(payload_has_local_media))
+        }
+        _ => false,
+    }
+}
+
 fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandidate> {
     let object = value.as_object()?;
+    if let Some(inline) = object
+        .get("inlineData")
+        .or_else(|| object.get("inline_data"))
+    {
+        return embedded_inline_candidate(value, inline);
+    }
     let raw_type = object.get("type").and_then(Value::as_str).unwrap_or("");
-    let kind = if raw_type.contains("image") {
+    let kind = if raw_type.contains("image")
+        || object
+            .get("mimeType")
+            .and_then(Value::as_str)
+            .is_some_and(|mime| mime.starts_with("image/"))
+        || object
+            .get("mime_type")
+            .and_then(Value::as_str)
+            .is_some_and(|mime| mime.starts_with("image/"))
+    {
         AttachmentKind::Image
     } else if raw_type.contains("file") || raw_type.contains("attachment") {
         AttachmentKind::File
     } else {
         return None;
     };
-    let source = ["file_path", "path", "url", "image_url"]
+    let source = ["file_path", "path", "url", "image_url", "uri"]
         .iter()
         .find_map(|key| object.get(*key).and_then(attachment_source_value))?;
+    finish_attachment_candidate(value, kind, source, project)
+}
+
+fn embedded_inline_candidate(value: &Value, inline: &Value) -> Option<AttachmentCandidate> {
+    let mime = first_text(inline, &["mimeType", "mime_type", "mime"]);
+    let mime = if mime.is_empty() {
+        first_text(value, &["mimeType", "mime_type", "mime"])
+    } else {
+        mime
+    };
+    let mut data = first_text(inline, &["data"]);
+    if data.is_empty() {
+        data = inline
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("")
+            .to_string();
+    }
+    if data.is_empty() {
+        return None;
+    }
+    if data.starts_with("http://") || data.starts_with("https://") {
+        return finish_attachment_candidate(value, AttachmentKind::Image, data, "");
+    }
+    let media_type = if mime.starts_with("image/") {
+        mime
+    } else if mime.is_empty() {
+        "image/png".to_string()
+    } else {
+        mime
+    };
+    let kind = if media_type.starts_with("image/") {
+        AttachmentKind::Image
+    } else {
+        AttachmentKind::File
+    };
+    let source = if data.starts_with("data:") {
+        data
+    } else {
+        format!("data:{media_type};base64,{data}")
+    };
+    let mut candidate = finish_attachment_candidate(value, kind, source, "")?;
+    candidate.attachment.media_type = media_type;
+    candidate.attachment.size_bytes = embedded_size_bytes(&candidate.source);
+    Some(candidate)
+}
+
+fn finish_attachment_candidate(
+    value: &Value,
+    kind: AttachmentKind,
+    source: String,
+    project: &str,
+) -> Option<AttachmentCandidate> {
     let embedded = source.starts_with("data:");
     let remote = source.starts_with("http://") || source.starts_with("https://");
     let resolved_path = if embedded || remote {
@@ -1132,7 +1257,7 @@ fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandid
     } else {
         source.clone()
     };
-    let name = first_text(value, &["name", "file_name"]);
+    let name = first_text(value, &["name", "file_name", "filename"]);
     let name = if name.is_empty() {
         Path::new(&original_path)
             .file_name()
@@ -1146,7 +1271,7 @@ fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandid
     } else {
         name
     };
-    let media_type = optional_text(value, &["mime_type", "media_type"])
+    let media_type = optional_text(value, &["mime_type", "media_type", "mimeType", "mime"])
         .unwrap_or_else(|| infer_media_type(&name, kind));
     Some(AttachmentCandidate {
         attachment: ConversationAttachment {
@@ -1155,12 +1280,28 @@ fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandid
             name,
             original_path,
             media_type,
-            size_bytes: metadata.map(|metadata| metadata.len()),
+            size_bytes: metadata.map(|metadata| metadata.len()).or_else(|| {
+                if embedded {
+                    embedded_size_bytes(&source)
+                } else {
+                    None
+                }
+            }),
             status,
         },
         source,
         resolved_path,
     })
+}
+
+fn embedded_size_bytes(source: &str) -> Option<u64> {
+    let encoded = source.split_once(',')?.1;
+    let padding = encoded
+        .bytes()
+        .rev()
+        .take_while(|byte| *byte == b'=')
+        .count();
+    Some(((encoded.len() * 3 / 4).saturating_sub(padding)) as u64)
 }
 
 fn attachment_source_value(value: &Value) -> Option<String> {

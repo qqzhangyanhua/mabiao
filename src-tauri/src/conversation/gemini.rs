@@ -6,6 +6,10 @@ use serde_json::Value;
 
 use super::toolbox::*;
 
+#[cfg(test)]
+#[path = "gemini_test.rs"]
+mod tests;
+
 fn project_from_path(path: &Path) -> String {
     path.parent()
         .and_then(Path::parent)
@@ -78,15 +82,31 @@ pub(super) fn parse(
         }
         if matches!(kind, "user" | "gemini" | "assistant") {
             let role = if kind == "user" { "user" } else { "assistant" };
+            let content = value
+                .get("content")
+                .or_else(|| value.get("parts"))
+                .or_else(|| value.get("text"))
+                .unwrap_or(&Value::Null);
             push_projected_message(
                 index,
                 &timestamp,
                 role,
-                value.get("content").unwrap_or(&Value::Null),
+                content,
                 value.clone(),
                 &mut messages,
                 &mut events,
             );
+        }
+        if matches!(kind, "compression" | "compact") {
+            events.push(semantic_event(
+                index,
+                EventKind::SystemStatus,
+                &timestamp,
+                None,
+                Some("compression".to_string()),
+                Some(compression_boundary_text(value)),
+                value.clone(),
+            ));
         }
         if matches!(kind, "error" | "info" | "warning") {
             events.push(semantic_event(
@@ -180,7 +200,7 @@ pub(super) fn parse(
     )
 }
 
-fn fold_gemini_jsonl(path: &Path) -> Result<Value, String> {
+pub(crate) fn fold_gemini_jsonl(path: &Path) -> Result<Value, String> {
     let values = parse_jsonl_conversation_values(path)?;
     let mut session_id = String::new();
     let mut order: Vec<String> = Vec::new();
