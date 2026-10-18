@@ -4,10 +4,11 @@
 //! 这条比 statusline hook 好在零配置——不用改用户的 `settings.json`，也不用等他
 //! 打开一次 Claude Code。读不到就由调用方回落到 statusline 捕获文件。
 //!
-//! 凭证在 `~/.claude/.credentials.json` 的 `claudeAiOauth`：`accessToken` +
-//! `expiresAt`（毫秒）。macOS 上 Claude Code 以钥匙串为准、文件为镜像，这里只读文件——
-//! 我们不写第三方文件，也不主动刷新（刷新会把新 token 写回去，见 ADR 0010），
-//! 过期就提示用户打开一次 Claude Code。
+//! 凭证在 Claude 配置根下的 `.credentials.json` 的 `claudeAiOauth`：`accessToken` +
+//! `expiresAt`（毫秒）。候选顺序：`CLAUDE_CONFIG_DIR`（设置页 / 环境变量，可逗号多路径）
+//! → `~/.claude` → `~/.config/claude`。只读已有文件，不回写。macOS 上 Claude Code
+//! 以钥匙串为准、文件为镜像——我们不写第三方文件，也不主动刷新（刷新会把新 token
+//! 写回去，见 ADR 0010），过期就提示用户打开一次 Claude Code。
 //!
 //! 接口要求登录态带 `user:profile` scope；`claude setup-token` 生成的纯推理 token
 //! 没有这个 scope，会被拒，所以先在本地筛掉，给一句能照做的提示。
@@ -19,6 +20,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
+use crate::ingest::PathOverrides;
 use crate::official_quota::{parse_resets_at, sanitize_percent};
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -40,9 +42,35 @@ pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
 }
 
 pub fn credentials_path() -> PathBuf {
-    crate::ingest::default_home()
-        .join(".claude")
-        .join(".credentials.json")
+    first_existing_credentials(
+        &crate::ingest::default_home(),
+        &crate::ingest::path_overrides(),
+    )
+}
+
+pub(crate) fn first_existing_credentials(home: &Path, overrides: &PathOverrides) -> PathBuf {
+    let candidates = credentials_candidates_with(home, overrides);
+    candidates
+        .into_iter()
+        .find(|path| path.exists())
+        .unwrap_or_else(|| home.join(".claude").join(".credentials.json"))
+}
+
+pub(crate) fn credentials_candidates_with(home: &Path, overrides: &PathOverrides) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(paths) = overrides.get("CLAUDE_CONFIG_DIR") {
+        roots.extend(paths.iter().cloned());
+    }
+    roots.push(home.join(".claude"));
+    roots.push(home.join(".config/claude"));
+    let mut paths = Vec::new();
+    for root in roots {
+        let path = root.join(".credentials.json");
+        if !paths.contains(&path) {
+            paths.push(path);
+        }
+    }
+    paths
 }
 
 /// 顶层三个固定窗口用 `utilization`，按模型拆的周窗口在 `limits[]` 里用 `percent`。
