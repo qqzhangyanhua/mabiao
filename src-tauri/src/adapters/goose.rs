@@ -1,10 +1,11 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use rusqlite::Connection;
 use serde::Deserialize;
 
+use crate::adapters::sqlite::{sql_int, sql_text};
 use crate::adapters::{finish, has_billable_tokens};
+
+pub(crate) use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
@@ -229,36 +230,6 @@ pub(crate) fn unix_seconds_to_rfc3339(started_at: i64) -> String {
     chrono::DateTime::from_timestamp(started_at, 0)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default()
-}
-
-pub(crate) fn table_columns(conn: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?;
-    let mut names = BTreeSet::new();
-    for name in rows {
-        names.insert(name.map_err(|error| error.to_string())?);
-    }
-    Ok(names)
-}
-
-fn sql_text(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
-}
-
-fn sql_int(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, 0)")
-    } else {
-        "0".to_string()
-    }
 }
 
 fn prefer_positive(primary: i64, fallback: i64) -> i64 {

@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
+use crate::adapters::sqlite::table_columns;
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
@@ -214,20 +215,6 @@ pub fn alma_model(model: &str, provider_id: &str) -> String {
         return model.to_string();
     }
     rest.to_string()
-}
-
-fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?;
-    let mut names = BTreeSet::new();
-    for name in rows {
-        names.insert(name.map_err(|error| error.to_string())?);
-    }
-    Ok(names)
 }
 
 fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {

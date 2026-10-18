@@ -676,3 +676,18 @@ fn crush_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::Crush);
     assert_conversation_index_matches_parse(&conn, home, "crush", "sess-crush-1");
 }
+
+#[test]
+fn bodyless_conversation_adapters_index_empty() {
+    let temp = tempfile::tempdir().unwrap();
+    let dummy = temp.path().join("unused");
+    std::fs::write(&dummy, "not a conversation").unwrap();
+    for source in [Source::Aider, Source::Warp, Source::Windsurf] {
+        let adapter = crate::conversation::conversation_adapter(source).unwrap();
+        let batch = (adapter.index)(&dummy).unwrap();
+        assert!(
+            batch.conversations.is_empty(),
+            "{source:?} conversation index must stay empty"
+        );
+    }
+}

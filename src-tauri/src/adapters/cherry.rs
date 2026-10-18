@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::adapters::goose::{table_columns, unix_seconds_to_rfc3339};
+use crate::adapters::goose::unix_seconds_to_rfc3339;
+use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
@@ -212,14 +213,6 @@ fn first_nonempty(values: &[&str]) -> String {
         .find(|value| !value.is_empty())
         .unwrap_or("")
         .to_string()
-}
-
-fn sql_text(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
 }
 
 fn sql_opt_int(columns: &BTreeSet<String>, name: &str) -> String {

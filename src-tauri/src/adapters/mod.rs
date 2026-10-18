@@ -32,6 +32,7 @@ pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
 pub mod roo;
+pub(crate) mod sqlite;
 pub mod trae;
 pub mod warp;
 pub mod windsurf;

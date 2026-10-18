@@ -1,11 +1,12 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::adapters::goose::{parse_sql_timestamp, table_columns};
+use crate::adapters::goose::parse_sql_timestamp;
+use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
@@ -386,13 +387,5 @@ fn blob_or_text(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<Vec<u8>
             "data".to_string(),
             value.data_type(),
         )),
-    }
-}
-
-fn sql_text(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
     }
 }
