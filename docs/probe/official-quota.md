@@ -8,7 +8,7 @@
 
 请求头缺一不可：`Authorization: Bearer <accessToken>`、`anthropic-beta: oauth-2025-04-20`、`User-Agent: claude-code/<版本>`、`Accept`/`Content-Type: application/json`。
 
-凭证读 `~/.claude/.credentials.json` 的 `claudeAiOauth`：
+凭证读 Claude 配置根下 `.credentials.json` 的 `claudeAiOauth`（`CLAUDE_CONFIG_DIR` → `~/.claude` → `~/.config/claude`，只读不回写）：
 
 - `accessToken` + `expiresAt`（毫秒）。**`expiresAt` 为 0 或缺失不当成过期**——第三方代理会写 0，交给接口判。
 - 必须有 `user:profile` scope；`claude setup-token` 生成的纯推理 token 没有，接口会拒，先本地筛掉。

@@ -99,3 +99,47 @@ fn claude_credentials_treat_zero_expiry_as_unknown() {
         now
     ));
 }
+
+#[test]
+fn credentials_prefer_claude_config_dir_over_default_home() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let custom = home.join("custom-claude");
+    std::fs::create_dir_all(&custom).unwrap();
+    std::fs::write(custom.join(".credentials.json"), "{}").unwrap();
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(home.join(".claude/.credentials.json"), "{}").unwrap();
+    let overrides =
+        crate::ingest::PathOverrides::from([("CLAUDE_CONFIG_DIR", vec![custom.clone()])]);
+    // 修前写死 ~/.claude；修后自定义根优先。
+    assert_eq!(
+        claude_usage::first_existing_credentials(home, &overrides),
+        custom.join(".credentials.json")
+    );
+}
+
+#[test]
+fn credentials_fall_back_to_default_home_when_config_dir_missing_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let custom = home.join("custom-claude");
+    std::fs::create_dir_all(&custom).unwrap();
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(home.join(".claude/.credentials.json"), "{}").unwrap();
+    let overrides = crate::ingest::PathOverrides::from([("CLAUDE_CONFIG_DIR", vec![custom])]);
+    assert_eq!(
+        claude_usage::first_existing_credentials(home, &overrides),
+        home.join(".claude/.credentials.json")
+    );
+}
+
+#[test]
+fn credentials_also_probe_xdg_config_claude() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let xdg = home.join(".config/claude");
+    std::fs::create_dir_all(&xdg).unwrap();
+    std::fs::write(xdg.join(".credentials.json"), "{}").unwrap();
+    let path = claude_usage::first_existing_credentials(home, &crate::ingest::PathOverrides::new());
+    assert_eq!(path, xdg.join(".credentials.json"));
+}
