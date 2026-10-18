@@ -275,6 +275,9 @@ fn row_note(source: Source) -> String {
         Source::Crush => {
             "读 projects.json 再打开各项目 crush.db。CRUSH_GLOBAL_DATA 覆盖全局数据目录；未覆盖时扫 ~/.local/share/crush 与 %LOCALAPPDATA%/crush。不遍历家目录下的 .crush。".to_string()
         }
+        Source::Aider => {
+            "只读 --analytics-log 的 JSONL。默认认 ~/.aider/analytics.jsonl；AIDER_ANALYTICS_LOG 可指向该文件或目录。不读、不写 .aider.conf.yml。".to_string()
+        }
         _ => String::new(),
     }
 }

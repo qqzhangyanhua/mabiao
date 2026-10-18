@@ -1,4 +1,5 @@
 pub mod agy;
+pub mod aider;
 pub mod alma;
 pub mod amp;
 pub mod cherry;
@@ -588,6 +589,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         coverage: "会话级 Token（含原生费用）",
         display_dirs: None,
         detected: None,
+    },
+    UsageAdapter {
+        source: Source::Aider,
+        path_env: "AIDER_ANALYTICS_LOG",
+        scan_dirs: aider::scan_dirs,
+        discover: aider::discover,
+        sidecar_fingerprint: empty_sidecar,
+        parse: aider::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: true,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（含原生费用）",
+        display_dirs: None,
+        detected: Some(aider::detected),
     },
 ];
 

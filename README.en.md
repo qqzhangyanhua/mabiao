@@ -30,6 +30,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | grok | ✅ | ✅ | |
 | Hermes | ✅ | ✅ | Native `actual_cost_usd` |
 | Crush | ✅ | ✅ | Native `cost`; root sessions only |
+| Aider | ✅ | ✅ | Only the JSONL the user enabled with `--analytics-log` |
 | kimi / gemini / dsh / copilot | ✅ | ❌ | dsh needs decompress; copilot totals only at session end |
 | Zed | ✅ | ❌ | `threads.db` zstd/json threads; remainder tops the per-request map up to cumulative |
 | Cherry Studio | ✅ | ✅ | sqlite `ai_usage_record`; USD cost only |

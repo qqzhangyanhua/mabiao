@@ -33,10 +33,11 @@ pub enum Brand {
     Cherry,
     OpenClaw,
     Crush,
+    Aider,
 }
 
 impl Brand {
-    pub const ALL: [Brand; 30] = [
+    pub const ALL: [Brand; 31] = [
         Brand::Claude,
         Brand::Codex,
         Brand::Grok,
@@ -67,6 +68,7 @@ impl Brand {
         Brand::Cherry,
         Brand::OpenClaw,
         Brand::Crush,
+        Brand::Aider,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -101,6 +103,7 @@ impl Brand {
             Brand::Cherry => "cherry",
             Brand::OpenClaw => "openclaw",
             Brand::Crush => "crush",
+            Brand::Aider => "aider",
         }
     }
 }
