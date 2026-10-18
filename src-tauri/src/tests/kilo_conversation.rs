@@ -11,7 +11,14 @@ fn kilo_session_feeds_catalog_detail_and_search() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
     assert_eq!(report.files_failed, 0, "{report:?}");
 
-    let page = conversation::sessions_page(&conn, &ConversationQuery::default()).unwrap();
+    let page = conversation::sessions_page(
+        &conn,
+        &ConversationQuery {
+            sources: vec!["kilo".into()],
+            ..ConversationQuery::default()
+        },
+    )
+    .unwrap();
     let row = page
         .rows
         .iter()
