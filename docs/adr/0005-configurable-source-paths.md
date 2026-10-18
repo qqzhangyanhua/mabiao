@@ -38,6 +38,7 @@
 | Roo Code | `ROO_TASKS_DIR` | 覆盖时直接扫该目录（应指向 `…/tasks`）；默认扫 VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae 以及 vscode-server 的 `User/globalStorage/rooveterinaryinc.roo-cline/tasks` |
 | Kilo Code | `KILO_TASKS_DIR` | 覆盖时直接扫该目录（应指向 `…/tasks`）；默认扫 VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae 以及 vscode-server 的 `User/globalStorage/kilocode.kilo-code/tasks` |
 | Amp | `AMP_DATA_DIR` | 覆盖时扫 `<root>/threads/*.json`；默认扫 `~/.local/share/amp/threads`、macOS Application Support、Windows AppData |
+| Zed | `ZED_DATA_DIR` | 覆盖时扫 `<root>/threads/threads.db`；默认扫 `~/.local/share/zed/threads`、macOS `~/Library/Application Support/Zed/threads`、Windows `%LOCALAPPDATA%/Zed/threads` |
 
 环境变量的值可以是逗号分隔的多个绝对路径，会全部扫描并合并到同一次摄取/对账里（不是相互独立的多份缓存）。覆盖是整体替换默认值，不是追加；默认的多路径（Claude Code 的 XDG 双路径、Antigravity 的 CLI/IDE 双路径、Kimi 的 `~/.kimi` 与 `~/.kimi-code`）在显式设置对应环境变量后也不再自动附加。
 

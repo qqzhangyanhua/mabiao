@@ -1497,6 +1497,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Amp.application_name(), "Amp");
     assert_eq!(Source::Amp.as_str(), "amp");
     assert_eq!(Source::parse("amp"), Some(Source::Amp));
+    assert_eq!(Source::Zed.application_name(), "Zed");
+    assert_eq!(Source::Zed.as_str(), "zed");
+    assert_eq!(Source::parse("zed"), Some(Source::Zed));
 }
 
 #[test]
@@ -2989,6 +2992,39 @@ fn amp_adapter_puts_undifferentiated_total_into_output() {
     assert_eq!(records[0].output_tokens, 345);
     assert_eq!(records[0].input_tokens, 0);
     assert_eq!(records[0].total_tokens, 345);
+}
+
+#[test]
+fn zed_adapter_reads_request_tokens_and_cumulative_remainder() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_zed_threads_db(&dir.path().join("threads.db"));
+    let records = zed::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records.iter().all(|record| record.source == Source::Zed));
+    assert!(records
+        .iter()
+        .all(|record| record.session_id == ZED_THREAD_ID));
+    assert_eq!(records[0].project, "/work/zed");
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].input_tokens, 100);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].cache_creation_tokens, 200);
+    assert_eq!(records[0].cache_read_tokens, 400);
+    assert_eq!(records[0].total_tokens, 750);
+    assert_eq!(records[1].input_tokens, 50);
+    assert_eq!(records[1].output_tokens, 20);
+    assert_eq!(records[1].cache_creation_tokens, 0);
+    assert_eq!(records[1].cache_read_tokens, 0);
+    assert_eq!(records[1].total_tokens, 70);
+    assert_eq!(
+        records
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        ZED_TOKENS
+    );
+    assert!(records.iter().all(|record| record.native_cost.is_none()));
 }
 
 #[test]

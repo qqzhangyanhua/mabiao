@@ -1209,6 +1209,14 @@ fn source_scan_dirs_default_to_home_relative_paths() {
             home.join("AppData/Roaming/amp/threads"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Zed),
+        vec![
+            home.join(".local/share/zed/threads"),
+            home.join("Library/Application Support/Zed/threads"),
+            home.join("AppData/Local/Zed/threads"),
+        ],
+    );
 }
 
 #[test]
@@ -1255,6 +1263,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")]),
         ("KILO_TASKS_DIR", vec![PathBuf::from("/custom/kilo-tasks")]),
         ("AMP_DATA_DIR", vec![PathBuf::from("/custom/amp")]),
+        ("ZED_DATA_DIR", vec![PathBuf::from("/custom/zed")]),
     ]);
 
     assert_eq!(
@@ -1346,6 +1355,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Amp),
         vec![PathBuf::from("/custom/amp/threads")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Zed),
+        vec![PathBuf::from("/custom/zed/threads")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1477,7 +1490,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 27);
+    assert_eq!(Source::ALL.len(), 28);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1592,6 +1605,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const AMP_FILES: u64 = 1;
     const AMP_RECORDS: usize = 2;
     const AMP_TOKENS: i64 = 865;
+    const ZED_FILES: u64 = 1;
+    const ZED_RECORDS: usize = 2;
 
     let opencode = first
         .sources
@@ -1678,6 +1693,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Amp.as_str())
         .unwrap();
+    let zed = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Zed.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1712,6 +1732,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(kilo.records_written, KILO_RECORDS as u64);
     assert_eq!(amp.files_parsed, AMP_FILES);
     assert_eq!(amp.records_written, AMP_RECORDS as u64);
+    assert_eq!(zed.files_parsed, ZED_FILES);
+    assert_eq!(zed.records_written, ZED_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1781,6 +1803,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Amp)
         .collect();
+    let zed_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Zed)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1798,6 +1824,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(roo_rows.len(), ROO_RECORDS);
     assert_eq!(kilo_rows.len(), KILO_RECORDS);
     assert_eq!(amp_rows.len(), AMP_RECORDS);
+    assert_eq!(zed_rows.len(), ZED_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -1917,6 +1944,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         AMP_TOKENS
     );
+    assert_eq!(
+        zed_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        ZED_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -1936,6 +1970,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ROO_FILES
         + KILO_FILES
         + AMP_FILES
+        + ZED_FILES
         + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
@@ -1955,6 +1990,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ROO_RECORDS
         + KILO_RECORDS
         + AMP_RECORDS
+        + ZED_RECORDS
         + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
@@ -1974,6 +2010,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + ROO_TOKENS
         + KILO_TOKENS
         + AMP_TOKENS
+        + ZED_TOKENS
         + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
@@ -2054,14 +2091,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 28);
+    assert_eq!(report.files_seen, 29);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 28);
+    assert_eq!(report.files_parsed, 29);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 50);
+    assert_eq!(report.records_written, 52);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 50);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 673926);
+    assert_eq!(stored.len(), 52);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 674746);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2096,7 +2133,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Trae
             | Source::Roo
             | Source::Kilo
-            | Source::Amp => (1, 0, 1, 2, 0, 0),
+            | Source::Amp
+            | Source::Zed => (1, 0, 1, 2, 0, 0),
             Source::Opencode | Source::Gemini | Source::Factory | Source::Goose => {
                 (1, 0, 1, 1, 0, 0)
             }
@@ -2621,6 +2659,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     assert!(!amp.append_log, "Amp 线程 JSON 整份重写，不是追加型日志");
     assert_eq!(amp.path_env, "AMP_DATA_DIR");
     assert_eq!(amp.coverage, "轮级 Token（input 不含 cache）");
+    let zed = usage_adapter(Source::Zed);
+    assert!(!zed.append_log, "Zed 会话库是 SQLite，不是追加型日志");
+    assert_eq!(zed.path_env, "ZED_DATA_DIR");
+    assert_eq!(zed.coverage, "轮级 Token（input 不含 cache）");
 }
 
 #[test]

@@ -269,6 +269,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     super::write_alma_ingest_db(home);
     super::write_default_hermes_home(home);
     super::write_default_goose_home(home);
+    super::write_default_zed_home(home);
     // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");
