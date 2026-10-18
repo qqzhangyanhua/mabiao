@@ -169,7 +169,7 @@ EU 区是 `https://api.eu.factory.ai`，当前不自动识别。
 
 - `percent_remaining`，或 `remaining` / `entitlement`，取反才是已用
 - **`unlimited: true`、`entitlement: -1`、`remaining: -1` 是无限额度**，`entitlement: 0` 是组织按量计费席位的零额度占位——四种都要丢掉，不能显示成 0% 或 100%
-- 重置时间 `quota_reset_date` / `limited_user_reset_date` 是**纯日期**（`2026-09-01`），通用的 `parse_resets_at` 认不了，要按 UTC 零点补一层
+- 重置时间 `quota_reset_date` / `limited_user_reset_date` 是**纯日期**（`2026-09-01`），通用的 `parse_resets_at` 认不了。GitHub 文档写明高级请求计数器每月 1 日 **00:00:00 UTC** 重置，按 UTC 零点补一层，界面标「UTC」以免被成本机日切
 - `copilot_plan`（`individual` / `business` / `enterprise`）→ 行级套餐展示名
 
 组织账单 `orgs/{org}/settings/billing/usage/summary` 当前不采。

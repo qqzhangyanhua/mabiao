@@ -15,6 +15,7 @@ import {
   formatCacheHitRate,
   formatClock,
   formatCompact,
+  formatUtcClock,
   formatCost,
   formatDelta,
   formatDuration,
@@ -221,6 +222,11 @@ describe("formatWindowClock / formatClock", () => {
 
   it("formats a valid ISO timestamp", () => {
     expect(formatClock("2026-08-17T05:31:13.000Z")).toMatch(/^2026-08-17 \d{2}:31:13$/);
+  });
+
+  it("formats Copilot reset instants on the UTC clock face", () => {
+    expect(formatUtcClock("2026-09-01T00:00:00Z")).toBe("2026-09-01 00:00:00 UTC");
+    expect(formatUtcClock("2026-09-01T00:00:00Z", true)).toBe("09-01 00:00 UTC");
   });
 });
 

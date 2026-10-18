@@ -233,6 +233,20 @@ export function formatClock(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** 按 UTC 钟面格式化，用于官方按 UTC 重置的额度窗。 */
+export function formatUtcClock(iso: string, compact = false): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) {
+    return iso;
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const clock = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+  if (compact) {
+    return `${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${clock} UTC`;
+  }
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${clock}:${pad(d.getUTCSeconds())} UTC`;
+}
+
 export function formatRangeLabel(filter: Filter, preset: string): string {
   if (preset === "today") {
     return "今天";
