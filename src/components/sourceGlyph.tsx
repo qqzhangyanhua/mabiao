@@ -237,6 +237,12 @@ const brandMarks = {
       </>
     ),
   },
+  aider: {
+    viewBox: "0 0 24 24",
+    body: (
+      <path d="M12 3.4 20.2 20.6h-3.4l-1.5-3.2H8.7l-1.5 3.2H3.8L12 3.4zm0 5.2-2.4 5.2h4.8L12 8.6z" />
+    ),
+  },
 } satisfies Record<BrandId, SourceMark>;
 
 function markOf(source: string): SourceMark {

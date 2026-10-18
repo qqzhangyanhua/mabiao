@@ -8,6 +8,7 @@ use crate::domain::{
 
 mod agent_graph;
 mod agy;
+mod aider;
 mod alma;
 mod amp;
 pub(crate) mod attachments;
@@ -447,6 +448,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index_suffix: None,
         detail: openclaw::detail,
         revision: openclaw::source_revision,
+        raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::Aider,
+        discover: aider::discover,
+        index: aider::index,
+        index_suffix: None,
+        detail: aider::detail,
+        revision: aider::source_revision,
         raw_extension: Some("jsonl"),
         reuse_unchanged_index: true,
     },

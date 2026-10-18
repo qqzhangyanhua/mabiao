@@ -1512,6 +1512,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Crush.application_name(), "Crush");
     assert_eq!(Source::Crush.as_str(), "crush");
     assert_eq!(Source::parse("crush"), Some(Source::Crush));
+    assert_eq!(Source::Aider.application_name(), "Aider");
+    assert_eq!(Source::Aider.as_str(), "aider");
+    assert_eq!(Source::parse("aider"), Some(Source::Aider));
 }
 
 #[test]
@@ -3037,6 +3040,26 @@ fn zed_adapter_reads_request_tokens_and_cumulative_remainder() {
         ZED_TOKENS
     );
     assert!(records.iter().all(|record| record.native_cost.is_none()));
+}
+
+#[test]
+fn aider_adapter_reads_message_send_and_skips_redacted_models() {
+    let records = aider::parse_aider_analytics(
+        &fixture_lines(&fixture("aider-analytics.jsonl")),
+        "/home/dev/.aider/analytics.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::Aider);
+    assert_eq!(records[0].model, "gemini/gemini-2.5-pro");
+    assert_eq!(records[0].provider, "gemini");
+    assert_eq!(
+        records[0].session_id,
+        "c42c4e6b-f054-44d7-ae1f-6726cc41da88"
+    );
+    assert_eq!(records[0].input_tokens, 200);
+    assert_eq!(records[0].output_tokens, 50);
+    assert_eq!(records[0].total_tokens, 250);
+    assert_eq!(records[0].native_cost, Some(0.012));
 }
 
 #[test]

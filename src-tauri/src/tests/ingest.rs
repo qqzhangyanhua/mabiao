@@ -1248,6 +1248,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
             home.join("AppData/Local/crush"),
         ],
     );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Aider),
+        vec![home.join(".aider")],
+    );
 }
 
 #[test]
@@ -1308,6 +1312,7 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
             vec![PathBuf::from("/custom/openclaw")],
         ),
         ("CRUSH_GLOBAL_DATA", vec![PathBuf::from("/custom/crush")]),
+        ("AIDER_ANALYTICS_LOG", vec![PathBuf::from("/custom/aider")]),
     ]);
 
     assert_eq!(
@@ -1419,6 +1424,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Crush),
         vec![PathBuf::from("/custom/crush")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::Aider),
+        vec![PathBuf::from("/custom/aider")],
     );
     // 未覆盖的 Source 仍然用默认路径。
     assert_eq!(
@@ -1550,7 +1559,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 32);
+    assert_eq!(Source::ALL.len(), 33);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1678,6 +1687,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const CRUSH_FILES: u64 = 1;
     const CRUSH_RECORDS: usize = 1;
     const CRUSH_TOKENS: i64 = 250;
+    const AIDER_FILES: u64 = 1;
+    const AIDER_RECORDS: usize = 1;
+    const AIDER_TOKENS: i64 = 250;
 
     let opencode = first
         .sources
@@ -1789,6 +1801,11 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .find(|entry| entry.source == Source::Crush.as_str())
         .unwrap();
+    let aider = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Aider.as_str())
+        .unwrap();
     assert_eq!(opencode.files_parsed, OPENCODE_FILES);
     assert_eq!(opencode.records_written, OPENCODE_RECORDS as u64);
     assert_eq!(cursor_agent.files_parsed, CURSOR_AGENT_FILES);
@@ -1833,6 +1850,8 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(codebuddy_ide.records_written, CODEBUDDY_IDE_RECORDS as u64);
     assert_eq!(crush.files_parsed, CRUSH_FILES);
     assert_eq!(crush.records_written, CRUSH_RECORDS as u64);
+    assert_eq!(aider.files_parsed, AIDER_FILES);
+    assert_eq!(aider.records_written, AIDER_RECORDS as u64);
 
     let opencode_rows: Vec<_> = stored
         .iter()
@@ -1922,6 +1941,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Crush)
         .collect();
+    let aider_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::Aider)
+        .collect();
     assert_eq!(opencode_rows.len(), OPENCODE_RECORDS);
     assert_eq!(cursor_agent_rows.len(), CURSOR_AGENT_RECORDS);
     assert_eq!(omp_rows.len(), OMP_RECORDS);
@@ -1944,6 +1967,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(openclaw_rows.len(), OPENCLAW_RECORDS);
     assert_eq!(codebuddy_ide_rows.len(), CODEBUDDY_IDE_RECORDS);
     assert_eq!(crush_rows.len(), CRUSH_RECORDS);
+    assert_eq!(aider_rows.len(), AIDER_RECORDS);
     assert_eq!(
         opencode_rows
             .iter()
@@ -2098,6 +2122,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
             .sum::<i64>(),
         CRUSH_TOKENS
     );
+    assert_eq!(
+        aider_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        AIDER_TOKENS
+    );
 
     let files = PREV_FILES
         + OPENCODE_FILES
@@ -2122,6 +2153,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + OPENCLAW_FILES
         + CODEBUDDY_IDE_FILES
         + CRUSH_FILES
+        + AIDER_FILES
         + QWEN_CHAT_FILES;
     let records = PREV_RECORDS
         + OPENCODE_RECORDS
@@ -2146,6 +2178,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + OPENCLAW_RECORDS
         + CODEBUDDY_IDE_RECORDS
         + CRUSH_RECORDS
+        + AIDER_RECORDS
         + QWEN_CHAT_RECORDS;
     let tokens = PREV_TOKENS
         + OPENCODE_TOKENS
@@ -2170,6 +2203,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + OPENCLAW_TOKENS
         + CODEBUDDY_IDE_TOKENS
         + CRUSH_TOKENS
+        + AIDER_TOKENS
         + QWEN_CHAT_TOKENS;
     assert_eq!(first.files_parsed, files);
     assert_eq!(first.records_written, records as u64);
@@ -2250,14 +2284,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 33);
+    assert_eq!(report.files_seen, 34);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 33);
+    assert_eq!(report.files_parsed, 34);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 58);
+    assert_eq!(report.records_written, 59);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 58);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 675911);
+    assert_eq!(stored.len(), 59);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 676161);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2301,7 +2335,8 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Factory
             | Source::Goose
             | Source::CodeBuddyIde
-            | Source::Crush => (1, 0, 1, 1, 0, 0),
+            | Source::Crush
+            | Source::Aider => (1, 0, 1, 1, 0, 0),
             Source::Qwen => (2, 0, 2, 2, 0, 0),
             Source::Agy => (1, 0, 1, 0, 0, 0),
             Source::Hermes | Source::Copilot => (1, 0, 1, 3, 0, 0),
@@ -2849,6 +2884,14 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     assert!(!crush.append_log, "Crush 会话库是 SQLite，不是追加型日志");
     assert_eq!(crush.path_env, "CRUSH_GLOBAL_DATA");
     assert_eq!(crush.coverage, "会话级 Token（含原生费用）");
+    let aider = usage_adapter(Source::Aider);
+    assert!(aider.append_log, "Aider analytics-log 是追加型 JSONL");
+    assert_eq!(aider.path_env, "AIDER_ANALYTICS_LOG");
+    assert_eq!(aider.coverage, "轮级 Token（含原生费用）");
+    assert!(
+        aider.detected.is_some(),
+        "Aider 必须用 analytics.jsonl 判定已检测，不能把 ~/.aider 目录存在当成已检测"
+    );
 }
 
 #[test]

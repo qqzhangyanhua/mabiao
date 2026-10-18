@@ -160,6 +160,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("cherry")).toBe("Cherry Studio");
     expect(sourceLabel("openclaw")).toBe("OpenClaw");
     expect(sourceLabel("crush")).toBe("Crush");
+    expect(sourceLabel("aider")).toBe("Aider");
   });
 
   it("always offers Cursor in the source filter list", () => {

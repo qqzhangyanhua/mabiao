@@ -16,6 +16,7 @@
 > **进度更新（2026-10-18）**：**OpenClaw**（`~/.openclaw/agents/*/sessions/*.jsonl`）已作为独立 Usage Source 接入。
 > **进度更新（2026-10-18）**：**CodeBuddy IDE**（`CodeBuddyExtension/Data/**/history/**/messages/*.json` 的累计 `statsSnapshot`）已作为独立 Usage Source 接入，品牌复用 CodeBuddy。
 > **进度更新（2026-10-18）**：**Crush**（`projects.json` 指向的各项目 `crush.db`）已作为独立 Usage Source 接入。
+> **进度更新（2026-10-18）**：**Aider**（只读用户 `--analytics-log` JSONL）已作为独立 Usage Source 接入，见「已实现」小节。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -110,6 +111,11 @@
 - **本机路径**：全局 `~/.local/share/crush/projects.json`（Windows `%LOCALAPPDATA%/crush`；`CRUSH_GLOBAL_DATA` 可覆盖）列出各项目 `data_dir`，用量在 `{data_dir}/crush.db`
 - **实现**：`src-tauri/src/adapters/crush.rs` + `conversation/crush.rs`，注册为 `Source::Crush`，coverage「会话级 Token（含原生费用）」；只入账 `parent_session_id` 为空的根会话；`prompt_tokens` / `completion_tokens`；`cost > 0` 写入 `native_cost`；模型取 `messages.model`；对话读 typed `parts`（text / reasoning / tool_call / tool_result）
 - **证据**：charmbracelet/crush `internal/projects/projects.go`、`internal/db/migrations/20250424200609_initial.sql`、`internal/db/sql/sessions.sql` 的 `ListSessions` / `UpdateSessionTitleAndUsage`
+### Aider ✅
+
+- **本机路径**：只读用户用 `--analytics-log` 主动打开的 JSONL。默认认 `~/.aider/analytics.jsonl`；`AIDER_ANALYTICS_LOG` 可覆盖。**不读、不写** `.aider.conf.yml`
+- **实现**：`src-tauri/src/adapters/aider.rs`，注册为 `Source::Aider`，coverage「轮级 Token（含原生费用）」；只收 `event=message_send`；跳过 `main_model` 为 `None` 或 `*/REDACTED`；`cost` 写入 `native_cost`。analytics JSONL 没有会话正文，对话目录为空
+- **证据**：Aider-AI/aider `aider/analytics.py` 的 `event()` 落盘格式，以及官方 `website/assets/sample-analytics.jsonl`
 
 ## Tier 3 — 本轮不投入
 

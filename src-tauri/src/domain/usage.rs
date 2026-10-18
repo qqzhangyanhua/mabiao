@@ -37,10 +37,11 @@ pub enum Source {
     Cherry,
     OpenClaw,
     Crush,
+    Aider,
 }
 
 impl Source {
-    pub const ALL: [Source; 32] = [
+    pub const ALL: [Source; 33] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -73,6 +74,7 @@ impl Source {
         Source::Cherry,
         Source::OpenClaw,
         Source::Crush,
+        Source::Aider,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -109,6 +111,7 @@ impl Source {
             Source::Cherry => "cherry",
             Source::OpenClaw => "openclaw",
             Source::Crush => "crush",
+            Source::Aider => "aider",
         }
     }
 
@@ -146,6 +149,7 @@ impl Source {
             Source::Cherry => "Cherry Studio",
             Source::OpenClaw => "OpenClaw",
             Source::Crush => "Crush",
+            Source::Aider => "Aider",
         }
     }
 
@@ -184,6 +188,7 @@ impl Source {
             Source::Cherry => Brand::Cherry,
             Source::OpenClaw => Brand::OpenClaw,
             Source::Crush => Brand::Crush,
+            Source::Aider => Brand::Aider,
         }
     }
 
@@ -222,6 +227,7 @@ impl Source {
             Source::Cherry => None,
             Source::OpenClaw => None,
             Source::Crush => None,
+            Source::Aider => None,
         }
     }
 
@@ -259,6 +265,7 @@ impl Source {
             "cherry" => Some(Source::Cherry),
             "openclaw" => Some(Source::OpenClaw),
             "crush" => Some(Source::Crush),
+            "aider" => Some(Source::Aider),
             _ => None,
         }
     }
