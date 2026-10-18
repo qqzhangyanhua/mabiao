@@ -1,0 +1,25 @@
+# cargo-audit 只认 CWD 下的 `.cargo/audit.toml`（CI 在 src-tauri 里跑）。
+# ignore 数组只能写 advisory ID；原因和复查日期写在注释里。
+#
+# 复查日期：2026-12-18。到期后先看 notify-rust / tauri-plugin-notification 是否已切 zbus 6，
+# 以及 Tauri 2 的 Linux GTK 栈是否离开 glib 0.18。
+
+[advisories]
+ignore = [
+    # RUSTSEC-2026-0370 / 0371 / 0372（2026-10-16）
+    # zvariant / zvariant_derive / zbus_names 已并进 zbus 6。本仓库经
+    # tauri-plugin-notification → notify-rust 4.18 → zbus 5.19 拉到这些独立 crate。
+    # 已试 notify-rust 4.18.2 与 tauri-plugin-notification 2.7.0，仍钉 zbus 5。
+    # 等上游切 zbus 6 再撤。
+    "RUSTSEC-2026-0370",
+    "RUSTSEC-2026-0371",
+    "RUSTSEC-2026-0372",
+
+    # RUSTSEC-2024-0370（2024-09-01）proc-macro-error 无人维护。
+    # 经 glib-macros 0.18.5 → glib 0.18.5 → gtk 0.18 → Tauri Linux 托盘/WebKit。
+    "RUSTSEC-2024-0370",
+
+    # RUSTSEC-2024-0429（2024-03-30）glib 0.18 VariantStrIter unsound。
+    # 同一条 GTK 0.18 链，Tauri 2.12 还没换栈。本应用不直接调用 VariantStrIter。
+    "RUSTSEC-2024-0429",
+]
