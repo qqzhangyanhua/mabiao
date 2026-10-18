@@ -1,0 +1,9 @@
+{
+  "id": "task-kilo-1",
+  "ts": 1760000000000,
+  "task": "Implement the adapter",
+  "tokensIn": 1700,
+  "tokensOut": 120,
+  "totalCost": 0.015,
+  "workspace": "/work/kilo"
+}

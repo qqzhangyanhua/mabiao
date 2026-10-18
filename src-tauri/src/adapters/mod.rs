@@ -16,6 +16,7 @@ pub mod gemini;
 pub mod goose;
 pub mod grok;
 pub mod hermes;
+pub mod kilo;
 pub mod kimi;
 pub mod omp;
 pub mod opencode;
@@ -469,6 +470,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         discover: roo::discover,
         sidecar_fingerprint: roo::sidecar_fingerprint,
         parse: roo::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::Kilo,
+        path_env: "KILO_TASKS_DIR",
+        scan_dirs: kilo::scan_dirs,
+        discover: kilo::discover,
+        sidecar_fingerprint: kilo::sidecar_fingerprint,
+        parse: kilo::parse,
         prepare_dir: None,
         prepare_file: None,
         append_log: false,

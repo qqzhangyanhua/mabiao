@@ -270,6 +270,23 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");
     std::fs::create_dir_all(agy.parent().unwrap()).unwrap();
     std::fs::write(&agy, b"").unwrap();
+    let kilo = home.join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks/task-kilo-1");
+    std::fs::create_dir_all(&kilo).unwrap();
+    std::fs::write(
+        kilo.join("ui_messages.json"),
+        fixture("kilo.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        kilo.join("api_conversation_history.json"),
+        fixture("kilo.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        kilo.join("history_item.json"),
+        fixture("kilo.history_item.json"),
+    )
+    .unwrap();
     let cline_manifest = home.join(".cline/data/sessions/sess-cline-1/sess-cline-1.json");
     std::fs::create_dir_all(cline_manifest.parent().unwrap()).unwrap();
     std::fs::write(&cline_manifest, fixture("cline.manifest.json")).unwrap();

@@ -29,6 +29,7 @@ export const SOURCE_SLUGS = [
   "trae",
   "goose",
   "roo",
+  "kilo",
 ] as const;
 
 /** 官方额度提供方 slug，顺序与 `OfficialQuotaProvider::ALL` 一致。 */
@@ -70,6 +71,7 @@ export const BRAND_IDS = [
   "trae",
   "goose",
   "roo",
+  "kilo",
 ] as const;
 
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
@@ -99,6 +101,7 @@ export const DISPLAY_NAMES = {
   trae: "Trae CLI",
   goose: "Goose",
   roo: "Roo Code",
+  kilo: "Kilo Code",
   cursor: "Cursor",
   droid: "Droid",
   antigravity: "Antigravity",
@@ -132,6 +135,7 @@ export const BRAND_BY_SLUG = {
   trae: "trae",
   goose: "goose",
   roo: "roo",
+  kilo: "kilo",
   cursor: "cursor",
   droid: "factory",
   antigravity: "agy",
@@ -165,6 +169,7 @@ export const RESUME_TEMPLATES = {
   trae: "traex resume {id}",
   goose: "goose session --resume --session-id {id}",
   roo: null,
+  kilo: null,
 } as const;
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];
