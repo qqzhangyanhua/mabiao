@@ -53,6 +53,7 @@ export const QUOTA_SOURCE_IDS = [
   "kilo",
   "workbuddy",
   "codebuddy",
+  "codebuddy_ide",
   "zcode",
   "alma",
   "trae",

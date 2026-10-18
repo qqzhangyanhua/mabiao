@@ -27,6 +27,7 @@ const KNOWN_SOURCES = [
   "zcode",
   "alma",
   "codebuddy",
+  "codebuddy_ide",
   "trae",
   "goose",
   "roo",

@@ -656,3 +656,13 @@ fn openclaw_event_index_matches_full_parse() {
     refresh_source(&conn, home, Source::OpenClaw);
     assert_conversation_index_matches_parse(&conn, home, "openclaw", "sess-openclaw-1");
 }
+
+#[test]
+fn codebuddy_ide_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_codebuddy_ide_home(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::CodeBuddyIde);
+    assert_conversation_index_matches_parse(&conn, home, "codebuddy_ide", "conv-ide-1");
+}

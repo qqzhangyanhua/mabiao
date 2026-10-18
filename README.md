@@ -33,6 +33,7 @@
 | Zed | ✅ | ❌ | `threads.db` 的 zstd/json 线程；累计大于 per-request map 时补 remainder |
 | Cherry Studio | ✅ | ✅ | sqlite `ai_usage_record`；仅 USD 费用 |
 | OpenClaw | ✅ | ✅ | jsonl `agents/*/sessions`；自带 `usage.cost.total` |
+| CodeBuddy IDE | ✅ | ❌ | `CodeBuddyExtension/Data` 会话累计 `statsSnapshot`；积分不当美元 |
 | Factory / droid | ✅ | ❌ | 会话累计（jsonl 有 usage 则轮级）；模型名来自 settings，子代理并入父会话 |
 | Cursor | ⚠️ | ❌ | 代码量 + 账号级用量（读本机客户端登录态） |
 | cursor-agent | ⚠️ | ❌ | Token 仅在包装落盘后可读 |

@@ -1,0 +1,6 @@
+{
+  "role": "user",
+  "id": "u1",
+  "createdAt": "2026-07-01T06:58:18.147Z",
+  "message": "{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"<user_info>\\nWorkspace Folder: /work/cb-ide\\n</user_info>\\n\\n<user_query>\\nDraft the buddy notes\\n</user_query>\"}]}"
+}

@@ -1482,6 +1482,9 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::CodeBuddy.application_name(), "CodeBuddy");
     assert_eq!(Source::CodeBuddy.as_str(), "codebuddy");
     assert_eq!(Source::parse("codebuddy"), Some(Source::CodeBuddy));
+    assert_eq!(Source::CodeBuddyIde.application_name(), "CodeBuddy IDE");
+    assert_eq!(Source::CodeBuddyIde.as_str(), "codebuddy_ide");
+    assert_eq!(Source::parse("codebuddy_ide"), Some(Source::CodeBuddyIde));
     assert_eq!(Source::Trae.application_name(), "Trae CLI");
     assert_eq!(Source::Trae.as_str(), "trae");
     assert_eq!(Source::parse("trae"), Some(Source::Trae));
@@ -3137,6 +3140,42 @@ fn openclaw_discover_counts_reset_archives_and_skips_checkpoints() {
     assert!(!found.contains(&bak));
     assert!(!found.contains(&checkpoint));
     assert!(!found.contains(&trajectory));
+}
+
+#[test]
+fn codebuddy_ide_adapter_reads_latest_stats_snapshot_and_ignores_credits() {
+    let dir = tempfile::tempdir().unwrap();
+    write_codebuddy_ide_home(dir.path());
+    let conversation = dir
+        .path()
+        .join(".config/CodeBuddyExtension/Data/acct/CodeBuddyIDE/ws/history/sess-ide-1/conv-ide-1");
+    let records = codebuddy_ide::parse(&conversation, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::CodeBuddyIde);
+    assert_eq!(records[0].session_id, "conv-ide-1");
+    assert_eq!(records[0].project, "/work/cb-ide");
+    assert_eq!(records[0].model, "deepseek-v4-flash");
+    assert_eq!(records[0].input_tokens, 200);
+    assert_eq!(records[0].output_tokens, 30);
+    assert_eq!(records[0].cache_read_tokens, 50);
+    assert_eq!(records[0].cache_creation_tokens, 0);
+    assert_eq!(records[0].reasoning_tokens, 10);
+    assert_eq!(records[0].total_tokens, 290);
+    assert_eq!(records[0].native_cost, None);
+}
+
+#[test]
+fn codebuddy_ide_adapter_skips_conversation_without_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let messages = dir.path().join("history/sess/conv-no-model/messages");
+    std::fs::create_dir_all(&messages).unwrap();
+    std::fs::write(
+        messages.join("msg-0.json"),
+        r#"{"role":"assistant","createdAt":"2026-07-01T06:58:36.818Z","message":"{}","extra":"{\"statsSnapshot\":{\"cacheMissTokens\":10,\"lastOutputTokens\":2}}"}"#,
+    )
+    .unwrap();
+    let records = codebuddy_ide::parse(messages.parent().unwrap(), dir.path()).unwrap();
+    assert!(records.is_empty());
 }
 
 #[test]

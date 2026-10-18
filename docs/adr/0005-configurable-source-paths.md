@@ -33,6 +33,7 @@
 | ZCode | `ZCODE_HOME` | `~/.zcode`（扫 `cli/db/db.sqlite`） |
 | Alma | `ALMA_HOME` | Electron `userData`/`alma`：Linux `~/.config/alma`、macOS `~/Library/Application Support/alma`、Windows `%APPDATA%/alma`（扫 `chat_threads.db`；不是 `~/.local/share/alma`） |
 | CodeBuddy | `CODEBUDDY_DIR` | `~/.codebuddy`（扫 `projects/`） |
+| CodeBuddy IDE | `CODEBUDDY_IDE_DIR` | `CodeBuddyExtension/Data`（Linux `~/.config`、macOS Application Support、Windows `%APPDATA%` 与 `%LOCALAPPDATA%`；扫 `history/**/messages/*.json`） |
 | Trae CLI | `TRAE_HOME` | `~/.trae`（扫 `cli/sessions/` 与 `cli/archived_sessions/` 下 `*.jsonl` 与 `*.jsonl.zst`） |
 | Goose | `GOOSE_PATH_ROOT` | 覆盖时扫 `<root>/data/sessions/sessions.db`；默认扫 `~/.local/share/goose/sessions`、macOS Application Support、以及 Block 旧路径 |
 | Roo Code | `ROO_TASKS_DIR` | 覆盖时直接扫该目录（应指向 `…/tasks`）；默认扫 VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae 以及 vscode-server 的 `User/globalStorage/rooveterinaryinc.roo-cline/tasks` |

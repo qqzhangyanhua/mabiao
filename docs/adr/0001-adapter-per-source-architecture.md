@@ -1,8 +1,9 @@
 # 每个采集源一个适配器（Adapter-per-Source）
 
-> **后续说明**：`Source` 枚举的权威名单是 `domain::Source::ALL`（当前 30 个 Usage Source，含 Hermes / Copilot / Antigravity / Qoder / Qoder CN / Cline / WorkBuddy / ZCode / CodeBuddy / Trae / Goose / Roo Code / Kilo Code / Amp / Zed / Cherry Studio / OpenClaw 等）。下文举例里的 Cursor **不是** Usage Source 变体：Cursor 走代码量 / 账号用量 / 会话等独立维度。
+> **后续说明**：`Source` 枚举的权威名单是 `domain::Source::ALL`（当前 31 个 Usage Source，含 Hermes / Copilot / Antigravity / Qoder / Qoder CN / Cline / WorkBuddy / ZCode / CodeBuddy / CodeBuddy IDE / Trae / Goose / Roo Code / Kilo Code / Amp / Zed / Cherry Studio / OpenClaw 等）。下文举例里的 Cursor **不是** Usage Source 变体：Cursor 走代码量 / 账号用量 / 会话等独立维度。
 
-本机使用的 AI 编程 CLI 当前有 **30 个 Usage Source**（权威名单：`domain::Source::ALL`）：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn、cline、workbuddy、zcode、alma、codebuddy、trae、goose、roo、kilo、amp、zed、cherry、openclaw。各工具的本地存储格式高度异构：jsonl、zstd 压缩 jsonl、sqlite、每消息一个 json 文件；token 字段的命名与结构也各不相同。
+本机使用的 AI 编程 CLI 当前有 **31 个 Usage Source**（权威名单：`domain::Source::ALL`）：codex、claude、pi、omp、dsh、opencode、kimi、gemini、grok、qwen、factory、cursor_agent、copilot、hermes、agy、qoder、qoder_cn、cline、workbuddy、zcode、alma、codebuddy、codebuddy_ide、trae、goose、roo、kilo、amp、zed、cherry、openclaw。各工具的本地存储格式高度异构：jsonl、zstd 压缩 jsonl、sqlite、每消息一个 json 文件；token 字段的命名与结构也各不相同。
+
 
 **Cursor**（代码量 / 账号用量 / 会话 / 对话记录）**不是** `Source` 变体，走独立维度，见 ADR 0006 / 0007 / 0011 与 CONTEXT.md。
 
