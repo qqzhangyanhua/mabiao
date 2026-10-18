@@ -269,6 +269,9 @@ fn row_note(source: Source) -> String {
         Source::OpenClaw => {
             "扫 agents/*/sessions 下 jsonl（含 .reset / .deleted 归档，跳过 checkpoint / bak / trajectory）。OPENCLAW_STATE_DIR 覆盖状态根并拼 agents；未覆盖时另扫 ~/.clawdbot。".to_string()
         }
+        Source::CodeBuddyIde => {
+            "扫 CodeBuddyExtension/Data 下 history/*/messages/*.json 的累计 statsSnapshot。CODEBUDDY_IDE_DIR 覆盖 Data 根。".to_string()
+        }
         _ => String::new(),
     }
 }

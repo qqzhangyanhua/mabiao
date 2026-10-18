@@ -14,6 +14,7 @@
 > **进度更新（2026-10-18）**：**Zed**（`threads.db` 的 zstd/json 线程 blob）已作为独立 Usage Source 接入，见「已实现」小节。原 Tier 3「本机未安装」结论被上游源码与 codeburn 口径推翻。
 > **进度更新（2026-10-18）**：**Cherry Studio**（Electron userData `cherrystudio.sqlite` 的 `ai_usage_record`）已作为独立 Usage Source 接入；原 Tier 3「IndexedDB」结论过时，v2 已落 sqlite。
 > **进度更新（2026-10-18）**：**OpenClaw**（`~/.openclaw/agents/*/sessions/*.jsonl`）已作为独立 Usage Source 接入。
+> **进度更新（2026-10-18）**：**CodeBuddy IDE**（`CodeBuddyExtension/Data/**/history/**/messages/*.json` 的累计 `statsSnapshot`）已作为独立 Usage Source 接入，品牌复用 CodeBuddy。
 
 **排序方法论**：以「实现成本 / 数据形态可行性」（ROI）为主轴排序，而不是先按业务重要性或竞品对齐程度排。数据形态越接近「结构化字段」越优先；需要逆向 Electron LevelDB/IndexedDB 的一律放到不投入档。
 
@@ -94,11 +95,15 @@
 
 - **本机路径**：Electron userData `cherrystudio.sqlite`（Linux `~/.config/{CherryStudio,Cherry Studio}`，macOS Application Support，Windows `%APPDATA%`）；`CHERRY_STUDIO_DATA_DIR` 覆盖 userData 根
 - **实现**：`src-tauri/src/adapters/cherry.rs` + `conversation/cherry.rs`，注册为 `Source::Cherry`，coverage「轮级 Token（input 不含 cache）」；读 v2 `ai_usage_record`（PR CherryHQ/cherry-studio#15992）；优先 `no_cache_tokens`，否则从 `input_tokens` 拆 cache；`cost_currency = USD` 才入 `native_cost`；无模型名跳过。对话读 `topic` + `message`（AI SDK `parts`；`role = root` 与 `deleted_at` 非空不进目录）
-        ),
+
 ### OpenClaw ✅
 
 - **本机路径**：`$OPENCLAW_STATE_DIR/agents/<agent>/sessions/`（默认 `~/.openclaw`，另扫 `~/.clawdbot`）
 - **实现**：`src-tauri/src/adapters/openclaw.rs` + `conversation/openclaw.rs`，注册为 `Source::OpenClaw`，coverage「轮级 Token（input 不含 cache）」；assistant `message.usage` 的 input/output/cacheRead/cacheWrite/reasoningTokens；`cost.total > 0` 写入 `native_cost`；含 `.jsonl.reset.*` / `.jsonl.deleted.*`；跳过 compaction checkpoint、`.bak`、trajectory、`delivery-mirror`
+### CodeBuddy IDE ✅
+
+- **本机路径**：`CodeBuddyExtension/Data/**/history/<session>/<conversation>/messages/*.json`（Linux `~/.config`、macOS Application Support、Windows `%APPDATA%` / `%LOCALAPPDATA%`）；`CODEBUDDY_IDE_DIR` 覆盖 Data 根
+- **实现**：`src-tauri/src/adapters/codebuddy_ide.rs` + `conversation/codebuddy_ide.rs`，注册为 `Source::CodeBuddyIde`，coverage「会话级 Token（input 不含 cache）」；每会话取最新 `statsSnapshot`（`cacheMissTokens` / `cachedInputTokens` / `lastOutputTokens` / `thinkingTokens`）；`credit` 是积分，不写入 `native_cost`
 
 ## Tier 3 — 本轮不投入
 
@@ -106,7 +111,6 @@
 |---|---|
 | Windsurf | 同上，`Session Storage` 是 LevelDB；`User/workspaceStorage` 下没找到独立于 VS Code 标准结构的 AI 对话文件 |
 | Trae CN / Trae IDE | IDE 会话在 SQLCipher 加密库里，国际版用量走云端 API；**Trae CLI**（`~/.trae/cli/sessions` Codex rollout）已作为独立 Usage Source 接入 |
-| CodeBuddy IDE | `CodeBuddyExtension/Data/Public/auth` 只有鉴权数据，没有会话数据。**CodeBuddy CLI**（`~/.codebuddy/projects/**/*.jsonl`）已作为独立 Usage Source 接入 |
 | Antigravity 本地 transcript | 同上，`Session Storage`/`blob_storage` 是 LevelDB（注意：Antigravity 的**官方额度**已经作为 `OfficialQuotaProvider` 接入，这里指的是本机会话明细，是另一件事） |
 | Zed | 已作为独立 Usage Source 接入（`adapters/zed.rs`，读 `threads.db`） |
 

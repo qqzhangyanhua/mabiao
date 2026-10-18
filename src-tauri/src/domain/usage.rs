@@ -27,6 +27,7 @@ pub enum Source {
     Zcode,
     Alma,
     CodeBuddy,
+    CodeBuddyIde,
     Trae,
     Goose,
     Roo,
@@ -38,7 +39,7 @@ pub enum Source {
 }
 
 impl Source {
-    pub const ALL: [Source; 30] = [
+    pub const ALL: [Source; 31] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -61,6 +62,7 @@ impl Source {
         Source::Zcode,
         Source::Alma,
         Source::CodeBuddy,
+        Source::CodeBuddyIde,
         Source::Trae,
         Source::Goose,
         Source::Roo,
@@ -95,6 +97,7 @@ impl Source {
             Source::Zcode => "zcode",
             Source::Alma => "alma",
             Source::CodeBuddy => "codebuddy",
+            Source::CodeBuddyIde => "codebuddy_ide",
             Source::Trae => "trae",
             Source::Goose => "goose",
             Source::Roo => "roo",
@@ -130,6 +133,7 @@ impl Source {
             Source::Zcode => "ZCode",
             Source::Alma => "Alma",
             Source::CodeBuddy => "CodeBuddy",
+            Source::CodeBuddyIde => "CodeBuddy IDE",
             Source::Trae => "Trae CLI",
             Source::Goose => "Goose",
             Source::Roo => "Roo Code",
@@ -166,6 +170,7 @@ impl Source {
             Source::Zcode => Brand::Zcode,
             Source::Alma => Brand::Alma,
             Source::CodeBuddy => Brand::CodeBuddy,
+            Source::CodeBuddyIde => Brand::CodeBuddy,
             Source::Trae => Brand::Trae,
             Source::Goose => Brand::Goose,
             Source::Roo => Brand::Roo,
@@ -202,6 +207,7 @@ impl Source {
             Source::Zcode => None,
             Source::Alma => None,
             Source::CodeBuddy => Some("codebuddy --resume {id}"),
+            Source::CodeBuddyIde => None,
             Source::Trae => Some("traex resume {id}"),
             Source::Goose => Some("goose session --resume --session-id {id}"),
             Source::Roo => None,
@@ -237,6 +243,7 @@ impl Source {
             "zcode" => Some(Source::Zcode),
             "alma" => Some(Source::Alma),
             "codebuddy" => Some(Source::CodeBuddy),
+            "codebuddy_ide" => Some(Source::CodeBuddyIde),
             "trae" => Some(Source::Trae),
             "goose" => Some(Source::Goose),
             "roo" => Some(Source::Roo),

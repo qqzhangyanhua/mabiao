@@ -1,0 +1,7 @@
+{
+  "role": "assistant",
+  "id": "a-final",
+  "createdAt": "2026-07-01T06:58:36.818Z",
+  "message": "{}",
+  "extra": "{\"modelId\":\"deepseek-v4-flash\",\"lastStepInputTokens\":250,\"lastStepOutputTokens\":30,\"lastStepCachedInputTokens\":50,\"statsSnapshot\":{\"cachedInputTokens\":50,\"cacheWriteTokens\":0,\"cacheMissTokens\":200,\"thinkingTokens\":10,\"lastOutputTokens\":30,\"credit\":1.5}}"
+}

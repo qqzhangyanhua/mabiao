@@ -18,6 +18,7 @@ mod cherry;
 mod claude;
 mod cline;
 mod codebuddy;
+mod codebuddy_ide;
 mod codex;
 mod context_cache;
 mod context_content;
@@ -366,6 +367,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: codebuddy::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::CodeBuddyIde,
+        discover: codebuddy_ide::discover,
+        index: codebuddy_ide::index,
+        index_suffix: None,
+        detail: codebuddy_ide::detail,
+        revision: codebuddy_ide::source_revision,
+        raw_extension: None,
         reuse_unchanged_index: true,
     },
     ConversationAdapter {

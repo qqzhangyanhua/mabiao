@@ -5,6 +5,7 @@ pub mod cherry;
 pub mod claude;
 pub mod cline;
 pub mod codebuddy;
+pub mod codebuddy_ide;
 pub mod codex;
 pub mod copilot;
 pub mod cursor;
@@ -434,6 +435,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::CodeBuddyIde,
+        path_env: "CODEBUDDY_IDE_DIR",
+        scan_dirs: codebuddy_ide::scan_dirs,
+        discover: codebuddy_ide::discover,
+        sidecar_fingerprint: codebuddy_ide::sidecar_fingerprint,
+        parse: codebuddy_ide::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "会话级 Token（input 不含 cache）",
         display_dirs: None,
         detected: None,
     },

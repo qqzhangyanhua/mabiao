@@ -150,6 +150,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("zcode")).toBe("ZCode");
     expect(sourceLabel("alma")).toBe("Alma");
     expect(sourceLabel("codebuddy")).toBe("CodeBuddy");
+    expect(sourceLabel("codebuddy_ide")).toBe("CodeBuddy IDE");
     expect(sourceLabel("trae")).toBe("Trae CLI");
     expect(sourceLabel("goose")).toBe("Goose");
     expect(sourceLabel("roo")).toBe("Roo Code");

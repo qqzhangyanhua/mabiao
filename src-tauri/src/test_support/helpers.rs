@@ -275,6 +275,7 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     super::write_default_goose_home(home);
     super::write_default_zed_home(home);
     super::write_default_cherry_home(home);
+    write_codebuddy_ide_home(home);
     // agy 全量摄取夹具仍放空 `.db`：接通发现 / 检测 / 对账，解析降级为空记录。
     let agy =
         home.join(".gemini/antigravity-cli/conversations/00000000-0000-4000-8000-000000000001.db");
@@ -337,6 +338,19 @@ fn write_opencode_fixture_db(home: &std::path::Path) {
         )
         .unwrap();
     }
+}
+
+pub fn write_codebuddy_ide_home(home: &std::path::Path) {
+    let dir = home.join(
+        ".config/CodeBuddyExtension/Data/acct/CodeBuddyIDE/ws/history/sess-ide-1/conv-ide-1/messages",
+    );
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("msg-0.json"), fixture("codebuddy-ide-user.json")).unwrap();
+    std::fs::write(
+        dir.join("msg-1.json"),
+        fixture("codebuddy-ide-assistant.json"),
+    )
+    .unwrap();
 }
 
 fn write_zcode_fixture_db(home: &std::path::Path) {

@@ -33,6 +33,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. Scan root
 | Zed | ✅ | ❌ | `threads.db` zstd/json threads; remainder tops the per-request map up to cumulative |
 | Cherry Studio | ✅ | ✅ | sqlite `ai_usage_record`; USD cost only |
 | OpenClaw | ✅ | ✅ | jsonl `agents/*/sessions`; native `usage.cost.total` |
+| CodeBuddy IDE | ✅ | ❌ | conversation-level `statsSnapshot` under `CodeBuddyExtension/Data`; credits are not USD |
 | Factory / droid | ✅ | ❌ | Session totals; model from settings; subagents merge into parent |
 | Cursor | ⚠️ | ❌ | Code volume + account usage (reads the local client's login state) |
 | cursor-agent | ⚠️ | ❌ | Tokens only after a wrapper writes them to disk |
