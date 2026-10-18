@@ -1,6 +1,8 @@
-# 来源覆盖扩展路线图
+# 来源覆盖扩展路线图（历史 probe）
 
-> 背景：CodexBar / CodeBurn / Token Monitor / TokenTracker 等竞品已扫描的来源里，本项目还没有覆盖或覆盖很弱的有 OpenClaw、Zed、Antigravity 本地 transcript、Cline/Roo/Kilo、Cherry Studio、Qoder CN、Windsurf；国内向的有 CodeBuddy/WorkBuddy/ZCode/Trae CN。另外已接入的 qwen/gemini/factory/copilot 四个来源字段有残缺。本文档记录一次本机 probe 后的优先级排序，供后续排期实现。
+> **这不是现状表。** 当前已适配 35 个 Usage Source，完整名单与口径见 [`CONTEXT.md`](../CONTEXT.md)。
+>
+> 本文保留 2026-09-02 对本机 `~` 的一次性 probe 与当时的优先级判断。开头提到的 OpenClaw / Zed / Windsurf / Roo / Kilo 等「还没有覆盖」是当时的结论，其后的进度更新已把多数项标成已实现。新来源请按 `docs/agent-layers.md` 的 Adapter 节做，不要把本页当待办清单。
 >
 > **进度更新（2026-09-03）**：原 Tier 1 第一名 **Hermes 已实现并合并**（PR #145，`adapters/hermes.rs` + `USAGE_ADAPTERS` 表 `Source::Hermes`，coverage「模型级 Token（含原生费用）」），已从下方待新增列表移除，见「已实现」小节。当前 Tier 1 待新增顺序为 VS Code 系 Cline/Roo/Kilo → ZCode → WorkBuddy。
 >

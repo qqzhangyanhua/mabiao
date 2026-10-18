@@ -18,7 +18,7 @@
 
 ## 支持的来源
 
-码表扫的是本机目录，不代替各家官方仪表盘。路径可在设置页填写绝对路径，也可用环境变量覆盖（设置页优先），详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。
+码表扫的是本机目录，不代替各家官方仪表盘。**完整 35 个 Usage Source 名单、默认路径与口径见 [`CONTEXT.md`](CONTEXT.md)**。路径可在设置页填写绝对路径，也可用环境变量覆盖（设置页优先），详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。下表是摘要，不是完备清单。
 
 | 来源 | 本机 Token | 本机费用 | 说明 |
 |------|:---:|:---:|------|
@@ -41,6 +41,15 @@
 | cursor-agent | ⚠️ | ❌ | Token 仅在包装落盘后可读 |
 | qwen | ✅ | ❌ | |
 | Amp | ✅ | ❌ | `threads/*.json`；credits 不是美元 |
+| Roo Code | ✅ | ✅ | VS Code 系 `ui_messages.json`；自带 `cost`（假定 USD） |
+| Kilo Code | ✅ | ✅ | 与 Roo 同形；`usageMissing` 跳过 |
+| Warp | ✅ | ❌ | `warp.sqlite` 会话总量；credits 不是美元 |
+| Windsurf | ✅ | ❌ | ACP `usage_update` ndjson；不读加密 Cascade |
+| Qoder / Qoder CN | ✅ | ✅ | Claude Code 形态；自带 `costUSD` |
+| Cline | ✅ | ✅ | CLI `messages.json`；自带 `metrics.cost` |
+| Goose | ✅ | ❌ | `sessions.db` 会话累计；`hidden` 不入账 |
+| Trae CLI | ✅ | ❌ | Codex rollout 形态；含 jsonl.zst |
+| WorkBuddy / ZCode / Alma / CodeBuddy | ✅ | 视来源 | 见 CONTEXT.md |
 
 口径、默认路径与限制见 [`CONTEXT.md`](CONTEXT.md)。
 
