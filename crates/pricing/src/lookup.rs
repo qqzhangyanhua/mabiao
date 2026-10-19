@@ -1,5 +1,6 @@
 //! 价目查找：精确匹配（model+provider，再 model 且 provider 为空），然后对本机记录做
-//! 确定性归一（去掉厂商前缀与末尾日期），可选签名模糊匹配（仅 Cursor 账号用量）。
+//! 确定性归一（去掉厂商前缀与末尾日期，版本 token `4-5` → `4.5`），可选签名模糊匹配
+//! （仅 Cursor 账号用量）。
 
 use std::collections::HashMap;
 
@@ -63,6 +64,7 @@ pub fn find_price<'a>(
 ) -> Option<&'a PriceEntry> {
     let stripped = strip_vendor_affixes(model);
     let canonical = strip_trailing_date_suffix(&stripped);
+    let versioned = normalize_version_hyphens(&canonical);
     lookup_price(model, provider, prices)
         .or_else(|| {
             if stripped != model {
@@ -74,6 +76,13 @@ pub fn find_price<'a>(
         .or_else(|| {
             if canonical != model && canonical != stripped {
                 lookup_price(&canonical, provider, prices)
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            if versioned != model && versioned != stripped && versioned != canonical {
+                lookup_price(&versioned, provider, prices)
             } else {
                 None
             }
@@ -313,6 +322,17 @@ fn strip_vendor_affixes(model: &str) -> String {
         tokens.remove(0);
     }
     tokens.join("-")
+}
+
+/// 把相邻的短数字版本 token 收成点分形式：`claude-4-5-sonnet` → `claude-4.5-sonnet`。
+/// 只改查找键，不改消耗记录里的模型名。`gpt-4-turbo` 不会被收成 `gpt.4.turbo`。
+fn normalize_version_hyphens(model: &str) -> String {
+    let tokens: Vec<String> = model
+        .split('-')
+        .filter(|token| !token.is_empty())
+        .map(ToOwned::to_owned)
+        .collect();
+    merge_version_tokens(tokens).join("-")
 }
 
 /// 只剥末尾的 8 位日期（`claude-sonnet-4-6-20250929`）。不剥 `gpt-4o-2024-08-06` 里的 4 位年份。

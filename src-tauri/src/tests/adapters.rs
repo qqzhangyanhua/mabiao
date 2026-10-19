@@ -3365,6 +3365,10 @@ fn warp_adapter_reads_model_token_totals_and_skips_empty_models() {
     assert_eq!(records[0].input_tokens, 250);
     assert_eq!(records[0].output_tokens, 0);
     assert_eq!(records[0].total_tokens, 250);
+    assert!(
+        records[0].native_cost.is_none(),
+        "Warp credits_spent 不是美元，不得写入 native_cost"
+    );
 }
 
 #[test]

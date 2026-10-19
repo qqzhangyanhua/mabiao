@@ -415,6 +415,25 @@ mod tests {
     }
 
     #[test]
+    fn warp_hyphen_version_matches_litellm_dot_key() {
+        // Warp fixture 模型名是 claude-4-5-sonnet；LiteLLM 快照键是 claude-4.5-sonnet。
+        let prices = table(vec![entry(
+            "claude-4.5-sonnet",
+            None,
+            3e-6,
+            PriceOrigin::Snapshot,
+        )]);
+        let priced = price_usage(usage("claude-4-5-sonnet", "warp", None), &prices, false);
+        assert_eq!(priced.basis, PricingBasis::Fallback);
+        assert_eq!(priced.derived.cost_source, CostSource::Snapshot);
+        assert!((priced.derived.amount.unwrap() - 3e-5).abs() < 1e-12);
+        let already_dotted = price_usage(usage("claude-4.5-sonnet", "", None), &prices, false);
+        assert_eq!(already_dotted.basis, PricingBasis::Fallback);
+        let turbo = price_usage(usage("gpt-4-turbo", "", None), &prices, false);
+        assert_eq!(turbo.basis, PricingBasis::Unpriced);
+    }
+
+    #[test]
     fn dated_table_key_still_wins_over_stripped_generic() {
         let prices = table(vec![
             entry("claude-3-5-sonnet", None, 1.0, PriceOrigin::Snapshot),
