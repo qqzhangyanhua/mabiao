@@ -40,6 +40,7 @@ export function ConversationCatalog({
   onOpen,
   onSummarize,
   onViewSummary,
+  sources,
 }: {
   searchInput: string;
   onSearchInput: (value: string) => void;
@@ -59,6 +60,7 @@ export function ConversationCatalog({
   onOpen: (row: ConversationSessionRow) => void;
   onSummarize: (row: ConversationSessionRow) => void;
   onViewSummary: (row: ConversationSessionRow) => void;
+  sources: string[];
 }) {
   const { rows, total } = pageData;
   const pageCount = Math.max(1, Math.ceil(total / CATALOG_PAGE_SIZE));
@@ -70,6 +72,7 @@ export function ConversationCatalog({
     searching,
     query: search,
     indexIncomplete,
+    sources,
   });
 
   return (

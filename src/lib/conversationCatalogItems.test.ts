@@ -52,6 +52,36 @@ describe("conversationCatalogItems", () => {
 });
 
 describe("conversationCatalogEmptyCopy", () => {
+  it("explains that aider / warp / windsurf have no local conversation body", () => {
+    expect(
+      conversationCatalogEmptyCopy({
+        searching: false,
+        query: "",
+        indexIncomplete: false,
+        sources: ["aider", "warp"],
+      }),
+    ).toEqual({
+      title: "该来源没有本机会话正文",
+      hint: "Aider / Warp / Windsurf 只记消耗，本机不存对话正文，目录为空是预期。",
+    });
+    expect(
+      conversationCatalogEmptyCopy({
+        searching: false,
+        query: "",
+        indexIncomplete: false,
+        sources: ["aider", "claude"],
+      }).title,
+    ).toBe("当前条件下暂无对话记录");
+    expect(
+      conversationCatalogEmptyCopy({
+        searching: false,
+        query: "",
+        indexIncomplete: false,
+        sources: [],
+      }).title,
+    ).toBe("当前条件下暂无对话记录");
+  });
+
   it("does not tell users to shorten a query that already cannot search bodies", () => {
     expect(
       conversationCatalogEmptyCopy({
