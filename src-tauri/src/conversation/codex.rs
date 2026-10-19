@@ -92,7 +92,7 @@ pub(super) fn index_suffix_as(
     })
 }
 
-fn is_codex_zst(path: &Path) -> bool {
+pub(super) fn is_codex_zst(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.ends_with(".jsonl.zst"))
