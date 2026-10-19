@@ -2977,6 +2977,26 @@ fn amp_adapter_empty_ledger_object_falls_back_to_messages() {
 }
 
 #[test]
+fn amp_adapter_empty_ledger_events_falls_back_to_messages() {
+    let content = r#"{
+      "id": "T-thread-a",
+      "usageLedger": {"events": []},
+      "messages": [
+        {"role": "assistant", "usage": {
+          "model": "claude-haiku-4-5-20251001",
+          "inputTokens": 10,
+          "outputTokens": 178,
+          "timestamp": "2026-01-19T11:42:10.652Z"
+        }}
+      ]
+    }"#;
+    let records = amp::parse_thread(content, "/tmp/T-thread-a.json");
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 10);
+    assert_eq!(records[0].output_tokens, 178);
+}
+
+#[test]
 fn amp_adapter_ledger_takes_precedence_and_skips_missing_model() {
     let content = r#"{
       "id": "thread-a",
