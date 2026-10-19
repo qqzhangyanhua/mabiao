@@ -156,13 +156,9 @@ fn parse_conversation(path: &Path) -> Result<Option<UsageRecord>, String> {
     );
     let cache_write = json_number(&snapshot, "cacheWriteTokens");
     let reasoning = json_number(&snapshot, "thinkingTokens");
-    let model = extra
-        .get("modelId")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|model| !model.is_empty())
-        .unwrap_or("")
-        .to_string();
+    let model = model_id_of(extra)
+        .or_else(|| latest_model_id(&messages))
+        .unwrap_or_default();
     if model.is_empty() {
         return Ok(None);
     }
@@ -195,8 +191,12 @@ fn parse_conversation(path: &Path) -> Result<Option<UsageRecord>, String> {
 fn read_messages(conversation: &Path) -> Result<Vec<ParsedMessage>, String> {
     let mut parsed = Vec::new();
     for path in message_json_files(&messages_dir(conversation))? {
-        let bytes = fs::read(&path).map_err(|error| error.to_string())?;
-        let value: Value = serde_json::from_slice(&bytes).map_err(|error| error.to_string())?;
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            continue;
+        };
         let role = value
             .get("role")
             .and_then(Value::as_str)
@@ -224,6 +224,23 @@ fn read_messages(conversation: &Path) -> Result<Vec<ParsedMessage>, String> {
         });
     }
     Ok(parsed)
+}
+
+fn model_id_of(extra: &Value) -> Option<String> {
+    extra
+        .get("modelId")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|model| !model.is_empty())
+        .map(str::to_string)
+}
+
+fn latest_model_id(messages: &[ParsedMessage]) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .filter(|message| message.role == "assistant")
+        .find_map(|message| model_id_of(&message.extra))
 }
 
 fn latest_usage(messages: &[ParsedMessage]) -> Option<&ParsedMessage> {

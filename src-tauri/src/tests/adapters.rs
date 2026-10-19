@@ -3331,6 +3331,45 @@ fn codebuddy_ide_adapter_skips_conversation_without_model() {
 }
 
 #[test]
+fn codebuddy_ide_adapter_falls_back_to_earlier_model_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let messages = dir.path().join("history/sess/conv-fallback/messages");
+    std::fs::create_dir_all(&messages).unwrap();
+    std::fs::write(
+        messages.join("msg-0.json"),
+        r#"{"role":"assistant","createdAt":"2026-07-01T06:58:00.000Z","message":"{}","extra":"{\"modelId\":\"deepseek-v4-flash\"}"}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        messages.join("msg-1.json"),
+        r#"{"role":"assistant","createdAt":"2026-07-01T06:58:36.818Z","message":"{}","extra":"{\"statsSnapshot\":{\"cacheMissTokens\":200,\"lastOutputTokens\":30,\"cachedInputTokens\":50}}"}"#,
+    )
+    .unwrap();
+    let records = codebuddy_ide::parse(messages.parent().unwrap(), dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "deepseek-v4-flash");
+    assert_eq!(records[0].input_tokens, 200);
+    assert_eq!(records[0].output_tokens, 30);
+}
+
+#[test]
+fn codebuddy_ide_adapter_skips_a_single_bad_message_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let messages = dir.path().join("history/sess/conv-bad/messages");
+    std::fs::create_dir_all(&messages).unwrap();
+    std::fs::write(messages.join("msg-0.json"), "{not-json").unwrap();
+    std::fs::write(
+        messages.join("msg-1.json"),
+        r#"{"role":"assistant","createdAt":"2026-07-01T06:58:36.818Z","message":"{}","extra":"{\"modelId\":\"deepseek-v4-flash\",\"statsSnapshot\":{\"cacheMissTokens\":10,\"lastOutputTokens\":2}}"}"#,
+    )
+    .unwrap();
+    let records = codebuddy_ide::parse(messages.parent().unwrap(), dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "deepseek-v4-flash");
+    assert_eq!(records[0].input_tokens, 10);
+}
+
+#[test]
 fn crush_adapter_reads_root_session_tokens_and_skips_children() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
