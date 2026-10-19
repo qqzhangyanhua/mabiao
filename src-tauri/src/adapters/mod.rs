@@ -543,7 +543,7 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         prepare_file: None,
         append_log: false,
         soft_parse_failure: false,
-        coverage: "轮级 Token（input 不含 cache）",
+        coverage: "轮级 Token（input 不含 cache；有消息时间用消息时间，否则会话 updated_at；子线程不入账）",
         display_dirs: None,
         detected: None,
     },

@@ -3069,6 +3069,96 @@ fn zed_adapter_reads_request_tokens_and_cumulative_remainder() {
 }
 
 #[test]
+fn zed_adapter_skips_child_threads_with_parent_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_zed_threads_db(&dir.path().join("threads.db"));
+    let db = rusqlite::Connection::open(&path).unwrap();
+    let child = serde_json::json!({
+        "title": "child",
+        "messages": [],
+        "request_token_usage": {
+            "um-child": {
+                "input_tokens": 999,
+                "output_tokens": 9,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0
+            }
+        },
+        "model": {"model": "claude-sonnet-4", "provider": "anthropic"}
+    });
+    let packed = zstd::encode_all(child.to_string().as_bytes(), 0).unwrap();
+    db.execute(
+        r#"
+        INSERT INTO threads (id, summary, updated_at, created_at, data_type, data, parent_id)
+        VALUES ('thread-child', 'child', '2026-10-17T11:00:00Z', '2026-10-17T11:00:00Z', 'zstd', ?1, ?2)
+        "#,
+        rusqlite::params![packed, ZED_THREAD_ID],
+    )
+    .unwrap();
+    drop(db);
+    let records = zed::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert!(records
+        .iter()
+        .all(|record| record.session_id == ZED_THREAD_ID));
+    assert!(!records.iter().any(|record| record.input_tokens == 999));
+}
+
+#[test]
+fn zed_adapter_uses_per_message_timestamp_when_present() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("threads.db");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch(
+        r#"
+        CREATE TABLE threads (
+            id TEXT PRIMARY KEY,
+            summary TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            data_type TEXT NOT NULL,
+            data BLOB NOT NULL,
+            parent_id TEXT,
+            created_at TEXT
+        );
+        "#,
+    )
+    .unwrap();
+    let json = serde_json::json!({
+        "title": "timed",
+        "messages": [{
+            "User": {
+                "id": "um-1",
+                "created_at": "2026-10-17T07:00:00Z",
+                "content": [{"Text": "hi"}]
+            }
+        }],
+        "request_token_usage": {
+            "um-1": {
+                "input_tokens": 10,
+                "output_tokens": 4,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0
+            }
+        },
+        "model": {"model": "claude-sonnet-4", "provider": "anthropic"}
+    });
+    db.execute(
+        r#"
+        INSERT INTO threads (id, summary, updated_at, created_at, data_type, data, parent_id)
+        VALUES ('thread-timed', 'timed', '2026-10-17T08:05:00Z', '2026-10-17T07:00:00Z', 'json', ?1, NULL)
+        "#,
+        rusqlite::params![json.to_string().as_bytes()],
+    )
+    .unwrap();
+    drop(db);
+    let records = zed::parse(&path, dir.path()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].occurred_at, "2026-10-17T07:00:00+00:00");
+    assert_ne!(records[0].occurred_at, "2026-10-17T08:05:00+00:00");
+}
+
+#[test]
 fn aider_adapter_reads_message_send_and_skips_redacted_models() {
     let records = aider::parse_aider_analytics(
         &fixture_lines(&fixture("aider-analytics.jsonl")),
