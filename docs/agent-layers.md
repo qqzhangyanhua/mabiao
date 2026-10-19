@@ -15,7 +15,7 @@
 4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，含 `path_env`（漏了完备性测试会红）。
 5. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
 6. `tests/adapters.rs` 断言去重与累计口径。
-7. 归一化输出变了就递增 `store.rs::ADAPTER_VERSION`。
+7. **已有**适配器的归一化输出变了才递增 `store.rs::ADAPTER_VERSION`。只加新 Source、旧 parse 不变则不 bump（新来源没有旧缓存行，见 ADR 0003）。按来源拆版本这次不要做。
 8. 重新生成展示身份文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。不要手改 `src/generated/displayIdentity.ts`，也不要再写一份显示名、图标或恢复命令表。
 9. 把新来源加进 `src/lib/overviewLayout.ts` 的 `QUOTA_SOURCE_IDS`（手排顺序，常用项靠前）。`pnpm test` 里的集合断言要求它等于全部来源加上 `cursor`。
 10. 只有新品牌才改前端视觉：`src/components/sourceGlyph.tsx` 的品牌 SVG、`src/lib/sourceIcon.ts` 的 `BRAND_TONE`。少一条 tsc 报错。已有品牌到此为止，不用改其它前端文件。
