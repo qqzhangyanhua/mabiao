@@ -137,12 +137,16 @@ pub(crate) fn parse_ui_messages(content: &str, path: &Path, source: Source) -> V
         let output = i64_field(&info, &["tokensOut", "tokens_out"]).max(0);
         // tokensIn 是含 cache 的总量；拆出后再入账。
         let input = (raw_input - cache_read - cache_write).max(0);
+        let occurred_at = occurred_at_from_message(message);
+        if occurred_at.is_empty() {
+            continue;
+        }
         let model = next_model(&models, &mut model_index, &mut last_model);
         if model.is_empty() {
             continue;
         }
         let record = finish(UsageRecord {
-            occurred_at: occurred_at_from_message(message),
+            occurred_at,
             source,
             model,
             provider: provider_from_info(&info),
@@ -291,6 +295,8 @@ fn provider_from_info(info: &Value) -> String {
     raw.split(['/', ':']).next().unwrap_or(&raw).to_string()
 }
 
+/// Roo / Kilo 的 `cost` 按上游约定是美元；正数才入账。
+/// 嵌套 JSON 没有币种字段，不能像 Cherry 那样按 currency 门控。
 fn native_cost_from_info(info: &Value) -> Option<f64> {
     let amount = info.get("cost").and_then(|value| {
         value

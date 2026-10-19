@@ -3801,6 +3801,39 @@ fn roo_adapter_subtracts_cache_from_tokens_in_and_pairs_models() {
 }
 
 #[test]
+fn roo_adapter_skips_api_req_without_timestamp() {
+    let dir = tempfile::tempdir().unwrap();
+    let task = dir
+        .path()
+        .join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/task-no-ts");
+    std::fs::create_dir_all(&task).unwrap();
+    std::fs::write(
+        task.join("ui_messages.json"),
+        r#"[
+          {"say":"api_req_started","text":"{\"tokensIn\":90,\"tokensOut\":10,\"cost\":0.01,\"apiProtocol\":\"anthropic\"}"},
+          {"ts":0,"say":"api_req_started","text":"{\"tokensIn\":80,\"tokensOut\":8,\"cost\":0.01,\"apiProtocol\":\"anthropic\"}"},
+          {"ts":1760000001000,"say":"api_req_started","text":"{\"tokensIn\":70,\"tokensOut\":7,\"cost\":0.01,\"apiProtocol\":\"anthropic\"}"}
+        ]"#,
+    )
+    .unwrap();
+    std::fs::write(
+        task.join("api_conversation_history.json"),
+        fixture("roo.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        task.join("history_item.json"),
+        fixture("roo.history_item.json"),
+    )
+    .unwrap();
+    let records = roo::parse(&task.join("ui_messages.json"), task.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].input_tokens, 70);
+    assert_eq!(records[0].output_tokens, 7);
+    assert!(!records[0].occurred_at.is_empty());
+}
+
+#[test]
 fn roo_scan_dirs_cover_vscode_family_and_env_override() {
     let home = std::path::Path::new("/home/example");
     let dirs = roo::scan_dirs(&ingest::PathOverrides::new(), home);
