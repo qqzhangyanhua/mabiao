@@ -3294,6 +3294,26 @@ fn windsurf_adapter_aggregates_acp_usage_update_and_splits_cache() {
     assert_eq!(records[0].cache_creation_tokens, 20);
     assert_eq!(records[0].total_tokens, 470);
     assert_eq!(records[0].native_cost, None);
+    // outputTokens 逐步相加：20 + 30 = 50，不是最后一次 30。
+    assert_ne!(
+        records[0].output_tokens, 30,
+        "must not treat outputTokens as a running total"
+    );
+}
+
+#[test]
+fn windsurf_adapter_uses_last_non_adaptive_model_and_params_update_envelope() {
+    let records = windsurf::parse_windsurf_ndjson(
+        &fixture_lines(&fixture("windsurf-acp-multimodel.ndjson")),
+        "/home/dev/.config/Devin/User/acp-events/sess-windsurf-2.ndjson",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].model, "gpt-5");
+    assert_eq!(records[0].input_tokens, 320);
+    assert_eq!(records[0].output_tokens, 60);
+    assert_eq!(records[0].cache_read_tokens, 80);
+    assert_eq!(records[0].cache_creation_tokens, 20);
+    assert_eq!(records[0].total_tokens, 480);
 }
 
 #[test]
