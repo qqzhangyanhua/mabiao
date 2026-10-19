@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::adapters::finish;
+use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
@@ -165,20 +166,6 @@ impl ParsedUsage {
             native_cost: native_cost(self.cost_source.as_deref(), self.actual_cost_usd),
         })
     }
-}
-
-fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?;
-    let mut names = BTreeSet::new();
-    for name in rows {
-        names.insert(name.map_err(|error| error.to_string())?);
-    }
-    Ok(names)
 }
 
 fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {

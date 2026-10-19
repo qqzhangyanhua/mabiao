@@ -3347,6 +3347,12 @@ fn codebuddy_ide_adapter_reads_latest_stats_snapshot_and_ignores_credits() {
     assert_eq!(records[0].cache_creation_tokens, 0);
     assert_eq!(records[0].reasoning_tokens, 10);
     assert_eq!(records[0].total_tokens, 290);
+    // lastStep* 是本轮增量，statsSnapshot 是会话累计；不能把两者加总。
+    assert_ne!(
+        records[0].total_tokens,
+        250 + 30 + 50 + 200 + 30 + 50 + 10,
+        "must not sum lastStep onto statsSnapshot"
+    );
 }
 
 #[test]
@@ -3392,6 +3398,17 @@ fn windsurf_adapter_aggregates_acp_usage_update_and_splits_cache() {
     assert_ne!(
         records[0].output_tokens, 30,
         "must not treat outputTokens as a running total"
+    );
+    // inputTokens 是累计（含 cache read），不能把两轮快照加总。
+    assert_ne!(
+        records[0].input_tokens,
+        300 + 400,
+        "must not sum cumulative inputTokens across usage_update"
+    );
+    assert_eq!(
+        records[0].output_tokens,
+        20 + 30,
+        "outputTokens is additive"
     );
 }
 
@@ -3483,6 +3500,35 @@ fn crush_adapter_reads_root_session_tokens_and_skips_children() {
     assert_eq!(records[0].output_tokens, 50);
     assert_eq!(records[0].total_tokens, 250);
     assert_eq!(records[0].native_cost, Some(0.012));
+}
+
+#[test]
+fn crush_discover_reads_crush_db_when_override_is_data_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let data_dir = dir.path().join("project/.crush");
+    std::fs::create_dir_all(&data_dir).unwrap();
+    let db = data_dir.join("crush.db");
+    std::fs::write(&db, []).unwrap();
+    let found = crush::discover(std::slice::from_ref(&data_dir)).unwrap();
+    assert_eq!(found, vec![db]);
+}
+
+#[test]
+fn crush_ingest_does_not_double_count_registry_and_data_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    write_default_crush_home(home);
+    let conn = store::open_memory().unwrap();
+    let report =
+        ingest::ingest_all_with_overrides(&conn, home, &ingest::PathOverrides::new()).unwrap();
+    let crush = report
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::Crush.as_str())
+        .unwrap();
+    assert_eq!(crush.files_seen, 1);
+    assert_eq!(crush.files_parsed, 1);
+    assert_eq!(crush.records_written, 1);
 }
 
 #[test]
@@ -3932,4 +3978,34 @@ fn kilo_scan_dirs_cover_vscode_family_and_env_override() {
         kilo::scan_dirs(&overrides, home),
         vec![PathBuf::from("/custom/kilo-tasks")]
     );
+}
+
+#[test]
+fn roo_sidecar_fingerprint_changes_when_history_is_rewritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_roo_task(dir.path(), "task-roo-fp");
+    let before = roo::sidecar_fingerprint(&path, &[]);
+    assert!(!before.is_empty());
+    std::fs::write(
+        path.parent().unwrap().join("api_conversation_history.json"),
+        fixture("roo.api_conversation_history.json").replace("claude-sonnet-4", "claude-opus-4"),
+    )
+    .unwrap();
+    let after = roo::sidecar_fingerprint(&path, &[]);
+    assert_ne!(before, after);
+}
+
+#[test]
+fn kilo_sidecar_fingerprint_changes_when_history_is_rewritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_kilo_task(dir.path(), "task-kilo-fp");
+    let before = kilo::sidecar_fingerprint(&path, &[]);
+    assert!(!before.is_empty());
+    std::fs::write(
+        path.parent().unwrap().join("api_conversation_history.json"),
+        fixture("kilo.api_conversation_history.json").replace("claude-sonnet-4", "claude-opus-4"),
+    )
+    .unwrap();
+    let after = kilo::sidecar_fingerprint(&path, &[]);
+    assert_ne!(before, after);
 }

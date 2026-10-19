@@ -148,7 +148,7 @@ pub(crate) struct SessionFileCursorWrite<'a> {
 }
 
 pub(crate) struct ConversationIndexBatch {
-    conversations: Vec<ParsedConversation>,
+    pub(crate) conversations: Vec<ParsedConversation>,
     diagnostics: Vec<ConversationIndexIssue>,
 }
 
@@ -163,7 +163,7 @@ pub(crate) type ConversationRevisionFn = fn(&Path) -> Result<String, String>;
 pub(crate) struct ConversationAdapter {
     pub(crate) source: Source,
     discover: ConversationDiscoverFn,
-    index: ConversationIndexFn,
+    pub(crate) index: ConversationIndexFn,
     /// 只解析后缀、不写库。未填则刷新时一律全量 index。
     index_suffix: Option<ConversationIndexSuffixFn>,
     detail: ConversationDetailFn,

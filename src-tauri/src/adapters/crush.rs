@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde::Deserialize;
 
+use crate::adapters::sqlite::{sql_int, sql_real, sql_text};
 use crate::adapters::{finish, has_billable_tokens};
+
+pub(crate) use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 
@@ -64,18 +67,30 @@ struct TrackedProject {
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();
     for root in roots {
+        // 覆盖值若直接指向带 crush.db 的 data_dir，没有 projects.json 也要收。
+        push_crush_db(&mut paths, &root.join("crush.db"));
+        if root
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == "crush.db")
+        {
+            push_crush_db(&mut paths, root);
+        }
         for project in load_projects(root)? {
             let data_dir = project.data_dir.trim();
             if data_dir.is_empty() {
                 continue;
             }
-            let db = PathBuf::from(data_dir).join("crush.db");
-            if db.is_file() && !paths.contains(&db) {
-                paths.push(db);
-            }
+            push_crush_db(&mut paths, &PathBuf::from(data_dir).join("crush.db"));
         }
     }
     Ok(paths)
+}
+
+fn push_crush_db(paths: &mut Vec<PathBuf>, db: &Path) {
+    if db.is_file() && !paths.contains(&db.to_path_buf()) {
+        paths.push(db.to_path_buf());
+    }
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
@@ -195,20 +210,6 @@ pub(crate) fn is_root_session(parent_session_id: &str) -> bool {
     parent_session_id.trim().is_empty()
 }
 
-pub(crate) fn table_columns(conn: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?;
-    let mut names = BTreeSet::new();
-    for name in rows {
-        names.insert(name.map_err(|error| error.to_string())?);
-    }
-    Ok(names)
-}
-
 pub(crate) fn unix_seconds_to_rfc3339(started_at: i64) -> String {
     if started_at <= 0 {
         return String::new();
@@ -305,28 +306,4 @@ fn session_model(
         }
     }
     fallback.unwrap_or_default()
-}
-
-fn sql_text(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
-}
-
-fn sql_int(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, 0)")
-    } else {
-        "0".to_string()
-    }
-}
-
-fn sql_real(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, 0)")
-    } else {
-        "0".to_string()
-    }
 }

@@ -1,8 +1,8 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
@@ -193,26 +193,4 @@ fn parse_sql_timestamp(raw: &str) -> String {
         }
     }
     String::new()
-}
-
-fn table_columns(conn: &rusqlite::Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|error| error.to_string())?;
-    let mut names = BTreeSet::new();
-    for name in rows {
-        names.insert(name.map_err(|error| error.to_string())?);
-    }
-    Ok(names)
-}
-
-fn sql_text(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
 }
