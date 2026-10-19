@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use crate::domain::Source;
 use crate::ingest;
+use crate::store;
+use crate::test_support::*;
 use crate::wsl;
 
 fn write_dir(path: &Path) {
@@ -80,6 +82,48 @@ fn missing_share_with_timeout_returns_empty() {
 #[test]
 fn extra_scan_homes_are_empty_without_injected_wsl_layout() {
     assert!(wsl::extra_scan_homes().is_empty());
+}
+
+#[test]
+fn ingest_and_diagnostics_see_wsl_jsonl_when_extra_scan_homes_are_injected() {
+    let temp = tempfile::tempdir().unwrap();
+    let windows_home = temp.path().join("win-home");
+    let wsl_home = temp.path().join("wsl-home");
+    write_dir(&windows_home);
+    let session_dir = wsl_home.join(".codex").join("sessions");
+    std::fs::create_dir_all(&session_dir).unwrap();
+    std::fs::write(session_dir.join("one.jsonl"), fixture("codex.jsonl")).unwrap();
+
+    wsl::with_extra_scan_homes(vec![wsl_home.clone()], || {
+        let conn = store::open_memory().unwrap();
+        let overrides = ingest::PathOverrides::new();
+        let report = ingest::ingest_all_with_overrides(&conn, &windows_home, &overrides).unwrap();
+        let records = store::load_all(&conn).unwrap();
+        assert_eq!(report.files_parsed, 1);
+        assert_eq!(records.len(), 2);
+        assert!(records.iter().all(|record| record.source == Source::Codex));
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| record.total_tokens)
+                .sum::<i64>(),
+            19113
+        );
+
+        let diagnostics =
+            ingest::source_diagnostics_with(&conn, &windows_home, &overrides).unwrap();
+        let codex = diagnostics
+            .iter()
+            .find(|row| row.source == "codex")
+            .expect("codex diagnostic");
+        assert!(codex.detected, "WSL 家目录里的 Codex 会话应标成已检测到");
+
+        let watched = ingest::watched_usage_paths(&windows_home, &overrides).unwrap();
+        assert!(
+            watched.iter().any(|path| path.ends_with("one.jsonl")),
+            "托盘 stale 检查应看见 WSL 下的用量文件：{watched:?}"
+        );
+    });
 }
 
 #[test]
