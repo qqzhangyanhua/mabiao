@@ -8,6 +8,7 @@ describe("SourceIcon", () => {
       <>
         <SourceIcon source="claude" />
         <SourceIcon source="alma" />
+        <SourceIcon source="windsurf" />
         <SourceIcon source="unknown-source" />
       </>,
     );

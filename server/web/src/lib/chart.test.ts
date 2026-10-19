@@ -7,6 +7,8 @@ describe("sourceTone", () => {
     expect(sourceTone("claude")).toBe("var(--tone-claude)");
     expect(sourceTone("cursor_agent")).toBe("var(--tone-cursor)");
     expect(sourceTone("factory")).toBe("var(--tone-codex)");
+    expect(sourceTone("windsurf")).toBe("var(--tone-gemini)");
+    expect(sourceTone("codebuddy_ide")).toBe("var(--tone-open)");
   });
 
   it("falls back to the cursor tone for unknown sources", () => {

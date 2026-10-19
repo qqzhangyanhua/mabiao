@@ -7,6 +7,8 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("antigravity")).toBe("agy");
     expect(resolveSourceIconId("cursor_agent")).toBe("cursor");
     expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
+    expect(resolveSourceIconId("codebuddy_ide")).toBe("codebuddy");
+    expect(resolveSourceIconId("windsurf")).toBe("windsurf");
   });
 
   it("falls back to unknown", () => {

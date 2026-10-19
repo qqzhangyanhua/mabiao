@@ -33,7 +33,25 @@ const SOURCE_COLOR: Record<string, string> = {
   workbuddy: "var(--tone-kimi)",
   zcode: "var(--tone-omp)",
   alma: "var(--tone-grok)",
+  codebuddy: "var(--tone-open)",
+  codebuddy_ide: "var(--tone-open)",
+  trae: "var(--tone-qwen)",
+  goose: "var(--tone-gemini)",
+  roo: "var(--tone-pi)",
+  kilo: "var(--tone-omp)",
+  amp: "var(--tone-kimi)",
+  zed: "var(--tone-grok)",
+  cherry: "var(--tone-claude)",
+  openclaw: "var(--tone-open)",
+  crush: "var(--tone-codex)",
+  aider: "var(--tone-pi)",
+  warp: "var(--tone-kimi)",
+  windsurf: "var(--tone-gemini)",
 };
+
+export function listedSourceTones(): ReadonlySet<string> {
+  return new Set(Object.keys(SOURCE_COLOR));
+}
 
 export function sourceTone(source: string): string {
   return SOURCE_COLOR[source] ?? "var(--tone-cursor)";
