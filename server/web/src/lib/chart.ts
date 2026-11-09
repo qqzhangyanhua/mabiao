@@ -30,6 +30,7 @@ const SOURCE_COLOR: Record<string, string> = {
   qoder: "var(--tone-qwen)",
   qoder_cn: "var(--tone-qwen)",
   cline: "var(--tone-open)",
+  cline_ide: "var(--tone-open)",
   workbuddy: "var(--tone-kimi)",
   zcode: "var(--tone-omp)",
   alma: "var(--tone-grok)",

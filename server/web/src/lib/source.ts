@@ -21,6 +21,7 @@ const SOURCE_LABEL: Record<string, string> = {
   qoder: "Qoder",
   qoder_cn: "Qoder CN",
   cline: "Cline",
+  cline_ide: "Cline IDE",
   workbuddy: "WorkBuddy",
   zcode: "ZCode",
   alma: "Alma",

@@ -13,6 +13,7 @@ mod cherry_conversation;
 mod claude_quota;
 mod claude_usage;
 mod cline_conversation;
+mod cline_ide_conversation;
 mod clipboard;
 mod codebuddy_conversation;
 mod codebuddy_ide_conversation;

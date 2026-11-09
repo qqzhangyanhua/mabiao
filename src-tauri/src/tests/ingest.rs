@@ -1210,6 +1210,10 @@ fn source_scan_dirs_default_to_home_relative_paths() {
     assert!(
         kilo_dirs.contains(&home.join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks"))
     );
+    let cline_ide_dirs = ingest::source_scan_dirs_with(&overrides, home, Source::ClineIde);
+    assert!(cline_ide_dirs
+        .contains(&home.join(".config/Code/User/globalStorage/saoudrizwan.claude-dev/tasks")));
+    assert!(cline_ide_dirs.contains(&home.join(".cline/data/tasks")));
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Amp),
         vec![
@@ -1321,6 +1325,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
         ("GOOSE_PATH_ROOT", vec![PathBuf::from("/custom/goose")]),
         ("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")]),
         ("KILO_TASKS_DIR", vec![PathBuf::from("/custom/kilo-tasks")]),
+        (
+            "CLINE_IDE_TASKS_DIR",
+            vec![PathBuf::from("/custom/cline-ide-tasks")],
+        ),
         ("AMP_DATA_DIR", vec![PathBuf::from("/custom/amp")]),
         ("ZED_DATA_DIR", vec![PathBuf::from("/custom/zed")]),
         (
@@ -1426,6 +1434,10 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Kilo),
         vec![PathBuf::from("/custom/kilo-tasks")],
+    );
+    assert_eq!(
+        ingest::source_scan_dirs_with(&overrides, home, Source::ClineIde),
+        vec![PathBuf::from("/custom/cline-ide-tasks")],
     );
     assert_eq!(
         ingest::source_scan_dirs_with(&overrides, home, Source::Amp),
@@ -1589,7 +1601,7 @@ fn write_all_source_fixtures_covers_every_registered_source() {
     write_all_source_fixtures(home);
     let overrides = ingest::PathOverrides::new();
 
-    assert_eq!(Source::ALL.len(), 35);
+    assert_eq!(Source::ALL.len(), 36);
     let opencode_fixture = fixture("opencode.json");
     assert!(
         !opencode_fixture.contains("zhangyanhua") && !opencode_fixture.contains("/Users/"),
@@ -1701,6 +1713,9 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     const KILO_FILES: u64 = 1;
     const KILO_RECORDS: usize = 2;
     const KILO_TOKENS: i64 = 1820;
+    const CLINE_IDE_FILES: u64 = 1;
+    const CLINE_IDE_RECORDS: usize = 2;
+    const CLINE_IDE_TOKENS: i64 = 1820;
     const AMP_FILES: u64 = 1;
     const AMP_RECORDS: usize = 2;
     const AMP_TOKENS: i64 = 865;
@@ -1884,6 +1899,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(roo.records_written, ROO_RECORDS as u64);
     assert_eq!(kilo.files_parsed, KILO_FILES);
     assert_eq!(kilo.records_written, KILO_RECORDS as u64);
+    let cline_ide = first
+        .sources
+        .iter()
+        .find(|entry| entry.source == Source::ClineIde.as_str())
+        .unwrap();
+    assert_eq!(cline_ide.files_parsed, CLINE_IDE_FILES);
+    assert_eq!(cline_ide.records_written, CLINE_IDE_RECORDS as u64);
     assert_eq!(amp.files_parsed, AMP_FILES);
     assert_eq!(amp.records_written, AMP_RECORDS as u64);
     assert_eq!(zed.files_parsed, ZED_FILES);
@@ -1967,6 +1989,10 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         .iter()
         .filter(|record| record.source == Source::Kilo)
         .collect();
+    let cline_ide_rows: Vec<_> = stored
+        .iter()
+        .filter(|record| record.source == Source::ClineIde)
+        .collect();
     let amp_rows: Vec<_> = stored
         .iter()
         .filter(|record| record.source == Source::Amp)
@@ -2019,6 +2045,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
     assert_eq!(goose_rows.len(), GOOSE_RECORDS);
     assert_eq!(roo_rows.len(), ROO_RECORDS);
     assert_eq!(kilo_rows.len(), KILO_RECORDS);
+    assert_eq!(cline_ide_rows.len(), CLINE_IDE_RECORDS);
     assert_eq!(amp_rows.len(), AMP_RECORDS);
     assert_eq!(zed_rows.len(), ZED_RECORDS);
     assert_eq!(cherry_rows.len(), CHERRY_RECORDS);
@@ -2141,6 +2168,13 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         KILO_TOKENS
     );
     assert_eq!(
+        cline_ide_rows
+            .iter()
+            .map(|record| record.total_tokens)
+            .sum::<i64>(),
+        CLINE_IDE_TOKENS
+    );
+    assert_eq!(
         amp_rows
             .iter()
             .map(|record| record.total_tokens)
@@ -2221,6 +2255,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + GOOSE_FILES
         + ROO_FILES
         + KILO_FILES
+        + CLINE_IDE_FILES
         + AMP_FILES
         + ZED_FILES
         + CHERRY_FILES
@@ -2248,6 +2283,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + GOOSE_RECORDS
         + ROO_RECORDS
         + KILO_RECORDS
+        + CLINE_IDE_RECORDS
         + AMP_RECORDS
         + ZED_RECORDS
         + CHERRY_RECORDS
@@ -2275,6 +2311,7 @@ fn ingest_all_fixtures_is_stable_on_refresh() {
         + GOOSE_TOKENS
         + ROO_TOKENS
         + KILO_TOKENS
+        + CLINE_IDE_TOKENS
         + AMP_TOKENS
         + ZED_TOKENS
         + CHERRY_TOKENS
@@ -2364,14 +2401,14 @@ fn all_source_ingest_report_matches_behavior_baseline() {
     let report = ingest::ingest_all_with_overrides(&conn, home, &overrides).unwrap();
     let stored = store::load_all(&conn).unwrap();
 
-    assert_eq!(report.files_seen, 36);
+    assert_eq!(report.files_seen, 37);
     assert_eq!(report.files_skipped, 0);
-    assert_eq!(report.files_parsed, 36);
+    assert_eq!(report.files_parsed, 37);
     assert_eq!(report.files_failed, 0);
-    assert_eq!(report.records_written, 61);
+    assert_eq!(report.records_written, 63);
     assert_eq!(report.records_archived, 0);
-    assert_eq!(stored.len(), 61);
-    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 676881);
+    assert_eq!(stored.len(), 63);
+    assert_eq!(stored.iter().map(|r| r.total_tokens).sum::<i64>(), 678701);
     assert!(
         report.issues.is_empty(),
         "全来源夹具首次摄取不应产生诊断问题：{:?}",
@@ -2406,6 +2443,7 @@ fn all_source_ingest_report_matches_behavior_baseline() {
             | Source::Trae
             | Source::Roo
             | Source::Kilo
+            | Source::ClineIde
             | Source::Amp
             | Source::Zed
             | Source::Cherry
@@ -2936,6 +2974,13 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     );
     assert_eq!(kilo.path_env, "KILO_TASKS_DIR");
     assert_eq!(kilo.coverage, "轮级 Token（input 不含 cache）");
+    let cline_ide = usage_adapter(Source::ClineIde);
+    assert!(
+        !cline_ide.append_log,
+        "Cline IDE ui_messages.json 整份重写，不是追加型日志"
+    );
+    assert_eq!(cline_ide.path_env, "CLINE_IDE_TASKS_DIR");
+    assert_eq!(cline_ide.coverage, "轮级 Token（tokensIn 不含 cache）");
     let amp = usage_adapter(Source::Amp);
     assert!(!amp.append_log, "Amp 线程 JSON 整份重写，不是追加型日志");
     assert_eq!(amp.path_env, "AMP_DATA_DIR");

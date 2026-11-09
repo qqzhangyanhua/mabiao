@@ -18,7 +18,7 @@
 
 ## 支持的来源
 
-码表扫的是本机目录，不代替各家官方仪表盘。**完整 35 个 Usage Source 名单、默认路径与口径见 [`CONTEXT.md`](CONTEXT.md)**。路径可在设置页填写绝对路径，也可用环境变量覆盖（设置页优先），详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。下表是摘要，不是完备清单。
+码表扫的是本机目录，不代替各家官方仪表盘。**完整 36 个 Usage Source 名单、默认路径与口径见 [`CONTEXT.md`](CONTEXT.md)**。路径可在设置页填写绝对路径，也可用环境变量覆盖（设置页优先），详见 [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md)。下表是摘要，不是完备清单。
 
 | 来源 | 本机 Token | 本机费用 | 说明 |
 |------|:---:|:---:|------|
@@ -47,6 +47,7 @@
 | Windsurf | ✅ | ❌ | ACP `usage_update` ndjson；不读加密 Cascade |
 | Qoder / Qoder CN | ✅ | ✅ | Claude Code 形态；自带 `costUSD` |
 | Cline | ✅ | ✅ | CLI `messages.json`；自带 `metrics.cost` |
+| Cline IDE | ✅ | ✅ | VS Code 扩展 `ui_messages.json`；`tokensIn` 不含 cache |
 | Goose | ✅ | ❌ | `sessions.db` 会话累计；`hidden` 不入账 |
 | Trae CLI | ✅ | ❌ | Codex rollout 形态；含 jsonl.zst |
 | WorkBuddy / ZCode / Alma / CodeBuddy | ✅ | 视来源 | 见 CONTEXT.md |

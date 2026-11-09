@@ -18,7 +18,7 @@ A local desktop app that scans AI coding CLI session files on your machine, norm
 
 ## Supported sources
 
-Mabiao reads local directories. It does not replace vendor dashboards. **The full list of 35 Usage Sources, default paths, and token dimensions is in [`CONTEXT.md`](CONTEXT.md).** Scan roots can be set as absolute paths in Settings, or overridden with environment variables (Settings wins); see [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md). The table below is a summary, not a complete inventory.
+Mabiao reads local directories. It does not replace vendor dashboards. **The full list of 36 Usage Sources, default paths, and token dimensions is in [`CONTEXT.md`](CONTEXT.md).** Scan roots can be set as absolute paths in Settings, or overridden with environment variables (Settings wins); see [`docs/adr/0005-configurable-source-paths.md`](docs/adr/0005-configurable-source-paths.md). The table below is a summary, not a complete inventory.
 
 | Source | Local tokens | Local cost | Notes |
 |------|:---:|:---:|------|
@@ -47,6 +47,7 @@ Mabiao reads local directories. It does not replace vendor dashboards. **The ful
 | Windsurf | ✅ | ❌ | ACP `usage_update` ndjson; no encrypted Cascade |
 | Qoder / Qoder CN | ✅ | ✅ | Claude Code shape; native `costUSD` |
 | Cline | ✅ | ✅ | CLI `messages.json`; native `metrics.cost` |
+| Cline IDE | ✅ | ✅ | VS Code extension `ui_messages.json`; `tokensIn` excludes cache |
 | Goose | ✅ | ❌ | `sessions.db` session totals; skip `hidden` |
 | Trae CLI | ✅ | ❌ | Codex rollout shape; includes jsonl.zst |
 | WorkBuddy / ZCode / Alma / CodeBuddy | ✅ | varies | See CONTEXT.md |
