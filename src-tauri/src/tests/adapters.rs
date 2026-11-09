@@ -1497,6 +1497,10 @@ fn source_maps_to_user_facing_application_names() {
     assert_eq!(Source::Kilo.application_name(), "Kilo Code");
     assert_eq!(Source::Kilo.as_str(), "kilo");
     assert_eq!(Source::parse("kilo"), Some(Source::Kilo));
+    assert_eq!(Source::ClineIde.application_name(), "Cline IDE");
+    assert_eq!(Source::ClineIde.as_str(), "cline_ide");
+    assert_eq!(Source::parse("cline_ide"), Some(Source::ClineIde));
+    assert_eq!(Source::ClineIde.brand(), crate::domain::Brand::Cline);
     assert_eq!(Source::Amp.application_name(), "Amp");
     assert_eq!(Source::Amp.as_str(), "amp");
     assert_eq!(Source::parse("amp"), Some(Source::Amp));
@@ -4007,5 +4011,98 @@ fn kilo_sidecar_fingerprint_changes_when_history_is_rewritten() {
     )
     .unwrap();
     let after = kilo::sidecar_fingerprint(&path, &[]);
+    assert_ne!(before, after);
+}
+
+fn write_cline_ide_task(home: &std::path::Path, id: &str) -> PathBuf {
+    let dir = home
+        .join(".config/Code/User/globalStorage/saoudrizwan.claude-dev/tasks")
+        .join(id);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("ui_messages.json"),
+        fixture("cline-ide.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("api_conversation_history.json"),
+        fixture("cline-ide.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("history_item.json"),
+        fixture("cline-ide.history_item.json"),
+    )
+    .unwrap();
+    dir.join("ui_messages.json")
+}
+
+#[test]
+fn cline_ide_adapter_keeps_tokens_in_outside_cache_and_pairs_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_cline_ide_task(dir.path(), "task-cline-ide-1");
+    let records = cline_ide::parse(&path, path.parent().unwrap()).unwrap();
+    assert_eq!(records.len(), 2);
+    assert_eq!(records[0].source, Source::ClineIde);
+    assert_eq!(records[0].model, "anthropic/claude-sonnet-4");
+    assert_eq!(records[0].provider, "anthropic");
+    assert_eq!(records[0].project, "/work/cline-ide");
+    assert_eq!(records[0].session_id, "task-cline-ide-1");
+    assert_eq!(records[0].input_tokens, 1000);
+    assert_eq!(records[0].output_tokens, 80);
+    assert_eq!(records[0].cache_read_tokens, 400);
+    assert_eq!(records[0].cache_creation_tokens, 100);
+    assert_eq!(records[0].total_tokens, 1580);
+    assert_eq!(records[0].native_cost, Some(0.012));
+    assert_eq!(records[1].model, "openai/gpt-4.1");
+    assert_eq!(records[1].provider, "openai");
+    assert_eq!(records[1].input_tokens, 200);
+    assert_eq!(records[1].output_tokens, 40);
+    assert_eq!(records[1].cache_read_tokens, 0);
+    assert_eq!(records[1].total_tokens, 240);
+    assert_eq!(records[1].native_cost, Some(0.003));
+    let summed: i64 = records.iter().map(|r| r.total_tokens).sum();
+    assert_eq!(summed, 1820);
+    // tokensIn 已不含 cache。若按 Roo / Kilo 再减一次，第一轮 input 会变成 500，合计 1320。
+    assert_ne!(summed, 500 + 80 + 400 + 100 + 200 + 40);
+}
+
+#[test]
+fn cline_ide_scan_dirs_cover_vscode_family_home_tasks_and_env_override() {
+    let home = std::path::Path::new("/home/example");
+    let dirs = cline_ide::scan_dirs(&ingest::PathOverrides::new(), home);
+    assert!(
+        dirs.contains(&home.join(".config/Code/User/globalStorage/saoudrizwan.claude-dev/tasks"))
+    );
+    assert!(dirs.contains(&home.join(
+        "Library/Application Support/Cursor/User/globalStorage/saoudrizwan.claude-dev/tasks"
+    )));
+    assert!(dirs.contains(
+        &home.join(".vscode-server/data/User/globalStorage/saoudrizwan.claude-dev/tasks")
+    ));
+    assert!(dirs.contains(&home.join(".cline/data/tasks")));
+    let overrides = ingest::PathOverrides::from([(
+        "CLINE_IDE_TASKS_DIR",
+        vec![PathBuf::from("/custom/cline-ide-tasks")],
+    )]);
+    assert_eq!(
+        cline_ide::scan_dirs(&overrides, home),
+        vec![PathBuf::from("/custom/cline-ide-tasks")]
+    );
+}
+
+#[test]
+fn cline_ide_sidecar_fingerprint_changes_when_history_is_rewritten() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = write_cline_ide_task(dir.path(), "task-cline-ide-fp");
+    let before = cline_ide::sidecar_fingerprint(&path, &[]);
+    assert!(!before.is_empty());
+    std::fs::write(
+        path.parent().unwrap().join("api_conversation_history.json"),
+        fixture("cline-ide.api_conversation_history.json")
+            .replace("claude-sonnet-4", "claude-opus-4"),
+    )
+    .unwrap();
+    let after = cline_ide::sidecar_fingerprint(&path, &[]);
     assert_ne!(before, after);
 }

@@ -23,6 +23,7 @@ const KNOWN_SOURCES = [
   "qoder",
   "qoder_cn",
   "cline",
+  "cline_ide",
   "workbuddy",
   "zcode",
   "alma",
@@ -61,6 +62,7 @@ describe("resolveSourceIconId", () => {
     expect(resolveSourceIconId("qoder")).toBe("qoder");
     expect(resolveSourceIconId("qoder_cn")).toBe("qoder");
     expect(resolveSourceIconId("cline")).toBe("cline");
+    expect(resolveSourceIconId("cline_ide")).toBe("cline");
     expect(resolveSourceIconId("workbuddy")).toBe("workbuddy");
     expect(resolveSourceIconId("zcode")).toBe("zcode");
     expect(resolveSourceIconId("alma")).toBe("alma");

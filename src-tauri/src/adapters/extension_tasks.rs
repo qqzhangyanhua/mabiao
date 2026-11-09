@@ -1,13 +1,12 @@
-//! VS Code 扩展任务目录（Roo Code / Kilo Code 共用）。
+//! VS Code 扩展任务目录（Roo Code / Kilo Code / Cline IDE 共用）。
 //!
 //! 每个任务一个文件夹，主文件是 `ui_messages.json`。`say == "api_req_started"`
 //! 的 `text` 是嵌套 JSON，含 `tokensIn` / `tokensOut` / `cacheReads` /
 //! `cacheWrites` / `cost` / `apiProtocol`。
 //!
-//! `tokensIn` 是含 cache 的 `totalInputTokens`（Roo Code PR #8954、Kilo
-//! `src/shared/cost.ts` / `openai-native.ts` / Gemini `uncachedInputTokens =
-//! inputTokens - cacheReadTokens`）：入账时拆出 cache，避免和
-//! `cacheReads`/`cacheWrites` 重复计数。模型名从同目录
+//! Roo / Kilo 的 `tokensIn` 是含 cache 的 `totalInputTokens`（Roo Code PR #8954、Kilo
+//! `src/shared/cost.ts`）：入账时拆出 cache。Cline IDE 的 `tokensIn` 已不含 cache，
+//! 调用 `parse_with_input_policy(..., false)`，不要再减。模型名从同目录
 //! `api_conversation_history.json` 的 `<model>` 环境标签按请求顺序配对。
 //! Kilo 另有 `usageMissing`：为 true 时该轮没有用量，跳过。
 
@@ -21,6 +20,7 @@ use crate::ingest::{self, PathOverrides};
 
 pub(crate) const ROO_EXTENSION_ID: &str = "rooveterinaryinc.roo-cline";
 pub(crate) const KILO_EXTENSION_ID: &str = "kilocode.kilo-code";
+pub(crate) const CLINE_EXTENSION_ID: &str = "saoudrizwan.claude-dev";
 pub(crate) const UI_MESSAGES: &str = "ui_messages.json";
 pub(crate) const API_HISTORY: &str = "api_conversation_history.json";
 pub(crate) const HISTORY_ITEM: &str = "history_item.json";
@@ -89,15 +89,35 @@ pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
 }
 
 pub(crate) fn parse(path: &Path, source: Source) -> Result<Vec<UsageRecord>, String> {
+    parse_with_input_policy(path, source, true)
+}
+
+/// `tokens_in_includes_cache` 为真时，`tokensIn` 含 cache，入账前拆出（Roo / Kilo）。
+/// 为假时，`tokensIn` 已是不含 cache 的 input（Cline IDE）。
+pub(crate) fn parse_with_input_policy(
+    path: &Path,
+    source: Source,
+    tokens_in_includes_cache: bool,
+) -> Result<Vec<UsageRecord>, String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     let content = std::str::from_utf8(&bytes)
         .map_err(|error| error.to_string())?
         .trim_start_matches('\u{feff}');
     serde_json::from_str::<serde::de::IgnoredAny>(content).map_err(|error| error.to_string())?;
-    Ok(parse_ui_messages(content, path, source))
+    Ok(parse_ui_messages(
+        content,
+        path,
+        source,
+        tokens_in_includes_cache,
+    ))
 }
 
-pub(crate) fn parse_ui_messages(content: &str, path: &Path, source: Source) -> Vec<UsageRecord> {
+pub(crate) fn parse_ui_messages(
+    content: &str,
+    path: &Path,
+    source: Source,
+    tokens_in_includes_cache: bool,
+) -> Vec<UsageRecord> {
     let value: Value = match serde_json::from_str(content.trim_start_matches('\u{feff}')) {
         Ok(value) => value,
         Err(_) => return Vec::new(),
@@ -135,8 +155,11 @@ pub(crate) fn parse_ui_messages(content: &str, path: &Path, source: Source) -> V
         let cache_write = i64_field(&info, &["cacheWrites", "cache_writes"]).max(0);
         let raw_input = i64_field(&info, &["tokensIn", "tokens_in"]).max(0);
         let output = i64_field(&info, &["tokensOut", "tokens_out"]).max(0);
-        // tokensIn 是含 cache 的总量；拆出后再入账。
-        let input = (raw_input - cache_read - cache_write).max(0);
+        let input = if tokens_in_includes_cache {
+            (raw_input - cache_read - cache_write).max(0)
+        } else {
+            raw_input
+        };
         let occurred_at = occurred_at_from_message(message);
         if occurred_at.is_empty() {
             continue;

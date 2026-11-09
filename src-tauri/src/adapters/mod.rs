@@ -5,6 +5,7 @@ pub mod amp;
 pub mod cherry;
 pub mod claude;
 pub mod cline;
+pub mod cline_ide;
 pub mod codebuddy;
 pub mod codebuddy_ide;
 pub mod codex;
@@ -380,6 +381,21 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
+        display_dirs: None,
+        detected: None,
+    },
+    UsageAdapter {
+        source: Source::ClineIde,
+        path_env: "CLINE_IDE_TASKS_DIR",
+        scan_dirs: cline_ide::scan_dirs,
+        discover: cline_ide::discover,
+        sidecar_fingerprint: cline_ide::sidecar_fingerprint,
+        parse: cline_ide::parse,
+        prepare_dir: None,
+        prepare_file: None,
+        append_log: false,
+        soft_parse_failure: false,
+        coverage: "轮级 Token（tokensIn 不含 cache）",
         display_dirs: None,
         detected: None,
     },

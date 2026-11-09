@@ -612,6 +612,16 @@ fn kilo_event_index_matches_full_parse() {
 }
 
 #[test]
+fn cline_ide_event_index_matches_full_parse() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_all_source_fixtures(home);
+    let conn = store::open_memory().unwrap();
+    refresh_source(&conn, home, Source::ClineIde);
+    assert_conversation_index_matches_parse(&conn, home, "cline_ide", "task-cline-ide-1");
+}
+
+#[test]
 fn amp_event_index_matches_full_parse() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

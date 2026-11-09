@@ -23,6 +23,7 @@ pub enum Source {
     Qoder,
     QoderCn,
     Cline,
+    ClineIde,
     WorkBuddy,
     Zcode,
     Alma,
@@ -43,7 +44,7 @@ pub enum Source {
 }
 
 impl Source {
-    pub const ALL: [Source; 35] = [
+    pub const ALL: [Source; 36] = [
         Source::Codex,
         Source::Claude,
         Source::Pi,
@@ -62,6 +63,7 @@ impl Source {
         Source::Qoder,
         Source::QoderCn,
         Source::Cline,
+        Source::ClineIde,
         Source::WorkBuddy,
         Source::Zcode,
         Source::Alma,
@@ -101,6 +103,7 @@ impl Source {
             Source::Qoder => "qoder",
             Source::QoderCn => "qoder_cn",
             Source::Cline => "cline",
+            Source::ClineIde => "cline_ide",
             Source::WorkBuddy => "workbuddy",
             Source::Zcode => "zcode",
             Source::Alma => "alma",
@@ -141,6 +144,7 @@ impl Source {
             Source::Qoder => "Qoder",
             Source::QoderCn => "Qoder CN",
             Source::Cline => "Cline",
+            Source::ClineIde => "Cline IDE",
             Source::WorkBuddy => "WorkBuddy",
             Source::Zcode => "ZCode",
             Source::Alma => "Alma",
@@ -182,6 +186,7 @@ impl Source {
             Source::Qoder => Brand::Qoder,
             Source::QoderCn => Brand::Qoder,
             Source::Cline => Brand::Cline,
+            Source::ClineIde => Brand::Cline,
             Source::WorkBuddy => Brand::WorkBuddy,
             Source::Zcode => Brand::Zcode,
             Source::Alma => Brand::Alma,
@@ -223,6 +228,7 @@ impl Source {
             Source::Qoder => Some("qodercli --resume {id}"),
             Source::QoderCn => Some("qoderclicn --resume {id}"),
             Source::Cline => Some("cline --id {id}"),
+            Source::ClineIde => None,
             Source::WorkBuddy => None,
             Source::Zcode => None,
             Source::Alma => None,
@@ -263,6 +269,7 @@ impl Source {
             "qoder" => Some(Source::Qoder),
             "qoder_cn" => Some(Source::QoderCn),
             "cline" => Some(Source::Cline),
+            "cline_ide" => Some(Source::ClineIde),
             "workbuddy" => Some(Source::WorkBuddy),
             "zcode" => Some(Source::Zcode),
             "alma" => Some(Source::Alma),

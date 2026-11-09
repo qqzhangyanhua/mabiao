@@ -15,6 +15,7 @@ describe("sourceLabel", () => {
     expect(sourceLabel("copilot")).toBe("GitHub Copilot CLI");
     expect(sourceLabel("cursor_agent")).toBe("Cursor Agent");
     expect(sourceLabel("codebuddy_ide")).toBe("CodeBuddy IDE");
+    expect(sourceLabel("cline_ide")).toBe("Cline IDE");
     expect(sourceLabel("windsurf")).toBe("Windsurf");
   });
 
@@ -26,7 +27,7 @@ describe("sourceLabel", () => {
 describe("desktop source identity coverage", () => {
   it("covers every desktop SOURCE_SLUGS entry with label, icon and tone", () => {
     const desktopSlugs = readDesktopSourceSlugs();
-    expect(desktopSlugs.length).toBe(35);
+    expect(desktopSlugs.length).toBe(36);
     const labels = listedSourceLabels();
     const icons = listedSourceIconSlugs();
     const tones = listedSourceTones();

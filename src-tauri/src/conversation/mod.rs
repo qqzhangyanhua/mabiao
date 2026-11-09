@@ -18,6 +18,7 @@ mod catalog_search;
 mod cherry;
 mod claude;
 mod cline;
+mod cline_ide;
 mod codebuddy;
 mod codebuddy_ide;
 mod codex;
@@ -519,6 +520,16 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         index: kilo::index,
         index_suffix: None,
         detail: kilo::detail,
+        revision: regular_source_revision,
+        raw_extension: Some("json"),
+        reuse_unchanged_index: true,
+    },
+    ConversationAdapter {
+        source: Source::ClineIde,
+        discover: cline_ide::discover,
+        index: cline_ide::index,
+        index_suffix: None,
+        detail: cline_ide::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
         reuse_unchanged_index: true,

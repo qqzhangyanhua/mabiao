@@ -1,6 +1,6 @@
 # 来源覆盖扩展路线图（历史 probe）
 
-> **这不是现状表。** 当前已适配 35 个 Usage Source，完整名单与口径见 [`CONTEXT.md`](../CONTEXT.md)。
+> **这不是现状表。** 当前已适配 36 个 Usage Source，完整名单与口径见 [`CONTEXT.md`](../CONTEXT.md)。
 >
 > 本文保留 2026-09-02 对本机 `~` 的一次性 probe 与当时的优先级判断。开头提到的 OpenClaw / Zed / Windsurf / Roo / Kilo 等「还没有覆盖」是当时的结论，其后的进度更新已把多数项标成已实现。新来源请按 `docs/agent-layers.md` 的 Adapter 节做，不要把本页当待办清单。
 >
@@ -10,8 +10,9 @@
 >
 > **进度更新（2026-10-18）**：**Goose**（`~/.local/share/goose/sessions/sessions.db`）已作为独立 Usage Source 接入，见「已实现」小节。
 >
-> **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Roo 已落地；Cline 扩展仍待接入。
-> **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。下文 Tier 1 的「Cline / Roo / Kilo」里 Kilo 已落地；Cline 扩展仍待接入。
+> **进度更新（2026-10-18）**：**Roo Code** VS Code 扩展（`globalStorage/rooveterinaryinc.roo-cline/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。
+> **进度更新（2026-10-18）**：**Kilo Code** VS Code 扩展（`globalStorage/kilocode.kilo-code/tasks/*/ui_messages.json`）已作为独立 Usage Source 接入，见「已实现」小节。
+> **进度更新（2026-11-09）**：**Cline IDE**（`globalStorage/saoudrizwan.claude-dev/tasks/*/ui_messages.json`，另扫 `~/.cline/data/tasks`）已作为独立 Usage Source `cline_ide` 接入，品牌复用 Cline。`tokensIn` 不含 cache，与 Roo / Kilo 不同。Cline CLI / Cline 4.x 的 `sessions/*.messages.json` 仍是 `cline`。下文 Tier 1 的扩展三项都已落地。
 > **进度更新（2026-10-18）**：**Amp**（`~/.local/share/amp/threads/*.json`）已作为独立 Usage Source 接入，见「已实现」小节。字段对齐 ccusage Amp parser 与 `amp threads export` 的线程 JSON。
 > **进度更新（2026-10-18）**：**Zed**（`threads.db` 的 zstd/json 线程 blob）已作为独立 Usage Source 接入，见「已实现」小节。原 Tier 3「本机未安装」结论被上游源码与 codeburn 口径推翻。
 > **进度更新（2026-10-18）**：**Cherry Studio**（Electron userData `cherrystudio.sqlite` 的 `ai_usage_record`）已作为独立 Usage Source 接入；原 Tier 3「IndexedDB」结论过时，v2 已落 sqlite。

@@ -308,6 +308,24 @@ pub fn write_all_source_fixtures(home: &std::path::Path) {
     let cline_manifest = home.join(".cline/data/sessions/sess-cline-1/sess-cline-1.json");
     std::fs::create_dir_all(cline_manifest.parent().unwrap()).unwrap();
     std::fs::write(&cline_manifest, fixture("cline.manifest.json")).unwrap();
+    let cline_ide =
+        home.join(".config/Code/User/globalStorage/saoudrizwan.claude-dev/tasks/task-cline-ide-1");
+    std::fs::create_dir_all(&cline_ide).unwrap();
+    std::fs::write(
+        cline_ide.join("ui_messages.json"),
+        fixture("cline-ide.ui_messages.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        cline_ide.join("api_conversation_history.json"),
+        fixture("cline-ide.api_conversation_history.json"),
+    )
+    .unwrap();
+    std::fs::write(
+        cline_ide.join("history_item.json"),
+        fixture("cline-ide.history_item.json"),
+    )
+    .unwrap();
     let roo =
         home.join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/task-roo-1");
     std::fs::create_dir_all(&roo).unwrap();
