@@ -1,5 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, PoisonError};
+use std::time::Duration;
 
 use crate::official_quota;
 use tauri::{Emitter, Manager};
@@ -390,4 +391,141 @@ pub fn delete_quota_account(
     id: String,
 ) -> Result<official_quota::accounts::QuotaAccountPanelDto, String> {
     official_quota::accounts::delete_account(&state.quota_account_paths, &id)
+}
+
+fn copilot_device_sessions(
+) -> &'static Mutex<HashMap<String, official_quota::accounts::CopilotDeviceLogin>> {
+    static SESSIONS: std::sync::LazyLock<
+        Mutex<HashMap<String, official_quota::accounts::CopilotDeviceLogin>>,
+    > = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+    &SESSIONS
+}
+
+fn device_session_id(
+    taken: &HashMap<String, official_quota::accounts::CopilotDeviceLogin>,
+) -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    let bits = || {
+        let mut hasher = RandomState::new().build_hasher();
+        hasher.write_u64(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_nanos() as u64),
+        );
+        hasher.finish()
+    };
+    for _ in 0..8 {
+        let id = format!("{:016x}{:016x}", bits(), bits());
+        if !taken.contains_key(&id) {
+            return id;
+        }
+    }
+    format!("{:016x}", bits())
+}
+
+fn copilot_device_agent() -> ureq::Agent {
+    crate::net::agent_with_timeout(Duration::from_secs(20))
+}
+
+/// 申请一次性设备码。验证码和验证页给界面，`device_code` 留在内存里。
+#[tauri::command]
+pub async fn start_copilot_device_login(
+) -> Result<official_quota::accounts::CopilotDeviceStartDto, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let login = official_quota::accounts::start_copilot_device_login(
+            &copilot_device_agent(),
+            &official_quota::accounts::CopilotDeviceEndpoints::github(),
+        )?;
+        let mut sessions = copilot_device_sessions()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let session_id = device_session_id(&sessions);
+        let dto = official_quota::accounts::CopilotDeviceStartDto {
+            session_id: session_id.clone(),
+            user_code: login.user_code.clone(),
+            verification_url: login.verification_url.clone(),
+            interval_seconds: login.interval_seconds(),
+        };
+        sessions.insert(session_id, login);
+        Ok(dto)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// 按服务端间隔轮询一次。成功后只刷新这一条 Copilot 额度账号。
+#[tauri::command]
+pub async fn poll_copilot_device_login(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> Result<official_quota::accounts::CopilotDevicePoll, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let login = {
+            let sessions = copilot_device_sessions()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            sessions
+                .get(&session_id)
+                .cloned()
+                .ok_or_else(|| "这次设备码授权已经结束，请重新获取验证码".to_string())?
+        };
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let polled = official_quota::accounts::poll_copilot_device_login(
+            &login,
+            &copilot_device_agent(),
+            &paths,
+            &official_quota::backoff::state_path(),
+        );
+        match polled {
+            Ok(official_quota::accounts::CopilotDevicePoll::Pending { interval_seconds }) => {
+                Ok(official_quota::accounts::CopilotDevicePoll::Pending { interval_seconds })
+            }
+            Ok(official_quota::accounts::CopilotDevicePoll::Authorized { saved }) => {
+                copilot_device_sessions()
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&session_id);
+                if saved.enabled {
+                    refresh_saved_account(&app, &saved.saved_id);
+                }
+                Ok(official_quota::accounts::CopilotDevicePoll::Authorized { saved })
+            }
+            Err(error) => {
+                copilot_device_sessions()
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&session_id);
+                Err(error)
+            }
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn cancel_copilot_device_login(session_id: String) -> Result<(), String> {
+    let mut sessions = copilot_device_sessions()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if let Some(login) = sessions.remove(&session_id) {
+        login.cancel();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_copilot_device_verification(session_id: String) -> Result<(), String> {
+    let url = {
+        let sessions = copilot_device_sessions()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        sessions
+            .get(&session_id)
+            .map(|login| login.verification_url.clone())
+            .ok_or_else(|| "这次设备码授权已经结束，请重新获取验证码".to_string())?
+    };
+    official_quota::accounts::open_copilot_verification(&url)
 }

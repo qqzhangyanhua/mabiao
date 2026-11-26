@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { humanStatus } from "../lib/format";
 import { OFFICIAL_QUOTA_PROVIDER_IDS, officialQuotaProviderLabel } from "../lib/overviewLayout";
 import type { OfficialQuotaDto } from "../types";
 import { Button } from "./ui/Button";
 
-type QuotaAccountSource = "local_snapshot";
+type QuotaAccountSource = "local_snapshot" | "oauth";
 
 type QuotaAccountDto = {
   id: string;
@@ -32,8 +32,49 @@ type SaveQuotaAccount = {
   enabled: boolean | null;
 };
 
+type CopilotDeviceStart = {
+  session_id: string;
+  user_code: string;
+  verification_url: string;
+  interval_seconds: number;
+};
+
+type CopilotDevicePoll =
+  | { status: "pending"; interval_seconds: number }
+  | { status: "authorized"; saved: SavedQuotaAccountDto };
+
+type DevicePrompt = {
+  sessionId: string;
+  userCode: string;
+  verificationUrl: string;
+  intervalSeconds: number;
+};
+
+const CANCELLED = "已取消设备码授权，没有保存账号";
+
+function accountSourceLabel(source: string): string {
+  if (source === "oauth") return "设备码授权";
+  if (source === "local_snapshot") return "本机登录";
+  return "额度账号";
+}
+
+function waitSeconds(seconds: number, stopped: () => boolean): Promise<void> {
+  const total = Math.max(0, seconds) * 1000;
+  if (stopped() || total === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (stopped() || Date.now() - started >= total) {
+        window.clearInterval(timer);
+        resolve();
+      }
+    }, 200);
+  });
+}
+
 /**
- * 官方额度下面的额度账号。只导入当前本机登录；界面只显示掩码。
+ * 官方额度下面的额度账号。本机导入之外，Copilot 可以走设备码授权。
+ * 界面只显示掩码，不拿令牌。
  */
 export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaDto) => void }) {
   const [panel, setPanel] = useState<QuotaAccountPanelDto | null>(null);
@@ -43,11 +84,22 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [device, setDevice] = useState<DevicePrompt | null>(null);
+  const [copied, setCopied] = useState(false);
+  const stopRef = useRef(false);
+  const sessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     void invoke<QuotaAccountPanelDto>("list_quota_accounts")
       .then(setPanel)
       .catch((cause: unknown) => setError(humanStatus(cause)));
+    return () => {
+      const sessionId = sessionRef.current;
+      if (!sessionId) return;
+      stopRef.current = true;
+      sessionRef.current = null;
+      void invoke("cancel_copilot_device_login", { sessionId });
+    };
   }, []);
 
   async function reload(next: QuotaAccountPanelDto) {
@@ -87,20 +139,112 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
     void run(() => invoke<QuotaAccountPanelDto>("delete_quota_account", { id }));
   }
 
+  async function openVerification(sessionId: string) {
+    try {
+      await invoke("open_copilot_device_verification", { sessionId });
+    } catch (cause) {
+      setError(humanStatus(cause));
+    }
+  }
+
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+    } catch (cause) {
+      setError(humanStatus(cause));
+    }
+  }
+
+  async function cancelDevice() {
+    stopRef.current = true;
+    const sessionId = sessionRef.current;
+    sessionRef.current = null;
+    setDevice(null);
+    setCopied(false);
+    setError(CANCELLED);
+    if (!sessionId) return;
+    try {
+      await invoke("cancel_copilot_device_login", { sessionId });
+    } catch {
+      // 会话已经结束就当取消成功。
+    }
+  }
+
+  async function beginDeviceLogin() {
+    stopRef.current = false;
+    setBusy(true);
+    setError(null);
+    setCopied(false);
+    try {
+      const started = await invoke<CopilotDeviceStart>("start_copilot_device_login");
+      if (stopRef.current) {
+        await invoke("cancel_copilot_device_login", { sessionId: started.session_id });
+        return;
+      }
+      sessionRef.current = started.session_id;
+      let interval = started.interval_seconds;
+      setDevice({
+        sessionId: started.session_id,
+        userCode: started.user_code,
+        verificationUrl: started.verification_url,
+        intervalSeconds: interval,
+      });
+      void openVerification(started.session_id);
+      while (!stopRef.current) {
+        await waitSeconds(interval, () => stopRef.current);
+        if (stopRef.current) return;
+        let polled: CopilotDevicePoll;
+        try {
+          polled = await invoke<CopilotDevicePoll>("poll_copilot_device_login", {
+            sessionId: started.session_id,
+          });
+        } catch (cause) {
+          if (stopRef.current) return;
+          throw cause;
+        }
+        if (stopRef.current) return;
+        if (polled.status === "authorized") {
+          sessionRef.current = null;
+          setDevice(null);
+          setCopied(false);
+          await reload(polled.saved.panel);
+          return;
+        }
+        interval = polled.interval_seconds;
+        setDevice((current) =>
+          current ? { ...current, intervalSeconds: interval } : current,
+        );
+      }
+    } catch (cause) {
+      if (!stopRef.current) {
+        sessionRef.current = null;
+        setDevice(null);
+        setError(humanStatus(cause));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="official-quota-accounts">
       <div className="panel-head">
         <div>
           <h3>额度账号</h3>
           <p className="panel-note">
-            导入当前本机登录。同一登录再导一次会更新原来那一条，不会多出一行。界面只显示掩码。
+            导入当前本机登录。GitHub Copilot 也可以用设备码授权，不改编辑器或命令行的登录态。同一身份再登录一次会更新原来那一条。界面只显示掩码。
           </p>
         </div>
       </div>
       <div className="row-actions">
         <label className="field">
           <span className="field-label">提供方</span>
-          <select value={provider} onChange={(event) => setProvider(event.target.value)}>
+          <select
+            value={provider}
+            disabled={busy}
+            onChange={(event) => setProvider(event.target.value)}
+          >
             {OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => (
               <option key={id} value={id}>
                 {officialQuotaProviderLabel(id)}
@@ -111,7 +255,31 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         <Button variant="accent" disabled={busy} onClick={importCurrent}>
           导入当前本机登录
         </Button>
+        {provider === "copilot" ? (
+          <Button disabled={busy} onClick={() => void beginDeviceLogin()}>
+            设备码授权登录
+          </Button>
+        ) : null}
       </div>
+      {device ? (
+        <div className="device-login">
+          <p className="panel-note">
+            在 GitHub 验证页输入下面的一次性验证码。码表不监听本地端口。当前每 {device.intervalSeconds}{" "}
+            秒查询一次，可以随时取消。
+          </p>
+          <code className="device-code" aria-label="设备验证码">
+            {device.userCode}
+          </code>
+          <code>{device.verificationUrl}</code>
+          <div className="row-actions">
+            <Button onClick={() => void copyCode(device.userCode)}>
+              {copied ? "已复制" : "复制验证码"}
+            </Button>
+            <Button onClick={() => void openVerification(device.sessionId)}>打开验证页面</Button>
+            <Button onClick={() => void cancelDevice()}>取消</Button>
+          </div>
+        </div>
+      ) : null}
       {error ? <p className="panel-note tone-danger">{error}</p> : null}
       {panel && panel.accounts.length === 0 ? (
         <p className="panel-note">还没有导入额度账号。</p>
@@ -133,7 +301,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                 <strong>{account.name}</strong>
               )}
               <span className="muted">{officialQuotaProviderLabel(account.provider)}</span>
-              <span className="muted">本机登录</span>
+              <span className="muted">{accountSourceLabel(account.source)}</span>
               <span className="muted">{account.hint}</span>
               <div className="row-actions">
                 {pendingDeleteId === account.id ? (
