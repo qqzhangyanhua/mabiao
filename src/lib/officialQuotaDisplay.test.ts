@@ -15,11 +15,13 @@ import {
   officialQuotaPlanKind,
   officialQuotaRefreshHint,
   officialQuotaResetLabel,
+  officialQuotaRowTitle,
   officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaStatusLabel,
   officialQuotaUndetectedNote,
 } from "./officialQuotaDisplay";
+import { officialQuotaAttributionId } from "./overviewLayout";
 
 const now = Date.parse("2026-08-23T07:20:00.000Z");
 
@@ -322,5 +324,70 @@ describe("officialQuotaResetLabel", () => {
     expect(reset.text.startsWith("重置 ")).toBe(true);
     expect(reset.text).not.toContain("UTC");
     expect(officialQuotaResetLabel("claude", null).text).toBe("重置时间未知");
+  });
+
+  it("follows the acct slug, and base_provider, for Copilot UTC copy", () => {
+    const reset = officialQuotaResetLabel("acct:copilot:ab12", "2026-09-01T00:00:00Z");
+    expect(reset.text).toBe("重置 2026-09-01 00:00:00 UTC");
+    expect(reset.title).toBe(COPILOT_RESET_TITLE);
+    const claude = officialQuotaResetLabel("acct:claude:ab12", "2026-09-01T00:00:00Z");
+    expect(claude.text).not.toContain("UTC");
+    expect(claude.title).not.toBe(COPILOT_RESET_TITLE);
+    const attributed = officialQuotaResetLabel(
+      officialQuotaAttributionId({ provider: "acct:codex:ab12", base_provider: "copilot" }),
+      "2026-09-01T00:00:00Z",
+    );
+    expect(attributed.text).toBe("重置 2026-09-01 00:00:00 UTC");
+    expect(attributed.title).toBe(COPILOT_RESET_TITLE);
+  });
+});
+
+describe("officialQuotaRowTitle", () => {
+  it("keeps the provider display name when there is no account label", () => {
+    expect(
+      officialQuotaRowTitle({
+        provider: "claude",
+        application: "Claude",
+      }),
+    ).toBe("Claude");
+    expect(
+      officialQuotaRowTitle({
+        provider: "grok",
+        application: "Grok",
+      }),
+    ).toBe("Grok");
+    expect(
+      officialQuotaRowTitle({
+        provider: "copilot",
+        application: "Copilot",
+      }),
+    ).toBe("Copilot");
+  });
+
+  it("composes the provider display name and the account label", () => {
+    expect(
+      officialQuotaRowTitle({
+        provider: "acct:codex:ab12",
+        application: "Codex",
+        account_label: "工作号",
+      }),
+    ).toBe("Codex · 工作号");
+    expect(
+      officialQuotaRowTitle({
+        provider: "acct:codex:ab12",
+        application: "Codex",
+        base_provider: "claude",
+        account_label: "工作号",
+        is_active_local: true,
+      }),
+    ).toBe("Claude · 工作号 · 当前本机");
+    expect(
+      officialQuotaRowTitle({
+        provider: "claude",
+        application: "Claude",
+        account_label: "   ",
+        is_active_local: true,
+      }),
+    ).toBe("Claude · 当前本机");
   });
 });

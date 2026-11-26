@@ -5,10 +5,12 @@ import {
   applyFavoriteQuotaSources,
   collectPresentSources,
   defaultOverviewLayout,
+  acctProviderSlug,
   filterOfficialQuotaRows,
   filterQuotaItems,
   isModuleVisible,
   isOfficialProviderVisible,
+  officialQuotaAttributionId,
   isQuotaSourceVisible,
   officialQuotaProviderLabel,
   OFFICIAL_QUOTA_PROVIDER_IDS,
@@ -224,6 +226,40 @@ describe("visibility helpers", () => {
     expect(summarizeOverviewLayout(hiddenAll).hiddenOfficialProviders).not.toContain(
       "custom:a3f9c1",
     );
+  });
+
+  it("hides quota-account rows with the built-in provider and keeps custom rows", () => {
+    const hiddenCodex = setOfficialProviderVisible(defaultOverviewLayout(), "codex", false);
+    const rows = [
+      { provider: "codex" },
+      { provider: "acct:codex:ab12" },
+      { provider: "acct:codex:cd34", base_provider: "codex" },
+      { provider: "acct:codex:ee56", base_provider: "claude" },
+      { provider: "claude" },
+      { provider: "custom:a3f9c1", base_provider: "codex" },
+    ];
+    expect(filterOfficialQuotaRows(rows, hiddenCodex).map((row) => row.provider)).toEqual([
+      "acct:codex:ee56",
+      "claude",
+      "custom:a3f9c1",
+    ]);
+    expect(isOfficialProviderVisible(hiddenCodex, "acct:codex:ab12")).toBe(false);
+    expect(acctProviderSlug("acct:codex:ab12")).toBe("codex");
+    expect(acctProviderSlug("custom:a3f9c1")).toBeNull();
+    expect(
+      officialQuotaAttributionId({ provider: "custom:a3f9c1", base_provider: "codex" }),
+    ).toBe("custom:a3f9c1");
+    expect(
+      officialQuotaAttributionId({ provider: "acct:codex:ee56", base_provider: " claude " }),
+    ).toBe("claude");
+
+    const hiddenAll = setAllOfficialProvidersVisible(defaultOverviewLayout(), false);
+    expect(filterOfficialQuotaRows(rows, hiddenAll).map((row) => row.provider)).toEqual([
+      "custom:a3f9c1",
+    ]);
+    expect(
+      visibleOfficialQuotaRows(rows, [...OFFICIAL_QUOTA_PROVIDER_IDS]).map((row) => row.provider),
+    ).toEqual(["custom:a3f9c1"]);
   });
 
   it("toggles modules and sources without mutating the original", () => {

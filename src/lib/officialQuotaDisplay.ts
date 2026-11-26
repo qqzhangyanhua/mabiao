@@ -6,7 +6,7 @@ import type {
   QuotaExhaustDto,
 } from "../types";
 import { formatClock, formatUtcClock, formatWindowClock, relativeTime } from "./format";
-import { officialQuotaProviderLabel } from "./overviewLayout";
+import { officialQuotaAttributionId, officialQuotaProviderLabel } from "./overviewLayout";
 
 export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, string> = {
   official: "官方",
@@ -72,6 +72,41 @@ export const OFFICIAL_QUOTA_EXHAUST_TITLE =
 export const COPILOT_RESET_TITLE =
   "GitHub 官方按 UTC 零点重置（每月 1 日 00:00:00 UTC），不是本机时区日切";
 
+/** 额度行标题用的短名，与 Rust `OfficialQuotaProvider::display_name` 一致。
+ *  不要换成 DISPLAY_NAMES：那份是来源名（Claude Code），零配置行标题不是它。
+ */
+const QUOTA_ROW_DISPLAY_NAMES: Record<string, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  cursor: "Cursor",
+  grok: "Grok",
+  droid: "Droid",
+  antigravity: "Antigravity",
+  opencode: "OpenCode",
+  copilot: "Copilot",
+  devin: "Devin",
+};
+
+/** 有账号标签时标题是「提供方显示名 · 标签」；没有则保持行上已有的 application。 */
+export function officialQuotaRowTitle(
+  row: Pick<OfficialQuotaRow, "provider" | "application"> & {
+    base_provider?: string | null;
+    account_label?: string | null;
+    is_active_local?: boolean;
+  },
+): string {
+  const label = row.account_label?.trim() ?? "";
+  const display = QUOTA_ROW_DISPLAY_NAMES[officialQuotaAttributionId(row)];
+  let title = row.application;
+  if (label) {
+    title = `${display ?? row.application} · ${label}`;
+  }
+  if (row.is_active_local) {
+    title = `${title} · 当前本机`;
+  }
+  return title;
+}
+
 export function officialQuotaResetLabel(
   provider: string,
   resetsAt: string | null,
@@ -80,7 +115,8 @@ export function officialQuotaResetLabel(
   if (!resetsAt) {
     return { text: "重置时间未知" };
   }
-  if (provider === "copilot") {
+  const slug = officialQuotaAttributionId({ provider });
+  if (slug === "copilot") {
     return {
       text: `重置 ${formatUtcClock(resetsAt, compact)}`,
       title: COPILOT_RESET_TITLE,

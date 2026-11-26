@@ -168,6 +168,9 @@ fn overlay_cooldown_message(
             error: Some(message),
             todo: None,
             plan: None,
+            base_provider: None,
+            account_label: None,
+            is_active_local: false,
         }),
     }
     Ok(dto)

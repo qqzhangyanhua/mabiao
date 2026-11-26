@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use base64::Engine;
@@ -377,12 +377,21 @@ pub fn parse_jwt_plan(token: &str) -> Option<String> {
 }
 
 fn load_session() -> Result<GrokSession, String> {
-    let path = auth_path();
-    if !path.exists() {
+    load_session_at(&auth_path(), Utc::now())
+}
+
+/// 从显式的 `auth.json` 或配置目录读会话。不访问网络，也不碰默认的 `GROK_HOME`。
+pub fn load_session_at(path: &Path, now: DateTime<Utc>) -> Result<GrokSession, String> {
+    let file = if path.is_dir() {
+        path.join("auth.json")
+    } else {
+        path.to_path_buf()
+    };
+    if !file.exists() {
         return Err("尚未登录 Grok CLI，请先运行 grok login".to_string());
     }
-    let raw = std::fs::read_to_string(&path).map_err(|e| format!("读取 Grok 登录凭证失败：{e}"))?;
-    parse_auth_json(&raw, Utc::now())
+    let raw = std::fs::read_to_string(&file).map_err(|e| format!("读取 Grok 登录凭证失败：{e}"))?;
+    parse_auth_json(&raw, now)
 }
 
 fn resolve_user_id(session: &GrokSession, token: &str) -> Result<String, String> {

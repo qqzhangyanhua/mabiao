@@ -167,6 +167,20 @@ pub struct OfficialQuotaRow {
     /// 账号套餐展示名。Cursor / Grok 能拿到；其余账号和自定义提供商留空。
     #[serde(default)]
     pub plan: Option<String>,
+    /// 额度账号归属的内置提供方 slug。内置单行和自定义提供商留空。
+    /// 缺字段的旧 JSON 仍能解析；默认空值不写回，避免零配置输出多出键。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_provider: Option<String>,
+    /// 额度账号的展示标签。没有时标题仍是提供方显示名。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_label: Option<String>,
+    /// 这条行是当前本机正在使用的登录态。缺省为 false，不写进 JSON。
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub is_active_local: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

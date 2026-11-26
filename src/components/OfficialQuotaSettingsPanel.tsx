@@ -8,10 +8,12 @@ import {
   persistOfficialQuotaConfig,
 } from "../lib/officialQuotaConfig";
 import {
+  officialQuotaRowTitle,
   officialQuotaRowTone,
   officialQuotaSettingsRefreshNote,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
+import { officialQuotaAttributionId } from "../lib/overviewLayout";
 import type { OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
 import { OfficialQuotaPlanMark, QuotaFreshnessMark } from "./OfficialQuotaPanel";
 import { SourceLabel } from "./SourceIcon";
@@ -123,7 +125,11 @@ export function OfficialQuotaSettingsPanel({
           {quota.rows.map((row) => (
             <li key={row.provider} className={`tone-${officialQuotaRowTone(row)}`}>
               <strong>
-                <SourceLabel source={row.provider} fallback={row.application} size={14} />
+                <SourceLabel
+                  source={officialQuotaAttributionId(row)}
+                  fallback={officialQuotaRowTitle(row)}
+                  size={14}
+                />
               </strong>
               {row.plan ? <OfficialQuotaPlanMark plan={row.plan} /> : null}
               <QuotaFreshnessMark

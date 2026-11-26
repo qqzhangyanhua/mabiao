@@ -222,6 +222,9 @@ fn official_row(
         error: None,
         todo: None,
         plan: None,
+        base_provider: None,
+        account_label: None,
+        is_active_local: false,
     }
 }
 

@@ -15,6 +15,7 @@ pub mod fetch;
 pub mod grok;
 pub(crate) mod grok_grpc;
 pub mod hook;
+pub mod identity;
 pub mod notify;
 pub mod opencode;
 
@@ -39,6 +40,7 @@ pub use fetch::{
     parse_provider, resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget,
     ThrottledFetch,
 };
+pub use identity::{read_identity, QuotaIdentity};
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
 pub const CONFIG_NAME: &str = "official_quota.json";
@@ -136,6 +138,9 @@ pub fn load_dto(
 
 /// 按 `hidden_providers` 挑出用户还想看的行，托盘额度面板用它瘦身。
 /// 独立成纯函数是为了不用 `AppHandle` 就能单测。
+///
+/// 额度账号按归属内置提供方隐藏：关掉 `codex` 会同时藏掉 `acct:codex:…`。
+/// 自定义提供商仍只按自己的 `custom:` 标识匹配，不跟着内置开关走。
 pub fn visible_rows(
     rows: Vec<OfficialQuotaRow>,
     hidden_providers: &[String],
@@ -146,8 +151,58 @@ pub fn visible_rows(
     let hidden: std::collections::HashSet<&str> =
         hidden_providers.iter().map(String::as_str).collect();
     rows.into_iter()
-        .filter(|row| !hidden.contains(row.provider.as_str()))
+        .filter(|row| !hidden.contains(quota_visibility_id(row)))
         .collect()
+}
+
+/// 配置显示和托盘用的提供方键：`base_provider`，否则从 `acct:<slug>:<hex>` 取出 slug。
+fn quota_visibility_id(row: &OfficialQuotaRow) -> &str {
+    if custom::is_custom_id(&row.provider) {
+        return row.provider.as_str();
+    }
+    if let Some(base) = row.base_provider.as_deref() {
+        let base = base.trim();
+        if !base.is_empty() {
+            return base;
+        }
+    }
+    acct_provider_slug(&row.provider).unwrap_or(row.provider.as_str())
+}
+
+/// `acct:<slug>:<hex>` 里的内置 slug。不是这个形状就不是额度账号。
+fn acct_provider_slug(id: &str) -> Option<&str> {
+    let rest = id.strip_prefix("acct:")?;
+    let (slug, hex) = rest.split_once(':')?;
+    if slug.is_empty()
+        || hex.is_empty()
+        || !slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        || !hex.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    Some(slug)
+}
+
+/// 额度行标题。没有账号标签时保持提供方显示名，有标签时为「显示名 · 标签」。
+pub fn quota_row_application(display_name: &str, account_label: Option<&str>) -> String {
+    match account_label
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+    {
+        Some(label) => format!("{display_name} · {label}"),
+        None => display_name.to_string(),
+    }
+}
+
+/// 「当前本机」是后来给额度账号打的标记，不是标题本身。
+pub fn quota_active_local_mark(is_active_local: bool) -> Option<&'static str> {
+    if is_active_local {
+        Some("当前本机")
+    } else {
+        None
+    }
 }
 
 fn load_row(
@@ -216,6 +271,9 @@ fn load_row_by_id(
                 error: stored.error,
                 todo: None,
                 plan: stored.plan,
+                base_provider: None,
+                account_label: None,
+                is_active_local: false,
             }
         }
         Ok(None) => empty_row(id, display_name, None),
@@ -233,6 +291,9 @@ fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuo
         error,
         todo: None,
         plan: None,
+        base_provider: None,
+        account_label: None,
+        is_active_local: false,
     }
 }
 

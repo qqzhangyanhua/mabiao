@@ -188,26 +188,51 @@ export function isOfficialProviderVisible(layout: OverviewLayout, provider: stri
   if (isCustomQuotaProviderId(provider)) {
     return true;
   }
-  return layout.officialProviders[provider] !== false;
+  const key = acctProviderSlug(provider) ?? provider;
+  return layout.officialProviders[key] !== false;
 }
 
-export function filterOfficialQuotaRows<T extends { provider: string }>(
-  rows: T[],
-  layout: OverviewLayout,
-): T[] {
-  return rows.filter((row) => isOfficialProviderVisible(layout, row.provider));
+export function filterOfficialQuotaRows<
+  T extends { provider: string; base_provider?: string | null },
+>(rows: T[], layout: OverviewLayout): T[] {
+  return rows.filter((row) =>
+    isOfficialProviderVisible(layout, officialQuotaAttributionId(row)),
+  );
 }
 
 /** 托盘额度面板按 official_quota.json 的 hidden_providers 过滤，和主窗口配置显示同步。 */
-export function visibleOfficialQuotaRows<T extends { provider: string }>(
-  rows: T[],
-  hiddenProviders: string[] | undefined,
-): T[] {
+export function visibleOfficialQuotaRows<
+  T extends { provider: string; base_provider?: string | null },
+>(rows: T[], hiddenProviders: string[] | undefined): T[] {
   if (!hiddenProviders || hiddenProviders.length === 0) {
     return rows;
   }
   const hidden = new Set(hiddenProviders);
-  return rows.filter((row) => !hidden.has(row.provider));
+  return rows.filter((row) => !hidden.has(officialQuotaAttributionId(row)));
+}
+
+/** `acct:<slug>:<hex>` 中间那段内置 slug。不是这个形状就返回 null。 */
+export function acctProviderSlug(provider: string): string | null {
+  const match = /^acct:([a-z0-9_-]+):([0-9a-fA-F]+)$/.exec(provider);
+  return match?.[1] ?? null;
+}
+
+/**
+ * 配置显示、图标和 Copilot 重置文案用的提供方。
+ * 自定义提供商保持自己的 `custom:` 标识；额度账号用 `base_provider`，没有再从 id 里取。
+ */
+export function officialQuotaAttributionId(row: {
+  provider: string;
+  base_provider?: string | null;
+}): string {
+  if (isCustomQuotaProviderId(row.provider)) {
+    return row.provider;
+  }
+  const base = row.base_provider?.trim();
+  if (base) {
+    return base;
+  }
+  return acctProviderSlug(row.provider) ?? row.provider;
 }
 
 export function isOfficialQuotaProviderId(value: string): value is OfficialQuotaProviderId {

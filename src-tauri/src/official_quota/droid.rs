@@ -317,19 +317,41 @@ pub(crate) fn parse_security_output(success: bool, stdout: &[u8]) -> Option<Stri
 }
 
 fn read_keyfile_v2(home: &std::path::Path) -> Result<Option<String>, String> {
+    Ok(read_keyfile_plaintext(home)?.and_then(|plain| access_token_from(&plain)))
+}
+
+fn read_keyfile_plaintext(home: &std::path::Path) -> Result<Option<String>, String> {
     let (Ok(payload), Ok(key)) = (
         std::fs::read_to_string(home.join("auth.v2.file")),
         std::fs::read_to_string(home.join("auth.v2.key")),
     ) else {
         return Ok(None);
     };
-    let plain = decrypt_credentials(payload.trim(), key.trim())?;
-    Ok(access_token_from(&plain))
+    decrypt_credentials(payload.trim(), key.trim()).map(Some)
 }
 
 fn read_legacy(home: &std::path::Path) -> Option<String> {
     let raw = std::fs::read_to_string(home.join("auth.json")).ok()?;
     access_token_from(&raw)
+}
+
+/// 显式目录或凭证文件里的登录态明文。不读系统钥匙串，也不写任何文件。
+pub fn read_auth_plaintext_at(home: &std::path::Path) -> Result<Option<String>, String> {
+    if home.is_file() {
+        return std::fs::read_to_string(home)
+            .map(Some)
+            .map_err(|error| format!("读取 Droid 登录态失败：{error}"));
+    }
+    if let Some(plain) = read_keyfile_plaintext(home)? {
+        if access_token_from(&plain).is_some() {
+            return Ok(Some(plain));
+        }
+    }
+    match std::fs::read_to_string(home.join("auth.json")) {
+        Ok(raw) => Ok(Some(raw)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("读取 Droid 登录态失败：{error}")),
+    }
 }
 
 fn access_token_from(raw: &str) -> Option<String> {

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BRAND_IDS } from "../generated/displayIdentity";
+import { officialQuotaAttributionId } from "./overviewLayout";
 import { brandToneClass, resolveSourceIconId } from "./sourceIcon";
 
 const KNOWN_SOURCES = [
@@ -97,6 +98,37 @@ describe("resolveSourceIconId", () => {
   it("uses the Antigravity face for official quota and agy usage", () => {
     expect(resolveSourceIconId("antigravity")).toBe("agy");
     expect(resolveSourceIconId("agy")).toBe("agy");
+  });
+
+  it("uses the built-in face for a quota-account row", () => {
+    const face = (row: { provider: string; base_provider?: string | null }) => {
+      const iconId = resolveSourceIconId(officialQuotaAttributionId(row));
+      return {
+        iconId,
+        tone: iconId === "unknown" ? "tone-other" : brandToneClass(iconId),
+      };
+    };
+    expect(face({ provider: "acct:droid:ab12" })).toEqual({
+      iconId: "factory",
+      tone: "tone-factory",
+    });
+    expect(face({ provider: "acct:antigravity:ab12" })).toEqual({
+      iconId: "agy",
+      tone: "tone-gemini",
+    });
+    expect(face({ provider: "acct:devin:ab12" })).toEqual({
+      iconId: "unknown",
+      tone: "tone-other",
+    });
+    expect(face({ provider: "acct:copilot:ab12" })).toEqual({
+      iconId: "copilot",
+      tone: "tone-copilot",
+    });
+    expect(face({ provider: "acct:codex:ab12", base_provider: "claude" })).toEqual({
+      iconId: "claude",
+      tone: "tone-claude",
+    });
+    expect(resolveSourceIconId("acct:codex:ab12")).toBe("unknown");
   });
 
   it("falls back to the generic mark instead of a first letter", () => {
