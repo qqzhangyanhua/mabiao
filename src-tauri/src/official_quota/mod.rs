@@ -301,13 +301,22 @@ fn load_account_row(
     row.base_provider = provider.map(|item| item.as_str().to_string());
     row.account_label = Some(account.config.name.clone());
     row.is_active_local = active_local;
-    if account.access_token_missing() {
-        if row.error.as_deref() == Some(accounts::MISSING_SECRET_TODO) {
-            row.error = None;
-        }
+    attach_account_missing_secret(&mut row, account.access_token_missing());
+    row
+}
+
+/// 缺凭证是待办，不是取数失败。sqlite 里可能残留同一句 todo，或迁移前的
+/// `LOGIN_EXPIRED`；这两句挪出 `error`，避免首页把待办画成红字。
+/// 密钥补上之后，残留的 todo 文案也从 `error` 拿掉。登录失效要等下次取数成功再清。
+fn attach_account_missing_secret(row: &mut OfficialQuotaRow, missing: bool) {
+    let stale_todo = row.error.as_deref() == Some(accounts::MISSING_SECRET_TODO);
+    let stale_expiry = missing && row.error.as_deref() == Some(accounts::LOGIN_EXPIRED);
+    if stale_todo || stale_expiry {
+        row.error = None;
+    }
+    if missing {
         row.todo = Some(accounts::MISSING_SECRET_TODO.to_string());
     }
-    row
 }
 
 /// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。

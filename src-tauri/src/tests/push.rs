@@ -697,6 +697,21 @@ fn context_layers_map_one_to_one_to_the_wire_layers() {
     }
 }
 
+#[test]
+fn payload_builders_take_sessions_and_usage_not_quota_accounts() {
+    let session: fn(
+        crate::conversation::PushSessionSource,
+        &push_protocol::DeviceInfo,
+    ) -> crate::push::payload::BuiltSession = build_session;
+    let usage: fn(&[UsageRecord], &PriceTable) -> crate::push::payload::BuiltUsage = build_usage;
+    let session_ty = std::any::type_name_of_val(&session);
+    let usage_ty = std::any::type_name_of_val(&usage);
+    assert!(session_ty.contains("PushSessionSource"), "{session_ty}");
+    assert!(usage_ty.contains("UsageRecord"), "{usage_ty}");
+    assert!(!session_ty.contains("QuotaAccount"), "{session_ty}");
+    assert!(!usage_ty.contains("QuotaAccount"), "{usage_ty}");
+}
+
 // ---- 消耗记录 ----
 
 pub(super) fn usage_row(at: &str, session: &str, total: i64) -> UsageRecord {
