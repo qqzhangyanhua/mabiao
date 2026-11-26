@@ -31,11 +31,23 @@ const NOT_SIGNED_IN: &str = "尚未登录 Devin / Windsurf，请先打开客户�
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let api_key = load_api_key()?;
-    let raw = request_user_status(&api_key)?;
+    fetch_with_access_token(&api_key)
+}
+
+/// 用调用方给的 apiKey 取额度。不读本机库。
+pub(crate) fn fetch_with_access_token(api_key: &str) -> Result<QuotaSnapshot, String> {
+    let raw = request_user_status(api_key)?;
     Ok(
         QuotaSnapshot::new(parse_user_status(&raw)?, Utc::now().to_rfc3339())
             .with_plan(parse_plan(&raw)),
     )
+}
+
+pub(crate) fn storage_dirs() -> Vec<std::path::PathBuf> {
+    APP_DIRS
+        .into_iter()
+        .filter_map(crate::vscode_state::global_storage_dir)
+        .collect()
 }
 
 pub fn parse_plan(raw: &str) -> Option<String> {

@@ -37,7 +37,14 @@ const WINDOWS: [(&str, &str, &str); 3] = [
 
 pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
     let token = load_access_token(&credentials_path())?;
-    let raw = request_usage(&token)?;
+    fetch_with_access_token(&token)
+}
+
+/// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
+pub(crate) fn fetch_with_access_token(
+    token: &str,
+) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let raw = request_usage(token)?;
     Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
 }
 

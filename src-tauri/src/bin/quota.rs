@@ -51,12 +51,16 @@ fn run(refresh: bool) -> Result<String, String> {
         });
     }
     let path = db_path.to_string_lossy().to_string();
-    let custom_paths = official_quota::custom::store::CustomQuotaPaths::app_data();
-    let custom = official_quota::custom::store::load_providers(&custom_paths);
+    let inputs = official_quota::accounts::QuotaSnapshotInputs::from_app_data();
 
     if refresh {
         // 取数在写之前完成，写完立刻放锁，尽量少打扰正在运行的应用。
-        let results = official_quota::fetch_all_targets(&custom);
+        let results = official_quota::fetch_all_targets_with_accounts(
+            &inputs.custom,
+            &inputs.accounts,
+            &inputs.logins,
+            |_, _| {},
+        );
         let conn = store::open_db(&path)?;
         official_quota::apply_fetch_results(&conn, results)?;
     }
@@ -64,10 +68,12 @@ fn run(refresh: bool) -> Result<String, String> {
     let conn = store::open_readonly(&path)?;
     let config =
         official_quota::load_config(&paths::app_data_dir().join(official_quota::CONFIG_NAME));
-    render(&official_quota::load_dto(
+    render(&official_quota::load_dto_with_accounts(
         &conn,
         &config,
-        &custom,
+        &inputs.custom,
+        &inputs.accounts,
+        &inputs.logins,
         chrono::Utc::now(),
     ))
 }

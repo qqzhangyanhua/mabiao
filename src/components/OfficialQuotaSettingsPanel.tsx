@@ -16,6 +16,7 @@ import {
 import { officialQuotaAttributionId } from "../lib/overviewLayout";
 import type { OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaHookDto } from "../types";
 import { OfficialQuotaPlanMark, QuotaFreshnessMark } from "./OfficialQuotaPanel";
+import { QuotaAccountPanel } from "./QuotaAccountPanel";
 import { SourceLabel } from "./SourceIcon";
 import { Button } from "./ui/Button";
 
@@ -220,6 +221,7 @@ export function OfficialQuotaSettingsPanel({
           </Button>
         </div>
       ) : null}
+      <QuotaAccountPanel onQuota={onQuota} />
     </section>
   );
 }

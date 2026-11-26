@@ -19,9 +19,18 @@ fn official_quota_snapshot(app: &tauri::AppHandle) -> Result<OfficialQuotaDto, S
     let state = app.state::<AppState>();
     let config = official_quota::load_config(&state.official_quota_path);
     let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
+    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
+    let logins = official_quota::accounts::probe_default_logins(&accounts);
     let dto = {
         let conn = state.lock_read()?;
-        official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now())
+        official_quota::load_dto_with_accounts(
+            &conn,
+            &config,
+            &custom,
+            &accounts,
+            &logins,
+            chrono::Utc::now(),
+        )
     };
     official_quota::notify::check_and_notify_with_config(
         app,
@@ -51,8 +60,12 @@ pub async fn refresh_official_quota(app: tauri::AppHandle) -> Result<OfficialQuo
         // 回调会在各家取数线程里并发进入；串起来保证推出去的快照只会越来越新。
         let publishing = Mutex::new(());
         let persisted = Mutex::new(HashSet::<String>::new());
-        let results = official_quota::fetch_all_targets_with(
-            &load_custom_providers(&app),
+        let custom = load_custom_providers(&app);
+        let (accounts, logins) = load_quota_accounts(&app);
+        let results = official_quota::fetch_all_targets_with_accounts(
+            &custom,
+            &accounts,
+            &logins,
             |target, result| {
                 let _serial = publishing.lock().unwrap_or_else(PoisonError::into_inner);
                 let id = target.quota_id().to_string();
@@ -95,7 +108,10 @@ pub async fn refresh_official_quota_provider(
     tauri::async_runtime::spawn_blocking(move || {
         // 先试内置枚举，认不出再回落到自定义通道——`custom:` 那些标识
         // 走的是后一条路，不该再撞上「未知的官方额度账号」。
-        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        let custom = load_custom_providers(&app);
+        let (accounts, logins) = load_quota_accounts(&app);
+        let target =
+            official_quota::resolve_target_with_accounts(&provider, &custom, &accounts, &logins)?;
         match official_quota::fetch_target_throttled(&target) {
             // 冷却期短路：不写库，避免把上一次真实失败原因换成这句「还要等 N 分
             // 钟」——只在这次响应的快照里临时替换该行 error，够按钮即时反馈用。
@@ -123,7 +139,10 @@ pub async fn refresh_official_quota_provider_force(
     provider: String,
 ) -> Result<OfficialQuotaDto, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let target = official_quota::resolve_target(&provider, &load_custom_providers(&app))?;
+        let custom = load_custom_providers(&app);
+        let (accounts, logins) = load_quota_accounts(&app);
+        let target =
+            official_quota::resolve_target_with_accounts(&provider, &custom, &accounts, &logins)?;
         let result = official_quota::fetch_target_forced(&target);
         persist_official_quota_fetches(&app, [(target, result)])
     })
@@ -134,6 +153,37 @@ pub async fn refresh_official_quota_provider_force(
 fn load_custom_providers(app: &tauri::AppHandle) -> Vec<official_quota::custom::ResolvedProvider> {
     let state = app.state::<AppState>();
     official_quota::custom::store::load_providers(&state.custom_quota_paths)
+}
+
+fn load_quota_accounts(
+    app: &tauri::AppHandle,
+) -> (
+    Vec<official_quota::accounts::ResolvedQuotaAccount>,
+    Vec<official_quota::accounts::LocalLogin>,
+) {
+    let state = app.state::<AppState>();
+    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
+    let logins = official_quota::accounts::probe_default_logins(&accounts);
+    (accounts, logins)
+}
+
+/// 保存或重新导入之后，启用的那一条立刻取一次。失败写进行里，不让保存本身失败。
+fn refresh_saved_account(app: &tauri::AppHandle, id: &str) {
+    let custom = load_custom_providers(app);
+    let (accounts, logins) = load_quota_accounts(app);
+    let Ok(target) = official_quota::resolve_target_with_accounts(id, &custom, &accounts, &logins)
+    else {
+        return;
+    };
+    let result = match official_quota::fetch_target_throttled(&target) {
+        official_quota::ThrottledFetch::Cooldown(_) => return,
+        official_quota::ThrottledFetch::Attempted(result) => result,
+    };
+    let state = app.state::<AppState>();
+    let Ok(conn) = state.lock_write() else {
+        return;
+    };
+    let _ = official_quota::apply_fetch_results(&conn, [(target, result)]);
 }
 
 fn persist_official_quota_fetches<T: official_quota::QuotaTarget>(
@@ -280,4 +330,64 @@ pub async fn test_custom_quota_provider(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn list_quota_accounts(
+    state: tauri::State<AppState>,
+) -> official_quota::accounts::QuotaAccountPanelDto {
+    official_quota::accounts::list(&state.quota_account_paths)
+}
+
+#[tauri::command]
+pub async fn import_local_quota_account(
+    app: tauri::AppHandle,
+    provider: String,
+) -> Result<official_quota::accounts::SavedQuotaAccountDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let provider = official_quota::parse_provider(&provider)?;
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let saved = official_quota::accounts::import_default(
+            &paths,
+            provider,
+            &official_quota::backoff::state_path(),
+        )?;
+        if saved.enabled {
+            refresh_saved_account(&app, &saved.saved_id);
+        }
+        Ok(saved)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn save_quota_account(
+    app: tauri::AppHandle,
+    request: official_quota::accounts::SaveQuotaAccount,
+) -> Result<official_quota::accounts::SavedQuotaAccountDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let saved = official_quota::accounts::save(
+            &paths,
+            request,
+            &official_quota::backoff::state_path(),
+        )?;
+        if saved.enabled {
+            refresh_saved_account(&app, &saved.saved_id);
+        }
+        Ok(saved)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn delete_quota_account(
+    state: tauri::State<AppState>,
+    id: String,
+) -> Result<official_quota::accounts::QuotaAccountPanelDto, String> {
+    official_quota::accounts::delete_account(&state.quota_account_paths, &id)
 }

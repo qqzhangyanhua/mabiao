@@ -30,7 +30,12 @@ const PERCENT_HEADERS: [(&str, &str); 2] = [
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let auth = load_auth(&auth_path())?;
-    let (raw, header_percents) = request_usage(&auth)?;
+    fetch_with_access_token(&auth)
+}
+
+/// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
+pub(crate) fn fetch_with_access_token(auth: &CodexAuth) -> Result<QuotaSnapshot, String> {
+    let (raw, header_percents) = request_usage(auth)?;
     let windows = parse_usage(&raw, &header_percents, Utc::now().timestamp())?;
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(parse_plan_type(&raw)))
 }

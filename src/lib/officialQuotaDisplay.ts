@@ -101,7 +101,7 @@ export function officialQuotaRowTitle(
   if (label) {
     title = `${display ?? row.application} · ${label}`;
   }
-  if (row.is_active_local) {
+  if (row.is_active_local && !title.endsWith("当前本机")) {
     title = `${title} · 当前本机`;
   }
   return title;

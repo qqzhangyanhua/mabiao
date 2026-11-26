@@ -71,6 +71,21 @@ pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
+/// 只用 access token 取摘要。401 直接报登录失效，不走 refresh。
+pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err(NOT_SIGNED_IN.to_string());
+    }
+    let raw = request_summary(token).map_err(|error| match error {
+        SummaryError::Unauthorized => "Antigravity 登录已失效，请重新打开客户端登录".to_string(),
+        SummaryError::Other(message) => message,
+    })?;
+    let windows = parse_quota_summary(&raw)?;
+    let plan = parse_code_assist_tier(&raw).or_else(|| fetch_plan(token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
 fn fetch_summary() -> Result<(String, String), String> {
     let tokens = load_local_tokens()?;
     if let Some(token) = tokens.access_token.as_deref() {

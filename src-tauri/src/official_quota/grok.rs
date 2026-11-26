@@ -75,6 +75,90 @@ pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
+/// 只用现成的 access token 取额度。不发现 OIDC，也不拿 refresh token 去换新的。
+/// `quota_base` 把额度 URL 换到调用方给的根上（本地桩）；生产传 `None`。
+pub(crate) fn fetch_with_access_token(
+    token: &str,
+    user_id: Option<&str>,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("Grok 登录已过期，请重新运行 grok login".to_string());
+    }
+    let direct = quota_base.is_some();
+    let version = DEFAULT_GROK_CLI_VERSION;
+    let user_id_owned = if let Some(id) = user_id.map(str::trim).filter(|id| !id.is_empty()) {
+        id.to_string()
+    } else if quota_base.is_none() {
+        let raw = request_json_inner(token, None, USER_URL, TIMEOUT, version, false)?;
+        parse_user_id_response(&raw)?
+    } else {
+        let raw = request_json_inner(
+            token,
+            None,
+            &rebase_quota_url(USER_URL, quota_base),
+            TIMEOUT,
+            version,
+            true,
+        )?;
+        parse_user_id_response(&raw)?
+    };
+    let credits_result = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(BILLING_CREDITS_URL, quota_base),
+        TIMEOUT,
+        version,
+        direct,
+    );
+    let mut windows = match credits_result {
+        Ok(raw) => parse_credits(&raw)?,
+        Err(error) if quota_base.is_none() && super::grok_grpc::should_fallback_to_grpc(&error) => {
+            super::grok_grpc::fetch_credits(token, Some(&user_id_owned), version)?
+        }
+        Err(error) => return Err(error),
+    };
+    if let Ok(monthly_raw) = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(BILLING_MONTHLY_URL, quota_base),
+        TIMEOUT,
+        version,
+        direct,
+    ) {
+        if let Ok(monthly) = parse_monthly(&monthly_raw) {
+            merge_windows(&mut windows, monthly);
+        }
+    }
+    if windows.is_empty() {
+        return Err("Grok 限额响应里没有可用的已用百分比".to_string());
+    }
+    let plan = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(SETTINGS_URL, quota_base),
+        SETTINGS_TIMEOUT,
+        version,
+        direct,
+    )
+    .ok()
+    .and_then(|raw| parse_settings_plan(&raw))
+    .or_else(|| parse_jwt_plan(token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+fn rebase_quota_url(url: &str, base: Option<&str>) -> String {
+    let Some(base) = base.map(str::trim).filter(|value| !value.is_empty()) else {
+        return url.to_string();
+    };
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|index| &rest[index..]))
+        .unwrap_or("/");
+    format!("{}{path}", base.trim_end_matches('/'))
+}
+
 /// 本地已知过期时提前现刷，省一次注定 401 的往返；没有刷新凭证才把过期错误原样交回。
 fn ensure_fresh_token(session: &GrokSession) -> Result<String, String> {
     if !session.expired {
@@ -412,7 +496,7 @@ pub fn auth_file_exists() -> bool {
     auth_path().exists()
 }
 
-fn auth_path() -> PathBuf {
+pub(crate) fn auth_path() -> PathBuf {
     grok_home().join("auth.json")
 }
 
@@ -438,11 +522,27 @@ fn request_json_with_timeout(
     url: &str,
     timeout: Duration,
 ) -> Result<String, String> {
-    let mut request = crate::net::agent_with_timeout(timeout)
+    request_json_inner(token, user_id, url, timeout, &grok_client_version(), false)
+}
+
+fn request_json_inner(
+    token: &str,
+    user_id: Option<&str>,
+    url: &str,
+    timeout: Duration,
+    version: &str,
+    direct: bool,
+) -> Result<String, String> {
+    let agent = if direct {
+        crate::net::agent_without_redirects(timeout, true)
+    } else {
+        crate::net::agent_with_timeout(timeout)
+    };
+    let mut request = agent
         .get(url)
         .set("Authorization", &format!("Bearer {token}"))
         .set("X-XAI-Token-Auth", TOKEN_AUTH)
-        .set("x-grok-client-version", &grok_client_version())
+        .set("x-grok-client-version", version)
         .set("x-grok-client-mode", CLIENT_MODE)
         .set("Accept", "application/json");
     if let Some(user_id) = user_id.filter(|id| !id.is_empty()) {

@@ -41,9 +41,14 @@ const BUCKETS: [(&str, &str); 3] = [("fiveHour", "5 小时"), ("weekly", "周"),
 
 pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     let token = load_access_token()?;
-    let raw = request_limits(&token)?;
+    fetch_with_access_token(&token)
+}
+
+/// 用调用方给的 access token 取限额。不读钥匙串，也不刷新。
+pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
+    let raw = request_limits(token)?;
     let windows = parse_limits(&raw, Utc::now())?;
-    let plan = fetch_subscription_plan(&token);
+    let plan = fetch_subscription_plan(token);
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
@@ -205,7 +210,7 @@ fn is_active(resets_at: Option<&DateTime<Utc>>, now: DateTime<Utc>) -> bool {
     resets_at.is_none_or(|value| *value > now)
 }
 
-fn factory_home() -> PathBuf {
+pub(crate) fn factory_home() -> PathBuf {
     std::env::var("FACTORY_HOME_OVERRIDE")
         .ok()
         .map(PathBuf::from)

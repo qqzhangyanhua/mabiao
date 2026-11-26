@@ -389,5 +389,12 @@ describe("officialQuotaRowTitle", () => {
         is_active_local: true,
       }),
     ).toBe("Claude · 当前本机");
+    expect(
+      officialQuotaRowTitle({
+        provider: "codex",
+        application: "Codex · 当前本机",
+        is_active_local: true,
+      }),
+    ).toBe("Codex · 当前本机");
   });
 });

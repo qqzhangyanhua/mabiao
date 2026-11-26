@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod antigravity;
 pub mod backoff;
 pub mod claude;
@@ -36,9 +37,10 @@ use crate::store;
 // 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
 pub use fetch::{
     apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_all_targets_with,
-    fetch_in_parallel, fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled,
-    parse_provider, resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget,
-    ThrottledFetch,
+    fetch_all_targets_with_accounts, fetch_in_parallel, fetch_provider, fetch_target,
+    fetch_target_forced, fetch_target_throttled, parse_provider, resolve_target,
+    resolve_target_with_accounts, targets_for_fetch, FetchTarget, ProviderFetch, QuotaSnapshot,
+    QuotaTarget, ThrottledFetch,
 };
 pub use identity::{read_identity, QuotaIdentity};
 
@@ -102,25 +104,69 @@ pub fn load_dto(
     custom: &[custom::ResolvedProvider],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
-    // 本机没凭证、也没历史缓存的 provider 不占一行——否则家数一多，
-    // 界面上全是永远好不了的红字。曾经拉到过数据的仍然保留，避免临时登出就丢历史。
-    let mut rows: Vec<OfficialQuotaRow> = OfficialQuotaProvider::ALL
-        .into_iter()
-        .map(|provider| load_row(conn, provider, now))
-        .filter(|row| {
-            !row.windows.is_empty()
-                || row.captured_at.is_some()
-                || OfficialQuotaProvider::parse(&row.provider)
-                    .is_some_and(detect::has_local_credentials)
-        })
-        .collect();
+    load_dto_with_accounts(conn, config, custom, &[], &[], now)
+}
+
+/// 有额度账号时按账号分行；某个提供方一个账号都没有时，仍是原来的单行。
+///
+/// `logins` 是离线探到的本机登录。测试传入临时目录上的结果，不读家目录。
+pub fn load_dto_with_accounts(
+    conn: &Connection,
+    config: &OfficialQuotaConfig,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+    now: DateTime<Utc>,
+) -> OfficialQuotaDto {
+    let mut rows = Vec::new();
+    for provider in OfficialQuotaProvider::ALL {
+        match accounts::plan::plan_provider(provider, accounts, logins) {
+            accounts::plan::ProviderPlan::Unchanged => {
+                // 本机没凭证、也没历史缓存的 provider 不占一行。
+                let row = load_row(conn, provider, now);
+                if !row.windows.is_empty()
+                    || row.captured_at.is_some()
+                    || detect::has_local_credentials(provider)
+                {
+                    rows.push(row);
+                }
+            }
+            accounts::plan::ProviderPlan::Managed {
+                show_builtin,
+                placements,
+            } => {
+                if show_builtin {
+                    let mut row = load_row(conn, provider, now);
+                    row.is_active_local = true;
+                    row.application = quota_row_title(provider.display_name(), None, true);
+                    rows.push(row);
+                }
+                for placement in placements {
+                    rows.push(load_account_row(
+                        conn,
+                        placement.account,
+                        placement.active_local,
+                        now,
+                    ));
+                }
+            }
+        }
+    }
     let undetected = OfficialQuotaProvider::ALL
         .into_iter()
-        .filter(|provider| !rows.iter().any(|row| row.provider == provider.as_str()))
+        .filter(|provider| {
+            let slug = provider.as_str();
+            let present = rows
+                .iter()
+                .any(|row| row.provider == slug || row.base_provider.as_deref() == Some(slug));
+            let registered = accounts
+                .iter()
+                .any(|account| account.config.provider == slug);
+            !present && !registered
+        })
         .map(|provider| provider.as_str().to_string())
         .collect();
-    // 自定义行不套上面那条「没凭证就不占位」的规则：用户是自己动手登记的，
-    // 登记完却看不到那一行，只会以为保存没生效。停用的才不占行。
+    // 自定义行不套「没凭证就不占位」：用户自己登记的，停用的才不占行。
     rows.extend(
         custom
             .iter()
@@ -205,12 +251,49 @@ pub fn quota_active_local_mark(is_active_local: bool) -> Option<&'static str> {
     }
 }
 
+/// 行标题：有标签时「显示名 · 标签」，当前本机再补「 · 当前本机」。
+pub fn quota_row_title(
+    display_name: &str,
+    account_label: Option<&str>,
+    is_active_local: bool,
+) -> String {
+    let mut title = quota_row_application(display_name, account_label);
+    if quota_active_local_mark(is_active_local).is_some() && !title.ends_with("当前本机") {
+        title = format!("{title} · 当前本机");
+    }
+    title
+}
+
 fn load_row(
     conn: &Connection,
     provider: OfficialQuotaProvider,
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     load_row_by_id(conn, provider.as_str(), provider.display_name(), now)
+}
+
+fn load_account_row(
+    conn: &Connection,
+    account: &accounts::ResolvedQuotaAccount,
+    active_local: bool,
+    now: DateTime<Utc>,
+) -> OfficialQuotaRow {
+    let provider = OfficialQuotaProvider::parse(&account.config.provider);
+    let display = provider
+        .map(OfficialQuotaProvider::display_name)
+        .unwrap_or(account.config.provider.as_str());
+    let title = quota_row_title(display, Some(&account.config.name), active_local);
+    let mut row = load_row_by_id(conn, &account.config.id, &title, now);
+    row.base_provider = provider.map(|item| item.as_str().to_string());
+    row.account_label = Some(account.config.name.clone());
+    row.is_active_local = active_local;
+    if account.access_token_missing() {
+        if row.error.as_deref() == Some(accounts::MISSING_SECRET_TODO) {
+            row.error = None;
+        }
+        row.todo = Some(accounts::MISSING_SECRET_TODO.to_string());
+    }
+    row
 }
 
 /// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。

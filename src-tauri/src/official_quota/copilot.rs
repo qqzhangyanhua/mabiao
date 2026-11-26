@@ -29,7 +29,12 @@ const SNAPSHOTS: [(&str, &str, &str); 3] = [
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let token = load_token().ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    let raw = request_usage(&token)?;
+    fetch_with_access_token(&token)
+}
+
+/// 用调用方给的 token 取额度。不读本机配置。
+pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
+    let raw = request_usage(token)?;
     Ok(QuotaSnapshot::new(parse_usage(&raw)?, Utc::now().to_rfc3339()).with_plan(parse_plan(&raw)))
 }
 
@@ -41,7 +46,7 @@ pub fn parse_plan(raw: &str) -> Option<String> {
         .and_then(display_plan_label)
 }
 
-fn config_home() -> PathBuf {
+pub(crate) fn config_home() -> PathBuf {
     std::env::var("XDG_CONFIG_HOME")
         .ok()
         .map(|raw| raw.trim().to_string())
