@@ -49,6 +49,19 @@ pub const CONFIG_NAME: &str = "official_quota.json";
 pub const NOTIFY_NAME: &str = "official_quota_notify_state.json";
 pub const CAPTURE_NAME: &str = "claude_statusline.json";
 
+/// 把生产额度 URL 的路径接到调用方给的根上。`None` 时原样返回。
+/// 只给额度账号的离线桩用；本机默认取数不传。
+pub(crate) fn rebase_quota_url(url: &str, base: Option<&str>) -> String {
+    let Some(base) = base.map(str::trim).filter(|value| !value.is_empty()) else {
+        return url.to_string();
+    };
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|index| &rest[index..]))
+        .unwrap_or("/");
+    format!("{}{path}", base.trim_end_matches('/'))
+}
+
 pub fn capture_path() -> PathBuf {
     crate::paths::app_data_dir().join(CAPTURE_NAME)
 }
@@ -118,9 +131,10 @@ pub fn load_dto_with_accounts(
     logins: &[accounts::LocalLogin],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
+    let accounts = accounts::with_live_profiles(accounts);
     let mut rows = Vec::new();
     for provider in OfficialQuotaProvider::ALL {
-        match accounts::plan::plan_provider(provider, accounts, logins) {
+        match accounts::plan::plan_provider(provider, &accounts, logins) {
             accounts::plan::ProviderPlan::Unchanged => {
                 // 本机没凭证、也没历史缓存的 provider 不占一行。
                 let row = load_row(conn, provider, now);

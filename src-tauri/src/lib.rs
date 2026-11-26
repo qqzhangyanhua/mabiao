@@ -458,6 +458,7 @@ pub fn run() {
             commands::list_quota_accounts,
             commands::import_local_quota_account,
             commands::save_quota_account,
+            commands::save_profile_dir_account,
             commands::delete_quota_account,
             commands::preview_custom_quota_request,
             commands::test_custom_quota_provider,

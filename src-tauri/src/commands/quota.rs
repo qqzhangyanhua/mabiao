@@ -363,6 +363,28 @@ pub async fn import_local_quota_account(
 }
 
 #[tauri::command]
+pub async fn save_profile_dir_account(
+    app: tauri::AppHandle,
+    request: official_quota::accounts::SaveProfileDirAccount,
+) -> Result<official_quota::accounts::SavedQuotaAccountDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let saved = official_quota::accounts::save_profile_dir(
+            &paths,
+            request,
+            &official_quota::backoff::state_path(),
+        )?;
+        if saved.enabled {
+            refresh_saved_account(&app, &saved.saved_id);
+        }
+        Ok(saved)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
 pub async fn save_quota_account(
     app: tauri::AppHandle,
     request: official_quota::accounts::SaveQuotaAccount,

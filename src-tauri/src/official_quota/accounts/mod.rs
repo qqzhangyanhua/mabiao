@@ -1,11 +1,13 @@
-//! 额度账号：把「当前本机登录」收成一条可开关、可改名的行。
+//! 额度账号：把「当前本机登录」或「隔离配置目录」收成一条可开关、可改名的行。
 //!
-//! 配置（标识、名称、掩码、指纹、开关）和密钥分两个文件。密钥从创建起就是
+//! 配置（标识、名称、掩码、指纹、开关、隔离目录）和密钥分两个文件。密钥从创建起就是
 //! 0600，也不进备份——备份白名单是另一件事。界面和命令只拿掩码，拿不到原文。
+//! 隔离目录不把长期密钥复制进凭证文件。已分离快照的续期只写这份凭证文件。
 
 mod capture;
 mod fetch_row;
 pub(crate) mod plan;
+mod refresh;
 
 use std::path::{Path, PathBuf};
 
@@ -16,18 +18,21 @@ use super::custom;
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{self, read_identity};
 
-pub use fetch_row::{fetch_account_row, AccountTarget};
+pub use fetch_row::{fetch_account_row, fetch_managed_account, AccountTarget};
 pub(crate) use fetch_row::{prepare_auto_target, prepare_manual_target};
 
 pub const CONFIG_NAME: &str = "quota_accounts.json";
 pub const SECRET_NAME: &str = "quota_account_secrets.json";
 /// 密钥文件里没有能直接取数的 access token。这是待办，不是取数失败。
 pub const MISSING_SECRET_TODO: &str = "登录凭证还没保存，请在设置页重新导入";
+/// 刷新令牌被上游拒绝。保留上次的窗口，让用户自己去重新授权。
+pub const LOGIN_EXPIRED: &str = "登录已失效，请在设置页重新授权或重新导入";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuotaAccountSource {
     LocalSnapshot,
+    ProfileDir,
 }
 
 /// 非敏感配置。指纹只用于防重和本机比对，不是令牌。
@@ -39,6 +44,9 @@ pub struct QuotaAccountConfig {
     pub hint: String,
     pub fingerprint: String,
     pub source: QuotaAccountSource,
+    /// 隔离目录的绝对路径。只有 `profile_dir` 会写它。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_dir: Option<String>,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
 }
@@ -53,7 +61,7 @@ struct QuotaAccountFile {
     accounts: Vec<QuotaAccountConfig>,
 }
 
-/// 以后取数要用的密钥。刷新写回不在这条路径里，字段先存着。
+/// 已分离快照的密钥。续期成功只改这份凭证，不改客户端目录。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccountSecret {
     #[serde(default)]
@@ -64,8 +72,14 @@ pub struct AccountSecret {
     pub refresh_issuer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refresh_client_id: Option<String>,
+    /// Antigravity 安装里扫到的客户端密钥。只在已分离快照续期时用，不展示。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refresh_client_secret: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
+    /// access token 的过期时刻（RFC3339）。没有就不靠它判断过期。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_expires_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,15 +93,49 @@ struct SecretFile {
 pub struct ResolvedQuotaAccount {
     pub config: QuotaAccountConfig,
     pub secret: Option<AccountSecret>,
+    /// 续期回写用。不是配置的一部分，加载时填上。
+    pub secrets_path: Option<PathBuf>,
 }
 
 impl ResolvedQuotaAccount {
     pub fn access_token_missing(&self) -> bool {
-        self.secret
-            .as_ref()
-            .map(|secret| secret.access_token.trim().is_empty())
-            .unwrap_or(true)
+        if self.config.source == QuotaAccountSource::ProfileDir {
+            return false;
+        }
+        match &self.secret {
+            Some(secret) if !secret.access_token.trim().is_empty() => false,
+            Some(secret) if refreshable(&self.config.provider) && has_refresh(secret) => false,
+            _ => true,
+        }
     }
+}
+
+pub(crate) fn refreshable_secret(provider: OfficialQuotaProvider, secret: &AccountSecret) -> bool {
+    refreshable(provider.as_str()) && has_refresh(secret)
+}
+
+fn refreshable(provider: &str) -> bool {
+    matches!(
+        OfficialQuotaProvider::parse(provider),
+        Some(
+            OfficialQuotaProvider::Codex
+                | OfficialQuotaProvider::Grok
+                | OfficialQuotaProvider::Antigravity
+        )
+    )
+}
+
+fn has_refresh(secret: &AccountSecret) -> bool {
+    secret
+        .refresh_token
+        .as_deref()
+        .is_some_and(|token| !token.trim().is_empty())
+}
+
+pub(crate) fn fingerprints_match(stored: &str, live: &str) -> bool {
+    let stored = stored.trim();
+    let live = live.trim();
+    !stored.is_empty() && stored == live
 }
 
 /// 离线探到的当前本机登录。`root` 是读到这份身份的目录或凭证文件。
@@ -158,6 +206,8 @@ pub struct QuotaAccountDto {
     pub name: String,
     pub hint: String,
     pub source: QuotaAccountSource,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_dir: Option<String>,
     pub enabled: bool,
 }
 
@@ -183,6 +233,16 @@ pub struct SaveQuotaAccount {
     pub enabled: Option<bool>,
 }
 
+/// 新增或编辑一条隔离目录账号。`id` 为空是新增。
+#[derive(Debug, Clone, Deserialize)]
+pub struct SaveProfileDirAccount {
+    #[serde(default)]
+    pub id: Option<String>,
+    pub provider: String,
+    pub name: String,
+    pub profile_dir: String,
+}
+
 pub fn load_resolved(paths: &QuotaAccountPaths) -> Vec<ResolvedQuotaAccount> {
     let secrets = load_secrets(&paths.secrets);
     load_config(&paths.config)
@@ -193,7 +253,11 @@ pub fn load_resolved(paths: &QuotaAccountPaths) -> Vec<ResolvedQuotaAccount> {
                 secret.access_token = secret.access_token.trim().to_string();
                 secret
             });
-            ResolvedQuotaAccount { config, secret }
+            ResolvedQuotaAccount {
+                config,
+                secret,
+                secrets_path: Some(paths.secrets.clone()),
+            }
         })
         .collect()
 }
@@ -230,6 +294,7 @@ pub fn import_local_login(
         }
         existing.hint = identity.label.clone();
         existing.source = QuotaAccountSource::LocalSnapshot;
+        existing.profile_dir = None;
         existing.id.clone()
     } else {
         let id = new_account_id(
@@ -247,6 +312,7 @@ pub fn import_local_login(
             hint: identity.label.clone(),
             fingerprint: identity.fingerprint,
             source: QuotaAccountSource::LocalSnapshot,
+            profile_dir: None,
             enabled: true,
         });
         id
@@ -319,6 +385,113 @@ pub fn save(
     })
 }
 
+/// 登记或改一条隔离目录。目录必须已经存在。不把目录里的长期密钥复制进凭证文件。
+pub fn save_profile_dir(
+    paths: &QuotaAccountPaths,
+    request: SaveProfileDirAccount,
+    backoff_path: &Path,
+) -> Result<SavedQuotaAccountDto, String> {
+    let provider = OfficialQuotaProvider::parse(request.provider.trim())
+        .ok_or_else(|| format!("未知的官方额度账号：{}", request.provider.trim()))?;
+    let name = request.name.trim();
+    if name.is_empty() {
+        return Err("请填写名称".to_string());
+    }
+    let directory = validated_profile_dir(&request.profile_dir)?;
+    let directory_text = directory.to_string_lossy().into_owned();
+    let identity = read_identity(provider, &directory).ok();
+    let mut config = load_config(&paths.config);
+    let slug = provider.as_str();
+    let requested_id = request
+        .id
+        .as_deref()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string);
+    let id = if let Some(id) = requested_id {
+        let account = config
+            .accounts
+            .iter_mut()
+            .find(|account| account.id == id)
+            .ok_or_else(|| format!("未知的官方额度账号：{id}"))?;
+        account.provider = slug.to_string();
+        account.name = name.to_string();
+        account.source = QuotaAccountSource::ProfileDir;
+        account.profile_dir = Some(directory_text);
+        if let Some(identity) = identity {
+            account.fingerprint = identity.fingerprint;
+            account.hint = identity.label;
+        }
+        account.id.clone()
+    } else if let Some(account) = config.accounts.iter_mut().find(|account| {
+        account.source == QuotaAccountSource::ProfileDir
+            && account.provider == slug
+            && account.profile_dir.as_deref() == Some(directory_text.as_str())
+    }) {
+        account.name = name.to_string();
+        if let Some(identity) = identity {
+            account.fingerprint = identity.fingerprint;
+            account.hint = identity.label;
+        }
+        account.id.clone()
+    } else {
+        let id = new_account_id(
+            slug,
+            &config
+                .accounts
+                .iter()
+                .map(|account| account.id.clone())
+                .collect::<Vec<_>>(),
+        );
+        let (fingerprint, hint) = match identity {
+            Some(identity) => (identity.fingerprint, identity.label),
+            None => (String::new(), name.to_string()),
+        };
+        config.accounts.push(QuotaAccountConfig {
+            id: id.clone(),
+            provider: slug.to_string(),
+            name: name.to_string(),
+            hint,
+            fingerprint,
+            source: QuotaAccountSource::ProfileDir,
+            profile_dir: Some(directory_text),
+            enabled: true,
+        });
+        id
+    };
+    save_config(&paths.config, &config)?;
+    forget_secret(&paths.secrets, &id)?;
+    backoff::clear(backoff_path, &id);
+    let enabled = config
+        .accounts
+        .iter()
+        .find(|account| account.id == id)
+        .is_some_and(|account| account.enabled);
+    Ok(SavedQuotaAccountDto {
+        saved_id: id,
+        enabled,
+        panel: list(paths),
+    })
+}
+
+fn validated_profile_dir(raw: &str) -> Result<PathBuf, String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err("请填写配置目录".to_string());
+    }
+    let path = PathBuf::from(trimmed);
+    if !path.is_absolute() {
+        return Err("配置目录要用绝对路径".to_string());
+    }
+    if !path.exists() {
+        return Err("配置目录不存在".to_string());
+    }
+    if !path.is_dir() {
+        return Err("配置目录必须是文件夹".to_string());
+    }
+    Ok(std::fs::canonicalize(&path).unwrap_or(path))
+}
+
 pub fn delete_account(paths: &QuotaAccountPaths, id: &str) -> Result<QuotaAccountPanelDto, String> {
     let mut config = load_config(&paths.config);
     let before = config.accounts.len();
@@ -327,10 +500,7 @@ pub fn delete_account(paths: &QuotaAccountPaths, id: &str) -> Result<QuotaAccoun
         return Err(format!("这条额度账号已经不在了：{id}"));
     }
     save_config(&paths.config, &config)?;
-    let mut secrets = load_secrets(&paths.secrets);
-    if secrets.secrets.remove(id).is_some() {
-        save_secrets(&paths.secrets, &secrets)?;
-    }
+    forget_secret(&paths.secrets, id)?;
     Ok(list(paths))
 }
 
@@ -387,8 +557,99 @@ fn to_dto(config: &QuotaAccountConfig) -> QuotaAccountDto {
         name: config.name.clone(),
         hint: config.hint.clone(),
         source: config.source,
+        profile_dir: config.profile_dir.clone(),
         enabled: config.enabled,
     }
+}
+
+/// 探测和刷新前，隔离目录的身份以目录里当前读到的为准。读不到就留着保存时的指纹。
+pub(crate) fn with_live_profiles(accounts: &[ResolvedQuotaAccount]) -> Vec<ResolvedQuotaAccount> {
+    accounts.iter().map(live_profile).collect()
+}
+
+fn live_profile(account: &ResolvedQuotaAccount) -> ResolvedQuotaAccount {
+    let mut account = account.clone();
+    if account.config.source != QuotaAccountSource::ProfileDir {
+        return account;
+    }
+    let Some(dir) = account
+        .config
+        .profile_dir
+        .as_deref()
+        .map(str::trim)
+        .filter(|dir| !dir.is_empty())
+    else {
+        return account;
+    };
+    let Some(provider) = OfficialQuotaProvider::parse(&account.config.provider) else {
+        return account;
+    };
+    if let Ok(identity) = read_identity(provider, Path::new(dir)) {
+        account.config.fingerprint = identity.fingerprint;
+        account.config.hint = identity.label;
+    }
+    account
+}
+
+/// 续期成功后只改码表自己的凭证文件。同一把锁包住读改写，避免并发刷新互相覆盖。
+pub(crate) fn store_refreshed_tokens(
+    path: &Path,
+    id: &str,
+    access_token: &str,
+    refresh_token: Option<&str>,
+) -> Result<(), String> {
+    let access_token = access_token.trim();
+    if access_token.is_empty() {
+        return Err("刷新响应里没有 access_token".to_string());
+    }
+    let rotated = refresh_token
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string);
+    with_secret_file(path, |file| {
+        let entry = file.secrets.entry(id.to_string()).or_default();
+        entry.access_token = access_token.to_string();
+        // 旧的过期时刻描述的是上一张 access token。留着会让下一轮误判成还要续期。
+        entry.access_expires_at = None;
+        if let Some(refresh_token) = rotated {
+            entry.refresh_token = Some(refresh_token);
+        }
+        Ok(())
+    })
+}
+
+fn forget_secret(path: &Path, id: &str) -> Result<(), String> {
+    let _guard = secret_file_lock()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    if !path.exists() {
+        return Ok(());
+    }
+    let mut secrets = load_secrets(path);
+    if secrets.secrets.remove(id).is_none() {
+        return Ok(());
+    }
+    save_secrets(path, &secrets)
+}
+
+fn with_secret_file(
+    path: &Path,
+    update: impl FnOnce(&mut SecretFile) -> Result<(), String>,
+) -> Result<(), String> {
+    let _guard = secret_file_lock()
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let mut secrets = load_secrets(path);
+    update(&mut secrets)?;
+    if secrets.secrets.is_empty() && !path.exists() {
+        return Ok(());
+    }
+    save_secrets(path, &secrets)
+}
+
+fn secret_file_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    &LOCK
 }
 
 fn load_config(path: &Path) -> QuotaAccountFile {

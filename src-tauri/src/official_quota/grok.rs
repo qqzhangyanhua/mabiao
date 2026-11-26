@@ -30,6 +30,8 @@ pub struct GrokSession {
     /// `fetch_rate_limits` 先现刷再用，不再直接报错让用户手动 `grok login`。
     pub expired: bool,
     pub refresh: Option<RefreshCredentials>,
+    /// `expires_at` 的 RFC3339。没有这个字段时是 `None`，不当成已过期。
+    pub expires_at: Option<String>,
 }
 
 /// OIDC 静默刷新要用的三件套，均来自 `auth.json` 同一条目，不落盘、只在内存里现刷现用。
@@ -178,8 +180,18 @@ fn is_expired_error(error: &str) -> bool {
 /// 用 `auth.json` 里的 `refresh_token` 换一个新 access token；不写回 `auth.json`——
 /// 真正的 grok CLI 才是这个文件的所有者（见 ADR 0010），我们只借 token 用一次。
 fn refresh_access_token(refresh: &RefreshCredentials) -> Result<String, String> {
+    refresh_tokens(refresh).map(|tokens| tokens.access_token)
+}
+
+/// 内存里换一套令牌。响应里若有轮换后的 refresh token 也带回来，由调用方决定写哪。
+pub(crate) struct RefreshedOidc {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+}
+
+pub(crate) fn refresh_tokens(refresh: &RefreshCredentials) -> Result<RefreshedOidc, String> {
     let token_endpoint = discover_token_endpoint(&refresh.oidc_issuer)?;
-    let response = crate::net::agent_with_timeout(TIMEOUT)
+    let response = crate::net::agent_for_url(&token_endpoint, TIMEOUT)
         .post(&token_endpoint)
         .set("Accept", "application/json")
         .send_form(&[
@@ -192,7 +204,7 @@ fn refresh_access_token(refresh: &RefreshCredentials) -> Result<String, String> 
             let body = ok
                 .into_string()
                 .map_err(|e| format!("读取 Grok 刷新响应失败：{e}"))?;
-            parse_refreshed_access_token(&body)
+            parse_refreshed_tokens(&body)
         }
         Err(ureq::Error::Status(401 | 403, _)) => {
             Err("Grok 登录已过期，请重新运行 grok login".to_string())
@@ -214,7 +226,7 @@ fn discover_token_endpoint(issuer: &str) -> Result<String, String> {
         "{}/.well-known/openid-configuration",
         issuer.trim_end_matches('/')
     );
-    match crate::net::agent_with_timeout(TIMEOUT).get(&url).call() {
+    match crate::net::agent_for_url(&url, TIMEOUT).get(&url).call() {
         Ok(response) => {
             let raw = response
                 .into_string()
@@ -228,9 +240,17 @@ fn discover_token_endpoint(issuer: &str) -> Result<String, String> {
 }
 
 pub fn parse_refreshed_access_token(raw: &str) -> Result<String, String> {
+    parse_refreshed_tokens(raw).map(|tokens| tokens.access_token)
+}
+
+fn parse_refreshed_tokens(raw: &str) -> Result<RefreshedOidc, String> {
     let value = parse_object(raw, "Grok 刷新响应")?;
-    string_field(&value, "access_token")
-        .ok_or_else(|| "Grok 刷新响应里没有 access_token".to_string())
+    let access_token = string_field(&value, "access_token")
+        .ok_or_else(|| "Grok 刷新响应里没有 access_token".to_string())?;
+    Ok(RefreshedOidc {
+        access_token,
+        refresh_token: string_field(&value, "refresh_token"),
+    })
 }
 
 /// 解析 `GET /v1/billing?format=credits`：周额度池 + Grok Build 分项 + 按需。
@@ -344,6 +364,7 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
                         user_id: user_id_of(node),
                         expired: true,
                         refresh: Some(refresh),
+                        expires_at: expires_at_of(node),
                     };
                     if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
                         preferred_refreshable.get_or_insert(session);
@@ -365,6 +386,7 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
             user_id: user_id_of(node),
             expired: false,
             refresh: refresh_of(node),
+            expires_at: expires_at_of(node),
         };
         if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
             preferred = Some(session);
@@ -398,6 +420,10 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
 }
 
 /// 从会话条目里取 OIDC 静默刷新三件套；缺任一项就当作不可自动刷新。
+fn expires_at_of(node: &Value) -> Option<String> {
+    crate::official_quota::parse_resets_at(node.get("expires_at")?)
+}
+
 fn refresh_of(node: &Value) -> Option<RefreshCredentials> {
     Some(RefreshCredentials {
         refresh_token: string_field(node, "refresh_token")?,

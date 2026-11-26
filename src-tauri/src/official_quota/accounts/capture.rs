@@ -88,6 +88,8 @@ fn grok_secret(root: &Path) -> Result<AccountSecret, String> {
         refresh_issuer: refresh.as_ref().map(|item| item.oidc_issuer.clone()),
         refresh_client_id: refresh.as_ref().map(|item| item.client_id.clone()),
         account_id: session.user_id,
+        access_expires_at: session.expires_at,
+        ..AccountSecret::default()
     })
 }
 

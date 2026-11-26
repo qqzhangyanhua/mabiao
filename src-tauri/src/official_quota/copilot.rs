@@ -34,7 +34,15 @@ pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
 
 /// 用调用方给的 token 取额度。不读本机配置。
 pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
-    let raw = request_usage(token)?;
+    fetch_with_access_token_at(token, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    token: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(USAGE_URL, quota_base);
+    let raw = request_usage(token, &url)?;
     Ok(QuotaSnapshot::new(parse_usage(&raw)?, Utc::now().to_rfc3339()).with_plan(parse_plan(&raw)))
 }
 
@@ -263,9 +271,9 @@ fn used_percent(node: &Value) -> Option<f64> {
     }
 }
 
-fn request_usage(token: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(USAGE_URL)
+fn request_usage(token: &str, url: &str) -> Result<String, String> {
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Authorization", &format!("token {token}"))
         .set("Accept", "application/json")
         .set("Editor-Version", "vscode/1.96.2")

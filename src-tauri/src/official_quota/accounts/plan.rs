@@ -40,7 +40,7 @@ pub(crate) fn plan_provider<'a>(
     if let Some(matched) = mine
         .iter()
         .copied()
-        .find(|account| account.config.fingerprint == login.fingerprint)
+        .find(|account| super::fingerprints_match(&account.config.fingerprint, &login.fingerprint))
     {
         if matched.config.enabled {
             let matched_id = matched.config.id.clone();

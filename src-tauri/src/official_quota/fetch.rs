@@ -148,6 +148,7 @@ pub fn resolve_target_with_accounts(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Result<FetchTarget, String> {
+    let accounts = accounts::with_live_profiles(accounts);
     if let Some(found) = accounts.iter().find(|account| account.config.id == id) {
         if !found.config.enabled {
             return Err(format!("「{}」已停用，先在设置页打开它", found.config.name));
@@ -231,13 +232,7 @@ pub fn fetch_target(target: &FetchTarget) -> ProviderFetch {
     match target {
         FetchTarget::Builtin(provider) => fetch_provider(*provider),
         FetchTarget::Custom(provider) => custom::fetch(provider),
-        FetchTarget::Account(account) => accounts::fetch_account_row(
-            account.provider,
-            &account.access_token,
-            account.account_id.as_deref(),
-            account.live_root.as_deref(),
-            None,
-        ),
+        FetchTarget::Account(account) => accounts::fetch_managed_account(account, None),
     }
 }
 
@@ -248,9 +243,10 @@ pub fn targets_for_fetch(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Vec<FetchTarget> {
+    let accounts = accounts::with_live_profiles(accounts);
     let mut targets = Vec::new();
     for provider in OfficialQuotaProvider::ALL {
-        match accounts::plan::plan_provider(provider, accounts, logins) {
+        match accounts::plan::plan_provider(provider, &accounts, logins) {
             accounts::plan::ProviderPlan::Unchanged => {
                 if detect::has_local_credentials(provider) {
                     targets.push(FetchTarget::Builtin(provider));

@@ -46,9 +46,22 @@ pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
 
 /// 用调用方给的 access token 取限额。不读钥匙串，也不刷新。
 pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
-    let raw = request_limits(token)?;
+    fetch_with_access_token_at(token, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    token: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(LIMITS_URL, quota_base);
+    let raw = request_limits(token, &url)?;
     let windows = parse_limits(&raw, Utc::now())?;
-    let plan = fetch_subscription_plan(token);
+    // 套餐接口失败不影响窗口。隔离目录的桩只接限额，不接套餐。
+    let plan = if quota_base.is_some() {
+        None
+    } else {
+        fetch_subscription_plan(token)
+    };
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
@@ -422,9 +435,9 @@ fn decrypt_gcm(key: &[u8], iv: &[u8], sealed: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-fn request_limits(token: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(LIMITS_URL)
+fn request_limits(token: &str, url: &str) -> Result<String, String> {
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Authorization", &format!("Bearer {token}"))
         .set("Accept", "application/json");
     match request.call() {

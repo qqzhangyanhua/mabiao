@@ -5,7 +5,7 @@ import { OFFICIAL_QUOTA_PROVIDER_IDS, officialQuotaProviderLabel } from "../lib/
 import type { OfficialQuotaDto } from "../types";
 import { Button } from "./ui/Button";
 
-type QuotaAccountSource = "local_snapshot";
+type QuotaAccountSource = "local_snapshot" | "profile_dir";
 
 type QuotaAccountDto = {
   id: string;
@@ -13,6 +13,7 @@ type QuotaAccountDto = {
   name: string;
   hint: string;
   source: QuotaAccountSource;
+  profile_dir?: string | null;
   enabled: boolean;
 };
 
@@ -32,8 +33,16 @@ type SaveQuotaAccount = {
   enabled: boolean | null;
 };
 
+type SaveProfileDirAccount = {
+  id: string | null;
+  provider: string;
+  name: string;
+  profile_dir: string;
+};
+
 /**
- * 官方额度下面的额度账号。只导入当前本机登录；界面只显示掩码。
+ * 官方额度下面的额度账号。可以导入当前本机登录，也可以登记一个隔离配置目录。
+ * 界面只显示掩码，不显示令牌。
  */
 export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaDto) => void }) {
   const [panel, setPanel] = useState<QuotaAccountPanelDto | null>(null);
@@ -43,6 +52,10 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftProvider, setDraftProvider] = useState<string>(OFFICIAL_QUOTA_PROVIDER_IDS[0]);
+  const [draftDir, setDraftDir] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [profileDir, setProfileDir] = useState("");
 
   useEffect(() => {
     void invoke<QuotaAccountPanelDto>("list_quota_accounts")
@@ -83,6 +96,17 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
     });
   }
 
+  function saveProfile(request: SaveProfileDirAccount) {
+    void run(async () => {
+      const saved = await invoke<SavedQuotaAccountDto>("save_profile_dir_account", { request });
+      if (request.id == null) {
+        setProfileName("");
+        setProfileDir("");
+      }
+      return saved.panel;
+    });
+  }
+
   function remove(id: string) {
     void run(() => invoke<QuotaAccountPanelDto>("delete_quota_account", { id }));
   }
@@ -93,7 +117,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         <div>
           <h3>额度账号</h3>
           <p className="panel-note">
-            导入当前本机登录。同一登录再导一次会更新原来那一条，不会多出一行。界面只显示掩码。
+            导入当前本机登录，或登记一个已有的配置目录。同一登录再导一次会更新原来那一条。隔离目录只保存路径，不复制里面的登录。界面只显示掩码。
           </p>
         </div>
       </div>
@@ -111,6 +135,41 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         <Button variant="accent" disabled={busy} onClick={importCurrent}>
           导入当前本机登录
         </Button>
+      </div>
+      <div className="custom-quota-form">
+        <label className="field">
+          <span className="field-label">名称</span>
+          <input
+            value={profileName}
+            aria-label="隔离目录名称"
+            onChange={(event) => setProfileName(event.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">配置目录</span>
+          <input
+            value={profileDir}
+            aria-label="配置目录"
+            placeholder="绝对路径"
+            onChange={(event) => setProfileDir(event.target.value)}
+          />
+        </label>
+        <div className="row-actions">
+          <Button
+            variant="accent"
+            disabled={busy}
+            onClick={() =>
+              saveProfile({
+                id: null,
+                provider,
+                name: profileName,
+                profile_dir: profileDir,
+              })
+            }
+          >
+            添加隔离目录
+          </Button>
+        </div>
       </div>
       {error ? <p className="panel-note tone-danger">{error}</p> : null}
       {panel && panel.accounts.length === 0 ? (
@@ -132,9 +191,34 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
               ) : (
                 <strong>{account.name}</strong>
               )}
-              <span className="muted">{officialQuotaProviderLabel(account.provider)}</span>
-              <span className="muted">本机登录</span>
+              {editingId === account.id && account.source === "profile_dir" ? (
+                <select
+                  aria-label={`提供方「${account.name}」`}
+                  value={draftProvider}
+                  onChange={(event) => setDraftProvider(event.target.value)}
+                >
+                  {OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {officialQuotaProviderLabel(id)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="muted">{officialQuotaProviderLabel(account.provider)}</span>
+              )}
+              <span className="muted">
+                {account.source === "profile_dir" ? "隔离目录" : "本机登录"}
+              </span>
               <span className="muted">{account.hint}</span>
+              {account.source === "profile_dir" && editingId === account.id ? (
+                <input
+                  value={draftDir}
+                  aria-label={`配置目录「${account.name}」`}
+                  onChange={(event) => setDraftDir(event.target.value)}
+                />
+              ) : account.profile_dir ? (
+                <span className="muted">{account.profile_dir}</span>
+              ) : null}
               <div className="row-actions">
                 {pendingDeleteId === account.id ? (
                   <>
@@ -150,9 +234,18 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                     <Button
                       variant="accent"
                       disabled={busy}
-                      onClick={() =>
-                        save({ id: account.id, name: draftName, enabled: null })
-                      }
+                      onClick={() => {
+                        if (account.source === "profile_dir") {
+                          saveProfile({
+                            id: account.id,
+                            provider: draftProvider,
+                            name: draftName,
+                            profile_dir: draftDir,
+                          });
+                          return;
+                        }
+                        save({ id: account.id, name: draftName, enabled: null });
+                      }}
                     >
                       保存
                     </Button>
@@ -184,9 +277,11 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                         setPendingDeleteId(null);
                         setEditingId(account.id);
                         setDraftName(account.name);
+                        setDraftProvider(account.provider);
+                        setDraftDir(account.profile_dir ?? "");
                       }}
                     >
-                      改名
+                      {account.source === "profile_dir" ? "编辑" : "改名"}
                     </Button>
                     <Button
                       variant="danger"

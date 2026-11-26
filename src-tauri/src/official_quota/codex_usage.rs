@@ -19,6 +19,10 @@ use crate::domain::OfficialQuotaWindow;
 use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
 
 const USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
+/// Codex CLI 的公开 OAuth 客户端标识。不是密钥。已分离凭证续期必须带上它，
+/// 否则登录服务会拒绝这份 refresh token。
+pub(crate) const OAUTH_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+pub(crate) const OAUTH_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 const TIMEOUT: Duration = Duration::from_secs(12);
 const SESSION_WINDOW_SECONDS: i64 = 5 * 60 * 60;
 const WEEKLY_WINDOW_SECONDS: i64 = 7 * 24 * 60 * 60;
@@ -35,7 +39,15 @@ pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
 
 /// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
 pub(crate) fn fetch_with_access_token(auth: &CodexAuth) -> Result<QuotaSnapshot, String> {
-    let (raw, header_percents) = request_usage(auth)?;
+    fetch_with_access_token_at(auth, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    auth: &CodexAuth,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(USAGE_URL, quota_base);
+    let (raw, header_percents) = request_usage(auth, &url)?;
     let windows = parse_usage(&raw, &header_percents, Utc::now().timestamp())?;
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(parse_plan_type(&raw)))
 }
@@ -163,9 +175,9 @@ fn resets_at(node: &Value, now_secs: i64) -> Option<String> {
     chrono::DateTime::from_timestamp(epoch, 0).map(|value| value.to_rfc3339())
 }
 
-fn request_usage(auth: &CodexAuth) -> Result<(String, Vec<(String, f64)>), String> {
-    let mut request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(USAGE_URL)
+fn request_usage(auth: &CodexAuth, url: &str) -> Result<(String, Vec<(String, f64)>), String> {
+    let mut request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Authorization", &format!("Bearer {}", auth.access_token))
         .set("Accept", "application/json")
         .set("User-Agent", "ai-usage-stats");

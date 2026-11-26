@@ -81,6 +81,16 @@ pub fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
     build_agent(ureq::AgentBuilder::new().timeout(timeout))
 }
 
+/// 回环地址直连且不跟随重定向，避免测试桩和本机回调被代理转走。
+/// 其它地址与 [`agent_with_timeout`] 相同。
+pub fn agent_for_url(url: &str, timeout: Duration) -> ureq::Agent {
+    if crate::remote_server::address::is_loopback_address(url) {
+        agent_without_redirects(timeout, true)
+    } else {
+        agent_with_timeout(timeout)
+    }
+}
+
 /// 不跟随重定向。带密码或 token 的请求不能被服务端一个 307 悄悄带去别的地址
 /// （尤其是 https 被降级成 http），出现跳转就让调用方报错。
 /// `direct` 为真时不走代理：回环地址经代理转一圈没有意义，还会把「本机没开服务」变成代理的 502。
