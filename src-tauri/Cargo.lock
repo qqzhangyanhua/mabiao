@@ -2254,6 +2254,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "dirs",
+ "getrandom 0.2.16",
  "image",
  "mimalloc",
  "pricing",

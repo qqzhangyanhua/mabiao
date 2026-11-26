@@ -58,9 +58,30 @@ type DevicePrompt = {
   intervalSeconds: number;
 };
 
-const CANCELLED = "已取消设备码授权，没有保存账号";
+type CodexPkceStart = {
+  session_id: string;
+  authorize_url: string;
+  redirect_uri: string;
+  listening: boolean;
+  paste_hint?: string | null;
+};
 
-function accountSourceLabel(source: string): string {
+type CodexPkcePoll =
+  | { status: "pending" }
+  | { status: "authorized"; saved: SavedQuotaAccountDto };
+
+type CodexPrompt = {
+  sessionId: string;
+  authorizeUrl: string;
+  listening: boolean;
+  pasteHint: string | null;
+};
+
+const CANCELLED = "已取消设备码授权，没有保存账号";
+const CODEX_CANCELLED = "已取消浏览器授权，没有保存账号";
+
+function accountSourceLabel(source: string, provider: string): string {
+  if (source === "oauth" && provider === "codex") return "浏览器授权";
   if (source === "oauth") return "设备码授权";
   if (source === "profile_dir") return "隔离目录";
   if (source === "local_snapshot") return "本机登录";
@@ -82,8 +103,8 @@ function waitSeconds(seconds: number, stopped: () => boolean): Promise<void> {
 }
 
 /**
- * 官方额度下面的额度账号。可以导入当前本机登录，登记一个隔离配置目录，
- * Copilot 也可以走设备码授权。界面只显示掩码，不拿令牌。
+ * 官方额度下面的额度账号。可以导入当前本机登录，登记一个隔离配置目录。
+ * Codex 可以走浏览器授权，Copilot 可以走设备码。界面只显示掩码，不拿令牌。
  */
 export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaDto) => void }) {
   const [panel, setPanel] = useState<QuotaAccountPanelDto | null>(null);
@@ -98,9 +119,14 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
   const [profileName, setProfileName] = useState("");
   const [profileDir, setProfileDir] = useState("");
   const [device, setDevice] = useState<DevicePrompt | null>(null);
+  const [codex, setCodex] = useState<CodexPrompt | null>(null);
+  const [callbackUrl, setCallbackUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const stopRef = useRef(false);
   const sessionRef = useRef<string | null>(null);
+  const kindRef = useRef<"copilot" | "codex" | null>(null);
+  const pasteInFlight = useRef(false);
+  const occupied = busy || device !== null || codex !== null;
 
   useEffect(() => {
     void invoke<QuotaAccountPanelDto>("list_quota_accounts")
@@ -108,9 +134,15 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
       .catch((cause: unknown) => setError(humanStatus(cause)));
     return () => {
       const sessionId = sessionRef.current;
+      const kind = kindRef.current;
       if (!sessionId) return;
       stopRef.current = true;
       sessionRef.current = null;
+      kindRef.current = null;
+      if (kind === "codex") {
+        void invoke("cancel_codex_pkce_login", { sessionId });
+        return;
+      }
       void invoke("cancel_copilot_device_login", { sessionId });
     };
   }, []);
@@ -184,6 +216,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
     stopRef.current = true;
     const sessionId = sessionRef.current;
     sessionRef.current = null;
+    kindRef.current = null;
     setDevice(null);
     setCopied(false);
     setError(CANCELLED);
@@ -192,6 +225,108 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
       await invoke("cancel_copilot_device_login", { sessionId });
     } catch {
       // 会话已经结束就当取消成功。
+    }
+  }
+
+  async function openCodex(sessionId: string) {
+    try {
+      await invoke("open_codex_pkce_login", { sessionId });
+    } catch (cause) {
+      setError(humanStatus(cause));
+    }
+  }
+
+  async function cancelCodex() {
+    stopRef.current = true;
+    const sessionId = sessionRef.current;
+    sessionRef.current = null;
+    kindRef.current = null;
+    setCodex(null);
+    setCallbackUrl("");
+    setError(CODEX_CANCELLED);
+    if (!sessionId) return;
+    try {
+      await invoke("cancel_codex_pkce_login", { sessionId });
+    } catch {
+      // 会话已经结束就当取消成功。
+    }
+  }
+
+  async function submitCodexCallback() {
+    const sessionId = sessionRef.current;
+    if (!sessionId || pasteInFlight.current) return;
+    pasteInFlight.current = true;
+    setError(null);
+    try {
+      const saved = await invoke<SavedQuotaAccountDto>("submit_codex_pkce_callback", {
+        sessionId,
+        callbackUrl,
+      });
+      stopRef.current = true;
+      sessionRef.current = null;
+      kindRef.current = null;
+      setCodex(null);
+      setCallbackUrl("");
+      await reload(saved.panel);
+    } catch (cause) {
+      setError(humanStatus(cause));
+    } finally {
+      pasteInFlight.current = false;
+    }
+  }
+
+  async function beginCodexLogin() {
+    stopRef.current = false;
+    setBusy(true);
+    setError(null);
+    setCallbackUrl("");
+    try {
+      const started = await invoke<CodexPkceStart>("start_codex_pkce_login");
+      if (stopRef.current) {
+        await invoke("cancel_codex_pkce_login", { sessionId: started.session_id });
+        return;
+      }
+      sessionRef.current = started.session_id;
+      kindRef.current = "codex";
+      setCodex({
+        sessionId: started.session_id,
+        authorizeUrl: started.authorize_url,
+        listening: started.listening,
+        pasteHint: started.paste_hint ?? null,
+      });
+      void openCodex(started.session_id);
+      if (!started.listening) return;
+      while (!stopRef.current) {
+        await waitSeconds(1, () => stopRef.current);
+        if (stopRef.current) return;
+        let polled: CodexPkcePoll;
+        try {
+          polled = await invoke<CodexPkcePoll>("poll_codex_pkce_login", {
+            sessionId: started.session_id,
+          });
+        } catch (cause) {
+          if (stopRef.current || pasteInFlight.current) return;
+          throw cause;
+        }
+        if (stopRef.current || pasteInFlight.current) return;
+        if (polled.status === "authorized") {
+          sessionRef.current = null;
+          kindRef.current = null;
+          setCodex(null);
+          setCallbackUrl("");
+          await reload(polled.saved.panel);
+          return;
+        }
+      }
+    } catch (cause) {
+      if (!stopRef.current) {
+        sessionRef.current = null;
+        kindRef.current = null;
+        setCodex(null);
+        setError(humanStatus(cause));
+      }
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -207,6 +342,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         return;
       }
       sessionRef.current = started.session_id;
+      kindRef.current = "copilot";
       let interval = started.interval_seconds;
       setDevice({
         sessionId: started.session_id,
@@ -230,6 +366,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         if (stopRef.current) return;
         if (polled.status === "authorized") {
           sessionRef.current = null;
+          kindRef.current = null;
           setDevice(null);
           setCopied(false);
           await reload(polled.saved.panel);
@@ -243,6 +380,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
     } catch (cause) {
       if (!stopRef.current) {
         sessionRef.current = null;
+        kindRef.current = null;
         setDevice(null);
         setError(humanStatus(cause));
       }
@@ -257,8 +395,9 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         <div>
           <h3>额度账号</h3>
           <p className="panel-note">
-            导入当前本机登录，或登记一个已有的配置目录。GitHub Copilot
-            也可以用设备码授权，不改编辑器或命令行的登录态。同一身份再登录一次会更新原来那一条。隔离目录只保存路径，不复制里面的登录。界面只显示掩码。
+            导入当前本机登录，或登记一个已有的配置目录。Codex
+            可以用浏览器授权登录，GitHub Copilot
+            可以用设备码授权，都不改原客户端的登录态。同一身份再登录一次会更新原来那一条。隔离目录只保存路径，不复制里面的登录。界面只显示掩码。
           </p>
         </div>
       </div>
@@ -267,7 +406,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
           <span className="field-label">提供方</span>
           <select
             value={provider}
-            disabled={busy}
+            disabled={occupied}
             onChange={(event) => setProvider(event.target.value)}
           >
             {OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => (
@@ -277,12 +416,17 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
             ))}
           </select>
         </label>
-        <Button variant="accent" disabled={busy} onClick={importCurrent}>
+        <Button variant="accent" disabled={occupied} onClick={importCurrent}>
           导入当前本机登录
         </Button>
         {provider === "copilot" ? (
-          <Button disabled={busy} onClick={() => void beginDeviceLogin()}>
+          <Button disabled={occupied} onClick={() => void beginDeviceLogin()}>
             设备码授权登录
+          </Button>
+        ) : null}
+        {provider === "codex" ? (
+          <Button disabled={occupied} onClick={() => void beginCodexLogin()}>
+            浏览器授权登录
           </Button>
         ) : null}
       </div>
@@ -307,7 +451,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
         <div className="row-actions">
           <Button
             variant="accent"
-            disabled={busy}
+            disabled={occupied}
             onClick={() =>
               saveProfile({
                 id: null,
@@ -337,6 +481,32 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
             </Button>
             <Button onClick={() => void openVerification(device.sessionId)}>打开验证页面</Button>
             <Button onClick={() => void cancelDevice()}>取消</Button>
+          </div>
+        </div>
+      ) : null}
+      {codex ? (
+        <div className="device-login">
+          <p className="panel-note">
+            {codex.listening
+              ? "已在本机临时监听回调。如果浏览器没能回到这台电脑，把地址栏里的回调链接粘贴到下面。可以随时取消。"
+              : codex.pasteHint}
+          </p>
+          <code>{codex.authorizeUrl}</code>
+          <label className="field">
+            <span className="field-label">回调链接</span>
+            <input
+              value={callbackUrl}
+              aria-label="回调链接"
+              placeholder="http://localhost:1455/auth/callback?code=…&state=…"
+              onChange={(event) => setCallbackUrl(event.target.value)}
+            />
+          </label>
+          <div className="row-actions">
+            <Button onClick={() => void openCodex(codex.sessionId)}>打开授权页面</Button>
+            <Button disabled={callbackUrl.trim() === ""} onClick={() => void submitCodexCallback()}>
+              使用回调链接
+            </Button>
+            <Button onClick={() => void cancelCodex()}>取消</Button>
           </div>
         </div>
       ) : null}
@@ -375,7 +545,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
               ) : (
                 <span className="muted">{officialQuotaProviderLabel(account.provider)}</span>
               )}
-              <span className="muted">{accountSourceLabel(account.source)}</span>
+              <span className="muted">{accountSourceLabel(account.source, account.provider)}</span>
               <span className="muted">{account.hint}</span>
               {account.source === "profile_dir" && editingId === account.id ? (
                 <input
@@ -389,10 +559,10 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
               <div className="row-actions">
                 {pendingDeleteId === account.id ? (
                   <>
-                    <Button variant="danger" disabled={busy} onClick={() => remove(account.id)}>
+                    <Button variant="danger" disabled={occupied} onClick={() => remove(account.id)}>
                       确认删除
                     </Button>
-                    <Button disabled={busy} onClick={() => setPendingDeleteId(null)}>
+                    <Button disabled={occupied} onClick={() => setPendingDeleteId(null)}>
                       取消
                     </Button>
                   </>
@@ -400,7 +570,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                   <>
                     <Button
                       variant="accent"
-                      disabled={busy}
+                      disabled={occupied}
                       onClick={() => {
                         if (account.source === "profile_dir") {
                           saveProfile({
@@ -416,7 +586,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                     >
                       保存
                     </Button>
-                    <Button disabled={busy} onClick={() => setEditingId(null)}>
+                    <Button disabled={occupied} onClick={() => setEditingId(null)}>
                       取消
                     </Button>
                   </>
@@ -431,7 +601,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                       role="switch"
                       aria-checked={account.enabled}
                       aria-label={`启用「${account.name}」`}
-                      disabled={busy}
+                      disabled={occupied}
                       onClick={() =>
                         save({ id: account.id, name: null, enabled: !account.enabled })
                       }
@@ -439,7 +609,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                       {account.enabled ? "已启用" : "已停用"}
                     </button>
                     <Button
-                      disabled={busy}
+                      disabled={occupied}
                       onClick={() => {
                         setPendingDeleteId(null);
                         setEditingId(account.id);
@@ -452,7 +622,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                     </Button>
                     <Button
                       variant="danger"
-                      disabled={busy}
+                      disabled={occupied}
                       onClick={() => {
                         setEditingId(null);
                         setPendingDeleteId(account.id);

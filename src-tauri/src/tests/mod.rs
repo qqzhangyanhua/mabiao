@@ -75,6 +75,7 @@ mod quota_account_profile;
 mod quota_accounts;
 mod quota_alerts;
 mod quota_backoff;
+mod quota_codex_pkce;
 mod quota_copilot_device;
 mod quota_exhaust;
 mod qwen_copilot_conversation;

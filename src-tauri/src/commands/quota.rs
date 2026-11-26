@@ -423,9 +423,7 @@ fn copilot_device_sessions(
     &SESSIONS
 }
 
-fn device_session_id(
-    taken: &HashMap<String, official_quota::accounts::CopilotDeviceLogin>,
-) -> String {
+fn device_session_id<T>(taken: &HashMap<String, T>) -> String {
     use std::collections::hash_map::RandomState;
     use std::hash::{BuildHasher, Hasher};
     let bits = || {
@@ -550,4 +548,192 @@ pub fn open_copilot_device_verification(session_id: String) -> Result<(), String
             .ok_or_else(|| "这次设备码授权已经结束，请重新获取验证码".to_string())?
     };
     official_quota::accounts::open_copilot_verification(&url)
+}
+
+fn codex_pkce_sessions() -> &'static Mutex<HashMap<String, official_quota::accounts::CodexPkceLogin>>
+{
+    static SESSIONS: std::sync::LazyLock<
+        Mutex<HashMap<String, official_quota::accounts::CodexPkceLogin>>,
+    > = std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+    &SESSIONS
+}
+
+fn codex_pkce_agent() -> ureq::Agent {
+    crate::net::agent_with_timeout(Duration::from_secs(20))
+}
+
+fn codex_pkce_dto(
+    session_id: String,
+    login: &official_quota::accounts::CodexPkceLogin,
+) -> official_quota::accounts::CodexPkceStartDto {
+    official_quota::accounts::CodexPkceStartDto {
+        session_id,
+        authorize_url: login.authorize_url().to_string(),
+        redirect_uri: login.redirect_uri().to_string(),
+        listening: login.listening(),
+        paste_hint: login.paste_hint().map(str::to_string),
+    }
+}
+
+/// 生成 PKCE 并尽量在回环端口听回调。端口被占用时仍返回授权地址，界面改走粘贴。
+#[tauri::command]
+pub async fn start_codex_pkce_login() -> Result<official_quota::accounts::CodexPkceStartDto, String>
+{
+    tauri::async_runtime::spawn_blocking(|| {
+        let login = official_quota::accounts::start_codex_pkce_login(
+            &official_quota::accounts::CodexPkceEndpoints::openai(),
+            official_quota::accounts::CODEX_PKCE_REDIRECT_PORT,
+        )?;
+        let mut sessions = codex_pkce_sessions()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let session_id = device_session_id(&sessions);
+        let dto = codex_pkce_dto(session_id.clone(), &login);
+        sessions.insert(session_id, login);
+        Ok(dto)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// 回调到了就交换令牌并只刷新这一条 Codex 额度账号。还在等就返回 pending。
+#[tauri::command]
+pub async fn poll_codex_pkce_login(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> Result<official_quota::accounts::CodexPkcePoll, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let login = {
+            let sessions = codex_pkce_sessions()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            sessions
+                .get(&session_id)
+                .cloned()
+                .ok_or_else(|| "这次浏览器授权已经结束，请重新发起".to_string())?
+        };
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let polled = official_quota::accounts::poll_codex_pkce_login(
+            &login,
+            &codex_pkce_agent(),
+            &paths,
+            &official_quota::backoff::state_path(),
+        );
+        match polled {
+            Ok(official_quota::accounts::CodexPkcePoll::Pending) => {
+                Ok(official_quota::accounts::CodexPkcePoll::Pending)
+            }
+            Ok(official_quota::accounts::CodexPkcePoll::Authorized { saved }) => {
+                codex_pkce_sessions()
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&session_id);
+                if saved.enabled {
+                    refresh_saved_account(&app, &saved.saved_id);
+                }
+                Ok(official_quota::accounts::CodexPkcePoll::Authorized { saved })
+            }
+            Err(error) => {
+                if !codex_pkce_retryable(&error) {
+                    codex_pkce_sessions()
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .remove(&session_id);
+                }
+                Err(error)
+            }
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// 浏览器没能打到回环端口时，用粘贴的回调链接做同一次状态校验和令牌交换。
+#[tauri::command]
+pub async fn submit_codex_pkce_callback(
+    app: tauri::AppHandle,
+    session_id: String,
+    callback_url: String,
+) -> Result<official_quota::accounts::SavedQuotaAccountDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let login = {
+            let sessions = codex_pkce_sessions()
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner);
+            sessions
+                .get(&session_id)
+                .cloned()
+                .ok_or_else(|| "这次浏览器授权已经结束，请重新发起".to_string())?
+        };
+        let state = app.state::<AppState>();
+        let paths = state.quota_account_paths.clone();
+        let submitted = official_quota::accounts::submit_codex_pkce_callback(
+            &login,
+            &callback_url,
+            &codex_pkce_agent(),
+            &paths,
+            &official_quota::backoff::state_path(),
+        );
+        match submitted {
+            Ok(saved) => {
+                codex_pkce_sessions()
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .remove(&session_id);
+                if saved.enabled {
+                    refresh_saved_account(&app, &saved.saved_id);
+                }
+                Ok(saved)
+            }
+            Err(error) => {
+                if !codex_pkce_retryable(&error) {
+                    codex_pkce_sessions()
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .remove(&session_id);
+                }
+                Err(error)
+            }
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn cancel_codex_pkce_login(session_id: String) -> Result<(), String> {
+    let mut sessions = codex_pkce_sessions()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    if let Some(login) = sessions.remove(&session_id) {
+        login.cancel();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_codex_pkce_login(session_id: String) -> Result<(), String> {
+    let url = {
+        let sessions = codex_pkce_sessions()
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        sessions
+            .get(&session_id)
+            .map(|login| login.authorize_url().to_string())
+            .ok_or_else(|| "这次浏览器授权已经结束，请重新发起".to_string())?
+    };
+    official_quota::accounts::open_codex_authorize(&url)
+}
+
+/// 链接本身不完整时留着会话，让用户再贴一次。状态对不上或交换失败就结束。
+fn codex_pkce_retryable(error: &str) -> bool {
+    matches!(
+        error,
+        "请粘贴浏览器地址栏里的回调链接"
+            | "回调链接无法识别，没有保存账号"
+            | "回调链接里没有授权码，没有保存账号"
+            | "回调链接里没有状态参数，没有保存账号"
+            | "正在完成授权，请稍候"
+    )
 }

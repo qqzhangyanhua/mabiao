@@ -5,11 +5,17 @@
 //! 隔离目录不把长期密钥复制进凭证文件。已分离快照的续期只写这份凭证文件。
 
 mod capture;
+mod codex_pkce;
 mod copilot_device;
 mod fetch_row;
 pub(crate) mod plan;
 mod refresh;
 
+pub use codex_pkce::{
+    open_codex_authorize, poll_codex_pkce_login, start_codex_pkce_login,
+    submit_codex_pkce_callback, CodexPkceEndpoints, CodexPkceLogin, CodexPkcePoll,
+    CodexPkceStartDto, CODEX_PKCE_REDIRECT_PORT,
+};
 pub use copilot_device::{
     open_copilot_verification, poll_copilot_device_login, start_copilot_device_login,
     CopilotDeviceEndpoints, CopilotDeviceLogin, CopilotDevicePoll, CopilotDeviceStartDto,
@@ -39,7 +45,7 @@ pub const LOGIN_EXPIRED: &str = "登录已失效，请在设置页重新授权�
 pub enum QuotaAccountSource {
     LocalSnapshot,
     ProfileDir,
-    /// 应用内授权拿到的独立会话。首期是 Copilot 设备码，不监听本地端口。
+    /// 应用内授权拿到的独立会话。Codex 走 PKCE，Copilot 走设备码。
     Oauth,
 }
 
