@@ -1,13 +1,19 @@
-//! 额度账号：把「当前本机登录」或「隔离配置目录」收成一条可开关、可改名的行。
+//! 额度账号：把「当前本机登录」、隔离配置目录或应用内授权收成一条可开关、可改名的行。
 //!
 //! 配置（标识、名称、掩码、指纹、开关、隔离目录）和密钥分两个文件。密钥从创建起就是
 //! 0600，也不进备份——备份白名单是另一件事。界面和命令只拿掩码，拿不到原文。
 //! 隔离目录不把长期密钥复制进凭证文件。已分离快照的续期只写这份凭证文件。
 
 mod capture;
+mod copilot_device;
 mod fetch_row;
 pub(crate) mod plan;
 mod refresh;
+
+pub use copilot_device::{
+    open_copilot_verification, poll_copilot_device_login, start_copilot_device_login,
+    CopilotDeviceEndpoints, CopilotDeviceLogin, CopilotDevicePoll, CopilotDeviceStartDto,
+};
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use super::backoff;
 use super::custom;
 use crate::domain::OfficialQuotaProvider;
-use crate::official_quota::{self, read_identity};
+use crate::official_quota::{self, read_identity, QuotaIdentity};
 
 pub use fetch_row::{fetch_account_row, fetch_managed_account, AccountTarget};
 pub(crate) use fetch_row::{prepare_auto_target, prepare_manual_target};
@@ -33,6 +39,8 @@ pub const LOGIN_EXPIRED: &str = "登录已失效，请在设置页重新授权�
 pub enum QuotaAccountSource {
     LocalSnapshot,
     ProfileDir,
+    /// 应用内授权拿到的独立会话。首期是 Copilot 设备码，不监听本地端口。
+    Oauth,
 }
 
 /// 非敏感配置。指纹只用于防重和本机比对，不是令牌。
@@ -281,6 +289,26 @@ pub fn import_local_login(
 ) -> Result<SavedQuotaAccountDto, String> {
     let identity = read_identity(provider, root)?;
     let secret = capture::capture_secret(provider, root)?;
+    upsert_account(
+        paths,
+        provider,
+        &identity,
+        secret,
+        QuotaAccountSource::LocalSnapshot,
+        backoff_path,
+    )
+}
+
+/// 同一提供方、同一指纹沿用原来的 id，并清掉这一条的退避。
+/// 自定义过的名称（和当时的标签不同）保留。
+fn upsert_account(
+    paths: &QuotaAccountPaths,
+    provider: OfficialQuotaProvider,
+    identity: &QuotaIdentity,
+    secret: AccountSecret,
+    source: QuotaAccountSource,
+    backoff_path: &Path,
+) -> Result<SavedQuotaAccountDto, String> {
     let mut config = load_config(&paths.config);
     let mut secrets = load_secrets(&paths.secrets);
     let slug = provider.as_str();
@@ -293,8 +321,10 @@ pub fn import_local_login(
             existing.name = identity.label.clone();
         }
         existing.hint = identity.label.clone();
-        existing.source = QuotaAccountSource::LocalSnapshot;
-        existing.profile_dir = None;
+        existing.source = source;
+        if source != QuotaAccountSource::ProfileDir {
+            existing.profile_dir = None;
+        }
         existing.id.clone()
     } else {
         let id = new_account_id(
@@ -310,8 +340,8 @@ pub fn import_local_login(
             provider: slug.to_string(),
             name: identity.label.clone(),
             hint: identity.label.clone(),
-            fingerprint: identity.fingerprint,
-            source: QuotaAccountSource::LocalSnapshot,
+            fingerprint: identity.fingerprint.clone(),
+            source,
             profile_dir: None,
             enabled: true,
         });
