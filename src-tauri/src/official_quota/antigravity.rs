@@ -57,6 +57,20 @@ pub struct LocalTokens {
     /// `ya29.` 开头，约 1 小时过期。
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
+    /// `antigravityAuthStatus.email`，或钥匙串 JSON 里的 email。不是密钥。
+    pub email: Option<String>,
+}
+
+impl LocalTokens {
+    pub(crate) fn signed_in(&self) -> bool {
+        token_present(&self.access_token) || token_present(&self.refresh_token)
+    }
+}
+
+fn token_present(value: &Option<String>) -> bool {
+    value
+        .as_deref()
+        .is_some_and(|token| !token.trim().is_empty())
 }
 
 enum SummaryError {
@@ -245,19 +259,28 @@ fn bucket_label(group_label: &str, bucket: &Value) -> String {
     format!("{group_label} {window}").trim().to_string()
 }
 
-fn load_local_tokens() -> Result<LocalTokens, String> {
-    if let Some(tokens) = read_keychain_tokens() {
-        if tokens != LocalTokens::default() {
+pub(crate) fn load_local_tokens() -> Result<LocalTokens, String> {
+    let dirs = APP_DIRS
+        .into_iter()
+        .filter_map(vscode_state::global_storage_dir)
+        .collect::<Vec<_>>();
+    resolve_local_tokens(read_keychain_tokens(), &dirs)
+}
+
+/// 钥匙串有登录就用它，否则按目录顺序读 `state.vscdb`。`keychain` 由调用方注入，测试不碰真钥匙串。
+pub(crate) fn resolve_local_tokens(
+    keychain: Option<LocalTokens>,
+    storage_dirs: &[PathBuf],
+) -> Result<LocalTokens, String> {
+    if let Some(tokens) = keychain {
+        if tokens.signed_in() {
             return Ok(tokens);
         }
     }
     let mut last_error = None;
-    for app in APP_DIRS {
-        let Some(dir) = vscode_state::global_storage_dir(app) else {
-            continue;
-        };
-        match read_local_tokens_at(&dir) {
-            Ok(tokens) if tokens != LocalTokens::default() => return Ok(tokens),
+    for dir in storage_dirs {
+        match read_local_tokens_at(dir) {
+            Ok(tokens) if tokens.signed_in() => return Ok(tokens),
             Ok(_) => {}
             Err(error) => last_error = Some(error),
         }
@@ -283,25 +306,26 @@ pub fn parse_keyring_blob(raw: &str) -> Option<LocalTokens> {
         serde_json::from_slice(&bytes).ok()?
     };
     let token = value.get("token").unwrap_or(&value);
-    let access_token = token
-        .get("access_token")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string);
-    let refresh_token = token
-        .get("refresh_token")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string);
+    let access_token = json_string(token, "access_token");
+    let refresh_token = json_string(token, "refresh_token");
     if access_token.is_none() && refresh_token.is_none() {
         return None;
     }
+    let email = json_string(token, "email").or_else(|| json_string(&value, "email"));
     Some(LocalTokens {
         access_token,
         refresh_token,
+        email,
     })
+}
+
+fn json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(target_os = "macos")]
@@ -366,22 +390,21 @@ pub fn read_local_tokens_at(global_storage: &Path) -> Result<LocalTokens, String
     let Some(conn) = vscode_state::open_read_only(global_storage)? else {
         return Ok(LocalTokens::default());
     };
-    let access_token = vscode_state::read_item(&conn, AUTH_STATUS_KEY)
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .and_then(|value| {
-            value
-                .get("apiKey")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|token| !token.is_empty())
-                .map(str::to_string)
-        });
+    let status = vscode_state::read_item(&conn, AUTH_STATUS_KEY)
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+    let access_token = status
+        .as_ref()
+        .and_then(|value| json_string(value, "apiKey"));
+    let email = status
+        .as_ref()
+        .and_then(|value| json_string(value, "email"));
     let refresh_token = vscode_state::read_item(&conn, OAUTH_TOKEN_KEY)
         .as_deref()
         .and_then(extract_refresh_token);
     Ok(LocalTokens {
         access_token,
         refresh_token,
+        email,
     })
 }
 

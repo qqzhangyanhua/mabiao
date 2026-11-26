@@ -710,7 +710,7 @@ fn active_local_profile_still_reads_the_live_login_and_does_not_refresh() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Codex,
         fingerprint: "acct_same".into(),
-        root: live.path().to_path_buf(),
+        root: Some(live.path().to_path_buf()),
     };
     let targets = official_quota::targets_for_fetch(&[], &accounts, &[login]);
     let target = account_target(&targets, &saved.saved_id);

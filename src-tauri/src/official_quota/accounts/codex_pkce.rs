@@ -27,19 +27,19 @@ const REDIRECT_PATH: &str = "/auth/callback";
 const SCOPE: &str = "openid profile email offline_access";
 const USER_AGENT: &str = "mabiao";
 
-const CANCELLED: &str = "已取消浏览器授权，没有保存账号";
-const STATE_MISMATCH: &str = "回调状态对不上，没有保存账号";
+const CANCELLED: &str = "已取消浏览器授权，没有保存额度账号";
+const STATE_MISMATCH: &str = "回调状态对不上，没有保存额度账号";
 const PORT_TAKEN_HINT: &str =
     "本地回环端口已被占用。请在浏览器完成登录后，把地址栏里的回调链接粘贴到下面";
-const NO_CODE: &str = "回调链接里没有授权码，没有保存账号";
-const NO_STATE: &str = "回调链接里没有状态参数，没有保存账号";
-const BAD_URL: &str = "回调链接无法识别，没有保存账号";
+const NO_CODE: &str = "回调链接里没有授权码，没有保存额度账号";
+const NO_STATE: &str = "回调链接里没有状态参数，没有保存额度账号";
+const BAD_URL: &str = "回调链接无法识别，没有保存额度账号";
 const EMPTY_URL: &str = "请粘贴浏览器地址栏里的回调链接";
-const NETWORK: &str = "无法连接 Codex 登录服务，没有保存账号。请检查网络后重试";
-const NO_TOKEN: &str = "Codex 没有返回访问令牌，没有保存账号";
-const NO_REFRESH: &str = "Codex 没有返回刷新令牌，没有保存账号";
-const IDENTITY_FAILED: &str = "无法确认 Codex 账号，没有保存账号";
-const DENIED: &str = "授权没有完成，没有保存账号";
+const NETWORK: &str = "无法连接 Codex 登录服务，没有保存额度账号。请检查网络后重试";
+const NO_TOKEN: &str = "Codex 没有返回访问令牌，没有保存额度账号";
+const NO_REFRESH: &str = "Codex 没有返回刷新令牌，没有保存额度账号";
+const IDENTITY_FAILED: &str = "无法确认 Codex 额度账号，没有保存额度账号";
+const DENIED: &str = "授权没有完成，没有保存额度账号";
 
 /// 授权页和令牌端点。测试把它们指到回环桩。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -364,7 +364,7 @@ fn exchange_and_store(
         return Err(CANCELLED.to_string());
     }
     if let Some(code) = json_str(&body, "error") {
-        return Err(format!("Codex 授权没有完成（{code}），没有保存账号"));
+        return Err(format!("Codex 授权没有完成（{code}），没有保存额度账号"));
     }
     let access_token = json_str(&body, "access_token")
         .filter(|token| !token.contains(char::is_whitespace))
@@ -489,7 +489,7 @@ fn handle_stream(stream: &mut TcpStream, shared: &Shared) -> bool {
         let message = if error == "access_denied" {
             DENIED.to_string()
         } else {
-            format!("Codex 授权没有完成（{error}），没有保存账号")
+            format!("Codex 授权没有完成（{error}），没有保存额度账号")
         };
         fail_waiting(shared, message.clone());
         respond(stream, 400, &message);
@@ -673,7 +673,7 @@ fn post_form(agent: &ureq::Agent, url: &str, fields: &[(&str, &str)]) -> Result<
         if status == 200 {
             "Codex 授权响应无法识别".to_string()
         } else {
-            format!("Codex 授权失败：HTTP {status}，没有保存账号")
+            format!("Codex 授权失败：HTTP {status}，没有保存额度账号")
         }
     })
 }

@@ -105,6 +105,59 @@ fn droid_credentials_decrypt_from_keyfile_triplet() {
     assert_eq!(decrypted, plain);
 }
 
+#[test]
+fn droid_default_plaintext_prefers_loginkeychain_over_auth_json() {
+    let engine = base64::engine::general_purpose::STANDARD;
+    let key = [9u8; 32];
+    let iv = [4u8; 16];
+    let keychain_plain = r#"{"access_token":"keychain-ACCESS","refresh_token":"keychain-REFRESH","active_organization_id":"org_keychain"}"#;
+    let sealed = Gcm16::new(&Key::<Gcm16>::try_from(key.as_slice()).unwrap())
+        .encrypt(
+            &Nonce::<U16>::try_from(iv.as_slice()).unwrap(),
+            Payload {
+                msg: keychain_plain.as_bytes(),
+                aad: &[],
+            },
+        )
+        .unwrap();
+    let (ciphertext, tag) = sealed.split_at(sealed.len() - 16);
+    let payload = format!(
+        "{}:{}:{}",
+        engine.encode(iv),
+        engine.encode(tag),
+        engine.encode(ciphertext)
+    );
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("auth.v2.loginkeychain"), payload).unwrap();
+    std::fs::write(
+        dir.path().join("auth.json"),
+        r#"{"access_token":"file-ACCESS","refresh_token":"file-REFRESH","active_organization_id":"org_file"}"#,
+    )
+    .unwrap();
+
+    let with_key = droid::load_auth_plaintext_with(dir.path(), Some(&engine.encode(key)))
+        .unwrap()
+        .unwrap();
+    assert!(with_key.contains("keychain-ACCESS"));
+    assert!(with_key.contains("org_keychain"));
+    assert!(!with_key.contains("file-ACCESS"));
+
+    let explicit = droid::read_auth_plaintext_at(dir.path()).unwrap().unwrap();
+    assert!(explicit.contains("file-ACCESS"));
+    assert!(!explicit.contains("keychain-ACCESS"));
+
+    let no_key = droid::load_auth_plaintext_with(dir.path(), None)
+        .unwrap()
+        .unwrap();
+    assert!(no_key.contains("file-ACCESS"));
+    assert!(!no_key.contains("keychain-ACCESS"));
+
+    let wrong = droid::load_auth_plaintext_with(dir.path(), Some(&engine.encode([1u8; 32])))
+        .unwrap()
+        .unwrap();
+    assert!(wrong.contains("file-ACCESS"));
+}
+
 /// `security find-generic-password -w` 找不到条目时退出码非 0（比如 44 = item not
 /// found）；这种情况和「密钥为空」都要当成「这条存储不可用」，落回 keyfile-v2，
 /// 不能直接报错断掉后面的兜底路径。

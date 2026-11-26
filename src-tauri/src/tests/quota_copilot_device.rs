@@ -186,7 +186,7 @@ fn cancelling_copilot_device_login_stops_before_saving() {
     let login = begin(&stub);
     login.cancel();
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "已取消设备码授权，没有保存账号");
+    assert_eq!(error, "已取消设备码授权，没有保存额度账号");
     assert_eq!(captured(&stub).len(), 1, "取消后不再轮询");
     assert_no_account(dir.path());
 }
@@ -197,7 +197,7 @@ fn an_already_expired_device_code_stops_with_a_chinese_message() {
     let dir = tempfile::tempdir().unwrap();
     let login = begin(&stub);
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "设备码已过期，没有保存账号。请重新发起授权");
+    assert_eq!(error, "设备码已过期，没有保存额度账号。请重新发起授权");
     assert_eq!(captured(&stub).len(), 1);
     assert_no_account(dir.path());
 }
@@ -211,7 +211,7 @@ fn an_expired_token_response_stops_with_a_chinese_message() {
     let dir = tempfile::tempdir().unwrap();
     let login = begin(&stub);
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "设备码已过期，没有保存账号。请重新发起授权");
+    assert_eq!(error, "设备码已过期，没有保存额度账号。请重新发起授权");
     assert_no_account(dir.path());
 }
 
@@ -224,7 +224,7 @@ fn a_denied_device_code_stops_with_a_chinese_message() {
     let dir = tempfile::tempdir().unwrap();
     let login = begin(&stub);
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "授权已被拒绝，没有保存账号");
+    assert_eq!(error, "授权已被拒绝，没有保存额度账号");
     assert_no_account(dir.path());
 }
 

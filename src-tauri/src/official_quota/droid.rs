@@ -232,17 +232,45 @@ pub(crate) fn factory_home() -> PathBuf {
 }
 
 pub fn load_access_token() -> Result<String, String> {
-    let home = factory_home();
-    if let Some(token) = read_loginkeychain_v2(&home) {
-        return Ok(token);
+    let plain = load_default_auth_plaintext()?
+        .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())?;
+    access_token_from(&plain)
+        .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())
+}
+
+/// 零配置和「导入当前本机登录」共用：先钥匙串解密的 loginkeychain，再 keyfile，再 `auth.json`。
+pub(crate) fn load_default_auth_plaintext() -> Result<Option<String>, String> {
+    load_auth_plaintext_with(&factory_home(), macos_login_key().as_deref())
+}
+
+/// `keychain_key` 为 `None` 时跳过 loginkeychain。测试传入密钥，不调用 `/usr/bin/security`。
+pub(crate) fn load_auth_plaintext_with(
+    home: &std::path::Path,
+    keychain_key: Option<&str>,
+) -> Result<Option<String>, String> {
+    if let Some(key) = keychain_key.map(str::trim).filter(|key| !key.is_empty()) {
+        if let Some(plain) = decrypt_loginkeychain_file(home, key) {
+            if access_token_from(&plain).is_some() {
+                return Ok(Some(plain));
+            }
+        }
     }
-    if let Some(token) = read_keyfile_v2(&home)? {
-        return Ok(token);
+    if let Some(plain) = read_keyfile_plaintext(home)? {
+        if access_token_from(&plain).is_some() {
+            return Ok(Some(plain));
+        }
     }
-    if let Some(token) = read_legacy(&home) {
-        return Ok(token);
-    }
-    Err("尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())
+    Ok(read_legacy_plaintext(home))
+}
+
+fn decrypt_loginkeychain_file(home: &std::path::Path, key: &str) -> Option<String> {
+    let payload = std::fs::read_to_string(home.join("auth.v2.loginkeychain")).ok()?;
+    decrypt_credentials(payload.trim(), key).ok()
+}
+
+fn read_legacy_plaintext(home: &std::path::Path) -> Option<String> {
+    let raw = std::fs::read_to_string(home.join("auth.json")).ok()?;
+    access_token_from(&raw).map(|_| raw)
 }
 
 /// macOS 钥匙串条目的 service/account，取值与 droid CLI 二进制里反编译出来的常量一致。
@@ -253,19 +281,15 @@ const KEYCHAIN_ACCOUNT: &str = "auth-encryption-key-security-cli";
 
 /// 密文文件存在但取不到密钥（钥匙串条目缺失/解密失败）都当作「这条存储不可用」，
 /// 静默落回 keyfile-v2，不让这一步的失败盖过后面可能有效的凭证。
+/// droid 非生产构建会给 account 加 `-dev` 后缀，正常安装用不到，保底也试一下。
 #[cfg(target_os = "macos")]
-pub(crate) fn read_loginkeychain_v2(home: &std::path::Path) -> Option<String> {
-    let payload = std::fs::read_to_string(home.join("auth.v2.loginkeychain")).ok()?;
-    // droid 非生产构建会给 account 加 `-dev` 后缀，正常安装用不到，保底也试一下。
-    let key = macos_keychain_password(KEYCHAIN_ACCOUNT)
-        .or_else(|| macos_keychain_password(&format!("{KEYCHAIN_ACCOUNT}-dev")))?;
-    decrypt_credentials(payload.trim(), &key)
-        .ok()
-        .and_then(|plain| access_token_from(&plain))
+fn macos_login_key() -> Option<String> {
+    macos_keychain_password(KEYCHAIN_ACCOUNT)
+        .or_else(|| macos_keychain_password(&format!("{KEYCHAIN_ACCOUNT}-dev")))
 }
 
 #[cfg(not(target_os = "macos"))]
-pub(crate) fn read_loginkeychain_v2(_home: &std::path::Path) -> Option<String> {
+fn macos_login_key() -> Option<String> {
     None
 }
 
@@ -334,10 +358,6 @@ pub(crate) fn parse_security_output(success: bool, stdout: &[u8]) -> Option<Stri
     }
 }
 
-fn read_keyfile_v2(home: &std::path::Path) -> Result<Option<String>, String> {
-    Ok(read_keyfile_plaintext(home)?.and_then(|plain| access_token_from(&plain)))
-}
-
 fn read_keyfile_plaintext(home: &std::path::Path) -> Result<Option<String>, String> {
     let (Ok(payload), Ok(key)) = (
         std::fs::read_to_string(home.join("auth.v2.file")),
@@ -348,12 +368,7 @@ fn read_keyfile_plaintext(home: &std::path::Path) -> Result<Option<String>, Stri
     decrypt_credentials(payload.trim(), key.trim()).map(Some)
 }
 
-fn read_legacy(home: &std::path::Path) -> Option<String> {
-    let raw = std::fs::read_to_string(home.join("auth.json")).ok()?;
-    access_token_from(&raw)
-}
-
-/// 显式目录或凭证文件里的登录态明文。不读系统钥匙串，也不写任何文件。
+/// 显式目录或凭证文件里的登录态明文。不读系统钥匙串，也不读 loginkeychain，也不写任何文件。
 pub fn read_auth_plaintext_at(home: &std::path::Path) -> Result<Option<String>, String> {
     if home.is_file() {
         return std::fs::read_to_string(home)

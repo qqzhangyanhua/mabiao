@@ -77,8 +77,8 @@ type CodexPrompt = {
   pasteHint: string | null;
 };
 
-const CANCELLED = "已取消设备码授权，没有保存账号";
-const CODEX_CANCELLED = "已取消浏览器授权，没有保存账号";
+const CANCELLED = "已取消设备码授权，没有保存额度账号";
+const CODEX_CANCELLED = "已取消浏览器授权，没有保存额度账号";
 
 function accountSourceLabel(source: string, provider: string): string {
   if (source === "oauth" && provider === "codex") return "浏览器授权";
@@ -634,7 +634,7 @@ export function QuotaAccountPanel({ onQuota }: { onQuota: (value: OfficialQuotaD
                 )}
               </div>
               {pendingDeleteId === account.id ? (
-                <p className="panel-note tone-warn">这条账号会从列表和首页消失，保存的登录也会被清掉。</p>
+                <p className="panel-note tone-warn">这条额度账号会从列表和首页消失，保存的登录也会被清掉。</p>
               ) : null}
             </div>
           </li>

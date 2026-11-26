@@ -10,7 +10,9 @@ use std::time::Duration;
 
 use base64::Engine;
 
-use crate::domain::{OfficialQuotaConfig, OfficialQuotaProvider, OfficialQuotaWindow};
+use crate::domain::{
+    OfficialQuotaConfig, OfficialQuotaFreshness, OfficialQuotaProvider, OfficialQuotaWindow,
+};
 use crate::official_quota::accounts::{self, QuotaAccountPaths, QuotaSnapshotInputs};
 use crate::official_quota::{self, FetchTarget, QuotaTarget};
 use crate::store;
@@ -310,7 +312,7 @@ fn enabled_local_login_replaces_the_builtin_row() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Codex,
         fingerprint: "acct_01HZwork".into(),
-        root: source.path().to_path_buf(),
+        root: Some(source.path().to_path_buf()),
     };
     let dto = official_quota::load_dto_with_accounts(
         &store::open_memory().unwrap(),
@@ -366,7 +368,7 @@ fn disabled_local_login_suppresses_the_builtin_row_and_cannot_alert() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Codex,
         fingerprint: "acct_01HZwork".into(),
-        root: source.path().to_path_buf(),
+        root: Some(source.path().to_path_buf()),
     };
     let dto = official_quota::load_dto_with_accounts(
         &conn,
@@ -402,7 +404,7 @@ fn unmatched_local_login_keeps_a_marked_builtin_beside_enabled_accounts() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Codex,
         fingerprint: "someone-else".into(),
-        root: source.path().to_path_buf(),
+        root: Some(source.path().to_path_buf()),
     };
     let dto = official_quota::load_dto_with_accounts(
         &store::open_memory().unwrap(),
@@ -576,6 +578,49 @@ fn missing_secret_shows_a_todo_and_is_not_fetched() {
 }
 
 #[test]
+fn missing_secret_clears_a_cached_error_other_than_the_todo_or_expiry() {
+    let app = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    codex_login(source.path(), "acct_01HZwork", "codex-SECRET-TOKEN-9f3a");
+    let saved = import(app.path(), OfficialQuotaProvider::Codex, source.path());
+    std::fs::remove_file(paths(app.path()).secrets).unwrap();
+    let conn = store::open_memory().unwrap();
+    let captured = chrono::Utc::now().to_rfc3339();
+    store::upsert_official_quota(
+        &conn,
+        &saved.saved_id,
+        &[OfficialQuotaWindow {
+            kind: "weekly".into(),
+            label: "7 天".into(),
+            used_percent: Some(22.0),
+            ..Default::default()
+        }],
+        &captured,
+        None,
+        None,
+    )
+    .unwrap();
+    store::set_official_quota_error(&conn, &saved.saved_id, "上游暂时失败：HTTP 500").unwrap();
+    let accounts = accounts::load_resolved(&paths(app.path()));
+    let dto = official_quota::load_dto_with_accounts(
+        &conn,
+        &OfficialQuotaConfig::default(),
+        &[],
+        &accounts,
+        &[],
+        chrono::Utc::now(),
+    );
+    let row = codex_rows(&dto)
+        .into_iter()
+        .find(|row| row.provider == saved.saved_id)
+        .unwrap();
+    assert_eq!(row.todo.as_deref(), Some(accounts::MISSING_SECRET_TODO));
+    assert_eq!(row.error, None, "缺凭证时残留的取数错误不该留在 error");
+    assert_eq!(row.freshness, OfficialQuotaFreshness::Official);
+    assert_eq!(row.windows[0].used_percent, Some(22.0));
+}
+
+#[test]
 fn cli_loader_includes_enabled_accounts_with_the_same_row_fields() {
     let app = tempfile::tempdir().unwrap();
     let source = tempfile::tempdir().unwrap();
@@ -584,7 +629,7 @@ fn cli_loader_includes_enabled_accounts_with_the_same_row_fields() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Codex,
         fingerprint: "acct_01HZwork".into(),
-        root: source.path().to_path_buf(),
+        root: Some(source.path().to_path_buf()),
     };
     let inputs = QuotaSnapshotInputs::from_stored(app.path(), vec![login.clone()]);
     let dto = official_quota::load_dto_with_accounts(
@@ -680,7 +725,7 @@ impl Stub {
                         });
                     }
                 }
-                let body = r#"{"config":{"creditUsagePercent":12}}"#;
+                let body = r#"{"config":{"creditUsagePercent":12},"groups":[{"displayName":"Gemini","buckets":[{"bucketId":"weekly","window":"weekly","remainingFraction":0.5,"resetTime":"2026-12-01T00:00:00Z"}]}]}"#;
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                     body.len()
@@ -723,6 +768,129 @@ fn grok_auth(dir: &Path, token: &str, expires: &str, refresh: Option<(&str, &str
     );
 }
 
+fn nested_refresh_blob(refresh: &str) -> String {
+    let engine = base64::engine::general_purpose::STANDARD;
+    fn field2(bytes: &[u8]) -> Vec<u8> {
+        let mut out = vec![0x0a];
+        let mut len = bytes.len();
+        while len >= 0x80 {
+            out.push((len as u8) | 0x80);
+            len >>= 7;
+        }
+        out.push(len as u8);
+        out.extend_from_slice(bytes);
+        out
+    }
+    let mut inner = field2(b"ya29.inner-access-ignored");
+    inner.extend(field2(refresh.as_bytes()));
+    engine.encode(field2(&engine.encode(&inner).into_bytes()))
+}
+
+fn write_antigravity(dir: &Path, access: &str, refresh: &str) {
+    let db = dir.join("state.vscdb");
+    let _ = std::fs::remove_file(&db);
+    seed_state_db(
+        dir,
+        &[
+            (
+                "antigravityAuthStatus",
+                &format!(r#"{{"apiKey":"{access}"}}"#),
+            ),
+            (
+                "antigravityUnifiedStateSync.oauthToken",
+                &nested_refresh_blob(refresh),
+            ),
+        ],
+    );
+}
+
+#[test]
+fn active_local_antigravity_fetch_uses_the_live_access_token_and_skips_refresh() {
+    let refresh = "1//antigravity-refresh-STABLE-should-not-leak-q7k2";
+    let stored_access = "ya29.antigravity-STORED-ACCESS-should-not-use";
+    let live_access = "ya29.antigravity-LIVE-ACCESS-should-use";
+    let stub = Stub::start();
+    let app = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    write_antigravity(source.path(), stored_access, refresh);
+    let saved = import(
+        app.path(),
+        OfficialQuotaProvider::Antigravity,
+        source.path(),
+    );
+    write_antigravity(source.path(), live_access, refresh);
+    let before =
+        official_quota::read_identity(OfficialQuotaProvider::Antigravity, source.path()).unwrap();
+    let accounts = accounts::load_resolved(&paths(app.path()));
+    let stored = accounts
+        .iter()
+        .find(|account| account.config.id == saved.saved_id)
+        .unwrap();
+    assert_eq!(stored.config.fingerprint, before.fingerprint);
+    assert!(!before.fingerprint.contains(stored_access));
+    assert!(!before.fingerprint.contains(live_access));
+    assert!(!before.fingerprint.contains(refresh));
+    assert!(!before.label.contains(refresh));
+    let login = accounts::LocalLogin {
+        provider: OfficialQuotaProvider::Antigravity,
+        fingerprint: before.fingerprint,
+        root: Some(source.path().to_path_buf()),
+    };
+    let targets = official_quota::targets_for_fetch(&[], &accounts, &[login]);
+    let FetchTarget::Account(target) = targets
+        .into_iter()
+        .find(|target| target.quota_id() == saved.saved_id)
+        .unwrap()
+    else {
+        panic!("active local account was not a fetch target");
+    };
+    assert!(target.live_root.is_some());
+    assert!(target.refresh.is_none());
+    official_quota::accounts::fetch_managed_account(&target, Some(&stub.base)).unwrap();
+    let hits = stub.hits.lock().unwrap();
+    assert!(hits
+        .iter()
+        .any(|hit| hit.authorization == format!("Bearer {live_access}")));
+    assert!(hits
+        .iter()
+        .all(|hit| hit.authorization != format!("Bearer {stored_access}")));
+    assert!(hits
+        .iter()
+        .any(|hit| hit.path.contains("retrieveUserQuotaSummary")));
+    assert!(hits.iter().all(|hit| !hit.path.contains("/token")));
+    let secret = std::fs::read_to_string(paths(app.path()).secrets).unwrap();
+    assert!(secret.contains(refresh));
+    assert!(!secret.contains(live_access));
+}
+
+#[test]
+fn matched_default_login_without_a_directory_skips_refresh() {
+    let app = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let refresh = "1//antigravity-refresh-STABLE-should-not-leak-q7k2";
+    write_antigravity(source.path(), "ya29.stored-access-TOKEN-9f3a", refresh);
+    let saved = import(
+        app.path(),
+        OfficialQuotaProvider::Antigravity,
+        source.path(),
+    );
+    let accounts = accounts::load_resolved(&paths(app.path()));
+    let stored = accounts
+        .iter()
+        .find(|account| account.config.id == saved.saved_id)
+        .unwrap();
+    let login = accounts::LocalLogin {
+        provider: OfficialQuotaProvider::Antigravity,
+        fingerprint: stored.config.fingerprint.clone(),
+        root: None,
+    };
+    let target = accounts::prepare_manual_target(stored, &[login]).unwrap();
+    assert!(target.live_default);
+    assert!(target.live_root.is_none());
+    assert!(target.refresh.is_none());
+    assert!(!stored.config.fingerprint.contains(refresh));
+}
+
 #[test]
 fn active_local_grok_fetch_uses_the_live_access_token_and_skips_refresh() {
     let stub = Stub::start();
@@ -747,7 +915,7 @@ fn active_local_grok_fetch_uses_the_live_access_token_and_skips_refresh() {
     let login = accounts::LocalLogin {
         provider: OfficialQuotaProvider::Grok,
         fingerprint: identity.fingerprint,
-        root: source.path().to_path_buf(),
+        root: Some(source.path().to_path_buf()),
     };
     let targets = official_quota::targets_for_fetch(&[], &accounts, &[login]);
     let FetchTarget::Account(target) = targets

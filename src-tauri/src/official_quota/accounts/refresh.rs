@@ -41,7 +41,7 @@ pub(crate) fn refresh_separated(request: &RefreshRequest<'_>) -> Result<Refreshe
         OfficialQuotaProvider::Grok => refresh_grok(refresh_token, request.secret),
         OfficialQuotaProvider::Antigravity => refresh_antigravity(refresh_token, request.secret),
         _ => Err(RefreshFail::Other(
-            "这个提供方的隔离账号不能在这里续期".to_string(),
+            "这个提供方的隔离额度账号不能在这里续期".to_string(),
         )),
     }
 }

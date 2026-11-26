@@ -1,7 +1,8 @@
 //! 从显式配置目录或凭证文件提取额度账号身份。
 //!
 //! 只读、离线。不读家目录，不读系统钥匙串，不写任何第三方文件，也不把明文令牌放进
-//! 指纹或展示标签。有稳定标识（账号 id、用户 id、邮箱、组织 id、JWT `sub`）就用它；
+//! 指纹或展示标签。有稳定标识（账号 id、用户 id、邮箱、组织 id、JWT `sub`）就用它。
+//! access token 会轮换：已经有 refresh token 或稳定主体时，不用 access token 当指纹。
 //! 只有不透明密钥时，指纹是 SHA-256，标签是尾号掩码。
 
 use std::path::{Path, PathBuf};
@@ -44,13 +45,18 @@ fn claude(root: &Path) -> Result<QuotaIdentity, String> {
     let raw = read_text(&path, "未找到 Claude Code 登录态，请先运行 claude 并登录")?;
     let value: Value = serde_json::from_str(&raw)
         .map_err(|_| "Claude 登录态文件结构变了，读不到 claudeAiOauth".to_string())?;
-    let token = value
-        .pointer("/claudeAiOauth/accessToken")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
+    let Some(oauth) = value.get("claudeAiOauth") else {
+        return Err("Claude 登录态里没有 accessToken".to_string());
+    };
+    let token = json_str(oauth, "accessToken")
         .ok_or_else(|| "Claude 登录态里没有 accessToken".to_string())?;
-    Ok(opaque_identity(token))
+    let refresh = json_str(oauth, "refreshToken");
+    let email = json_str(oauth, "email");
+    let account = ["accountUuid", "accountId", "userId"]
+        .into_iter()
+        .find_map(|key| json_str(oauth, key))
+        .or(email);
+    Ok(login_identity(token, refresh, account, email))
 }
 
 fn codex(root: &Path) -> Result<QuotaIdentity, String> {
@@ -93,19 +99,15 @@ fn grok_identity(root: &Path) -> Result<QuotaIdentity, String> {
 fn droid_identity(root: &Path) -> Result<QuotaIdentity, String> {
     let plain = droid::read_auth_plaintext_at(root)?
         .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())?;
+    identity_from_droid_plaintext(&plain)
+}
+
+pub(crate) fn identity_from_droid_plaintext(plain: &str) -> Result<QuotaIdentity, String> {
     let value: Value =
-        serde_json::from_str(&plain).map_err(|_| "Droid 登录态不是合法 JSON".to_string())?;
-    let token = value
-        .get("access_token")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
+        serde_json::from_str(plain).map_err(|_| "Droid 登录态不是合法 JSON".to_string())?;
+    let token = json_str(&value, "access_token")
         .ok_or_else(|| "Droid 登录态里没有 access_token".to_string())?;
-    if let Some(org_id) = value
-        .get("active_organization_id")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|org_id| !org_id.is_empty())
+    if let Some(org_id) = json_str(&value, "active_organization_id")
         .map(str::to_string)
         .or_else(|| droid::parse_jwt_external_org_id(token))
     {
@@ -116,12 +118,21 @@ fn droid_identity(root: &Path) -> Result<QuotaIdentity, String> {
 
 fn antigravity_identity(root: &Path) -> Result<QuotaIdentity, String> {
     let tokens = antigravity::read_local_tokens_at(vscode_storage_dir(root))?;
-    let secret = nonempty(tokens.access_token.as_deref())
-        .or_else(|| nonempty(tokens.refresh_token.as_deref()))
-        .ok_or_else(|| {
-            "尚未登录 Antigravity，请先打开 Antigravity 客户端并登录 Google 账号".to_string()
-        })?;
-    Ok(opaque_identity(secret))
+    identity_from_antigravity_tokens(&tokens)
+}
+
+pub(crate) fn identity_from_antigravity_tokens(
+    tokens: &antigravity::LocalTokens,
+) -> Result<QuotaIdentity, String> {
+    let access = nonempty(tokens.access_token.as_deref()).unwrap_or("");
+    let refresh = nonempty(tokens.refresh_token.as_deref());
+    if access.is_empty() && refresh.is_none() {
+        return Err(
+            "尚未登录 Antigravity，请先打开 Antigravity 客户端并登录 Google 账号".to_string(),
+        );
+    }
+    let email = nonempty(tokens.email.as_deref());
+    Ok(login_identity(access, refresh, email, email))
 }
 
 fn opencode_identity(root: &Path) -> Result<QuotaIdentity, String> {
@@ -172,6 +183,36 @@ fn read_text(path: &Path, missing: &str) -> Result<String, String> {
 
 fn nonempty(value: Option<&str>) -> Option<&str> {
     value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn json_str<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
+    nonempty(value.get(key).and_then(Value::as_str))
+}
+
+/// JWT `sub`，其次凭证里的账号或邮箱，其次 refresh token。最后才哈希会轮换的 access token。
+fn login_identity(
+    access: &str,
+    refresh: Option<&str>,
+    subject: Option<&str>,
+    email: Option<&str>,
+) -> QuotaIdentity {
+    if let Some(sub) = jwt_claim(access, "sub") {
+        let label = jwt_claim(access, "email").or_else(|| nonempty(email).map(str::to_string));
+        return stable_identity(&sub, label.as_deref(), access);
+    }
+    if let Some(id) = nonempty(subject) {
+        let label = nonempty(email).unwrap_or(id);
+        let secret = if access.is_empty() {
+            refresh.unwrap_or(access)
+        } else {
+            access
+        };
+        return stable_identity(id, Some(label), secret);
+    }
+    if let Some(refresh) = nonempty(refresh) {
+        return opaque_identity(refresh);
+    }
+    opaque_identity(access)
 }
 
 /// 稳定标识不是密钥。标识本身如果就是那串密钥，退回摘要，避免明文漏出去。

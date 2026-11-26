@@ -152,12 +152,13 @@ pub(crate) fn fingerprints_match(stored: &str, live: &str) -> bool {
     !stored.is_empty() && stored == live
 }
 
-/// 离线探到的当前本机登录。`root` 是读到这份身份的目录或凭证文件。
+/// 离线探到的当前本机登录。
+/// `root` 有值时只读那个目录或凭证文件；`None` 表示默认发现，取数时走和零配置相同的读者。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalLogin {
     pub provider: OfficialQuotaProvider,
     pub fingerprint: String,
-    pub root: PathBuf,
+    pub root: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -188,7 +189,7 @@ pub struct QuotaSnapshotInputs {
 }
 
 impl QuotaSnapshotInputs {
-    /// 有额度账号才探本机默认登录。没有账号时不读那些目录。
+    /// 有额度账号才探本机默认登录。没有额度账号时不读那些目录。
     pub fn from_app_data() -> Self {
         let custom = custom::store::load_providers(&custom::store::CustomQuotaPaths::app_data());
         let accounts = load_resolved(&QuotaAccountPaths::app_data());
@@ -369,24 +370,58 @@ fn upsert_account(
     })
 }
 
-/// 按这个提供方的默认登录位置依次试，第一个读到身份的算数。
+/// 按这个提供方的默认登录位置导入。Antigravity / Droid 走和零配置取数相同的发现顺序。
 pub fn import_default(
     paths: &QuotaAccountPaths,
     provider: OfficialQuotaProvider,
     backoff_path: &Path,
 ) -> Result<SavedQuotaAccountDto, String> {
-    let roots = default_roots(provider);
-    if roots.is_empty() {
-        return Err("未找到本机登录态，请先在客户端登录".to_string());
-    }
-    let mut last = "未找到本机登录态，请先在客户端登录".to_string();
-    for root in roots {
-        match import_local_login(paths, provider, &root, backoff_path) {
-            Ok(saved) => return Ok(saved),
-            Err(error) => last = error,
+    match provider {
+        OfficialQuotaProvider::Antigravity => {
+            let tokens = crate::official_quota::antigravity::load_local_tokens()?;
+            let identity =
+                crate::official_quota::identity::identity_from_antigravity_tokens(&tokens)?;
+            let secret = capture::antigravity_secret_from_tokens(&tokens)?;
+            upsert_account(
+                paths,
+                provider,
+                &identity,
+                secret,
+                QuotaAccountSource::LocalSnapshot,
+                backoff_path,
+            )
+        }
+        OfficialQuotaProvider::Droid => {
+            let plain =
+                crate::official_quota::droid::load_default_auth_plaintext()?.ok_or_else(|| {
+                    "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string()
+                })?;
+            let identity = crate::official_quota::identity::identity_from_droid_plaintext(&plain)?;
+            let secret = capture::droid_secret_from_plaintext(&plain)?;
+            upsert_account(
+                paths,
+                provider,
+                &identity,
+                secret,
+                QuotaAccountSource::LocalSnapshot,
+                backoff_path,
+            )
+        }
+        other => {
+            let roots = default_roots(other);
+            if roots.is_empty() {
+                return Err("未找到本机登录态，请先在客户端登录".to_string());
+            }
+            let mut last = "未找到本机登录态，请先在客户端登录".to_string();
+            for root in roots {
+                match import_local_login(paths, other, &root, backoff_path) {
+                    Ok(saved) => return Ok(saved),
+                    Err(error) => last = error,
+                }
+            }
+            Err(last)
         }
     }
-    Err(last)
 }
 
 pub fn save(
@@ -553,18 +588,48 @@ pub fn probe_default_logins(accounts: &[ResolvedQuotaAccount]) -> Vec<LocalLogin
         {
             continue;
         }
-        for root in default_roots(provider) {
-            if let Ok(identity) = read_identity(provider, &root) {
-                logins.push(LocalLogin {
-                    provider,
-                    fingerprint: identity.fingerprint,
-                    root,
-                });
-                break;
-            }
+        if let Some(login) = probe_provider(provider) {
+            logins.push(login);
         }
     }
     logins
+}
+
+fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
+    match provider {
+        OfficialQuotaProvider::Antigravity => {
+            let tokens = crate::official_quota::antigravity::load_local_tokens().ok()?;
+            let identity =
+                crate::official_quota::identity::identity_from_antigravity_tokens(&tokens).ok()?;
+            Some(LocalLogin {
+                provider,
+                fingerprint: identity.fingerprint,
+                root: None,
+            })
+        }
+        OfficialQuotaProvider::Droid => {
+            let plain = crate::official_quota::droid::load_default_auth_plaintext().ok()??;
+            let identity =
+                crate::official_quota::identity::identity_from_droid_plaintext(&plain).ok()?;
+            Some(LocalLogin {
+                provider,
+                fingerprint: identity.fingerprint,
+                root: None,
+            })
+        }
+        other => {
+            for root in default_roots(other) {
+                if let Ok(identity) = read_identity(other, &root) {
+                    return Some(LocalLogin {
+                        provider,
+                        fingerprint: identity.fingerprint,
+                        root: Some(root),
+                    });
+                }
+            }
+            None
+        }
+    }
 }
 
 pub(crate) fn default_roots(provider: OfficialQuotaProvider) -> Vec<PathBuf> {

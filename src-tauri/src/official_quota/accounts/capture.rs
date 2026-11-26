@@ -1,4 +1,5 @@
-//! 从显式目录抄一份登录密钥。只读，不写第三方客户端文件，也不走钥匙串。
+//! 从登录态抄一份密钥。显式目录只读文件，不写第三方客户端文件，也不走钥匙串。
+//! 没指定目录时走和零配置取数相同的发现顺序；Antigravity 与 Droid 会先读钥匙串。
 
 use std::path::{Path, PathBuf};
 
@@ -96,8 +97,12 @@ fn grok_secret(root: &Path) -> Result<AccountSecret, String> {
 fn droid_secret(root: &Path) -> Result<AccountSecret, String> {
     let plain = droid::read_auth_plaintext_at(root)?
         .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())?;
+    droid_secret_from_plaintext(&plain)
+}
+
+pub(crate) fn droid_secret_from_plaintext(plain: &str) -> Result<AccountSecret, String> {
     let value: Value =
-        serde_json::from_str(&plain).map_err(|_| "Droid 登录态不是合法 JSON".to_string())?;
+        serde_json::from_str(plain).map_err(|_| "Droid 登录态不是合法 JSON".to_string())?;
     let access_token = value
         .get("access_token")
         .and_then(Value::as_str)
@@ -119,8 +124,15 @@ fn droid_secret(root: &Path) -> Result<AccountSecret, String> {
 }
 
 fn antigravity_secret(root: &Path) -> Result<AccountSecret, String> {
-    let tokens = antigravity::read_local_tokens_at(vscode_storage_dir(root))?;
-    let access_token = tokens.access_token.unwrap_or_default();
+    antigravity_secret_from_tokens(&antigravity::read_local_tokens_at(vscode_storage_dir(
+        root,
+    ))?)
+}
+
+pub(crate) fn antigravity_secret_from_tokens(
+    tokens: &antigravity::LocalTokens,
+) -> Result<AccountSecret, String> {
+    let access_token = tokens.access_token.clone().unwrap_or_default();
     if access_token.trim().is_empty() && tokens.refresh_token.is_none() {
         return Err(
             "尚未登录 Antigravity，请先打开 Antigravity 客户端并登录 Google 账号".to_string(),
@@ -128,9 +140,34 @@ fn antigravity_secret(root: &Path) -> Result<AccountSecret, String> {
     }
     Ok(AccountSecret {
         access_token,
-        refresh_token: tokens.refresh_token,
+        refresh_token: tokens.refresh_token.clone(),
         ..AccountSecret::default()
     })
+}
+
+/// 没传目录时和零配置取数读同一份登录。显式目录仍走 `capture_secret`，不进这里。
+pub(crate) fn capture_default(provider: OfficialQuotaProvider) -> Result<AccountSecret, String> {
+    match provider {
+        OfficialQuotaProvider::Antigravity => {
+            antigravity_secret_from_tokens(&antigravity::load_local_tokens()?)
+        }
+        OfficialQuotaProvider::Droid => {
+            let plain = droid::load_default_auth_plaintext()?.ok_or_else(|| {
+                "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string()
+            })?;
+            droid_secret_from_plaintext(&plain)
+        }
+        other => {
+            let mut last = "未找到本机登录态，请先在客户端登录".to_string();
+            for root in super::default_roots(other) {
+                match capture_secret(other, &root) {
+                    Ok(secret) => return Ok(secret),
+                    Err(error) => last = error,
+                }
+            }
+            Err(last)
+        }
+    }
 }
 
 fn opencode_secret(root: &Path) -> Result<AccountSecret, String> {

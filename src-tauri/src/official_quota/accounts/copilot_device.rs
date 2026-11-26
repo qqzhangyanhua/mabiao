@@ -24,11 +24,11 @@ const USER_AGENT: &str = "mabiao";
 const DEFAULT_INTERVAL_SECONDS: u64 = 5;
 const DEFAULT_EXPIRES_SECONDS: u64 = 900;
 
-const CANCELLED: &str = "已取消设备码授权，没有保存账号";
-const EXPIRED: &str = "设备码已过期，没有保存账号。请重新发起授权";
-const DENIED: &str = "授权已被拒绝，没有保存账号";
-const IDENTITY_FAILED: &str = "无法确认 GitHub 账号，没有保存账号";
-const NETWORK: &str = "无法连接 GitHub 授权服务，没有保存账号。请检查网络后重试";
+const CANCELLED: &str = "已取消设备码授权，没有保存额度账号";
+const EXPIRED: &str = "设备码已过期，没有保存额度账号。请重新发起授权";
+const DENIED: &str = "授权已被拒绝，没有保存额度账号";
+const IDENTITY_FAILED: &str = "无法确认 GitHub 额度账号，没有保存额度账号";
+const NETWORK: &str = "无法连接 GitHub 授权服务，没有保存额度账号。请检查网络后重试";
 
 /// 设备码、换令牌、读 GitHub 登录名三个地址。测试把它们指到回环桩。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -214,7 +214,7 @@ pub fn poll_copilot_device_login(
     }
     let token = json_str(&body, "access_token")
         .filter(|token| !token.contains(char::is_whitespace))
-        .ok_or_else(|| "GitHub 没有返回访问令牌，没有保存账号".to_string())?;
+        .ok_or_else(|| "GitHub 没有返回访问令牌，没有保存额度账号".to_string())?;
     if login.cancelled() {
         return Err(CANCELLED.to_string());
     }
@@ -277,7 +277,7 @@ fn github_login(agent: &ureq::Agent, url: &str, token: &str) -> Result<String, S
         if status == 200 {
             IDENTITY_FAILED.to_string()
         } else {
-            format!("GitHub 授权失败：HTTP {status}，没有保存账号")
+            format!("GitHub 授权失败：HTTP {status}，没有保存额度账号")
         }
     })?;
     json_str(&value, "login")
@@ -319,7 +319,7 @@ fn post_form(agent: &ureq::Agent, url: &str, fields: &[(&str, &str)]) -> Result<
         if status == 200 {
             "GitHub 授权响应无法识别".to_string()
         } else {
-            format!("GitHub 授权失败：HTTP {status}，没有保存账号")
+            format!("GitHub 授权失败：HTTP {status}，没有保存额度账号")
         }
     })
 }
@@ -392,7 +392,7 @@ fn slowed_interval(current: u64, server: Option<u64>) -> u64 {
 }
 
 fn oauth_failure(code: &str) -> String {
-    format!("GitHub 授权没有完成（{code}），没有保存账号")
+    format!("GitHub 授权没有完成（{code}），没有保存额度账号")
 }
 
 fn deadline(seconds: u64) -> Instant {

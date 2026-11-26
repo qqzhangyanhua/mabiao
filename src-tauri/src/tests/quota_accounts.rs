@@ -8,6 +8,7 @@ use crate::domain::{
     OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaProvider, OfficialQuotaRow,
     OfficialQuotaWindow,
 };
+use crate::official_quota::antigravity;
 use crate::official_quota::notify::{self, NotifyState};
 use crate::official_quota::{self, QuotaIdentity};
 use crate::store;
@@ -335,6 +336,85 @@ fn claude_identity_hashes_the_access_token_even_when_expiry_is_zero() {
 }
 
 #[test]
+fn claude_identity_keeps_the_same_fingerprint_when_the_access_token_rotates() {
+    let refresh = "sk-ant-ort01-REFRESH-STABLE-should-not-leak-q7k2";
+    let access_a = "sk-ant-oat01-ACCESS-AAAA-should-not-leak-9f3a";
+    let access_b = "sk-ant-oat01-ACCESS-BBBB-should-not-leak-zzzz";
+    let body = |access: &str| {
+        format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"{access}","refreshToken":"{refresh}","expiresAt":0}}}}"#
+        )
+    };
+    let dir_a = tempfile::tempdir().unwrap();
+    write_file(dir_a.path(), ".credentials.json", &body(access_a));
+    let dir_b = tempfile::tempdir().unwrap();
+    write_file(dir_b.path(), ".credentials.json", &body(access_b));
+    let first = read(OfficialQuotaProvider::Claude, dir_a.path());
+    let second = read(OfficialQuotaProvider::Claude, dir_b.path());
+    assert_eq!(first.fingerprint, second.fingerprint);
+    assert_eq!(first.label, "••••••q7k2");
+    assert_ne!(first.fingerprint, CLAUDE_FINGERPRINT);
+    assert_secret_absent(&first, &[access_a, access_b, refresh]);
+    assert_secret_absent(&second, &[access_a, access_b, refresh]);
+
+    let email_a = tempfile::tempdir().unwrap();
+    write_file(
+        email_a.path(),
+        ".credentials.json",
+        &format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"{access_a}","refreshToken":"sk-ant-ort01-OTHER-REFRESH-aaaa","email":"ada@example.com","expiresAt":0}}}}"#
+        ),
+    );
+    let email_b = tempfile::tempdir().unwrap();
+    write_file(
+        email_b.path(),
+        ".credentials.json",
+        &format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"{access_b}","refreshToken":"sk-ant-ort01-YET-ANOTHER-bbbb","email":"ada@example.com","expiresAt":0}}}}"#
+        ),
+    );
+    let from_email = read(OfficialQuotaProvider::Claude, email_a.path());
+    let same_email = read(OfficialQuotaProvider::Claude, email_b.path());
+    assert_eq!(from_email.fingerprint, "ada@example.com");
+    assert_eq!(same_email.fingerprint, from_email.fingerprint);
+    assert_eq!(from_email.label, "ada@example.com");
+    assert_secret_absent(
+        &from_email,
+        &[
+            access_a,
+            access_b,
+            refresh,
+            "sk-ant-ort01-OTHER-REFRESH-aaaa",
+        ],
+    );
+
+    let subject = jwt(r#"{"sub":"claude-user-1","email":"ada@anthropic.com"}"#);
+    let rotated = jwt(r#"{"sub":"claude-user-1","email":"ada@anthropic.com"}"#);
+    let jwt_dir = tempfile::tempdir().unwrap();
+    write_file(
+        jwt_dir.path(),
+        ".credentials.json",
+        &format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"{subject}","refreshToken":"{refresh}","expiresAt":0}}}}"#
+        ),
+    );
+    let other_jwt = tempfile::tempdir().unwrap();
+    write_file(
+        other_jwt.path(),
+        ".credentials.json",
+        &format!(
+            r#"{{"claudeAiOauth":{{"accessToken":"{rotated}","refreshToken":"sk-ant-ort01-DIFFERENT-cccc","expiresAt":0}}}}"#
+        ),
+    );
+    let from_sub = read(OfficialQuotaProvider::Claude, jwt_dir.path());
+    let same_sub = read(OfficialQuotaProvider::Claude, other_jwt.path());
+    assert_eq!(from_sub.fingerprint, "claude-user-1");
+    assert_eq!(same_sub.fingerprint, from_sub.fingerprint);
+    assert_eq!(from_sub.label, "ada@anthropic.com");
+    assert_secret_absent(&from_sub, &[&subject, &rotated, refresh]);
+}
+
+#[test]
 fn codex_identity_prefers_account_id_and_stays_stable_across_tokens() {
     let token_a = "codex-SECRET-TOKEN-9f3a";
     let token_b = "codex-OTHER-SECRET-TOKEN-9f3a";
@@ -502,6 +582,139 @@ fn antigravity_identity_hashes_the_local_access_token() {
         &dir.path().join("state.vscdb"),
     );
     assert_opaque(&identity, secret);
+}
+
+#[test]
+fn antigravity_identity_keeps_the_same_fingerprint_when_the_access_token_rotates() {
+    let refresh = "1//antigravity-refresh-STABLE-should-not-leak-q7k2";
+    let access_a = "ya29.antigravity-ACCESS-AAAA-should-not-leak-9f3a";
+    let access_b = "ya29.antigravity-ACCESS-BBBB-should-not-leak-zzzz";
+    let dir_a = tempfile::tempdir().unwrap();
+    write_antigravity(dir_a.path(), access_a, refresh, None);
+    let dir_b = tempfile::tempdir().unwrap();
+    write_antigravity(dir_b.path(), access_b, refresh, None);
+    let first = read(OfficialQuotaProvider::Antigravity, dir_a.path());
+    let second = read(OfficialQuotaProvider::Antigravity, dir_b.path());
+    assert_eq!(first.fingerprint, second.fingerprint);
+    assert_eq!(first.label, "••••••q7k2");
+    let access_only = tempfile::tempdir().unwrap();
+    write_antigravity(access_only.path(), access_a, "", None);
+    let hashed_access = read(OfficialQuotaProvider::Antigravity, access_only.path());
+    assert_ne!(first.fingerprint, hashed_access.fingerprint);
+    assert_secret_absent(&first, &[access_a, access_b, refresh]);
+    assert_secret_absent(&second, &[access_a, access_b, refresh]);
+
+    let email_a = tempfile::tempdir().unwrap();
+    write_antigravity(
+        email_a.path(),
+        access_a,
+        "1//antigravity-refresh-OTHER-aaaa",
+        Some("ada@example.com"),
+    );
+    let email_b = tempfile::tempdir().unwrap();
+    write_antigravity(
+        email_b.path(),
+        access_b,
+        "1//antigravity-refresh-YET-ANOTHER-bbbb",
+        Some("ada@example.com"),
+    );
+    let from_email = read(OfficialQuotaProvider::Antigravity, email_a.path());
+    let same_email = read(OfficialQuotaProvider::Antigravity, email_b.path());
+    assert_eq!(from_email.fingerprint, "ada@example.com");
+    assert_eq!(same_email.fingerprint, from_email.fingerprint);
+    assert_eq!(from_email.label, "ada@example.com");
+    assert_secret_absent(
+        &from_email,
+        &[
+            access_a,
+            access_b,
+            refresh,
+            "1//antigravity-refresh-OTHER-aaaa",
+        ],
+    );
+}
+
+#[test]
+fn antigravity_default_discovery_prefers_keychain_tokens_over_the_state_file() {
+    let refresh = "1//keychain-refresh-STABLE-should-not-leak-q7k2";
+    let key_access = "ya29.keychain-ACCESS-AAAA-should-not-leak-9f3a";
+    let file_access = "ya29.file-ACCESS-BBBB-should-not-leak-zzzz";
+    let file_refresh = "1//file-refresh-OTHER-should-not-win-abcd";
+    let dir = tempfile::tempdir().unwrap();
+    write_antigravity(dir.path(), file_access, file_refresh, None);
+    let keychain = antigravity::LocalTokens {
+        access_token: Some(key_access.to_string()),
+        refresh_token: Some(refresh.to_string()),
+        email: None,
+    };
+    let resolved =
+        antigravity::resolve_local_tokens(Some(keychain), &[dir.path().to_path_buf()]).unwrap();
+    assert_eq!(resolved.access_token.as_deref(), Some(key_access));
+    assert_eq!(resolved.refresh_token.as_deref(), Some(refresh));
+    let from_default =
+        official_quota::identity::identity_from_antigravity_tokens(&resolved).unwrap();
+    let from_file = read(OfficialQuotaProvider::Antigravity, dir.path());
+    assert_ne!(from_default.fingerprint, from_file.fingerprint);
+    assert_eq!(from_default.label, "••••••q7k2");
+    assert_secret_absent(
+        &from_default,
+        &[key_access, file_access, refresh, file_refresh],
+    );
+
+    let fallback = antigravity::resolve_local_tokens(None, &[dir.path().to_path_buf()]).unwrap();
+    assert_eq!(fallback.access_token.as_deref(), Some(file_access));
+    let from_fallback =
+        official_quota::identity::identity_from_antigravity_tokens(&fallback).unwrap();
+    assert_eq!(from_fallback.fingerprint, from_file.fingerprint);
+
+    let empty = antigravity::resolve_local_tokens(
+        Some(antigravity::LocalTokens::default()),
+        &[dir.path().to_path_buf()],
+    )
+    .unwrap();
+    assert_eq!(empty.access_token.as_deref(), Some(file_access));
+    let explicit = antigravity::read_local_tokens_at(dir.path()).unwrap();
+    assert_eq!(explicit.access_token.as_deref(), Some(file_access));
+    assert_ne!(explicit.refresh_token.as_deref(), Some(refresh));
+}
+
+fn write_antigravity(dir: &Path, access: &str, refresh: &str, email: Option<&str>) {
+    let email_field = email
+        .map(|email| format!(r#","email":"{email}""#))
+        .unwrap_or_default();
+    let mut items = vec![(
+        "antigravityAuthStatus",
+        format!(r#"{{"apiKey":"{access}"{email_field}}}"#),
+    )];
+    if !refresh.is_empty() {
+        items.push((
+            "antigravityUnifiedStateSync.oauthToken",
+            nested_refresh_blob(refresh),
+        ));
+    }
+    let borrowed: Vec<(&str, &str)> = items
+        .iter()
+        .map(|(key, value)| (*key, value.as_str()))
+        .collect();
+    seed_state_db(dir, &borrowed);
+}
+
+fn nested_refresh_blob(refresh: &str) -> String {
+    let engine = base64::engine::general_purpose::STANDARD;
+    fn field2(bytes: &[u8]) -> Vec<u8> {
+        let mut out = vec![0x0a];
+        let mut len = bytes.len();
+        while len >= 0x80 {
+            out.push((len as u8) | 0x80);
+            len >>= 7;
+        }
+        out.push(len as u8);
+        out.extend_from_slice(bytes);
+        out
+    }
+    let mut inner = field2(b"ya29.inner-access-ignored");
+    inner.extend(field2(refresh.as_bytes()));
+    engine.encode(field2(&engine.encode(&inner).into_bytes()))
 }
 
 #[test]

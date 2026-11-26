@@ -251,7 +251,7 @@ fn a_mismatched_callback_state_is_rejected_without_a_token_request() {
     let page = hit_callback(&login, AUTH_CODE, "not-the-state");
     assert!(page.contains("没有保存"));
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "回调状态对不上，没有保存账号");
+    assert_eq!(error, "回调状态对不上，没有保存额度账号");
     assert!(captured(&stub).is_empty());
     assert_no_account(dir.path());
     assert_port_free(login.listen_port().unwrap());
@@ -303,7 +303,7 @@ fn cancelling_codex_pkce_login_releases_the_port_and_saves_nothing() {
     login.cancel();
     assert_port_free(port);
     let error = poll(&login, dir.path()).unwrap_err();
-    assert_eq!(error, "已取消浏览器授权，没有保存账号");
+    assert_eq!(error, "已取消浏览器授权，没有保存额度账号");
     assert!(captured(&stub).is_empty());
     assert_no_account(dir.path());
     assert_port_free(port);

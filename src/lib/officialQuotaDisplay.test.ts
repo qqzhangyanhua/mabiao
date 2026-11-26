@@ -164,6 +164,22 @@ describe("officialQuotaRowTone", () => {
     expect(officialQuotaRowTone({ freshness: "stale", error: null })).toBe("warn");
     expect(officialQuotaRowTone({ freshness: "unavailable", error: null })).toBe("idle");
   });
+
+  it("is not warn solely because a missing-secret todo cleared a cached error", () => {
+    const cleared = {
+      freshness: "official" as const,
+      error: null,
+      todo: "登录凭证还没保存，请在设置页重新导入",
+      windows: { length: 1 },
+    };
+    expect(officialQuotaStatusLabel(cleared)).toBe("官方");
+    expect(officialQuotaStatusLabel(cleared)).not.toBe("失败");
+    expect(officialQuotaRowTone(cleared)).toBe("ok");
+    expect(officialQuotaNotice({ todo: cleared.todo, error: cleared.error })).toEqual({
+      kind: "todo",
+      text: cleared.todo,
+    });
+  });
 });
 
 describe("formatQuotaAmount", () => {
@@ -364,23 +380,24 @@ describe("officialQuotaRowTitle", () => {
     ).toBe("Copilot");
   });
 
-  it("composes the provider display name and the account label", () => {
+  it("uses the application Rust already built, and only adds the local mark", () => {
     expect(
       officialQuotaRowTitle({
         provider: "acct:codex:ab12",
-        application: "Codex",
-        account_label: "工作号",
+        application: "Codex · 工作号",
+        base_provider: "claude",
+        account_label: "别再用来拼标题",
       }),
     ).toBe("Codex · 工作号");
     expect(
       officialQuotaRowTitle({
         provider: "acct:codex:ab12",
-        application: "Codex",
+        application: "Codex · 工作号",
         base_provider: "claude",
-        account_label: "工作号",
+        account_label: "别再用来拼标题",
         is_active_local: true,
       }),
-    ).toBe("Claude · 工作号 · 当前本机");
+    ).toBe("Codex · 工作号 · 当前本机");
     expect(
       officialQuotaRowTitle({
         provider: "claude",
@@ -396,5 +413,11 @@ describe("officialQuotaRowTitle", () => {
         is_active_local: true,
       }),
     ).toBe("Codex · 当前本机");
+    expect(
+      officialQuotaRowTitle({
+        provider: "claude",
+        application: "Claude",
+      }),
+    ).toBe("Claude");
   });
 });

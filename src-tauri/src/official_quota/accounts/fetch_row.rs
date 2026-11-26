@@ -31,8 +31,10 @@ pub struct AccountTarget {
     pub provider: OfficialQuotaProvider,
     pub access_token: String,
     pub account_id: Option<String>,
-    /// 有值表示取数时从这里重读 access token：当前本机登录，或隔离目录。
+    /// 有值表示取数时从这里重读 access token：显式目录上的当前本机登录，或隔离目录。
     pub live_root: Option<PathBuf>,
+    /// 默认发现：取数时走和零配置相同的读者，不指向某个文件，也不续期。
+    pub live_default: bool,
     /// 已分离快照的续期材料。当前本机和隔离目录保持空。
     pub refresh: Option<super::AccountSecret>,
     pub secrets_path: Option<PathBuf>,
@@ -47,17 +49,7 @@ pub(crate) fn prepare_auto_target(
     let provider = OfficialQuotaProvider::parse(&account.config.provider)?;
     if placement.active_local {
         let login = matching_login(account, logins)?;
-        let secret = capture::capture_secret(provider, &login.root).ok()?;
-        if secret.access_token.trim().is_empty() {
-            return None;
-        }
-        return Some(live_target(
-            account,
-            provider,
-            secret.access_token,
-            secret.account_id,
-            login.root.clone(),
-        ));
+        return live_from_login(account, provider, login, true);
     }
     if account.config.source == QuotaAccountSource::ProfileDir {
         let dir = profile_dir(account)?;
@@ -79,13 +71,8 @@ pub(crate) fn prepare_manual_target(
     let provider = OfficialQuotaProvider::parse(&account.config.provider)
         .ok_or_else(|| format!("未知的官方额度账号：{}", account.config.id))?;
     if let Some(login) = matching_login(account, logins) {
-        return Ok(live_target(
-            account,
-            provider,
-            String::new(),
-            None,
-            login.root.clone(),
-        ));
+        return live_from_login(account, provider, login, false)
+            .ok_or_else(|| MISSING_SECRET_TODO.to_string());
     }
     if account.config.source == QuotaAccountSource::ProfileDir {
         let dir = profile_dir(account).ok_or_else(|| "配置目录不存在".to_string())?;
@@ -98,6 +85,62 @@ pub(crate) fn prepare_manual_target(
         ));
     }
     separated_target(account, provider).ok_or_else(|| MISSING_SECRET_TODO.to_string())
+}
+
+fn live_from_login(
+    account: &ResolvedQuotaAccount,
+    provider: OfficialQuotaProvider,
+    login: &LocalLogin,
+    require_access: bool,
+) -> Option<AccountTarget> {
+    let Some(root) = login.root.clone() else {
+        if !require_access {
+            return Some(default_live_target(account, provider, String::new(), None));
+        }
+        let secret = capture::capture_default(provider).ok()?;
+        if secret.access_token.trim().is_empty() {
+            return None;
+        }
+        return Some(default_live_target(
+            account,
+            provider,
+            secret.access_token,
+            secret.account_id,
+        ));
+    };
+    if !require_access {
+        return Some(live_target(account, provider, String::new(), None, root));
+    }
+    let secret = capture::capture_secret(provider, &root).ok()?;
+    if secret.access_token.trim().is_empty() {
+        return None;
+    }
+    Some(live_target(
+        account,
+        provider,
+        secret.access_token,
+        secret.account_id,
+        root,
+    ))
+}
+
+fn default_live_target(
+    account: &ResolvedQuotaAccount,
+    provider: OfficialQuotaProvider,
+    access_token: String,
+    account_id: Option<String>,
+) -> AccountTarget {
+    AccountTarget {
+        id: account.config.id.clone(),
+        name: account.config.name.clone(),
+        provider,
+        access_token,
+        account_id,
+        live_root: None,
+        live_default: true,
+        refresh: None,
+        secrets_path: None,
+    }
 }
 
 fn live_target(
@@ -114,6 +157,7 @@ fn live_target(
         access_token,
         account_id,
         live_root: Some(root),
+        live_default: false,
         refresh: None,
         secrets_path: None,
     }
@@ -141,6 +185,7 @@ fn separated_target(
         access_token,
         account_id: secret.and_then(|secret| secret.account_id),
         live_root: None,
+        live_default: false,
         refresh: if refreshable {
             secret_of(account)
         } else {
@@ -211,6 +256,18 @@ pub fn fetch_managed_account(
     target: &AccountTarget,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
+    if target.live_default {
+        let secret = capture::capture_default(target.provider)?;
+        if secret.access_token.trim().is_empty() {
+            return Err(MISSING_SECRET_TODO.to_string());
+        }
+        return dispatch(
+            target.provider,
+            &secret.access_token,
+            secret.account_id.as_deref(),
+            quota_base,
+        );
+    }
     if target.live_root.is_some() || target.refresh.is_none() {
         return fetch_account_row(
             target.provider,
