@@ -1,0 +1,67 @@
+src-tauri/src/tests/ingest.rs
+  s_1186bccdca0dc8::t_74487d5e5a8d3e 2567,2576-2581,2587-2600,2603-2606,2608
+.cursor/rules/ingestion-cache.mdc
+  s_1186bccdca0dc8::t_c7fe1e870d5747 17
+docs/adr/0003-trusted-ingestion-cache.md
+  s_1186bccdca0dc8::t_50e527b5f9c217 14,24
+docs/adr/0011-conversation-event-index.md
+  s_1186bccdca0dc8::t_34950f302df6d7 38
+docs/adr/0022-context-manifest-load-modes.md
+  s_1186bccdca0dc8::t_9fcf0b32537912 35-36
+docs/adr/0027-staged-ingestion.md
+  s_1186bccdca0dc8::t_104623f6e5ef59 34
+docs/agent-layers.md
+  s_1186bccdca0dc8::t_19df3cab253158 83,86
+docs/probe/hermes.md
+  s_1186bccdca0dc8::t_9bff23e5d21b69 30
+src-tauri/src/adapters/agy.rs
+  s_1186bccdca0dc8::t_f9be75827486b3 20,96
+src-tauri/src/adapters/alma.rs
+  s_1186bccdca0dc8::t_7f2efd9f97e7cd 37
+src-tauri/src/adapters/cherry.rs
+  s_1186bccdca0dc8::t_6df7175b420ee1 40
+src-tauri/src/adapters/crush.rs
+  s_1186bccdca0dc8::t_b59e9a3a93f0d1 97
+src-tauri/src/adapters/goose.rs
+  s_1186bccdca0dc8::t_8dae9b34d15371 46
+src-tauri/src/adapters/hermes.rs
+  s_1186bccdca0dc8::t_54371425a51ce5 62
+src-tauri/src/adapters/warp.rs
+  s_1186bccdca0dc8::t_2c0024a298bde2 47
+src-tauri/src/adapters/zed.rs
+  s_1186bccdca0dc8::t_d99a13864c529f 41
+src-tauri/src/conversation/context_cache.rs
+  s_1186bccdca0dc8::t_07e9b4ee55bc44 71-73,78,84,86-88,98-110
+src-tauri/src/conversation/mod.rs
+  s_1186bccdca0dc8::t_6782efea0347cb 172-175,187,197,207,217,227,237,247,257,267,277,287,297,307,317,327,337,347,357,367,377,387,397,407,417,427,437,447,457,467,477,487,497,507,517,527
+src-tauri/src/conversation/opencode.rs
+  s_1186bccdca0dc8::t_d03090fb200edc 87-91,97,107
+src-tauri/src/conversation/refresh.rs
+  s_1186bccdca0dc8::t_d3944ebd048b13 66-67,73,75-76,129,318,327,337-338,361,406-412
+src-tauri/src/ingest.rs
+  s_1186bccdca0dc8::t_d247e5076ffaa7 1114-1119
+src-tauri/src/store/schema.rs
+  s_1186bccdca0dc8::t_2439ad4b8b81c4 350-355
+src-tauri/src/tests/adapters.rs
+  s_1186bccdca0dc8::t_f9f0b27938746c 2330,2340-2344,2683,2691,2698-2702
+src-tauri/src/tests/conversation_context.rs
+  s_1186bccdca0dc8::t_f054d7b74788de 2284-2345
+src-tauri/src/tests/opencode_conversation.rs
+  s_1186bccdca0dc8::t_0853863855ed75 322-329,379-428
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "6b1a07fecbf387f43df6d810c73b9f988f5f9ac6",
+  "prompts": {},
+  "sessions": {
+    "s_1186bccdca0dc8": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a866d692-c4a0-4691-8ad9-5e56484f6342",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
