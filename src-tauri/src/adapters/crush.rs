@@ -94,7 +94,7 @@ fn push_crush_db(paths: &mut Vec<PathBuf>, db: &Path) {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_shm_fingerprint(path)
+    ingest::wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {

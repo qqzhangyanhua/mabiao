@@ -2282,6 +2282,68 @@ fn dropping_metrics_cache_rebuilds_from_live_snapshot() {
 }
 
 #[test]
+fn context_metrics_recompute_only_for_refreshed_or_uncached_sessions() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let session_id = "sess-cursor-metrics-skip";
+    let transcript = seed_cursor_transcript(home, session_id);
+    let write_store = |false_key: &str| {
+        write_cursor_chat_store(
+            home,
+            session_id,
+            &[
+                serde_json::json!({"role":"system","content":"sys"}),
+                cursor_user_with_completeness("hello", &[false_key]),
+            ],
+        )
+    };
+    let store_path = write_store("gitRepos");
+    let rewrite_store = |false_key: &str| {
+        std::fs::remove_file(&store_path).unwrap();
+        write_store(false_key);
+    };
+    let conn = store::open_memory().unwrap();
+    refresh_cursor(&conn, home);
+    let first = context_metrics_blob(&conn);
+    assert!(first.contains("gitRepos"), "{first}");
+
+    rewrite_store("mcp");
+    refresh_cursor(&conn, home);
+    assert_eq!(
+        context_metrics_blob(&conn),
+        first,
+        "transcript unchanged: cached metrics must not be recomputed"
+    );
+
+    conn.execute("DELETE FROM conversation_context_metrics", [])
+        .unwrap();
+    refresh_cursor(&conn, home);
+    let backfilled = context_metrics_blob(&conn);
+    assert!(
+        backfilled.contains("mcp") && !backfilled.contains("gitRepos"),
+        "missing cache row must be rebuilt from the live snapshot: {backfilled}"
+    );
+
+    rewrite_store("agentSkills");
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&transcript)
+        .unwrap();
+    std::io::Write::write_all(
+        &mut file,
+        b"{\"type\":\"turn_ended\",\"timestamp\":\"2026-09-08T00:00:04Z\",\"status\":\"success\"}\n",
+    )
+    .unwrap();
+    drop(file);
+    refresh_cursor(&conn, home);
+    let refreshed = context_metrics_blob(&conn);
+    assert!(
+        refreshed.contains("agentSkills") && !refreshed.contains("mcp"),
+        "a re-parsed session must recompute its metrics: {refreshed}"
+    );
+}
+
+#[test]
 fn grok_detail_uses_cached_metrics_after_snapshot_removed() {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path();

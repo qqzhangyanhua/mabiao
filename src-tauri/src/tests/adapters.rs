@@ -2327,7 +2327,7 @@ fn hermes_adapter_readonly_parse_does_not_change_wal_sidecar() {
 }
 
 #[test]
-fn hermes_adapter_fingerprint_covers_wal_and_shm() {
+fn hermes_adapter_fingerprint_tracks_wal_but_not_shm() {
     let dir = tempfile::tempdir().unwrap();
     let db = write_default_hermes_home(dir.path());
     let missing = hermes::sidecar_fingerprint(&db, &[]);
@@ -2337,9 +2337,11 @@ fn hermes_adapter_fingerprint_covers_wal_and_shm() {
     assert_ne!(with_wal, missing);
 
     std::fs::write(format!("{}-shm", db.to_string_lossy()), b"shm").unwrap();
-    let with_wal_and_shm = hermes::sidecar_fingerprint(&db, &[]);
-    assert_ne!(with_wal_and_shm, with_wal);
-    assert_ne!(with_wal_and_shm, missing);
+    assert_eq!(
+        hermes::sidecar_fingerprint(&db, &[]),
+        with_wal,
+        "只读打开就会刷新 -shm，它不能进指纹"
+    );
 }
 
 fn agy_conversations(home: &std::path::Path) -> PathBuf {
@@ -2678,7 +2680,7 @@ fn agy_adapter_malformed_trajectory_skips_project_but_parses_usage() {
 }
 
 #[test]
-fn agy_adapter_fingerprint_covers_wal_and_shm() {
+fn agy_adapter_fingerprint_tracks_wal_but_not_shm() {
     let dir = tempfile::tempdir().unwrap();
     let db = write_agy_conversation_db(
         &dir.path().join("sess.db"),
@@ -2686,20 +2688,18 @@ fn agy_adapter_fingerprint_covers_wal_and_shm() {
         &[GEN_CLAUDE],
     );
     let missing = agy::sidecar_fingerprint(&db, &[]);
-    assert_eq!(missing, "missing|missing");
+    assert_eq!(missing, "missing");
 
     std::fs::write(format!("{}-wal", db.to_string_lossy()), b"wal").unwrap();
     let with_wal = agy::sidecar_fingerprint(&db, &[]);
     assert_ne!(with_wal, missing);
-    assert!(
-        with_wal.ends_with("|missing"),
-        "只有 -wal 变化时 -shm 仍应是 missing：{with_wal}"
-    );
 
     std::fs::write(format!("{}-shm", db.to_string_lossy()), b"shm").unwrap();
-    let with_wal_and_shm = agy::sidecar_fingerprint(&db, &[]);
-    assert_ne!(with_wal_and_shm, with_wal);
-    assert_ne!(with_wal_and_shm, missing);
+    assert_eq!(
+        agy::sidecar_fingerprint(&db, &[]),
+        with_wal,
+        "只读打开就会刷新 -shm，它不能进指纹"
+    );
 }
 
 #[test]
