@@ -1,0 +1,25 @@
+src-tauri/src/tests/rollup_source.rs
+  s_1186bccdca0dc8::t_ed0caf059614ae 294-364
+src-tauri/src/rollup_source.rs
+  s_1186bccdca0dc8::t_5ca4f4c6d1da4f 87-123,156,184
+src-tauri/src/test_support/helpers.rs
+  s_1186bccdca0dc8::t_d319ce065c1ea3 578-610
+src-tauri/src/tests/report.rs
+  s_1186bccdca0dc8::t_b76f06cbb0270c 1219-1240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "8023c0914d9cb91b1db3d87611183361b8e43cd4",
+  "prompts": {},
+  "sessions": {
+    "s_1186bccdca0dc8": {
+      "agent_id": {
+        "tool": "droid",
+        "id": "a866d692-c4a0-4691-8ad9-5e56484f6342",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
