@@ -291,3 +291,74 @@ fn placeholder_count_matches_params_for_all_forms() {
         assert_shape(&got.sql, &got.params);
     }
 }
+
+#[test]
+fn split_reads_rollup_columns_by_name_on_upgraded_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let conn = open_db_with_upgraded_rollup(&dir.path().join("upgraded.sqlite"));
+    let records = vec![
+        rec(
+            "2026-08-02T10:00:00Z",
+            Source::Codex,
+            "gpt-5",
+            "official",
+            "/p",
+            "s1",
+            300,
+        ),
+        rec(
+            "2026-08-04T10:00:00Z",
+            Source::Codex,
+            "gpt-5",
+            "official",
+            "/p",
+            "s1",
+            50,
+        ),
+    ];
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+    let filter = Filter {
+        from: Some("2026-08-01T12:00:00Z".into()),
+        to: Some("2026-08-04T15:00:00Z".into()),
+        ..Filter::default()
+    };
+    let got = source(
+        &plan(filter.from.as_deref(), filter.to.as_deref(), true, None),
+        &filter,
+    );
+    assert!(got.sql.contains("UNION ALL"));
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT typeof(first_at), first_at, total_tokens FROM ({}) d ORDER BY first_at",
+            got.sql
+        ))
+        .unwrap();
+    let rows: Vec<(String, String, i64)> = stmt
+        .query_map(params_from_iter(got.params.iter()), |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        rows,
+        vec![
+            ("text".into(), "2026-08-02T10:00:00Z".into(), 300),
+            ("text".into(), "2026-08-04T10:00:00Z".into(), 50),
+        ],
+        "整天与 partial 两段必须按列名对齐，不能依赖物理列序"
+    );
+
+    let prices = PriceTable::default();
+    let sessions = query::top_sessions(&conn, &filter, &prices, 10).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].started_at, "2026-08-02T10:00:00Z");
+    assert_eq!(sessions[0].total_tokens, 350);
+    assert_eq!(
+        query::overview(&conn, &filter, &prices)
+            .unwrap()
+            .total_tokens,
+        350
+    );
+}

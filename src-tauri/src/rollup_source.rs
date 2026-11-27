@@ -84,6 +84,43 @@ fn raw_projection() -> String {
     )
 }
 
+/// `usage_rollup` 的列，顺序与 `raw_projection` 一致。老库靠 ALTER TABLE 补出的列排在表尾，
+/// 物理列序与新建表不同；UNION ALL 按位置对齐，所以预聚合侧必须按名取列，不能 `SELECT *`。
+const ROLLUP_COLUMNS: [&str; 24] = [
+    "day",
+    "source",
+    "model",
+    "provider",
+    "project",
+    "session_id",
+    "has_native",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "cache_creation_tokens",
+    "cache_creation_1h_tokens",
+    "input_tokens_above_200k",
+    "output_tokens_above_200k",
+    "cache_read_tokens_above_200k",
+    "cache_creation_tokens_above_200k",
+    "cache_creation_1h_tokens_above_200k",
+    "reasoning_tokens",
+    "total_tokens",
+    "native_cost",
+    "record_count",
+    "first_at",
+    "last_at",
+    "file_key",
+];
+
+fn rollup_projection() -> String {
+    ROLLUP_COLUMNS
+        .iter()
+        .map(|column| format!("d.{column} AS {column}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// 按切分判定产出的形态拼出子查询。
 pub fn rollup_source(plan: &RollupPlan, filter: &Filter) -> RollupSource {
     match plan {
@@ -116,7 +153,7 @@ fn raw_source(filter: &Filter) -> RollupSource {
 fn rollup_only_source(filter: &Filter) -> RollupSource {
     let (clauses, params) = dimension_clauses(filter, "d");
     RollupSource {
-        sql: select_sql("*", "usage_rollup d", &clauses),
+        sql: select_sql(&rollup_projection(), "usage_rollup d", &clauses),
         params,
     }
 }
@@ -144,7 +181,7 @@ fn complete_days_source(split: &RollupSplit, filter: &Filter) -> RollupSource {
     clauses.extend(dim_clauses);
     params.extend(dim_params);
     RollupSource {
-        sql: select_sql("*", "usage_rollup d", &clauses),
+        sql: select_sql(&rollup_projection(), "usage_rollup d", &clauses),
         params,
     }
 }

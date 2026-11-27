@@ -575,6 +575,39 @@ pub fn local_noon_iso(date: chrono::NaiveDate) -> String {
     local_time_iso(date, 12, 0, 0)
 }
 
+/// 建一个在分层计价列加入前就有 `usage_rollup` 的老库，再按正常路径打开升级。
+/// 升级用 ALTER TABLE 补列，补出的列排在表尾，物理列序与新建表不同。
+pub fn open_db_with_upgraded_rollup(path: &std::path::Path) -> rusqlite::Connection {
+    let legacy = rusqlite::Connection::open(path).unwrap();
+    legacy
+        .execute_batch(
+            "CREATE TABLE usage_rollup (
+                day TEXT NOT NULL,
+                source TEXT NOT NULL,
+                model TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                project TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                has_native INTEGER NOT NULL,
+                input_tokens INTEGER NOT NULL,
+                output_tokens INTEGER NOT NULL,
+                cache_read_tokens INTEGER NOT NULL,
+                cache_creation_tokens INTEGER NOT NULL,
+                reasoning_tokens INTEGER NOT NULL,
+                total_tokens INTEGER NOT NULL,
+                native_cost REAL NOT NULL DEFAULT 0,
+                record_count INTEGER NOT NULL,
+                first_at TEXT NOT NULL,
+                last_at TEXT NOT NULL,
+                file_key TEXT,
+                PRIMARY KEY (day, source, session_id, model, provider, project, has_native)
+            );",
+        )
+        .unwrap();
+    drop(legacy);
+    crate::store::open_db(path.to_string_lossy().as_ref()).unwrap()
+}
+
 /// 本地日历日某一时刻 -> UTC RFC3339，用于构造与运行机器时区无关、但仍落在指定
 /// 本地日期的测试记录（跨午夜场景需要中午以外的时刻）。
 pub fn local_time_iso(date: chrono::NaiveDate, hour: u32, min: u32, sec: u32) -> String {
