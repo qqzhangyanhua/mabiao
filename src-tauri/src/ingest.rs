@@ -1111,13 +1111,12 @@ pub(crate) fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(format!("{}{suffix}", path.to_string_lossy()))
 }
 
-/// 主库旁的 `-wal` / `-shm` 元数据指纹（mtime+size 等）。任一侧车变化都会让缓存失效。
-pub(crate) fn wal_shm_fingerprint(path: &Path) -> String {
-    format!(
-        "{}|{}",
-        metadata_fingerprint(&sqlite_sidecar_path(path, "-wal")),
-        metadata_fingerprint(&sqlite_sidecar_path(path, "-shm"))
-    )
+/// 主库旁 `-wal` 的元数据指纹（mtime+size 等），WAL 变化会让缓存失效。
+///
+/// 不算 `-shm`：它只是 WAL 索引，内容完全由主库与 `-wal` 决定；而每次只读打开都会
+/// 刷新它的 mtime，算进来的话摄取自己的读取就会让下一轮判定为已变化，每轮整份重解析。
+pub(crate) fn wal_fingerprint(path: &Path) -> String {
+    metadata_fingerprint(&sqlite_sidecar_path(path, "-wal"))
 }
 
 pub(crate) fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>, String> {

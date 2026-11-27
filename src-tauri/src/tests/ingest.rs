@@ -2564,7 +2564,7 @@ fn scan_is_stale_detects_opencode_wal_change() {
 }
 
 #[test]
-fn scan_is_stale_detects_hermes_wal_and_shm_change() {
+fn scan_is_stale_detects_hermes_wal_change_but_not_shm() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
     let db_path = write_default_hermes_home(home);
@@ -2573,17 +2573,39 @@ fn scan_is_stale_detects_hermes_wal_and_shm_change() {
     ingest::ingest_all(&conn, home).unwrap();
     assert!(!ingest::scan_is_stale(&conn, home).unwrap());
 
+    std::fs::write(format!("{}-shm", db_path.to_string_lossy()), b"shm").unwrap();
+    assert!(
+        !ingest::scan_is_stale(&conn, home).unwrap(),
+        "state.db-shm is touched by every read-only open and must not mark the scan stale"
+    );
+
     std::fs::write(format!("{}-wal", db_path.to_string_lossy()), b"wal").unwrap();
     assert!(
         ingest::scan_is_stale(&conn, home).unwrap(),
         "state.db-wal change should be stale"
     );
+}
+
+#[test]
+fn agy_shm_touch_does_not_reparse_usage() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    let conv = home.join(".gemini/antigravity-cli/conversations");
+    std::fs::create_dir_all(&conv).unwrap();
+    let db_path =
+        write_agy_conversation_db(&conv.join("sess.db"), &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+
+    let conn = store::open_memory().unwrap();
+    let first = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(first.files_parsed, 1, "unexpected first report: {first:?}");
 
     std::fs::write(format!("{}-shm", db_path.to_string_lossy()), b"shm").unwrap();
-    assert!(
-        ingest::scan_is_stale(&conn, home).unwrap(),
-        "state.db-shm change should be stale"
+    let second = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(
+        second.files_parsed, 0,
+        "unexpected second report: {second:?}"
     );
+    assert_eq!(second.files_skipped, 1);
 }
 
 #[test]

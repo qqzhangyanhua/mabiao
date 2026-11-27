@@ -169,7 +169,10 @@ pub(crate) struct ConversationAdapter {
     detail: ConversationDetailFn,
     revision: ConversationRevisionFn,
     raw_extension: Option<&'static str>,
-    reuse_unchanged_index: bool,
+    /// 目录阶段整份解析时照常写事件、不标待补建。只给一个源文件装着全部会话、
+    /// 详情又只能整份读的来源（OpenCode 整库快照）：标待补建的话，补建要为每个会话
+    /// 各读一遍整库。
+    catalog_writes_events: bool,
 }
 
 pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
@@ -181,7 +184,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: codex::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Claude,
@@ -191,7 +194,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: detail_claude,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::CursorAgent,
@@ -201,7 +204,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: cursor::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Dsh,
@@ -211,7 +214,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: dsh::detail,
         revision: dsh::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Factory,
@@ -221,7 +224,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: droid::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Kimi,
@@ -231,7 +234,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: kimi::detail,
         revision: kimi::source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Grok,
@@ -241,7 +244,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: grok::detail,
         revision: grok::source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Pi,
@@ -251,7 +254,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: detail_pi,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Omp,
@@ -261,7 +264,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: detail_omp,
         revision: omp::source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Gemini,
@@ -271,7 +274,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: detail_gemini,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Opencode,
@@ -281,7 +284,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: opencode::detail,
         revision: opencode::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: false,
+        catalog_writes_events: true,
     },
     ConversationAdapter {
         source: Source::Qwen,
@@ -291,7 +294,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: qwen::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Copilot,
@@ -301,7 +304,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: copilot::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Qoder,
@@ -311,7 +314,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: qoder::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::QoderCn,
@@ -321,7 +324,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: qoder::detail_cn,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Cline,
@@ -331,7 +334,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: cline::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::WorkBuddy,
@@ -341,7 +344,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: workbuddy::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Zcode,
@@ -351,7 +354,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: zcode::detail,
         revision: zcode::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Alma,
@@ -361,7 +364,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: alma::detail,
         revision: alma::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::CodeBuddy,
@@ -371,7 +374,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: codebuddy::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::CodeBuddyIde,
@@ -381,7 +384,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: codebuddy_ide::detail,
         revision: codebuddy_ide::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Trae,
@@ -391,7 +394,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: trae::detail,
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Goose,
@@ -401,7 +404,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: goose::detail,
         revision: goose::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Amp,
@@ -411,7 +414,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: amp::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Zed,
@@ -421,7 +424,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: zed::detail,
         revision: zed::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Warp,
@@ -431,7 +434,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: warp::detail,
         revision: warp::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Crush,
@@ -441,7 +444,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: crush::detail,
         revision: crush::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Cherry,
@@ -451,7 +454,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: cherry::detail,
         revision: cherry::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::OpenClaw,
@@ -461,7 +464,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: openclaw::detail,
         revision: openclaw::source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Aider,
@@ -471,7 +474,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: aider::detail,
         revision: aider::source_revision,
         raw_extension: Some("jsonl"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Windsurf,
@@ -481,7 +484,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: windsurf::detail,
         revision: windsurf::source_revision,
         raw_extension: Some("ndjson"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Hermes,
@@ -491,7 +494,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: hermes::detail,
         revision: hermes::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Agy,
@@ -501,7 +504,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: agy::detail,
         revision: agy::source_revision,
         raw_extension: None,
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Roo,
@@ -511,7 +514,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: roo::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
     ConversationAdapter {
         source: Source::Kilo,
@@ -521,7 +524,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         detail: kilo::detail,
         revision: regular_source_revision,
         raw_extension: Some("json"),
-        reuse_unchanged_index: true,
+        catalog_writes_events: false,
     },
 ];
 

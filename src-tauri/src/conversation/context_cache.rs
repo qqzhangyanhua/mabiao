@@ -68,17 +68,24 @@ pub(crate) fn load(
     }))
 }
 
+/// 本轮重新解析过的会话重算度量；源文件没变的会话只在还没有缓存行时补算。
+/// 注入快照是会话开头那一刻的内容，会话不变它就不变，每轮重读整份快照
+/// （Cursor 要解 `store.db` 的 blob）只会白白拖慢目录同步。
 pub(crate) fn persist_seen_sessions(
     conn: &Connection,
     source: Source,
     session_ids: &BTreeSet<String>,
+    refreshed: &BTreeSet<String>,
     skip: &BTreeSet<String>,
 ) -> Result<(), String> {
     if !matches!(source, Source::CursorAgent | Source::Grok) {
         return Ok(());
     }
+    let cached = cached_session_ids(conn, source)?;
     for session_id in session_ids {
-        if skip.contains(session_id) {
+        if skip.contains(session_id)
+            || (!refreshed.contains(session_id) && cached.contains(session_id))
+        {
             continue;
         }
         let Some(session) = load_session(conn, source.as_str(), session_id)? else {
@@ -88,6 +95,19 @@ pub(crate) fn persist_seen_sessions(
     }
     Ok(())
 }
+
+fn cached_session_ids(conn: &Connection, source: Source) -> Result<BTreeSet<String>, String> {
+    let mut statement = conn
+        .prepare("SELECT session_id FROM conversation_context_metrics WHERE source = ?1")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![source.as_str()], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok(rows)
+}
+
 fn persist_live(
     conn: &Connection,
     source: Source,

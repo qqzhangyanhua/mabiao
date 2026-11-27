@@ -84,12 +84,17 @@ pub(super) fn detail(
         .ok_or_else(|| "OpenCode 数据库中未找到该会话".to_string())
 }
 
+/// 进修订号的 OpenCode 归一化代次。库没变时目录同步直接跳过，所以 OpenCode 的事件或会话
+/// 归一化输出变了要改它，让已有缓存整份重解析一次；不必递增全来源共用的
+/// `CONVERSATION_ADAPTER_VERSION`。
+const INDEX_REVISION: &str = "opencode-index-1";
+
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
     if crate::adapters::opencode::is_legacy_session(path) {
         fs::metadata(path).map_err(|error| format!("读取 OpenCode 会话文件元数据失败：{error}"))?;
         let main = ingest::metadata_fingerprint(path);
         let extra = crate::adapters::opencode::legacy_sidecar(path);
-        return Ok(format!("{main}|{extra}"));
+        return Ok(format!("{main}|{extra}|{INDEX_REVISION}"));
     }
     fs::metadata(path).map_err(|error| format!("读取 OpenCode 数据库元数据失败：{error}"))?;
     let main = ingest::metadata_fingerprint(path);
@@ -99,7 +104,7 @@ pub(super) fn source_revision(path: &Path) -> Result<String, String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => "missing".to_string(),
         Err(error) => return Err(format!("读取 OpenCode WAL 元数据失败：{error}")),
     };
-    serde_json::to_string(&(main, wal)).map_err(|error| error.to_string())
+    serde_json::to_string(&(main, wal, INDEX_REVISION)).map_err(|error| error.to_string())
 }
 
 fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {

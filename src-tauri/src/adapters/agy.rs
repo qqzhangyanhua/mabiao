@@ -17,7 +17,7 @@
 //! 用磁盘真实大小写；失败则原样保留 URI 最后一段。不读 blob 里的 git remote，
 //! 也不做小写化。URI 缺失、空串或 blob 畸形时项目留空，用量行仍解析。
 //!
-//! 摄取边界：只读打开跟随 WAL；sidecar 指纹含 `-wal`/`-shm`；前置校验失败视为
+//! 摄取边界：只读打开跟随 WAL；sidecar 指纹含 `-wal`（不含 `-shm`）；前置校验失败视为
 //! 非 agy 数据（`Ok([])`，不抬 `files_failed`）；过了前置却中途失败则软失败，
 //! 写诊断、保留上次正确缓存，但不阻断该来源的归档对账。
 
@@ -93,7 +93,7 @@ pub(crate) fn detected(dirs: &[PathBuf]) -> bool {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_shm_fingerprint(path)
+    ingest::wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {

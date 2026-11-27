@@ -27,4 +27,4 @@
 
 ## 只读打开
 
-Hermes 自己用 `file:{path}?mode=ro` + `uri=True`。本适配器同样 `OPEN_READ_ONLY | OPEN_URI`，避免和 Hermes 写事务抢锁。WAL 侧车变化靠 `state.db-wal` / `state.db-shm` 指纹触发重解析。
+Hermes 自己用 `file:{path}?mode=ro` + `uri=True`。本适配器同样 `OPEN_READ_ONLY | OPEN_URI`，避免和 Hermes 写事务抢锁。WAL 侧车变化靠 `state.db-wal` 指纹触发重解析（`-shm` 每次只读打开都会变，不进指纹）。

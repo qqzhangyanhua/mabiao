@@ -1216,3 +1216,25 @@ fn week_ignores_custom_from_to_fields() {
     assert_eq!(dto.start_date, "2026-08-10");
     assert_eq!(dto.end_date, "2026-08-16");
 }
+
+#[test]
+fn weekly_report_on_upgraded_rollup_schema_matches_fresh_schema() {
+    // 本地日界不在 UTC 零点时，首尾两天落在明细 partial，中间几天走预聚合。
+    let records = vec![
+        usage(day(2026, 8, 10), 1, 0, 0, "s1", 100),
+        usage(day(2026, 8, 12), 12, 0, 0, "s2", 70),
+        usage(day(2026, 8, 16), 23, 0, 0, "s1", 40),
+    ];
+    let build_ready = |conn: &rusqlite::Connection| {
+        store::insert_records(conn, &records).unwrap();
+        store::backfill_rollup(conn).unwrap();
+        crate::report::build(conn, &PriceTable::default(), week(0), now())
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let upgraded = open_db_with_upgraded_rollup(&dir.path().join("upgraded.sqlite"));
+    let upgraded_dto = build_ready(&upgraded).expect("老库升级后周报应能加载");
+    let fresh_dto = build_ready(&store::open_memory().unwrap()).unwrap();
+
+    assert_eq!(upgraded_dto.totals.total_tokens, 210);
+    assert_eq!(upgraded_dto, fresh_dto);
+}

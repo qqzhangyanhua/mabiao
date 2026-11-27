@@ -347,6 +347,12 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         "INTEGER",
     )?;
     migrate_conversation_session_files_key(conn)?;
+    // 目录刷新逐个源文件查已见指纹；没有它就是按来源整段扫描，文件多了是平方级。
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_conversation_session_files_file
+             ON conversation_session_files(source, source_file);",
+    )
+    .map_err(|error| error.to_string())?;
     ensure_column(
         conn,
         "cursor_sessions",

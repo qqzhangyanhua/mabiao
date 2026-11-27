@@ -319,9 +319,14 @@ fn opencode_schema_degrades_optional_parts_and_preserves_last_good_sessions_on_f
     }));
     let repeated_report =
         ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
-    assert!(repeated_report.conversation_issues.iter().any(|issue| {
-        issue.source == "opencode" && issue.event_type.as_deref() == Some("part_schema")
-    }));
+    assert!(
+        !repeated_report
+            .conversation_issues
+            .iter()
+            .any(|issue| issue.source == "opencode"),
+        "an unchanged database is skipped, like every other source: {:?}",
+        repeated_report.conversation_issues
+    );
 
     source_db.execute_batch("DROP TABLE session;").unwrap();
     let fatal_report = ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
@@ -369,6 +374,56 @@ fn opencode_catalog_refresh_never_marks_sessions_for_backfill() {
     let progress = conversation::event_index_progress(&conn).unwrap();
     assert_eq!(progress.indexed, progress.total);
     assert_eq!(progress.total, 2);
+}
+
+fn opencode_event_generation(conn: &rusqlite::Connection, session_id: &str) -> Option<i64> {
+    conn.query_row(
+        "SELECT event_index_generation FROM conversation_sessions
+         WHERE source = 'opencode' AND session_id = ?1",
+        params![session_id],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
+#[test]
+fn opencode_catalog_skips_unchanged_database_and_reindexes_after_wal_write() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let (_db_path, source_db) = create_opencode_database(home);
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Opencode);
+
+    conversation::refresh_catalog(&conn, Source::Opencode, &roots).unwrap();
+    let first = opencode_event_generation(&conn, "ses-usage");
+    assert!(first.is_some());
+
+    conversation::refresh_catalog(&conn, Source::Opencode, &roots).unwrap();
+    assert_eq!(
+        opencode_event_generation(&conn, "ses-usage"),
+        first,
+        "unchanged opencode.db must not rewrite events"
+    );
+
+    source_db
+        .execute(
+            "INSERT INTO part VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![
+                "part-late",
+                "msg-assistant",
+                "ses-usage",
+                1_780_000_002_900_i64,
+                serde_json::json!({"type":"text","text":"Late WAL text"}).to_string()
+            ],
+        )
+        .unwrap();
+    conversation::refresh_catalog(&conn, Source::Opencode, &roots).unwrap();
+    assert_ne!(
+        opencode_event_generation(&conn, "ses-usage"),
+        first,
+        "a WAL write must re-index the database"
+    );
+    assert!(!conversation::session_needs_event_backfill(&conn, "opencode", "ses-usage").unwrap());
 }
 
 #[test]

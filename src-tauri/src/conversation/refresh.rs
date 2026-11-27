@@ -63,17 +63,17 @@ pub(crate) fn refresh(
 /// 推进，源文件不再变化时下一轮直接跳过；事件游标不推进，待补建会话也不走增量，
 /// 要等补建整份重写。未待补建的可追加会话照常增量。
 ///
-/// 不复用旧索引的来源（OpenCode 整库快照）没有「源文件不变就跳过」这一步，每轮都会整份解析，
-/// 若也标待补建就会每轮全部会话变脏、补建反复重跑，所以这类来源仍按整份写事件。
+/// `catalog_writes_events` 的来源（OpenCode 整库快照）库一变就整份解析全部会话，若也标待补建，
+/// 补建要为每个会话各读一遍整库，所以这类来源仍按整份写事件。
 pub(crate) fn refresh_catalog(
     conn: &Connection,
     source: Source,
     roots: &[PathBuf],
 ) -> Result<Vec<ConversationIndexIssue>, String> {
-    let mode = if conversation_adapter(source)?.reuse_unchanged_index {
-        RefreshMode::CatalogOnly
-    } else {
+    let mode = if conversation_adapter(source)?.catalog_writes_events {
         RefreshMode::Full
+    } else {
+        RefreshMode::CatalogOnly
     };
     refresh_with_mode(conn, source, roots, mode)
 }
@@ -126,11 +126,7 @@ fn refresh_with_mode(
                 continue;
             }
         };
-        let cached = if adapter.reuse_unchanged_index {
-            load_cached_fingerprints(conn, source, &path)?
-        } else {
-            Vec::new()
-        };
+        let cached = load_cached_fingerprints(conn, source, &path)?;
         if !cached.is_empty()
             && cached.iter().all(|cached| {
                 cached.source_file_mtime_ns == mtime_ns
@@ -319,6 +315,7 @@ fn refresh_with_mode(
         }
     }
 
+    let mut refreshed_session_ids = BTreeSet::new();
     for pending in pending_incrementals {
         if blocked_session_ids.contains(&pending.session_id)
             || grouped.contains_key(&pending.session_id)
@@ -327,6 +324,7 @@ fn refresh_with_mode(
             continue;
         }
         let path = pending.path.to_string_lossy().to_string();
+        let session_id = pending.session_id.clone();
         if let Err(message) = apply_incremental(conn, source, pending) {
             let issue = ConversationIndexIssue {
                 path,
@@ -336,6 +334,8 @@ fn refresh_with_mode(
             };
             blocking_issues.push(issue.clone());
             issues.push(issue);
+        } else {
+            refreshed_session_ids.insert(session_id);
         }
     }
 
@@ -358,6 +358,7 @@ fn refresh_with_mode(
         if blocked_session_ids.contains(&session_id) {
             continue;
         }
+        refreshed_session_ids.insert(session_id.clone());
         let source_files = indexed_files
             .iter()
             .map(|file| PathBuf::from(&file.session.source_file))
@@ -402,7 +403,13 @@ fn refresh_with_mode(
     }
     let mut persist_skip = blocked_session_ids;
     persist_skip.extend(incomplete_session_ids.iter().cloned());
-    context_cache::persist_seen_sessions(conn, source, &seen_session_ids, &persist_skip)?;
+    context_cache::persist_seen_sessions(
+        conn,
+        source,
+        &seen_session_ids,
+        &refreshed_session_ids,
+        &persist_skip,
+    )?;
     if blocking_issues.is_empty() {
         tombstone_missing_sessions(conn, source, &seen_session_ids)?;
     }
