@@ -14,10 +14,12 @@ import {
   officialQuotaPlanClass,
   officialQuotaRefreshHint,
   officialQuotaResetLabel,
+  officialQuotaRowTitle,
   officialQuotaRowTone,
   officialQuotaStatusLabel,
   officialQuotaUndetectedNote,
 } from "../lib/officialQuotaDisplay";
+import { officialQuotaAttributionId } from "../lib/overviewLayout";
 import { trayQuotaRowSummary } from "../lib/trayQuotaLayout";
 import type { OfficialQuotaDto, OfficialQuotaRow, OfficialQuotaWindow } from "../types";
 import { EmptyState } from "./EmptyState";
@@ -281,7 +283,10 @@ function QuotaRowTitle({
   return (
     <div className="official-quota-title">
       <strong>
-        <SourceLabel source={row.provider} fallback={row.application} />
+        <SourceLabel
+          source={officialQuotaAttributionId(row)}
+          fallback={officialQuotaRowTitle(row)}
+        />
       </strong>
       {row.plan ? <OfficialQuotaPlanMark plan={row.plan} /> : null}
       {onRefresh ? (
@@ -312,7 +317,7 @@ function QuotaRowBody({ row, compactReset }: { row: OfficialQuotaRow; compactRes
   return (
     <>
       <OfficialQuotaWindows
-        provider={row.provider}
+        provider={officialQuotaAttributionId(row)}
         windows={row.windows}
         compactReset={compactReset}
       />

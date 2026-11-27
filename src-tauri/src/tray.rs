@@ -213,15 +213,26 @@ fn refresh_usage_and_await_deferred_catalog(app: &AppHandle) -> Result<(), Strin
 /// 再落库刷新托盘标题/悬浮面板。取数放在锁外，避免持锁期间打网络。
 fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let results = official_quota::fetch_all_targets(
-        &official_quota::custom::store::load_providers(&state.custom_quota_paths),
-    );
+    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
+    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
+    let logins = official_quota::accounts::probe_default_logins(&accounts);
+    let results =
+        official_quota::fetch_all_targets_with_accounts(&custom, &accounts, &logins, |_, _| {});
     let conn = state.lock_write()?;
     let _ = official_quota::sync_claude_capture(&conn);
     official_quota::apply_fetch_results(&conn, results)?;
     let config = official_quota::load_config(&state.official_quota_path);
     let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
+    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
+    let logins = official_quota::accounts::probe_default_logins(&accounts);
+    let dto = official_quota::load_dto_with_accounts(
+        &conn,
+        &config,
+        &custom,
+        &accounts,
+        &logins,
+        chrono::Utc::now(),
+    );
     official_quota::notify::check_and_notify_with_config(
         app,
         &dto,
@@ -256,7 +267,16 @@ pub fn load_quota_dto(app: &AppHandle) -> Result<OfficialQuotaDto, String> {
     let conn = state.lock_read()?;
     let config = official_quota::load_config(&state.official_quota_path);
     let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let mut dto = official_quota::load_dto(&conn, &config, &custom, chrono::Utc::now());
+    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
+    let logins = official_quota::accounts::probe_default_logins(&accounts);
+    let mut dto = official_quota::load_dto_with_accounts(
+        &conn,
+        &config,
+        &custom,
+        &accounts,
+        &logins,
+        chrono::Utc::now(),
+    );
     dto.rows = official_quota::visible_rows(dto.rows, &dto.hidden_providers);
     Ok(dto)
 }

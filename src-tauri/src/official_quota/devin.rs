@@ -31,11 +31,31 @@ const NOT_SIGNED_IN: &str = "尚未登录 Devin / Windsurf，请先打开客户�
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let api_key = load_api_key()?;
-    let raw = request_user_status(&api_key)?;
+    fetch_with_access_token(&api_key)
+}
+
+/// 用调用方给的 apiKey 取额度。不读本机库。
+pub(crate) fn fetch_with_access_token(api_key: &str) -> Result<QuotaSnapshot, String> {
+    fetch_with_access_token_at(api_key, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    api_key: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(&format!("{API_SERVER}/{SERVICE_PATH}"), quota_base);
+    let raw = request_user_status(api_key, &url)?;
     Ok(
         QuotaSnapshot::new(parse_user_status(&raw)?, Utc::now().to_rfc3339())
             .with_plan(parse_plan(&raw)),
     )
+}
+
+pub(crate) fn storage_dirs() -> Vec<std::path::PathBuf> {
+    APP_DIRS
+        .into_iter()
+        .filter_map(crate::vscode_state::global_storage_dir)
+        .collect()
 }
 
 pub fn parse_plan(raw: &str) -> Option<String> {
@@ -140,7 +160,7 @@ fn resets_at(plan: &Value, field: &str) -> Option<String> {
     chrono::DateTime::from_timestamp(seconds, 0).map(|value| value.to_rfc3339())
 }
 
-fn request_user_status(api_key: &str) -> Result<String, String> {
+fn request_user_status(api_key: &str, url: &str) -> Result<String, String> {
     let body = json!({
         "metadata": {
             "apiKey": api_key,
@@ -151,8 +171,8 @@ fn request_user_status(api_key: &str) -> Result<String, String> {
             "locale": "en"
         }
     });
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .post(&format!("{API_SERVER}/{SERVICE_PATH}"))
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .post(url)
         .set("Content-Type", "application/json")
         .set("Connect-Protocol-Version", "1");
     match request.send_string(&body.to_string()) {

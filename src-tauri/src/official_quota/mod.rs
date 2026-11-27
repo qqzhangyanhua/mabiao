@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod antigravity;
 pub mod backoff;
 pub mod claude;
@@ -15,6 +16,7 @@ pub mod fetch;
 pub mod grok;
 pub(crate) mod grok_grpc;
 pub mod hook;
+pub mod identity;
 pub mod notify;
 pub mod opencode;
 
@@ -35,15 +37,30 @@ use crate::store;
 // 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
 pub use fetch::{
     apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_all_targets_with,
-    fetch_in_parallel, fetch_provider, fetch_target, fetch_target_forced, fetch_target_throttled,
-    parse_provider, resolve_target, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget,
-    ThrottledFetch,
+    fetch_all_targets_with_accounts, fetch_in_parallel, fetch_provider, fetch_target,
+    fetch_target_forced, fetch_target_throttled, parse_provider, resolve_target,
+    resolve_target_with_accounts, targets_for_fetch, FetchTarget, ProviderFetch, QuotaSnapshot,
+    QuotaTarget, ThrottledFetch,
 };
+pub use identity::{read_identity, QuotaIdentity};
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
 pub const CONFIG_NAME: &str = "official_quota.json";
 pub const NOTIFY_NAME: &str = "official_quota_notify_state.json";
 pub const CAPTURE_NAME: &str = "claude_statusline.json";
+
+/// 把生产额度 URL 的路径接到调用方给的根上。`None` 时原样返回。
+/// 只给额度账号的离线桩用；本机默认取数不传。
+pub(crate) fn rebase_quota_url(url: &str, base: Option<&str>) -> String {
+    let Some(base) = base.map(str::trim).filter(|value| !value.is_empty()) else {
+        return url.to_string();
+    };
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|index| &rest[index..]))
+        .unwrap_or("/");
+    format!("{}{path}", base.trim_end_matches('/'))
+}
 
 pub fn capture_path() -> PathBuf {
     crate::paths::app_data_dir().join(CAPTURE_NAME)
@@ -100,25 +117,70 @@ pub fn load_dto(
     custom: &[custom::ResolvedProvider],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
-    // 本机没凭证、也没历史缓存的 provider 不占一行——否则家数一多，
-    // 界面上全是永远好不了的红字。曾经拉到过数据的仍然保留，避免临时登出就丢历史。
-    let mut rows: Vec<OfficialQuotaRow> = OfficialQuotaProvider::ALL
-        .into_iter()
-        .map(|provider| load_row(conn, provider, now))
-        .filter(|row| {
-            !row.windows.is_empty()
-                || row.captured_at.is_some()
-                || OfficialQuotaProvider::parse(&row.provider)
-                    .is_some_and(detect::has_local_credentials)
-        })
-        .collect();
+    load_dto_with_accounts(conn, config, custom, &[], &[], now)
+}
+
+/// 有额度账号时按账号分行；某个提供方一个账号都没有时，仍是原来的单行。
+///
+/// `logins` 是离线探到的本机登录。测试传入临时目录上的结果，不读家目录。
+pub fn load_dto_with_accounts(
+    conn: &Connection,
+    config: &OfficialQuotaConfig,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+    now: DateTime<Utc>,
+) -> OfficialQuotaDto {
+    let accounts = accounts::with_live_profiles(accounts);
+    let mut rows = Vec::new();
+    for provider in OfficialQuotaProvider::ALL {
+        match accounts::plan::plan_provider(provider, &accounts, logins) {
+            accounts::plan::ProviderPlan::Unchanged => {
+                // 本机没凭证、也没历史缓存的 provider 不占一行。
+                let row = load_row(conn, provider, now);
+                if !row.windows.is_empty()
+                    || row.captured_at.is_some()
+                    || detect::has_local_credentials(provider)
+                {
+                    rows.push(row);
+                }
+            }
+            accounts::plan::ProviderPlan::Managed {
+                show_builtin,
+                placements,
+            } => {
+                if show_builtin {
+                    let mut row = load_row(conn, provider, now);
+                    row.is_active_local = true;
+                    row.application = quota_row_title(provider.display_name(), None, true);
+                    rows.push(row);
+                }
+                for placement in placements {
+                    rows.push(load_account_row(
+                        conn,
+                        placement.account,
+                        placement.active_local,
+                        now,
+                    ));
+                }
+            }
+        }
+    }
     let undetected = OfficialQuotaProvider::ALL
         .into_iter()
-        .filter(|provider| !rows.iter().any(|row| row.provider == provider.as_str()))
+        .filter(|provider| {
+            let slug = provider.as_str();
+            let present = rows
+                .iter()
+                .any(|row| row.provider == slug || row.base_provider.as_deref() == Some(slug));
+            let registered = accounts
+                .iter()
+                .any(|account| account.config.provider == slug);
+            !present && !registered
+        })
         .map(|provider| provider.as_str().to_string())
         .collect();
-    // 自定义行不套上面那条「没凭证就不占位」的规则：用户是自己动手登记的，
-    // 登记完却看不到那一行，只会以为保存没生效。停用的才不占行。
+    // 自定义行不套「没凭证就不占位」：用户自己登记的，停用的才不占行。
     rows.extend(
         custom
             .iter()
@@ -136,6 +198,9 @@ pub fn load_dto(
 
 /// 按 `hidden_providers` 挑出用户还想看的行，托盘额度面板用它瘦身。
 /// 独立成纯函数是为了不用 `AppHandle` 就能单测。
+///
+/// 额度账号按归属内置提供方隐藏：关掉 `codex` 会同时藏掉 `acct:codex:…`。
+/// 自定义提供商仍只按自己的 `custom:` 标识匹配，不跟着内置开关走。
 pub fn visible_rows(
     rows: Vec<OfficialQuotaRow>,
     hidden_providers: &[String],
@@ -146,8 +211,71 @@ pub fn visible_rows(
     let hidden: std::collections::HashSet<&str> =
         hidden_providers.iter().map(String::as_str).collect();
     rows.into_iter()
-        .filter(|row| !hidden.contains(row.provider.as_str()))
+        .filter(|row| !hidden.contains(quota_visibility_id(row)))
         .collect()
+}
+
+/// 配置显示和托盘用的提供方键：`base_provider`，否则从 `acct:<slug>:<hex>` 取出 slug。
+fn quota_visibility_id(row: &OfficialQuotaRow) -> &str {
+    if custom::is_custom_id(&row.provider) {
+        return row.provider.as_str();
+    }
+    if let Some(base) = row.base_provider.as_deref() {
+        let base = base.trim();
+        if !base.is_empty() {
+            return base;
+        }
+    }
+    acct_provider_slug(&row.provider).unwrap_or(row.provider.as_str())
+}
+
+/// `acct:<slug>:<hex>` 里的内置 slug。不是这个形状就不是额度账号。
+fn acct_provider_slug(id: &str) -> Option<&str> {
+    let rest = id.strip_prefix("acct:")?;
+    let (slug, hex) = rest.split_once(':')?;
+    if slug.is_empty()
+        || hex.is_empty()
+        || !slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        || !hex.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    Some(slug)
+}
+
+/// 额度行标题。没有账号标签时保持提供方显示名，有标签时为「显示名 · 标签」。
+pub fn quota_row_application(display_name: &str, account_label: Option<&str>) -> String {
+    match account_label
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+    {
+        Some(label) => format!("{display_name} · {label}"),
+        None => display_name.to_string(),
+    }
+}
+
+/// 「当前本机」是后来给额度账号打的标记，不是标题本身。
+pub fn quota_active_local_mark(is_active_local: bool) -> Option<&'static str> {
+    if is_active_local {
+        Some("当前本机")
+    } else {
+        None
+    }
+}
+
+/// 行标题：有标签时「显示名 · 标签」，当前本机再补「 · 当前本机」。
+pub fn quota_row_title(
+    display_name: &str,
+    account_label: Option<&str>,
+    is_active_local: bool,
+) -> String {
+    let mut title = quota_row_application(display_name, account_label);
+    if quota_active_local_mark(is_active_local).is_some() && !title.ends_with("当前本机") {
+        title = format!("{title} · 当前本机");
+    }
+    title
 }
 
 fn load_row(
@@ -156,6 +284,39 @@ fn load_row(
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     load_row_by_id(conn, provider.as_str(), provider.display_name(), now)
+}
+
+fn load_account_row(
+    conn: &Connection,
+    account: &accounts::ResolvedQuotaAccount,
+    active_local: bool,
+    now: DateTime<Utc>,
+) -> OfficialQuotaRow {
+    let provider = OfficialQuotaProvider::parse(&account.config.provider);
+    let display = provider
+        .map(OfficialQuotaProvider::display_name)
+        .unwrap_or(account.config.provider.as_str());
+    let title = quota_row_title(display, Some(&account.config.name), active_local);
+    let mut row = load_row_by_id(conn, &account.config.id, &title, now);
+    row.base_provider = provider.map(|item| item.as_str().to_string());
+    row.account_label = Some(account.config.name.clone());
+    row.is_active_local = active_local;
+    attach_account_missing_secret(&mut row, account.access_token_missing());
+    row
+}
+
+/// 缺凭证是待办，不是取数失败。sqlite 里可能残留任意上一轮的 `error`；
+/// 只要这一行是缺凭证待办，就把 `error` 清掉，避免首页把待办画成红字。
+/// 密钥补上之后，只拿掉残留的 todo 文案。登录失效要等下次取数成功再清。
+fn attach_account_missing_secret(row: &mut OfficialQuotaRow, missing: bool) {
+    if missing {
+        row.error = None;
+        row.todo = Some(accounts::MISSING_SECRET_TODO.to_string());
+        return;
+    }
+    if row.error.as_deref() == Some(accounts::MISSING_SECRET_TODO) {
+        row.error = None;
+    }
 }
 
 /// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。
@@ -216,6 +377,9 @@ fn load_row_by_id(
                 error: stored.error,
                 todo: None,
                 plan: stored.plan,
+                base_provider: None,
+                account_label: None,
+                is_active_local: false,
             }
         }
         Ok(None) => empty_row(id, display_name, None),
@@ -233,6 +397,9 @@ fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuo
         error,
         todo: None,
         plan: None,
+        base_provider: None,
+        account_label: None,
+        is_active_local: false,
     }
 }
 

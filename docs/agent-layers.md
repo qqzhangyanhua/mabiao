@@ -73,9 +73,9 @@
 ## 官方额度
 
 1. 内置账号在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`）。新增一家：加 `official_quota/<provider>.rs`，并接到 `detect.rs` 与 `fetch.rs`。给 `display_name` 和 `brand` 补穷举分支，再重新生成展示身份文件（命令见 Adapter 节第 8 步）。首页额度开关的提供方 id 来自生成文件的 `OFFICIAL_QUOTA_PROVIDER_SLUGS`，文案经 `officialQuotaProviderLabel` 读 `DISPLAY_NAMES`，不要再手写短名表。
-2. 凭证只读各客户端已有登录态。自定义提供商密钥单独文件，备份排除该文件。
+2. 零配置取数只读各客户端已有登录态。额度账号的应用内授权（Codex PKCE、Copilot 设备码）只写应用密钥文件 `quota_account_secrets.json`，不进备份、不进推送；客户端文件、钥匙串和第三方数据库保持只读。见 ADR 0029。自定义提供商密钥是另一份被备份排除的文件。
 3. `tray.rs::sync_official_quota` 在刷新、全量摄取后、每 5 分钟 stale 检查时取数（受退避约束）。最紧一档走 `official_quota::tightest_window`：无 `resets_at` 的自定义充值余额不参与；有重置时间的自定义预算窗参与。
-4. fixture 测响应解析。读 ADR 0008、0012、0013。
+4. fixture 测响应解析。读 ADR 0008、0012、0013、0029。
 5. `cargo test quota` 绿。
 
 ## 对话记录

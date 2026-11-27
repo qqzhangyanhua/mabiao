@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use base64::Engine;
@@ -30,6 +30,8 @@ pub struct GrokSession {
     /// `fetch_rate_limits` 先现刷再用，不再直接报错让用户手动 `grok login`。
     pub expired: bool,
     pub refresh: Option<RefreshCredentials>,
+    /// `expires_at` 的 RFC3339。没有这个字段时是 `None`，不当成已过期。
+    pub expires_at: Option<String>,
 }
 
 /// OIDC 静默刷新要用的三件套，均来自 `auth.json` 同一条目，不落盘、只在内存里现刷现用。
@@ -75,6 +77,90 @@ pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
+/// 只用现成的 access token 取额度。不发现 OIDC，也不拿 refresh token 去换新的。
+/// `quota_base` 把额度 URL 换到调用方给的根上（本地桩）；生产传 `None`。
+pub(crate) fn fetch_with_access_token(
+    token: &str,
+    user_id: Option<&str>,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("Grok 登录已过期，请重新运行 grok login".to_string());
+    }
+    let direct = quota_base.is_some();
+    let version = DEFAULT_GROK_CLI_VERSION;
+    let user_id_owned = if let Some(id) = user_id.map(str::trim).filter(|id| !id.is_empty()) {
+        id.to_string()
+    } else if quota_base.is_none() {
+        let raw = request_json_inner(token, None, USER_URL, TIMEOUT, version, false)?;
+        parse_user_id_response(&raw)?
+    } else {
+        let raw = request_json_inner(
+            token,
+            None,
+            &rebase_quota_url(USER_URL, quota_base),
+            TIMEOUT,
+            version,
+            true,
+        )?;
+        parse_user_id_response(&raw)?
+    };
+    let credits_result = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(BILLING_CREDITS_URL, quota_base),
+        TIMEOUT,
+        version,
+        direct,
+    );
+    let mut windows = match credits_result {
+        Ok(raw) => parse_credits(&raw)?,
+        Err(error) if quota_base.is_none() && super::grok_grpc::should_fallback_to_grpc(&error) => {
+            super::grok_grpc::fetch_credits(token, Some(&user_id_owned), version)?
+        }
+        Err(error) => return Err(error),
+    };
+    if let Ok(monthly_raw) = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(BILLING_MONTHLY_URL, quota_base),
+        TIMEOUT,
+        version,
+        direct,
+    ) {
+        if let Ok(monthly) = parse_monthly(&monthly_raw) {
+            merge_windows(&mut windows, monthly);
+        }
+    }
+    if windows.is_empty() {
+        return Err("Grok 限额响应里没有可用的已用百分比".to_string());
+    }
+    let plan = request_json_inner(
+        token,
+        Some(&user_id_owned),
+        &rebase_quota_url(SETTINGS_URL, quota_base),
+        SETTINGS_TIMEOUT,
+        version,
+        direct,
+    )
+    .ok()
+    .and_then(|raw| parse_settings_plan(&raw))
+    .or_else(|| parse_jwt_plan(token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+fn rebase_quota_url(url: &str, base: Option<&str>) -> String {
+    let Some(base) = base.map(str::trim).filter(|value| !value.is_empty()) else {
+        return url.to_string();
+    };
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.find('/').map(|index| &rest[index..]))
+        .unwrap_or("/");
+    format!("{}{path}", base.trim_end_matches('/'))
+}
+
 /// 本地已知过期时提前现刷，省一次注定 401 的往返；没有刷新凭证才把过期错误原样交回。
 fn ensure_fresh_token(session: &GrokSession) -> Result<String, String> {
     if !session.expired {
@@ -94,8 +180,18 @@ fn is_expired_error(error: &str) -> bool {
 /// 用 `auth.json` 里的 `refresh_token` 换一个新 access token；不写回 `auth.json`——
 /// 真正的 grok CLI 才是这个文件的所有者（见 ADR 0010），我们只借 token 用一次。
 fn refresh_access_token(refresh: &RefreshCredentials) -> Result<String, String> {
+    refresh_tokens(refresh).map(|tokens| tokens.access_token)
+}
+
+/// 内存里换一套令牌。响应里若有轮换后的 refresh token 也带回来，由调用方决定写哪。
+pub(crate) struct RefreshedOidc {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+}
+
+pub(crate) fn refresh_tokens(refresh: &RefreshCredentials) -> Result<RefreshedOidc, String> {
     let token_endpoint = discover_token_endpoint(&refresh.oidc_issuer)?;
-    let response = crate::net::agent_with_timeout(TIMEOUT)
+    let response = crate::net::agent_for_url(&token_endpoint, TIMEOUT)
         .post(&token_endpoint)
         .set("Accept", "application/json")
         .send_form(&[
@@ -108,7 +204,7 @@ fn refresh_access_token(refresh: &RefreshCredentials) -> Result<String, String> 
             let body = ok
                 .into_string()
                 .map_err(|e| format!("读取 Grok 刷新响应失败：{e}"))?;
-            parse_refreshed_access_token(&body)
+            parse_refreshed_tokens(&body)
         }
         Err(ureq::Error::Status(401 | 403, _)) => {
             Err("Grok 登录已过期，请重新运行 grok login".to_string())
@@ -130,7 +226,7 @@ fn discover_token_endpoint(issuer: &str) -> Result<String, String> {
         "{}/.well-known/openid-configuration",
         issuer.trim_end_matches('/')
     );
-    match crate::net::agent_with_timeout(TIMEOUT).get(&url).call() {
+    match crate::net::agent_for_url(&url, TIMEOUT).get(&url).call() {
         Ok(response) => {
             let raw = response
                 .into_string()
@@ -144,9 +240,17 @@ fn discover_token_endpoint(issuer: &str) -> Result<String, String> {
 }
 
 pub fn parse_refreshed_access_token(raw: &str) -> Result<String, String> {
+    parse_refreshed_tokens(raw).map(|tokens| tokens.access_token)
+}
+
+fn parse_refreshed_tokens(raw: &str) -> Result<RefreshedOidc, String> {
     let value = parse_object(raw, "Grok 刷新响应")?;
-    string_field(&value, "access_token")
-        .ok_or_else(|| "Grok 刷新响应里没有 access_token".to_string())
+    let access_token = string_field(&value, "access_token")
+        .ok_or_else(|| "Grok 刷新响应里没有 access_token".to_string())?;
+    Ok(RefreshedOidc {
+        access_token,
+        refresh_token: string_field(&value, "refresh_token"),
+    })
 }
 
 /// 解析 `GET /v1/billing?format=credits`：周额度池 + Grok Build 分项 + 按需。
@@ -260,6 +364,7 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
                         user_id: user_id_of(node),
                         expired: true,
                         refresh: Some(refresh),
+                        expires_at: expires_at_of(node),
                     };
                     if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
                         preferred_refreshable.get_or_insert(session);
@@ -281,6 +386,7 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
             user_id: user_id_of(node),
             expired: false,
             refresh: refresh_of(node),
+            expires_at: expires_at_of(node),
         };
         if scope.starts_with(SUPERGROK_SCOPE_PREFIX) {
             preferred = Some(session);
@@ -314,6 +420,10 @@ pub fn parse_auth_json(raw: &str, now: DateTime<Utc>) -> Result<GrokSession, Str
 }
 
 /// 从会话条目里取 OIDC 静默刷新三件套；缺任一项就当作不可自动刷新。
+fn expires_at_of(node: &Value) -> Option<String> {
+    crate::official_quota::parse_resets_at(node.get("expires_at")?)
+}
+
 fn refresh_of(node: &Value) -> Option<RefreshCredentials> {
     Some(RefreshCredentials {
         refresh_token: string_field(node, "refresh_token")?,
@@ -377,12 +487,21 @@ pub fn parse_jwt_plan(token: &str) -> Option<String> {
 }
 
 fn load_session() -> Result<GrokSession, String> {
-    let path = auth_path();
-    if !path.exists() {
+    load_session_at(&auth_path(), Utc::now())
+}
+
+/// 从显式的 `auth.json` 或配置目录读会话。不访问网络，也不碰默认的 `GROK_HOME`。
+pub fn load_session_at(path: &Path, now: DateTime<Utc>) -> Result<GrokSession, String> {
+    let file = if path.is_dir() {
+        path.join("auth.json")
+    } else {
+        path.to_path_buf()
+    };
+    if !file.exists() {
         return Err("尚未登录 Grok CLI，请先运行 grok login".to_string());
     }
-    let raw = std::fs::read_to_string(&path).map_err(|e| format!("读取 Grok 登录凭证失败：{e}"))?;
-    parse_auth_json(&raw, Utc::now())
+    let raw = std::fs::read_to_string(&file).map_err(|e| format!("读取 Grok 登录凭证失败：{e}"))?;
+    parse_auth_json(&raw, now)
 }
 
 fn resolve_user_id(session: &GrokSession, token: &str) -> Result<String, String> {
@@ -403,7 +522,7 @@ pub fn auth_file_exists() -> bool {
     auth_path().exists()
 }
 
-fn auth_path() -> PathBuf {
+pub(crate) fn auth_path() -> PathBuf {
     grok_home().join("auth.json")
 }
 
@@ -429,11 +548,27 @@ fn request_json_with_timeout(
     url: &str,
     timeout: Duration,
 ) -> Result<String, String> {
-    let mut request = crate::net::agent_with_timeout(timeout)
+    request_json_inner(token, user_id, url, timeout, &grok_client_version(), false)
+}
+
+fn request_json_inner(
+    token: &str,
+    user_id: Option<&str>,
+    url: &str,
+    timeout: Duration,
+    version: &str,
+    direct: bool,
+) -> Result<String, String> {
+    let agent = if direct {
+        crate::net::agent_without_redirects(timeout, true)
+    } else {
+        crate::net::agent_with_timeout(timeout)
+    };
+    let mut request = agent
         .get(url)
         .set("Authorization", &format!("Bearer {token}"))
         .set("X-XAI-Token-Auth", TOKEN_AUTH)
-        .set("x-grok-client-version", &grok_client_version())
+        .set("x-grok-client-version", version)
         .set("x-grok-client-mode", CLIENT_MODE)
         .set("Accept", "application/json");
     if let Some(user_id) = user_id.filter(|id| !id.is_empty()) {

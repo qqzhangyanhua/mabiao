@@ -6,7 +6,7 @@ import type {
   QuotaExhaustDto,
 } from "../types";
 import { formatClock, formatUtcClock, formatWindowClock, relativeTime } from "./format";
-import { officialQuotaProviderLabel } from "./overviewLayout";
+import { officialQuotaAttributionId, officialQuotaProviderLabel } from "./overviewLayout";
 
 export const OFFICIAL_QUOTA_FRESHNESS_STATUS: Record<OfficialQuotaFreshness, string> = {
   official: "官方",
@@ -72,6 +72,24 @@ export const OFFICIAL_QUOTA_EXHAUST_TITLE =
 export const COPILOT_RESET_TITLE =
   "GitHub 官方按 UTC 零点重置（每月 1 日 00:00:00 UTC），不是本机时区日切";
 
+/** 行标题用 Rust 已经拼好的 `application`。当前本机标记只在还没写上时补一次。
+ *  调用方按整行传入；提供方、标签不在这里再拼一次。
+ */
+export function officialQuotaRowTitle(
+  row: Pick<OfficialQuotaRow, "application"> & {
+    provider?: string;
+    base_provider?: string | null;
+    account_label?: string | null;
+    is_active_local?: boolean;
+  },
+): string {
+  let title = row.application;
+  if (row.is_active_local && !title.endsWith("当前本机")) {
+    title = `${title} · 当前本机`;
+  }
+  return title;
+}
+
 export function officialQuotaResetLabel(
   provider: string,
   resetsAt: string | null,
@@ -80,7 +98,8 @@ export function officialQuotaResetLabel(
   if (!resetsAt) {
     return { text: "重置时间未知" };
   }
-  if (provider === "copilot") {
+  const slug = officialQuotaAttributionId({ provider });
+  if (slug === "copilot") {
     return {
       text: `重置 ${formatUtcClock(resetsAt, compact)}`,
       title: COPILOT_RESET_TITLE,

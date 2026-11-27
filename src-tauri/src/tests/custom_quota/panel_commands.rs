@@ -21,11 +21,13 @@ fn single_refresh_resolves_builtin_first_then_falls_back_to_custom() {
             assert_eq!(provider, OfficialQuotaProvider::Claude)
         }
         quota::FetchTarget::Custom(_) => panic!("claude 不该走自定义通道"),
+        quota::FetchTarget::Account(_) => panic!("claude 不该走额度账号通道"),
     }
     // `custom:` 标识不再撞上「未知的官方额度账号」。
     match quota::resolve_target("custom:a3f9c1", &resolved).unwrap() {
         quota::FetchTarget::Custom(provider) => assert_eq!(provider.config.name, "公司的中转"),
         quota::FetchTarget::Builtin(_) => panic!("自定义标识不该被内置枚举吃掉"),
+        quota::FetchTarget::Account(_) => panic!("自定义标识不该走额度账号通道"),
     }
     // 删掉之后再点刷新，报的是「不认识」，不是崩溃。
     assert!(quota::resolve_target("custom:deleted", &resolved)

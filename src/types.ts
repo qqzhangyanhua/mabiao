@@ -132,6 +132,12 @@ export type OfficialQuotaRow = {
   todo: string | null;
   /** 账号套餐展示名。Cursor / Grok 能拿到；其余账号和自定义提供商为 null。 */
   plan: string | null;
+  /** 额度账号归属的内置提供方 slug。自定义提供商和旧缓存没有这个字段。 */
+  base_provider?: string | null;
+  /** 额度账号展示标签。没有时标题仍是提供方显示名。 */
+  account_label?: string | null;
+  /** 这条行是当前本机正在使用的登录态。缺省当 false。 */
+  is_active_local?: boolean;
 };
 
 export type OfficialQuotaConfig = {

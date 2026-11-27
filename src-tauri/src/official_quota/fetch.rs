@@ -10,8 +10,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
 use super::{
-    antigravity, backoff, capture_path, claude, claude_usage, codex, codex_usage, copilot, cursor,
-    custom, detect, devin, droid, grok, opencode,
+    accounts, antigravity, backoff, capture_path, claude, claude_usage, codex, codex_usage,
+    copilot, cursor, custom, detect, devin, droid, grok, opencode,
 };
 use crate::domain::{OfficialQuotaProvider, OfficialQuotaWindow};
 use crate::store;
@@ -94,6 +94,7 @@ impl QuotaTarget for String {
 pub enum FetchTarget {
     Builtin(OfficialQuotaProvider),
     Custom(Box<custom::ResolvedProvider>),
+    Account(Box<accounts::AccountTarget>),
 }
 
 impl QuotaTarget for FetchTarget {
@@ -101,6 +102,7 @@ impl QuotaTarget for FetchTarget {
         match self {
             Self::Builtin(provider) => provider.quota_id(),
             Self::Custom(provider) => provider.quota_id(),
+            Self::Account(account) => account.id.as_str(),
         }
     }
 
@@ -108,6 +110,7 @@ impl QuotaTarget for FetchTarget {
         match self {
             Self::Builtin(provider) => provider.quota_display_name(),
             Self::Custom(provider) => provider.quota_display_name(),
+            Self::Account(account) => account.name.as_str(),
         }
     }
 }
@@ -136,6 +139,24 @@ pub fn resolve_target(
         return Err(format!("「{}」已停用，先在设置页打开它", found.config.name));
     }
     Ok(FetchTarget::Custom(Box::new(found.clone())))
+}
+
+/// 单条刷新。`acct:` 走额度账号；停用的不取数。其余仍是内置或自定义。
+pub fn resolve_target_with_accounts(
+    id: &str,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+) -> Result<FetchTarget, String> {
+    let accounts = accounts::with_live_profiles(accounts);
+    if let Some(found) = accounts.iter().find(|account| account.config.id == id) {
+        if !found.config.enabled {
+            return Err(format!("「{}」已停用，先在设置页打开它", found.config.name));
+        }
+        let target = accounts::prepare_manual_target(found, logins)?;
+        return Ok(FetchTarget::Account(Box::new(target)));
+    }
+    resolve_target(id, custom)
 }
 
 /// 真正会打网的自定义目标：启用、且有密钥。
@@ -211,7 +232,43 @@ pub fn fetch_target(target: &FetchTarget) -> ProviderFetch {
     match target {
         FetchTarget::Builtin(provider) => fetch_provider(*provider),
         FetchTarget::Custom(provider) => custom::fetch(provider),
+        FetchTarget::Account(account) => accounts::fetch_managed_account(account, None),
     }
+}
+
+/// 这一轮要打网的目标。没有额度账号的提供方仍按本机凭证过滤；
+/// 有账号的提供方跟快照同一套计划，当前本机那条读现场登录，不读存档里的 refresh。
+pub fn targets_for_fetch(
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+) -> Vec<FetchTarget> {
+    let accounts = accounts::with_live_profiles(accounts);
+    let mut targets = Vec::new();
+    for provider in OfficialQuotaProvider::ALL {
+        match accounts::plan::plan_provider(provider, &accounts, logins) {
+            accounts::plan::ProviderPlan::Unchanged => {
+                if detect::has_local_credentials(provider) {
+                    targets.push(FetchTarget::Builtin(provider));
+                }
+            }
+            accounts::plan::ProviderPlan::Managed {
+                show_builtin,
+                placements,
+            } => {
+                if show_builtin {
+                    targets.push(FetchTarget::Builtin(provider));
+                }
+                for placement in placements {
+                    if let Some(target) = accounts::prepare_auto_target(&placement, logins) {
+                        targets.push(FetchTarget::Account(Box::new(target)));
+                    }
+                }
+            }
+        }
+    }
+    targets.extend(custom_targets_for_fetch(custom));
+    targets
 }
 
 /// 先取数再交给调用方加锁写入，避免在持锁期间打网络。
@@ -222,10 +279,10 @@ pub fn fetch_all_targets(custom: &[custom::ResolvedProvider]) -> Vec<(FetchTarge
     fetch_all_targets_with(custom, |_, _| {})
 }
 
-/// 同 [`fetch_all_targets`]，但每家一取完就在它自己的取数线程里回调一次，
-/// 调用方可以先落库、先推给界面，不必等最慢的那家。回调可能并发进入。
-pub fn fetch_all_targets_with<F>(
+pub fn fetch_all_targets_with_accounts<F>(
     custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
     on_result: F,
 ) -> Vec<(FetchTarget, ProviderFetch)>
 where
@@ -234,14 +291,7 @@ where
     let now = Utc::now();
     let path = backoff::state_path();
     let mut state = backoff::load_state(&path);
-    let mut targets: Vec<FetchTarget> = OfficialQuotaProvider::ALL
-        .into_iter()
-        .filter(|provider| detect::has_local_credentials(*provider))
-        .map(FetchTarget::Builtin)
-        .collect();
-    targets.extend(custom_targets_for_fetch(custom));
-    let targets = exclude_cooling(targets, &state, now);
-
+    let targets = exclude_cooling(targets_for_fetch(custom, accounts, logins), &state, now);
     let results = fetch_in_parallel(targets, |target| {
         let result = fetch_target(target);
         on_result(target, &result);
@@ -256,6 +306,18 @@ where
         &path,
     );
     results
+}
+
+/// 同 [`fetch_all_targets`]，但每家一取完就在它自己的取数线程里回调一次，
+/// 调用方可以先落库、先推给界面，不必等最慢的那家。回调可能并发进入。
+pub fn fetch_all_targets_with<F>(
+    custom: &[custom::ResolvedProvider],
+    on_result: F,
+) -> Vec<(FetchTarget, ProviderFetch)>
+where
+    F: Fn(&FetchTarget, &ProviderFetch) + Sync,
+{
+    fetch_all_targets_with_accounts(custom, &[], &[], on_result)
 }
 
 /// 并发跑各家、按传入顺序返回。取数函数作为参数传入，这样调度本身可以脱网测试。

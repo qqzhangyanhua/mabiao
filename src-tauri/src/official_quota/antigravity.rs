@@ -38,7 +38,7 @@ const KEYCHAIN_ACCOUNT: &str = "antigravity";
 const KEYCHAIN_TIMEOUT: Duration = Duration::from_secs(5);
 const AUTH_STATUS_KEY: &str = "antigravityAuthStatus";
 const OAUTH_TOKEN_KEY: &str = "antigravityUnifiedStateSync.oauthToken";
-const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+pub(crate) const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 /// 必须带 `Antigravity/` 标记，否则 cloudcode-pa 直接 403。
 const USER_AGENT: &str = "vscode/1.X.X (Antigravity/4.3.0)";
 /// prod 已验证可用；daily / sandbox 是 Antigravity 自己也会走的备用环境。
@@ -57,6 +57,20 @@ pub struct LocalTokens {
     /// `ya29.` 开头，约 1 小时过期。
     pub access_token: Option<String>,
     pub refresh_token: Option<String>,
+    /// `antigravityAuthStatus.email`，或钥匙串 JSON 里的 email。不是密钥。
+    pub email: Option<String>,
+}
+
+impl LocalTokens {
+    pub(crate) fn signed_in(&self) -> bool {
+        token_present(&self.access_token) || token_present(&self.refresh_token)
+    }
+}
+
+fn token_present(value: &Option<String>) -> bool {
+    value
+        .as_deref()
+        .is_some_and(|token| !token.trim().is_empty())
 }
 
 enum SummaryError {
@@ -68,6 +82,32 @@ pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
     let (raw, token) = fetch_summary()?;
     let windows = parse_quota_summary(&raw)?;
     let plan = parse_code_assist_tier(&raw).or_else(|| fetch_plan(&token));
+    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+/// 只用 access token 取摘要。401 直接报登录失效，不走 refresh。
+/// `quota_base` 把摘要地址换到本地桩；生产传 `None`。
+pub(crate) fn fetch_with_access_token_at(
+    token: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err(NOT_SIGNED_IN.to_string());
+    }
+    let raw = request_summary_at(token, quota_base).map_err(|error| match error {
+        SummaryError::Unauthorized => "Antigravity 登录已失效，请重新打开客户端登录".to_string(),
+        SummaryError::Other(message) => message,
+    })?;
+    let windows = parse_quota_summary(&raw)?;
+    // 桩只回答摘要。套餐档在摘要里就用，没有也不再打生产环境。
+    let plan = parse_code_assist_tier(&raw).or_else(|| {
+        if quota_base.is_some() {
+            None
+        } else {
+            fetch_plan(token)
+        }
+    });
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
@@ -219,19 +259,28 @@ fn bucket_label(group_label: &str, bucket: &Value) -> String {
     format!("{group_label} {window}").trim().to_string()
 }
 
-fn load_local_tokens() -> Result<LocalTokens, String> {
-    if let Some(tokens) = read_keychain_tokens() {
-        if tokens != LocalTokens::default() {
+pub(crate) fn load_local_tokens() -> Result<LocalTokens, String> {
+    let dirs = APP_DIRS
+        .into_iter()
+        .filter_map(vscode_state::global_storage_dir)
+        .collect::<Vec<_>>();
+    resolve_local_tokens(read_keychain_tokens(), &dirs)
+}
+
+/// 钥匙串有登录就用它，否则按目录顺序读 `state.vscdb`。`keychain` 由调用方注入，测试不碰真钥匙串。
+pub(crate) fn resolve_local_tokens(
+    keychain: Option<LocalTokens>,
+    storage_dirs: &[PathBuf],
+) -> Result<LocalTokens, String> {
+    if let Some(tokens) = keychain {
+        if tokens.signed_in() {
             return Ok(tokens);
         }
     }
     let mut last_error = None;
-    for app in APP_DIRS {
-        let Some(dir) = vscode_state::global_storage_dir(app) else {
-            continue;
-        };
-        match read_local_tokens_at(&dir) {
-            Ok(tokens) if tokens != LocalTokens::default() => return Ok(tokens),
+    for dir in storage_dirs {
+        match read_local_tokens_at(dir) {
+            Ok(tokens) if tokens.signed_in() => return Ok(tokens),
             Ok(_) => {}
             Err(error) => last_error = Some(error),
         }
@@ -257,25 +306,26 @@ pub fn parse_keyring_blob(raw: &str) -> Option<LocalTokens> {
         serde_json::from_slice(&bytes).ok()?
     };
     let token = value.get("token").unwrap_or(&value);
-    let access_token = token
-        .get("access_token")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string);
-    let refresh_token = token
-        .get("refresh_token")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string);
+    let access_token = json_string(token, "access_token");
+    let refresh_token = json_string(token, "refresh_token");
     if access_token.is_none() && refresh_token.is_none() {
         return None;
     }
+    let email = json_string(token, "email").or_else(|| json_string(&value, "email"));
     Some(LocalTokens {
         access_token,
         refresh_token,
+        email,
     })
+}
+
+fn json_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)
 }
 
 #[cfg(target_os = "macos")]
@@ -340,22 +390,21 @@ pub fn read_local_tokens_at(global_storage: &Path) -> Result<LocalTokens, String
     let Some(conn) = vscode_state::open_read_only(global_storage)? else {
         return Ok(LocalTokens::default());
     };
-    let access_token = vscode_state::read_item(&conn, AUTH_STATUS_KEY)
-        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .and_then(|value| {
-            value
-                .get("apiKey")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|token| !token.is_empty())
-                .map(str::to_string)
-        });
+    let status = vscode_state::read_item(&conn, AUTH_STATUS_KEY)
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok());
+    let access_token = status
+        .as_ref()
+        .and_then(|value| json_string(value, "apiKey"));
+    let email = status
+        .as_ref()
+        .and_then(|value| json_string(value, "email"));
     let refresh_token = vscode_state::read_item(&conn, OAUTH_TOKEN_KEY)
         .as_deref()
         .and_then(extract_refresh_token);
     Ok(LocalTokens {
         access_token,
         refresh_token,
+        email,
     })
 }
 
@@ -467,7 +516,7 @@ fn scan_bytes(source: &[u8], keep: impl Fn(&str) -> bool) -> Vec<String> {
     found
 }
 
-fn local_oauth_clients() -> Result<Vec<(String, String)>, String> {
+pub(crate) fn local_oauth_clients() -> Result<Vec<(String, String)>, String> {
     for path in oauth_source_files() {
         let Ok(bytes) = std::fs::read(&path) else {
             continue;
@@ -555,12 +604,28 @@ fn which_named(name: &str) -> Option<PathBuf> {
 }
 
 /// 本机存的 access token 只活约 1 小时，过期了就用 refresh token 换一个。
+/// 新令牌只留在内存里，不写钥匙串，也不写 `state.vscdb`。
 fn refresh_access_token(refresh_token: &str) -> Result<String, String> {
     let clients = local_oauth_clients()?;
+    exchange_refresh_token(TOKEN_URL, refresh_token, &clients).map(|(access_token, _)| access_token)
+}
+
+/// 用给定的令牌地址和客户端换 access token。轮换出来的 refresh token 一并返回。
+/// 调用方决定写不写、写到哪里——这条函数本身不落盘。
+pub(crate) fn exchange_refresh_token(
+    token_url: &str,
+    refresh_token: &str,
+    clients: &[(String, String)],
+) -> Result<(String, Option<String>), String> {
+    if clients.is_empty() {
+        return Err(
+            "找不到本机 Antigravity 安装目录，无法取得刷新登录所需的客户端信息".to_string(),
+        );
+    }
     let mut last = "Antigravity 登录已失效，请重新打开客户端登录".to_string();
     for (client_id, client_secret) in clients {
-        let response = crate::net::agent_with_timeout(TIMEOUT)
-            .post(TOKEN_URL)
+        let response = crate::net::agent_for_url(token_url, TIMEOUT)
+            .post(token_url)
             .send_form(&[
                 ("client_id", client_id.as_str()),
                 ("client_secret", client_secret.as_str()),
@@ -572,13 +637,8 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, String> {
                 let body = ok
                     .into_string()
                     .map_err(|e| format!("读取 Antigravity 令牌响应失败：{e}"))?;
-                if let Some(token) = serde_json::from_str::<Value>(&body).ok().and_then(|value| {
-                    value
-                        .get("access_token")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                }) {
-                    return Ok(token);
+                if let Some(tokens) = parse_google_tokens(&body) {
+                    return Ok(tokens);
                 }
                 last = "Antigravity 令牌响应里没有 access_token".to_string();
             }
@@ -587,7 +647,10 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, String> {
                 let _ = response.into_string();
             }
             Err(ureq::Error::Status(code, response)) => {
-                let _ = response.into_string();
+                let body = response.into_string().unwrap_or_default();
+                if body.contains("invalid_grant") {
+                    continue;
+                }
                 last = format!("刷新 Antigravity 登录失败：HTTP {code}");
             }
             Err(_) => {
@@ -598,31 +661,68 @@ fn refresh_access_token(refresh_token: &str) -> Result<String, String> {
     Err(last)
 }
 
+fn parse_google_tokens(body: &str) -> Option<(String, Option<String>)> {
+    let value: Value = serde_json::from_str(body).ok()?;
+    let access_token = value
+        .get("access_token")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string)?;
+    let refresh_token = value
+        .get("refresh_token")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+        .map(str::to_string);
+    Some((access_token, refresh_token))
+}
+
+fn request_summary_at(
+    access_token: &str,
+    quota_base: Option<&str>,
+) -> Result<String, SummaryError> {
+    if let Some(base) = quota_base.map(str::trim).filter(|value| !value.is_empty()) {
+        let url = super::rebase_quota_url(SUMMARY_URLS[0], Some(base));
+        return request_summary_url(access_token, &url);
+    }
+    request_summary(access_token)
+}
+
 fn request_summary(access_token: &str) -> Result<String, SummaryError> {
     let mut last = SummaryError::Other("无法连接 Antigravity 限额接口，请检查网络后重试".into());
     for url in SUMMARY_URLS {
-        let result = crate::net::agent_with_timeout(TIMEOUT)
-            .post(url)
-            .set("Authorization", &format!("Bearer {access_token}"))
-            .set("User-Agent", USER_AGENT)
-            .set("Content-Type", "application/json")
-            .send_string("{}");
-        match result {
-            Ok(response) => {
-                return response.into_string().map_err(|e| {
-                    SummaryError::Other(format!("读取 Antigravity 限额响应失败：{e}"))
-                })
-            }
-            // 换环境也不会变，交给上层去刷新重试。
-            Err(ureq::Error::Status(401 | 403, _)) => return Err(SummaryError::Unauthorized),
-            Err(ureq::Error::Status(code, response)) => {
-                let _ = response.into_string();
-                last = SummaryError::Other(format!("拉取 Antigravity 限额失败：HTTP {code}"));
-            }
-            Err(_) => {}
+        match request_summary_url(access_token, url) {
+            Ok(raw) => return Ok(raw),
+            Err(SummaryError::Unauthorized) => return Err(SummaryError::Unauthorized),
+            Err(error) => last = error,
         }
     }
     Err(last)
+}
+
+fn request_summary_url(access_token: &str, url: &str) -> Result<String, SummaryError> {
+    let result = crate::net::agent_for_url(url, TIMEOUT)
+        .post(url)
+        .set("Authorization", &format!("Bearer {access_token}"))
+        .set("User-Agent", USER_AGENT)
+        .set("Content-Type", "application/json")
+        .send_string("{}");
+    match result {
+        Ok(response) => response
+            .into_string()
+            .map_err(|e| SummaryError::Other(format!("读取 Antigravity 限额响应失败：{e}"))),
+        Err(ureq::Error::Status(401 | 403, _)) => Err(SummaryError::Unauthorized),
+        Err(ureq::Error::Status(code, response)) => {
+            let _ = response.into_string();
+            Err(SummaryError::Other(format!(
+                "拉取 Antigravity 限额失败：HTTP {code}"
+            )))
+        }
+        Err(_) => Err(SummaryError::Other(
+            "无法连接 Antigravity 限额接口，请检查网络后重试".into(),
+        )),
+    }
 }
 
 fn request_code_assist(access_token: &str) -> Option<String> {

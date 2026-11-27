@@ -129,6 +129,8 @@ pub struct AppState {
     /// 自定义提供商的配置与密钥。配置可以进备份，密钥不进——备份目录是设计成
     /// 给人整个拷走的。
     pub custom_quota_paths: official_quota::custom::store::CustomQuotaPaths,
+    /// 额度账号的配置与密钥。密钥文件从创建起就是 0600，不进备份。
+    pub quota_account_paths: official_quota::accounts::QuotaAccountPaths,
     pub conn: Mutex<Connection>,
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
@@ -366,6 +368,7 @@ pub fn run() {
             let official_quota_path = dir.join(official_quota::CONFIG_NAME);
             let official_quota_notify_path = dir.join(official_quota::NOTIFY_NAME);
             let custom_quota_paths = official_quota::custom::store::CustomQuotaPaths::in_dir(&dir);
+            let quota_account_paths = official_quota::accounts::QuotaAccountPaths::in_dir(&dir);
             let db_path_str = db_path.to_string_lossy().to_string();
             let conn = store::open_db(&db_path_str).map_err(std::io::Error::other)?;
             // open_db 必须先跑：它建表建索引，只读连接开在空库上会查不到表。
@@ -381,6 +384,7 @@ pub fn run() {
                 official_quota_path,
                 official_quota_notify_path,
                 custom_quota_paths,
+                quota_account_paths,
                 conn: Mutex::new(conn),
                 read_pool,
                 snapshot: Mutex::new(snapshot),
@@ -451,6 +455,20 @@ pub fn run() {
             commands::list_custom_quota_providers,
             commands::save_custom_quota_provider,
             commands::delete_custom_quota_provider,
+            commands::list_quota_accounts,
+            commands::import_local_quota_account,
+            commands::save_quota_account,
+            commands::save_profile_dir_account,
+            commands::delete_quota_account,
+            commands::start_copilot_device_login,
+            commands::poll_copilot_device_login,
+            commands::cancel_copilot_device_login,
+            commands::open_copilot_device_verification,
+            commands::start_codex_pkce_login,
+            commands::poll_codex_pkce_login,
+            commands::submit_codex_pkce_callback,
+            commands::cancel_codex_pkce_login,
+            commands::open_codex_pkce_login,
             commands::preview_custom_quota_request,
             commands::test_custom_quota_provider,
             commands::get_price_snapshot,

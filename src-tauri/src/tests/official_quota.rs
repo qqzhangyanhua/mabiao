@@ -178,6 +178,9 @@ fn tightest_window_picks_highest_cursor_dimension() {
             error: None,
             todo: None,
             plan: None,
+            base_provider: None,
+            account_label: None,
+            is_active_local: false,
         }],
         alerts_enabled: true,
         stale_after_minutes: 10,
@@ -320,6 +323,9 @@ fn visible_rows_drops_only_hidden_providers() {
             error: None,
             todo: None,
             plan: None,
+            base_provider: None,
+            account_label: None,
+            is_active_local: false,
         },
         crate::domain::OfficialQuotaRow {
             provider: "devin".into(),
@@ -330,6 +336,9 @@ fn visible_rows_drops_only_hidden_providers() {
             error: None,
             todo: None,
             plan: None,
+            base_provider: None,
+            account_label: None,
+            is_active_local: false,
         },
     ];
     let hidden = vec!["devin".to_string()];

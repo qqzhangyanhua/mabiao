@@ -249,10 +249,7 @@ pub fn event_matches_filter(event: &CursorUsageEvent, filter: &Filter) -> bool {
             return false;
         }
     }
-    if !filter.models.is_empty() && !filter.models.iter().any(|model| model == &event.model) {
-        return false;
-    }
-    true
+    filter.models.is_empty() || filter.models.iter().any(|model| model == &event.model)
 }
 
 fn timestamp_ge(occurred_at: &str, bound: &str) -> bool {

@@ -7,7 +7,7 @@
 //! 注意 `Authorization` 用的是 `token` 而不是 `Bearer`，这是这个内部端点认的方案；
 //! 另外要带上 Copilot 客户端那几个 `Editor-*` 头。
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use chrono::Utc;
@@ -29,7 +29,20 @@ const SNAPSHOTS: [(&str, &str, &str); 3] = [
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
     let token = load_token().ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    let raw = request_usage(&token)?;
+    fetch_with_access_token(&token)
+}
+
+/// 用调用方给的 token 取额度。不读本机配置。
+pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
+    fetch_with_access_token_at(token, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    token: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(USAGE_URL, quota_base);
+    let raw = request_usage(token, &url)?;
     Ok(QuotaSnapshot::new(parse_usage(&raw)?, Utc::now().to_rfc3339()).with_plan(parse_plan(&raw)))
 }
 
@@ -41,7 +54,7 @@ pub fn parse_plan(raw: &str) -> Option<String> {
         .and_then(display_plan_label)
 }
 
-fn config_home() -> PathBuf {
+pub(crate) fn config_home() -> PathBuf {
     std::env::var("XDG_CONFIG_HOME")
         .ok()
         .map(|raw| raw.trim().to_string())
@@ -51,12 +64,52 @@ fn config_home() -> PathBuf {
 }
 
 pub fn credential_paths() -> Vec<PathBuf> {
-    let config = config_home();
+    credential_paths_under(&config_home())
+}
+
+pub fn credential_paths_under(config_home: &Path) -> Vec<PathBuf> {
     vec![
-        config.join("github-copilot").join("apps.json"),
-        config.join("github-copilot").join("hosts.json"),
-        config.join("gh").join("hosts.yml"),
+        config_home.join("github-copilot").join("apps.json"),
+        config_home.join("github-copilot").join("hosts.json"),
+        config_home.join("gh").join("hosts.yml"),
     ]
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CopilotLogin {
+    pub token: String,
+    pub user: Option<String>,
+}
+
+/// 从显式配置目录或单个凭证文件读 token，以及同一条目里的 GitHub 用户名。
+/// 不读钥匙串，也不碰默认的 `XDG_CONFIG_HOME`。
+pub fn load_login_at(root: &Path) -> Option<CopilotLogin> {
+    let paths = if root.is_file() {
+        vec![root.to_path_buf()]
+    } else {
+        credential_paths_under(root)
+    };
+    for path in paths {
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let login = if is_yaml(&path) {
+            parse_gh_hosts_login(&raw)
+        } else {
+            parse_copilot_config_login(&raw)
+        };
+        if let Some((token, user)) = login {
+            return Some(CopilotLogin { token, user });
+        }
+    }
+    None
+}
+
+fn is_yaml(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|ext| ext.to_str()),
+        Some("yml" | "yaml")
+    )
 }
 
 fn load_token() -> Option<String> {
@@ -73,37 +126,77 @@ fn load_token() -> Option<String> {
 /// Copilot 插件的配置是个对象，键形如 `github.com:<clientId>`，值里带 `oauth_token`。
 /// 键名不稳定，所以扫所有条目，取第一个有 token 的。
 pub fn parse_copilot_config_token(raw: &str) -> Option<String> {
-    serde_json::from_str::<Value>(raw)
-        .ok()?
-        .as_object()?
-        .values()
-        .filter_map(|entry| entry.get("oauth_token").and_then(Value::as_str))
-        .map(str::trim)
-        .find(|token| !token.is_empty())
-        .map(str::to_string)
+    parse_copilot_config_login(raw).map(|(token, _)| token)
+}
+
+/// 第一个带 `oauth_token` 的条目。`user` 和 token 必须来自同一条，避免配错账号。
+pub fn parse_copilot_config_login(raw: &str) -> Option<(String, Option<String>)> {
+    let value: Value = serde_json::from_str(raw).ok()?;
+    let object = value.as_object()?;
+    for entry in object.values() {
+        let Some(token) = entry
+            .get("oauth_token")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+        else {
+            continue;
+        };
+        let user = entry
+            .get("user")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|user| !user.is_empty())
+            .map(str::to_string);
+        return Some((token.to_string(), user));
+    }
+    None
 }
 
 /// `gh` 的 hosts.yml 只需要取 `oauth_token:` 那一行，不值得引 YAML 依赖。
 /// 只认 github.com 段之后的第一个 token，避免读到企业实例的。
 pub fn parse_gh_hosts_token(raw: &str) -> Option<String> {
+    parse_gh_hosts_login(raw).map(|(token, _)| token)
+}
+
+fn yaml_scalar(trimmed: &str, key: &str) -> Option<String> {
+    let value = trimmed
+        .strip_prefix(key)?
+        .trim()
+        .trim_matches(['"', '\''])
+        .trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+/// `github.com` 段里的 `oauth_token` 和可选的 `user`。企业实例段一律忽略。
+pub fn parse_gh_hosts_login(raw: &str) -> Option<(String, Option<String>)> {
     let mut in_github_com = false;
+    let mut token = None;
+    let mut user = None;
     for line in raw.lines() {
         let trimmed = line.trim();
         if !line.starts_with([' ', '\t']) && trimmed.ends_with(':') {
+            if in_github_com {
+                break;
+            }
             in_github_com = trimmed == "github.com:";
             continue;
         }
         if !in_github_com {
             continue;
         }
-        if let Some(value) = trimmed.strip_prefix("oauth_token:") {
-            let token = value.trim().trim_matches(['"', '\'']).trim();
-            if !token.is_empty() {
-                return Some(token.to_string());
-            }
+        if token.is_none() {
+            token = yaml_scalar(trimmed, "oauth_token:");
+        }
+        if user.is_none() {
+            user = yaml_scalar(trimmed, "user:");
         }
     }
-    None
+    token.map(|token| (token, user))
 }
 
 /// `quota_snapshots.{premium_interactions,chat,completions}`，每档给的是**剩余**口径：
@@ -178,9 +271,9 @@ fn used_percent(node: &Value) -> Option<f64> {
     }
 }
 
-fn request_usage(token: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(USAGE_URL)
+fn request_usage(token: &str, url: &str) -> Result<String, String> {
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Authorization", &format!("token {token}"))
         .set("Accept", "application/json")
         .set("Editor-Version", "vscode/1.96.2")

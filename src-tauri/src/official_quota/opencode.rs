@@ -29,7 +29,22 @@ const WINDOWS: [(&str, &str, &str); 3] = [
 
 pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
     let key = load_api_key(&auth_path())?.ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    let raw = request_usage(&key)?;
+    fetch_with_access_token(&key)
+}
+
+/// 用调用方给的 API key 取用量。不读本机文件。
+pub(crate) fn fetch_with_access_token(
+    key: &str,
+) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    fetch_with_access_token_at(key, None)
+}
+
+pub(crate) fn fetch_with_access_token_at(
+    key: &str,
+    quota_base: Option<&str>,
+) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let url = super::rebase_quota_url(USAGE_URL, quota_base);
+    let raw = request_usage(key, &url)?;
     Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
 }
 
@@ -123,9 +138,9 @@ fn error_detail(body: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn request_usage(api_key: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(USAGE_URL)
+fn request_usage(api_key: &str, url: &str) -> Result<String, String> {
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Authorization", &format!("Bearer {api_key}"))
         .set("Accept", "application/json");
     match request.call() {

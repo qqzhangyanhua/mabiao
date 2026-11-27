@@ -15,14 +15,29 @@ pub fn fetch_usage_summary() -> Result<QuotaSnapshot, String> {
     let credential = cursor_credentials::read_local_credential()
         .filter(|value| !value.is_expired())
         .ok_or_else(cursor_account::missing_token_error)?;
-    let raw = request_usage_summary(&credential.session_token)?;
-    let windows = parse_usage_summary(&raw)?;
-    let plan = parse_membership_type(&raw).or_else(|| {
-        credential
+    let mut snapshot = fetch_with_session_token(&credential.session_token)?;
+    if snapshot.plan.is_none() {
+        snapshot.plan = credential
             .membership
             .as_deref()
-            .and_then(display_plan_label)
-    });
+            .and_then(display_plan_label);
+    }
+    Ok(snapshot)
+}
+
+/// 用已经拼好的 session cookie 取用量。不读本机库，也不刷新。
+pub(crate) fn fetch_with_session_token(token: &str) -> Result<QuotaSnapshot, String> {
+    fetch_with_session_token_at(token, None)
+}
+
+pub(crate) fn fetch_with_session_token_at(
+    token: &str,
+    quota_base: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    let url = super::rebase_quota_url(USAGE_SUMMARY_URL, quota_base);
+    let raw = request_usage_summary(token, &url)?;
+    let windows = parse_usage_summary(&raw)?;
+    let plan = parse_membership_type(&raw);
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
 }
 
@@ -148,9 +163,9 @@ fn percent_from_used_limit(plan: &Value) -> Option<f64> {
     Some((used / limit * 100.0).clamp(0.0, 100.0))
 }
 
-fn request_usage_summary(token: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(USAGE_SUMMARY_URL)
+fn request_usage_summary(token: &str, url: &str) -> Result<String, String> {
+    let request = crate::net::agent_for_url(url, TIMEOUT)
+        .get(url)
         .set("Cookie", &format!("WorkosCursorSessionToken={token}"))
         .set("Origin", "https://cursor.com");
     match request.call() {

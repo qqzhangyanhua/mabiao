@@ -100,6 +100,19 @@ describe("order helpers", () => {
 });
 
 describe("collapse helpers", () => {
+  it("collapses each quota-account id on its own", () => {
+    const work = "acct:codex:ab12";
+    const personal = "acct:codex:cd34";
+    expect(toggleTrayQuotaCollapsed([work], personal)).toEqual([work, personal]);
+    expect(isTrayQuotaCollapsed([work], personal)).toBe(false);
+    expect(
+      sortQuotaRows(
+        [{ provider: personal }, { provider: work }, { provider: "codex" }],
+        [],
+      ).map((row) => row.provider),
+    ).toEqual([personal, work, "codex"]);
+  });
+
   it("toggles a provider in the collapsed list", () => {
     expect(toggleTrayQuotaCollapsed([], "cursor")).toEqual(["cursor"]);
     expect(toggleTrayQuotaCollapsed(["cursor"], "cursor")).toEqual([]);

@@ -22,4 +22,9 @@ ignore = [
     # RUSTSEC-2024-0429（2024-03-30）glib 0.18 VariantStrIter unsound。
     # 同一条 GTK 0.18 链，Tauri 2.12 还没换栈。本应用不直接调用 VariantStrIter。
     "RUSTSEC-2024-0429",
+
+    # RUSTSEC-2026-0459（2026-11-27）libsqlite3-sys 经由 C SQLite CVE-2026-119375。
+    # 修补线是 >=0.39.0。rusqlite 0.40.2 要求 ^0.38.1，锁文件升不到 0.39。
+    # 等 rusqlite 放宽这个约束再撤。
+    "RUSTSEC-2026-0459",
 ]

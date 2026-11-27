@@ -50,6 +50,9 @@ fn custom_row(windows: Vec<OfficialQuotaWindow>) -> OfficialQuotaRow {
         error: None,
         todo: None,
         plan: None,
+        base_provider: None,
+        account_label: None,
+        is_active_local: false,
     }
 }
 
@@ -227,6 +230,9 @@ fn builtin_percent_windows_without_a_reset_time_still_do_not_alert() {
             error: None,
             todo: None,
             plan: None,
+            base_provider: None,
+            account_label: None,
+            is_active_local: false,
         }],
         true,
     );
