@@ -9,24 +9,25 @@ use push_protocol::{check_protocol_version, LoginRequest, LoginResponse, RemoteR
 use tower_http::services::ServeDir;
 
 use crate::api::{
-    AccountView, CoverageView, CreateMemberRequest, DeviceView, PricingOverview, RecomputeResponse,
-    SessionListQuery, SessionListResponse, SetTeamPriceRequest, SetTeamPriceResponse,
-    SnapshotMetaView, SummaryQuery, SummaryResponse,
+    AccountView, CreateMemberRequest, PricingOverview, RecomputeResponse, SessionListQuery,
+    SessionListResponse, SetTeamPriceRequest, SetTeamPriceResponse, SnapshotMetaView, SummaryQuery,
 };
 use crate::api_detail::{
-    AdminProjectView, MergeProjectRequest, MergeProjectResponse, ProjectDetailResponse,
-    ProjectView, RenameProjectRequest, SessionDetailView,
+    MergeProjectRequest, MergeProjectResponse, ProjectDetailResponse, RenameProjectRequest,
+    SessionDetailView,
 };
 use crate::auth::{AdminAccount, AuthedAccount};
+use crate::coverage::{self, MemberCoverage};
+use crate::devices::{self, DeviceRow};
 use crate::error::{ApiJson, ApiQuery, AppError};
-use crate::sessions::{self, parse_timestamp, SessionFilter};
-use crate::summary;
-use crate::team_pricing::{self, Scope};
-use crate::usage_query::{self, Filter};
+use crate::project_admin::{self, ProjectListRow, ProjectRow};
+use crate::scope::Scope;
+use crate::sessions::{self, SessionFilter};
+use crate::summary::{self, Summary};
+use crate::team_pricing;
+use crate::usage_query;
 use crate::work_timeline::{self, WorkTimelineQuery, WorkTimelineResponse};
-use crate::{
-    accounts, analytics, coverage, devices, password, project_admin, push, tokens, AppState,
-};
+use crate::{accounts, analytics, password, push, tokens, AppState};
 
 /// 注意：这里没有注册 / 自助开户的路由，账号只能由管理员接口或服务端命令行创建。
 pub fn router(state: AppState) -> Router {
@@ -142,15 +143,14 @@ async fn account_devices(
     State(state): State<AppState>,
     caller: AuthedAccount,
     Path(account_id): Path<i64>,
-) -> Result<Json<Vec<DeviceView>>, AppError> {
+) -> Result<Json<Vec<DeviceRow>>, AppError> {
     if !caller.can_access(account_id) {
         return Err(AppError::forbidden("只能查看自己的数据"));
     }
     if accounts::get(&state.pool, account_id).await?.is_none() {
         return Err(AppError::not_found("账号不存在"));
     }
-    let rows = devices::list(&state.pool, account_id).await?;
-    Ok(Json(rows.into_iter().map(Into::into).collect()))
+    Ok(Json(devices::list(&state.pool, account_id).await?))
 }
 
 async fn admin_list_accounts(
@@ -193,9 +193,8 @@ async fn admin_deactivate_account(
 async fn admin_coverage(
     State(state): State<AppState>,
     _admin: AdminAccount,
-) -> Result<Json<Vec<CoverageView>>, AppError> {
-    let rows = coverage::list(&state.pool).await?;
-    Ok(Json(rows.into_iter().map(Into::into).collect()))
+) -> Result<Json<Vec<MemberCoverage>>, AppError> {
+    Ok(Json(coverage::list(&state.pool).await?))
 }
 
 async fn admin_pricing(
@@ -205,7 +204,7 @@ async fn admin_pricing(
     let prices = team_pricing::list(&state.pool).await?;
     let snapshot = team_pricing::builtin_snapshot();
     Ok(Json(PricingOverview {
-        prices: prices.into_iter().map(Into::into).collect(),
+        prices,
         snapshot: SnapshotMetaView {
             as_of: snapshot.as_of.clone(),
             source: snapshot.source.clone(),
@@ -225,10 +224,11 @@ async fn admin_set_price(
     team_pricing::lock_exclusive(&mut tx).await?;
     let row = team_pricing::upsert(&mut tx, &price, admin.id).await?;
     let table = team_pricing::load_table(&mut tx).await?;
-    let recomputed = team_pricing::recompute(&mut tx, &table, Scope::Model(&row.model)).await?;
+    let recomputed =
+        team_pricing::recompute(&mut tx, &table, team_pricing::Scope::Model(&row.model)).await?;
     tx.commit().await?;
     Ok(Json(SetTeamPriceResponse {
-        price: row.into(),
+        price: row,
         recomputed,
     }))
 }
@@ -245,7 +245,8 @@ async fn admin_delete_price(
         .await?
         .ok_or_else(|| AppError::not_found("团队价目不存在"))?;
     let table = team_pricing::load_table(&mut tx).await?;
-    let recomputed = team_pricing::recompute(&mut tx, &table, Scope::Model(&model)).await?;
+    let recomputed =
+        team_pricing::recompute(&mut tx, &table, team_pricing::Scope::Model(&model)).await?;
     tx.commit().await?;
     Ok(Json(RecomputeResponse { recomputed }))
 }
@@ -255,48 +256,8 @@ async fn admin_recompute(
     State(state): State<AppState>,
     _admin: AdminAccount,
 ) -> Result<Json<RecomputeResponse>, AppError> {
-    let recomputed = team_pricing::recompute_locked(&state.pool, Scope::All).await?;
+    let recomputed = team_pricing::recompute_locked(&state.pool, team_pricing::Scope::All).await?;
     Ok(Json(RecomputeResponse { recomputed }))
-}
-
-fn parse_bound(
-    name: &str,
-    value: Option<&str>,
-) -> Result<Option<chrono::DateTime<chrono::Utc>>, AppError> {
-    value
-        .map(|text| {
-            parse_timestamp(text)
-                .ok_or_else(|| AppError::invalid(format!("{name} 不是 RFC 3339 时间")))
-        })
-        .transpose()
-}
-
-pub(crate) fn build_filter(
-    account_id: Option<i64>,
-    project_id: Option<i64>,
-    from: Option<&str>,
-    to: Option<&str>,
-) -> Result<Filter, AppError> {
-    Ok(Filter {
-        account_id,
-        project_id,
-        from: parse_bound("from", from)?,
-        to: parse_bound("to", to)?,
-    })
-}
-
-/// 成员只看自己的；管理员默认看全体，可用 `account_id` 收窄。
-/// 成员指定别人的 `account_id` 得到 403，与其它按账号归属的接口走同一个 `can_access`。
-pub(crate) fn scope_account(
-    caller: &AuthedAccount,
-    requested: Option<i64>,
-) -> Result<Option<i64>, AppError> {
-    match requested {
-        Some(id) if !caller.can_access(id) => Err(AppError::forbidden("只能查看自己的数据")),
-        Some(id) => Ok(Some(id)),
-        None if caller.is_admin() => Ok(None),
-        None => Ok(Some(caller.id)),
-    }
 }
 
 pub(crate) fn parse_paging(
@@ -330,17 +291,10 @@ async fn usage_summary(
     State(state): State<AppState>,
     caller: AuthedAccount,
     ApiQuery(query): ApiQuery<SummaryQuery>,
-) -> Result<Json<SummaryResponse>, AppError> {
-    let account_id = scope_account(&caller, query.account_id)?;
+) -> Result<Json<Summary>, AppError> {
+    let scope = Scope::resolve(&state.pool, &caller, query.scope_input()).await?;
     let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
-    let filter = build_filter(
-        account_id,
-        query.project_id,
-        query.from.as_deref(),
-        query.to.as_deref(),
-    )?;
-    let result = summary::build(&state.pool, &filter, tz_offset).await?;
-    Ok(Json(result.into()))
+    Ok(Json(summary::build(&state.pool, &scope, tz_offset).await?))
 }
 
 /// 工作时间线：已推送会话按重叠裁到本地日历日，挂上当天消耗。聚合在服务端做。
@@ -349,20 +303,14 @@ async fn work_timeline(
     caller: AuthedAccount,
     ApiQuery(query): ApiQuery<WorkTimelineQuery>,
 ) -> Result<Json<WorkTimelineResponse>, AppError> {
-    let account_id = scope_account(&caller, query.account_id)?;
+    let scope = Scope::resolve(&state.pool, &caller, query.scope_input()).await?;
     let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
-    let filter = build_filter(
-        account_id,
-        query.project_id,
-        query.from.as_deref(),
-        query.to.as_deref(),
-    )?;
     let source = query
         .source
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty());
-    let result = work_timeline::build(&state.pool, &filter, source, tz_offset).await?;
+    let result = work_timeline::build(&state.pool, &scope, source, tz_offset).await?;
     Ok(Json(result))
 }
 
@@ -372,24 +320,15 @@ async fn session_list(
     caller: AuthedAccount,
     ApiQuery(query): ApiQuery<SessionListQuery>,
 ) -> Result<Json<SessionListResponse>, AppError> {
-    let account_id = scope_account(&caller, query.account_id)?;
+    let scope = Scope::resolve(&state.pool, &caller, query.scope_input()).await?;
     let (limit, offset) = parse_paging(query.limit, query.offset)?;
-    let filter = build_filter(
-        account_id,
-        query.project_id,
-        query.from.as_deref(),
-        query.to.as_deref(),
-    )?;
     let filter = SessionFilter {
-        scope: filter,
+        scope,
         generated_by_work_notes: query.generated_by_work_notes,
     };
-    let rows = sessions::list(&state.pool, &filter, limit, offset).await?;
+    let sessions = sessions::list(&state.pool, &filter, limit, offset).await?;
     let total = sessions::count(&state.pool, &filter).await?;
-    Ok(Json(SessionListResponse {
-        sessions: rows.into_iter().map(Into::into).collect(),
-        total,
-    }))
+    Ok(Json(SessionListResponse { sessions, total }))
 }
 
 /// 单场会话全文（正文、工具调用、上下文清单、本场消耗）。
@@ -419,45 +358,33 @@ async fn session_detail(
     Ok(Json(SessionDetailView::new(row, usage)))
 }
 
-/// 项目页：谁在这个项目上花了多少。项目是团队共享的，用量仍按 `scope_account` 收窄，
-/// 成员只看到自己的那部分，指定别人的 `account_id` 得 403。
+/// 项目页：谁在这个项目上花了多少。项目是团队共享的，用量仍按 `Scope` 收窄，
+/// 成员只看到自己的那部分，指定别人的 `account_id` 得 403，未做过或已合并的项目得 404。
 async fn project_detail(
     State(state): State<AppState>,
     caller: AuthedAccount,
     Path(id): Path<i64>,
     ApiQuery(query): ApiQuery<SummaryQuery>,
 ) -> Result<Json<ProjectDetailResponse>, AppError> {
-    let account_id = scope_account(&caller, query.account_id)?;
-    let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
-    let project = project_admin::get(&state.pool, id)
-        .await?
-        .ok_or_else(|| AppError::not_found("项目不存在"))?;
-    if project.merged_into.is_some() {
-        return Err(AppError::not_found("项目已被合并到别的项目"));
-    }
-    // 项目名与 remote 是团队共享的，但成员只该看到自己做过的项目。
-    if !caller.is_admin() && !project_admin::has_data_of(&state.pool, id, caller.id).await? {
-        return Err(AppError::not_found("项目不存在"));
-    }
-    let filter = build_filter(
-        account_id,
-        Some(id),
+    let (scope, project) = Scope::resolve_project(
+        &state.pool,
+        &caller,
+        id,
+        query.account_id,
         query.from.as_deref(),
         query.to.as_deref(),
-    )?;
-    let result = summary::build(&state.pool, &filter, tz_offset).await?;
-    Ok(Json(ProjectDetailResponse {
-        project: ProjectView::from(project),
-        summary: result.into(),
-    }))
+    )
+    .await?;
+    let tz_offset = parse_tz_offset(query.tz_offset_minutes)?;
+    let summary = summary::build(&state.pool, &scope, tz_offset).await?;
+    Ok(Json(ProjectDetailResponse { project, summary }))
 }
 
 async fn admin_projects(
     State(state): State<AppState>,
     _admin: AdminAccount,
-) -> Result<Json<Vec<AdminProjectView>>, AppError> {
-    let rows = project_admin::list_live(&state.pool).await?;
-    Ok(Json(rows.into_iter().map(Into::into).collect()))
+) -> Result<Json<Vec<ProjectListRow>>, AppError> {
+    Ok(Json(project_admin::list_live(&state.pool).await?))
 }
 
 async fn admin_rename_project(
@@ -465,10 +392,9 @@ async fn admin_rename_project(
     _admin: AdminAccount,
     Path(id): Path<i64>,
     ApiJson(request): ApiJson<RenameProjectRequest>,
-) -> Result<Json<ProjectView>, AppError> {
+) -> Result<Json<ProjectRow>, AppError> {
     let name = project_admin::normalize_name(&request.name)?;
-    let row = project_admin::rename(&state.pool, id, &name).await?;
-    Ok(Json(row.into()))
+    Ok(Json(project_admin::rename(&state.pool, id, &name).await?))
 }
 
 /// 把 `{id}` 并进 `into_project_id`：历史会话、消耗记录改挂目标，之后的推送也归到目标。
@@ -482,7 +408,7 @@ async fn admin_merge_project(
     let outcome = project_admin::merge(&mut tx, id, request.into_project_id).await?;
     tx.commit().await?;
     Ok(Json(MergeProjectResponse {
-        project: outcome.target.into(),
+        project: outcome.target,
         sessions_moved: outcome.sessions_moved,
         usage_records_moved: outcome.usage_records_moved,
     }))

@@ -8,78 +8,8 @@ use serde_json::{json, Value};
 
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    let roots = overrides
-        .get("OPENCODE_DATA_DIR")
-        .cloned()
-        .unwrap_or_else(|| vec![home.join(".local/share/opencode")]);
-    let db = overrides.get("OPENCODE_DB").and_then(|paths| paths.first());
-    if db.is_none() {
-        let mut found: Vec<PathBuf> = roots
-            .iter()
-            .flat_map(|root| list_opencode_dbs(root))
-            .collect();
-        found.sort();
-        found.dedup();
-        if !found.is_empty() {
-            return found;
-        }
-    }
-    let mut planned: Vec<PathBuf> = roots.iter().map(|root| db_file(root, db)).collect();
-    planned.sort();
-    planned.dedup();
-    let existing: Vec<PathBuf> = planned
-        .iter()
-        .filter(|path| path.is_file())
-        .cloned()
-        .collect();
-    if !existing.is_empty() {
-        return existing;
-    }
-    // 绝对路径的库还不存在时，旧 JSON 仍在数据目录的 storage/ 下，不在那个绝对路径旁边。
-    if db.is_some_and(|path| path.is_absolute()) {
-        let mut fallback: Vec<PathBuf> =
-            roots.iter().map(|root| root.join("opencode.db")).collect();
-        fallback.sort();
-        fallback.dedup();
-        return fallback;
-    }
-    planned
-}
-
-/// 数据目录的环境变量补进覆盖表。`OPENCODE_DATA_DIR` 已有（设置页或同名环境变量）时
-/// 不再用 `XDG_DATA_HOME`。`OPENCODE_DB` 是库文件名或绝对路径，不是另一个数据根。
-pub(crate) fn apply_env(overrides: &mut PathOverrides) {
-    let xdg = trimmed_env("XDG_DATA_HOME");
-    let db = trimmed_env("OPENCODE_DB").filter(|value| value != ":memory:");
-    apply_env_values(overrides, xdg.as_deref(), db.as_deref());
-}
-
-pub(crate) fn apply_env_values(
-    overrides: &mut PathOverrides,
-    xdg_data_home: Option<&str>,
-    opencode_db: Option<&str>,
-) {
-    if !overrides.contains_key("OPENCODE_DATA_DIR") {
-        if let Some(xdg) = xdg_data_home
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            overrides.insert(
-                "OPENCODE_DATA_DIR",
-                vec![PathBuf::from(xdg).join("opencode")],
-            );
-        }
-    }
-    if let Some(db) = opencode_db
-        .map(str::trim)
-        .filter(|value| !value.is_empty() && *value != ":memory:")
-    {
-        overrides.insert("OPENCODE_DB", vec![PathBuf::from(db)]);
-    }
-}
+use crate::ingest;
+use crate::source_sqlite::{self, column_exists, open_plain_readonly, table_exists};
 
 /// 有 `opencode.db` / `opencode-*.db`（或 `OPENCODE_DB`）就只读库。库不在时才读
 /// 1.2 以前留在 `storage/session/<项目>/<id>.json` 的会话；库是从这些文件迁出来的，两边都在时只读库。
@@ -104,8 +34,7 @@ pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
     if is_legacy_session(path) {
         return legacy_sidecar(path);
     }
-    let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
-    ingest::metadata_fingerprint(&wal)
+    source_sqlite::wal_fingerprint(path)
 }
 
 pub(crate) fn is_legacy_session(path: &Path) -> bool {
@@ -142,7 +71,7 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
     if is_legacy_session(path) {
         return parse_legacy_session(path);
     }
-    let source_db = ingest::open_readonly(path)?;
+    let source_db = open_plain_readonly(path)?;
     let loc = path.to_string_lossy().into_owned();
     let mut messages = Vec::new();
     if table_exists(&source_db, "session_message") {
@@ -355,52 +284,6 @@ fn v1_session_ids_to_skip(db: &Connection) -> Result<HashSet<String>, String> {
         .map_err(|e| e.to_string())
 }
 
-fn table_exists(db: &Connection, name: &str) -> bool {
-    db.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
-        [name],
-        |row| row.get::<_, i64>(0),
-    )
-    .ok()
-    .is_some_and(|n| n > 0)
-}
-
-fn column_exists(db: &Connection, table: &str, column: &str) -> bool {
-    let sql = match table {
-        "session_message" => "PRAGMA table_info(session_message)",
-        "session_v2" => "PRAGMA table_info(session_v2)",
-        _ => return false,
-    };
-    let Ok(mut stmt) = db.prepare(sql) else {
-        return false;
-    };
-    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) else {
-        return false;
-    };
-    let names: Vec<String> = rows.flatten().collect();
-    names.iter().any(|name| name == column)
-}
-
-fn list_opencode_dbs(root: &Path) -> Vec<PathBuf> {
-    if root.is_file() {
-        return vec![root.to_path_buf()];
-    }
-    let Ok(entries) = fs::read_dir(root) else {
-        return Vec::new();
-    };
-    let mut files = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let Some(name) = path.file_name().and_then(OsStr::to_str) else {
-            continue;
-        };
-        if name == "opencode.db" || (name.starts_with("opencode-") && name.ends_with(".db")) {
-            files.push(path);
-        }
-    }
-    files
-}
-
 fn migration_completed(db: &Connection) -> bool {
     if !table_exists(db, "kv") {
         return false;
@@ -422,21 +305,6 @@ fn millis_to_rfc3339(ms: i64) -> String {
     chrono::DateTime::from_timestamp_millis(ms)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_default()
-}
-
-fn db_file(root: &Path, db: Option<&PathBuf>) -> PathBuf {
-    match db {
-        Some(path) if path.is_absolute() => path.clone(),
-        Some(path) => root.join(path),
-        None => root.join("opencode.db"),
-    }
-}
-
-fn trimmed_env(key: &str) -> Option<String> {
-    std::env::var(key)
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
 }
 
 fn ancestor_name(path: &Path, generations: usize) -> Option<&str> {

@@ -7,31 +7,7 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Windsurf / Devin Desktop 把 ACP 事件写成 `User/acp-events/*.ndjson`。
-///
-/// 只读 `sessionUpdate=usage_update` 的 `_meta`：
-/// `cognition.ai/inputTokens`（累计，含 cache read）、`cachedReadTokens`、
-/// `cachedWriteTokens`、`outputTokens`（逐步相加）。无模型名则跳过。
-/// `WINDSURF_ACP_HOME` 整体替换，指向 `acp-events` 目录。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("WINDSURF_ACP_HOME")
-        .cloned()
-        .unwrap_or_else(|| {
-            ["Devin", "Windsurf"]
-                .into_iter()
-                .flat_map(|app| {
-                    [
-                        home.join(format!(".config/{app}/User/acp-events")),
-                        home.join(format!("Library/Application Support/{app}/User/acp-events")),
-                        home.join(format!("AppData/Roaming/{app}/User/acp-events")),
-                    ]
-                })
-                .collect()
-        })
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

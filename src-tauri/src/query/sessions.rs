@@ -19,6 +19,17 @@ pub fn top_sessions(
         return Ok(Vec::new());
     }
     install_prices(conn, prices)?;
+    top_sessions_installed(conn, filter, limit)
+}
+
+pub(super) fn top_sessions_installed(
+    conn: &Connection,
+    filter: &Filter,
+    limit: usize,
+) -> Result<Vec<SessionRow>, String> {
+    if limit == 0 {
+        return Ok(Vec::new());
+    }
     let inner = rollup_source(
         &rollup_plan(
             filter.from.as_deref(),

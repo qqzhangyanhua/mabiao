@@ -6,7 +6,9 @@ use serde_json::Value;
 
 use super::toolbox::*;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
-use crate::ingest;
+use crate::source_sqlite::{
+    open_wal_readonly, row_opt_string, sql_coalesce, table_columns, wal_source_revision,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
@@ -34,7 +36,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::regular_source_revision(path)
+    wal_source_revision(path, "Alma")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -51,7 +53,7 @@ fn project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Alma 数据库失败：{error}")))?;
     let threads = table_columns(&db, "chat_threads").map_err(|message| fatal(path, message))?;
     if !threads.contains("id") {
@@ -115,10 +117,10 @@ fn read_threads(
          FROM chat_threads t{join}
          WHERE {skip}{filter}
          ORDER BY t.id",
-        title = coalesce(threads, "t", "title", "''"),
-        model = coalesce(threads, "t", "model", "''"),
-        created = coalesce(threads, "t", "created_at", "''"),
-        updated = coalesce(threads, "t", "updated_at", "''"),
+        title = sql_coalesce(threads, "t", "title", "''"),
+        model = sql_coalesce(threads, "t", "model", "''"),
+        created = sql_coalesce(threads, "t", "created_at", "''"),
+        updated = sql_coalesce(threads, "t", "updated_at", "''"),
         skip = skip_thread_sql(threads),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
@@ -126,11 +128,11 @@ fn read_threads(
         .query_map([], |row| {
             Ok(ThreadRow {
                 id: row.get(0)?,
-                title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                model: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                created_at: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
-                updated_at: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
-                project: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                title: row_opt_string(row, 1)?,
+                model: row_opt_string(row, 2)?,
+                created_at: row_opt_string(row, 3)?,
+                updated_at: row_opt_string(row, 4)?,
+                project: row_opt_string(row, 5)?,
             })
         })
         .map_err(|error| error.to_string())?
@@ -153,21 +155,9 @@ fn project_thread(
     } else {
         "rowid"
     };
-    let parent_tool = if message_cols.contains("parent_tool_call_id") {
-        "COALESCE(parent_tool_call_id, '')"
-    } else {
-        "''"
-    };
-    let timestamp = if message_cols.contains("timestamp") {
-        "COALESCE(timestamp, '')"
-    } else {
-        "''"
-    };
-    let metadata = if message_cols.contains("metadata") {
-        "COALESCE(metadata, '{}')"
-    } else {
-        "'{}'"
-    };
+    let parent_tool = sql_coalesce(message_cols, "", "parent_tool_call_id", "''");
+    let timestamp = sql_coalesce(message_cols, "", "timestamp", "''");
+    let metadata = sql_coalesce(message_cols, "", "metadata", "'{}'");
     let sql = format!(
         "SELECT message, {timestamp}, {metadata}, {parent_tool}
          FROM chat_messages WHERE thread_id = ?1 ORDER BY {order}, rowid"
@@ -177,7 +167,7 @@ fn project_thread(
         .query_map([&thread.id], |row| {
             Ok((
                 row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                row_opt_string(row, 1)?,
                 row.get::<_, Option<String>>(2)?.unwrap_or_default(),
                 row.get::<_, Option<String>>(3)?.unwrap_or_default(),
             ))
@@ -312,29 +302,5 @@ fn skip_thread_sql(cols: &BTreeSet<String>) -> String {
         "1 = 1".to_string()
     } else {
         conds.join(" AND ")
-    }
-}
-
-fn table_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut statement = db
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows)
-}
-
-fn coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {
-    if columns.contains(name) {
-        if alias.is_empty() {
-            format!("COALESCE({name}, {fallback})")
-        } else {
-            format!("COALESCE({alias}.{name}, {fallback})")
-        }
-    } else {
-        fallback.to_string()
     }
 }

@@ -49,30 +49,23 @@ pub(crate) fn fetch_with_access_token_at(
 }
 
 pub fn data_dir() -> PathBuf {
-    for key in ["OPENCODE_DATA_DIR", "XDG_DATA_HOME"] {
-        let Some(value) = std::env::var(key)
-            .ok()
-            .map(|raw| raw.trim().to_string())
-            .filter(|raw| !raw.is_empty())
-        else {
-            continue;
-        };
-        let base = PathBuf::from(value);
-        // XDG_DATA_HOME 指的是所有应用共享的根，要再进一层。
-        return if key == "XDG_DATA_HOME" {
-            base.join("opencode")
-        } else {
-            base
-        };
-    }
-    crate::ingest::default_home()
-        .join(".local")
-        .join("share")
-        .join("opencode")
+    data_dir_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
+}
+
+pub(crate) fn data_dir_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    env.client_credential_root(crate::domain::Source::Opencode, "auth.json")
 }
 
 pub fn auth_path() -> PathBuf {
-    data_dir().join("auth.json")
+    auth_path_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
+}
+
+pub(crate) fn auth_path_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    data_dir_in(env).join("auth.json")
 }
 
 /// 文件缺失 → `Ok(None)`（没登录）；文件在但坏了 → `Err`（别当成没登录）。

@@ -177,16 +177,26 @@ pub fn load_summary_filtered(
     filter: Option<&Filter>,
 ) -> Result<CursorAccountUsageDto, String> {
     let events = store::load_cursor_account_events(conn)?;
-    let filtered = match filter {
+    let as_of = store::cursor_account_as_of(conn)?;
+    Ok(summarize_events_filtered(&events, filter, as_of))
+}
+
+pub(crate) fn summarize_events_filtered(
+    events: &[CursorUsageEvent],
+    filter: Option<&Filter>,
+    as_of: Option<String>,
+) -> CursorAccountUsageDto {
+    let filtered: Vec<CursorUsageEvent> = match filter {
         Some(filter) => events
-            .into_iter()
+            .iter()
             .filter(|event| event_matches_filter(event, filter))
+            .cloned()
             .collect(),
-        None => events,
+        None => events.to_vec(),
     };
     let mut dto = summarize_cursor_usage(&filtered);
-    dto.as_of = store::cursor_account_as_of(conn)?;
-    Ok(dto)
+    dto.as_of = as_of;
+    dto
 }
 
 /// 供来源统计挂一行：认时间与模型，不套用来源/项目/provider。
@@ -194,6 +204,14 @@ pub fn events_for_application_analytics(
     conn: &Connection,
     filter: &Filter,
 ) -> Result<Vec<CursorUsageEvent>, String> {
+    let events = store::load_cursor_account_events(conn)?;
+    Ok(filter_events_for_application_analytics(&events, filter))
+}
+
+pub(crate) fn filter_events_for_application_analytics(
+    events: &[CursorUsageEvent],
+    filter: &Filter,
+) -> Vec<CursorUsageEvent> {
     let scoped = Filter {
         from: filter.from.clone(),
         to: filter.to.clone(),
@@ -202,11 +220,11 @@ pub fn events_for_application_analytics(
         projects: Vec::new(),
         providers: Vec::new(),
     };
-    let events = store::load_cursor_account_events(conn)?;
-    Ok(events
-        .into_iter()
+    events
+        .iter()
         .filter(|event| event_matches_filter(event, &scoped))
-        .collect())
+        .cloned()
+        .collect()
 }
 
 /// 供概览 7 天滚动挂一行：只认模型筛选，不套用来源/项目/provider，也不跟总览日期预设。
@@ -214,13 +232,21 @@ pub fn events_for_weekly_window(
     conn: &Connection,
     filter: &Filter,
 ) -> Result<Vec<CursorUsageEvent>, String> {
+    let events = store::load_cursor_account_events(conn)?;
+    Ok(filter_events_for_weekly_window(&events, filter))
+}
+
+pub(crate) fn filter_events_for_weekly_window(
+    events: &[CursorUsageEvent],
+    filter: &Filter,
+) -> Vec<CursorUsageEvent> {
     if !filter.sources.is_empty()
         && !filter
             .sources
             .iter()
             .any(|source| source == crate::billing_window::CURSOR_WEEKLY_SOURCE)
     {
-        return Ok(Vec::new());
+        return Vec::new();
     }
     let scoped = Filter {
         from: None,
@@ -230,11 +256,11 @@ pub fn events_for_weekly_window(
         projects: Vec::new(),
         providers: Vec::new(),
     };
-    let events = store::load_cursor_account_events(conn)?;
-    Ok(events
-        .into_iter()
+    events
+        .iter()
         .filter(|event| event_matches_filter(event, &scoped))
-        .collect())
+        .cloned()
+        .collect()
 }
 
 /// 账号用量只认时间与模型；来源 / 项目 / provider 是本机消耗记录维度，不套到这里。

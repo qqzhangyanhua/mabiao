@@ -6,17 +6,6 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
-
-/// OpenClaw 会话写在 `$OPENCLAW_STATE_DIR/agents/<agent>/sessions/`，
-/// 默认 `~/.openclaw`；升级前的 `~/.clawdbot` 一并扫。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("OPENCLAW_STATE_DIR")
-        .cloned()
-        .map(|roots| roots.into_iter().map(|root| root.join("agents")).collect())
-        .unwrap_or_else(|| vec![home.join(".openclaw/agents"), home.join(".clawdbot/agents")])
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

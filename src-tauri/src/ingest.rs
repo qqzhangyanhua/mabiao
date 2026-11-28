@@ -18,32 +18,19 @@ use crate::cursor_session;
 use crate::domain::{
     IngestIssue, IngestReport, Source, SourceDiagnostic, SourceIngestReport, UsageRecord,
 };
+use crate::scan_paths::ScanEnv;
 use crate::store;
 
 pub fn default_home() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
 }
 
-/// 环境变量覆盖表：键为环境变量名，值为解析后的根目录列表。只在真正设置了变量时才有
-/// 条目。用一个显式的 map 而不是在各处直接读 `std::env::var`，是为了让路径拼接逻辑可以
-/// 脱离进程级环境变量单独做单元测试（并行跑测试时修改真实环境变量并不安全）。
+/// 环境变量覆盖表：键为环境变量名，值为解析后的根目录列表。
+/// 新代码与测试请优先直接构造 [`ScanEnv`] 快照。
 pub(crate) type PathOverrides = BTreeMap<&'static str, Vec<PathBuf>>;
 
-pub(crate) fn env_overrides() -> PathOverrides {
-    let mut overrides: PathOverrides = Source::ALL
-        .iter()
-        .copied()
-        .filter_map(|source| {
-            let var = usage_adapter(source).path_env;
-            env_override(var).map(|paths| (var, paths))
-        })
-        .collect();
-    // OpenCode 另外认 XDG_DATA_HOME 与 OPENCODE_DB。逻辑留在适配器里。
-    crate::adapters::opencode::apply_env(&mut overrides);
-    overrides
-}
-
 /// 设置页覆盖叠在环境变量上：同一来源以设置页为准，未填写的来源仍走环境变量。
+#[cfg(test)]
 pub(crate) fn merge_path_overrides(mut env: PathOverrides, file: PathOverrides) -> PathOverrides {
     for (key, paths) in file {
         env.insert(key, paths);
@@ -51,76 +38,19 @@ pub(crate) fn merge_path_overrides(mut env: PathOverrides, file: PathOverrides) 
     env
 }
 
-/// 生产环境读取设置页文件 + 环境变量。测试里不碰真实 `scan_paths.json`，只读进程环境变量。
-pub(crate) fn path_overrides() -> PathOverrides {
-    #[cfg(test)]
-    {
-        env_overrides()
-    }
-    #[cfg(not(test))]
-    {
-        merge_path_overrides(
-            env_overrides(),
-            crate::scan_paths::load_overrides(&crate::scan_paths::config_path()),
-        )
-    }
-}
-
+#[cfg(test)]
 pub(crate) fn source_scan_dirs(home: &Path, source: Source) -> Vec<PathBuf> {
-    source_scan_dirs_with(&path_overrides(), home, source)
+    ScanEnv::capture_for_home(home).usage_scan_dirs(source)
 }
 
-fn env_override(var: &str) -> Option<Vec<PathBuf>> {
-    let raw = std::env::var(var).ok()?;
-    let paths: Vec<PathBuf> = raw
-        .split(',')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .map(PathBuf::from)
-        .collect();
-    (!paths.is_empty()).then_some(paths)
-}
-
-/// 解析某个 Source 的根目录列表：覆盖表（设置页优先于环境变量）整体替换默认的 home 相对路径；
-/// 两种情况都按同样的规则拼接叶子子路径（`leaf` 为空表示根目录本身就是扫描目标）。
-pub(crate) fn resolve_dirs(
-    overrides: &PathOverrides,
-    home: &Path,
-    env_var: &str,
-    default_relative: &str,
-    leaf: &str,
-) -> Vec<PathBuf> {
-    let roots = overrides
-        .get(env_var)
-        .cloned()
-        .unwrap_or_else(|| vec![home.join(default_relative)]);
-    if leaf.is_empty() {
-        roots
-    } else {
-        roots.into_iter().map(|root| root.join(leaf)).collect()
-    }
-}
-
-/// 每个来源实际要扫描的目录（可能不止一个），一律从表里取。
-/// 未覆盖默认路径时，Windows 还会并上各 WSL 发行版用户家目录里的同一相对路径。
+/// 每个来源实际要扫描的目录（可能不止一个），统一走 [`ScanEnv`] 的声明式路径解析。
+#[cfg(test)]
 pub(crate) fn source_scan_dirs_with(
     overrides: &PathOverrides,
     home: &Path,
     source: Source,
 ) -> Vec<PathBuf> {
-    let adapter = usage_adapter(source);
-    if overrides.contains_key(adapter.path_env) {
-        return (adapter.scan_dirs)(overrides, home);
-    }
-    let mut dirs = Vec::new();
-    for scan_home in crate::wsl::scan_homes(home) {
-        for path in (adapter.scan_dirs)(overrides, &scan_home) {
-            if !dirs.contains(&path) {
-                dirs.push(path);
-            }
-        }
-    }
-    dirs
+    ScanEnv::from_overrides(home, overrides).usage_scan_dirs(source)
 }
 
 /// 用量阶段与对话目录阶段串行同步跑完，结果与一次完整摄取相同。
@@ -134,7 +64,12 @@ pub fn ingest_all_with_mode(
     home: &Path,
     mode: CatalogMode,
 ) -> Result<IngestReport, String> {
-    ingest_all_with_overrides_timed(conn, home, &path_overrides(), mode).map(|(report, _)| report)
+    let env = ScanEnv::capture_for_home(home);
+    ingest_all_with_env_timed(conn, &env, mode).map(|(report, _)| report)
+}
+
+pub fn ingest_all_with_env(conn: &Connection, env: &ScanEnv) -> Result<IngestReport, String> {
+    ingest_all_with_env_timed(conn, env, CatalogMode::Full).map(|(report, _)| report)
 }
 
 /// 用量阶段各步耗时。
@@ -171,7 +106,8 @@ pub fn ingest_all_timed(
     conn: &Connection,
     home: &Path,
 ) -> Result<(IngestReport, IngestPhaseTimings), String> {
-    ingest_all_with_overrides_timed(conn, home, &path_overrides(), CatalogMode::Full)
+    let env = ScanEnv::capture_for_home(home);
+    ingest_all_with_env_timed(conn, &env, CatalogMode::Full)
 }
 
 /// 用量阶段：清理未知来源、全部来源的消耗记录、Cursor 会话、预聚合，一个事务提交。
@@ -185,7 +121,12 @@ pub fn ingest_usage_timed(
     conn: &Connection,
     home: &Path,
 ) -> Result<(IngestReport, UsagePhaseTimings), String> {
-    ingest_usage_with_overrides_timed(conn, home, &path_overrides())
+    let env = ScanEnv::capture_for_home(home);
+    ingest_usage_with_env_timed(conn, &env)
+}
+
+pub fn ingest_usage_with_env(conn: &Connection, env: &ScanEnv) -> Result<IngestReport, String> {
+    ingest_usage_with_env_timed(conn, env).map(|(report, _)| report)
 }
 
 /// 供测试直接注入路径覆盖表。
@@ -195,7 +136,8 @@ pub(crate) fn ingest_usage_with_overrides(
     home: &Path,
     overrides: &PathOverrides,
 ) -> Result<IngestReport, String> {
-    ingest_usage_with_overrides_timed(conn, home, overrides).map(|(report, _)| report)
+    let env = ScanEnv::from_overrides(home, overrides);
+    ingest_usage_with_env_timed(conn, &env).map(|(report, _)| report)
 }
 
 /// 对话目录阶段怎样对待需要整份解析的会话。
@@ -233,8 +175,22 @@ where
     A: FnMut() -> Result<C, String>,
     P: FnMut(CatalogProgress),
 {
-    refresh_conversation_catalogs_timed(acquire, home, &path_overrides(), mode, on_progress)
-        .map(|(issues, _)| issues)
+    let env = ScanEnv::capture_for_home(home);
+    refresh_conversation_catalogs_with_env(acquire, &env, mode, on_progress)
+}
+
+pub fn refresh_conversation_catalogs_with_env<C, A, P>(
+    acquire: A,
+    env: &ScanEnv,
+    mode: CatalogMode,
+    on_progress: P,
+) -> Result<Vec<IngestIssue>, String>
+where
+    C: Deref<Target = Connection>,
+    A: FnMut() -> Result<C, String>,
+    P: FnMut(CatalogProgress),
+{
+    refresh_conversation_catalogs_timed(acquire, env, mode, on_progress).map(|(issues, _)| issues)
 }
 
 /// 供测试直接注入路径覆盖表。
@@ -251,14 +207,13 @@ where
     A: FnMut() -> Result<C, String>,
     P: FnMut(CatalogProgress),
 {
-    refresh_conversation_catalogs_timed(acquire, home, overrides, mode, on_progress)
-        .map(|(issues, _)| issues)
+    let env = ScanEnv::from_overrides(home, overrides);
+    refresh_conversation_catalogs_timed(acquire, &env, mode, on_progress).map(|(issues, _)| issues)
 }
 
 fn refresh_conversation_catalogs_timed<C, A, P>(
     mut acquire: A,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     mode: CatalogMode,
     mut on_progress: P,
 ) -> Result<(Vec<IngestIssue>, CatalogPhaseTimings), String>
@@ -281,15 +236,7 @@ where
         });
         let conn = acquire()?;
         let started = Instant::now();
-        refresh_source_catalog_committed(
-            &conn,
-            home,
-            overrides,
-            source,
-            mode,
-            &mut issues,
-            &mut timings,
-        );
+        refresh_source_catalog_committed(&conn, env, source, mode, &mut issues, &mut timings);
         drop(conn);
         timings
             .per_source_ms
@@ -316,14 +263,13 @@ where
 /// 一个来源一个事务：刷新出错或提交失败都整体回滚，库里留的是上一次的目录。
 fn refresh_source_catalog_committed(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     source: Source,
     mode: CatalogMode,
     issues: &mut Vec<IngestIssue>,
     timings: &mut CatalogPhaseTimings,
 ) {
-    let dirs = crate::conversation::catalog_roots(overrides, home, source);
+    let dirs = crate::conversation::catalog_roots_with_env(env, source);
     let transaction = match conn.unchecked_transaction() {
         Ok(transaction) => transaction,
         Err(error) => {
@@ -433,36 +379,12 @@ pub fn load_scan_cache(conn: &Connection) -> Result<ScanCache, String> {
 }
 
 pub fn scan_is_stale_from_cache(cache: &ScanCache, home: &Path) -> Result<bool, String> {
-    scan_is_stale_with_overrides(cache, home, &path_overrides())
+    let env = ScanEnv::capture_for_home(home);
+    scan_is_stale_with_env(cache, &env)
 }
 
-/// 供测试注入与摄取相同的路径覆盖表，避免心跳判定偷偷读进程环境变量。
-pub(crate) fn scan_is_stale_with_overrides(
-    cache: &ScanCache,
-    home: &Path,
-    overrides: &PathOverrides,
-) -> Result<bool, String> {
-    scan_is_stale_cached(cache, home, overrides)
-}
-
-/// 心跳枚举出的消耗记录源文件路径。测试用同一份 PathOverrides 与 ingested_files 对照。
-#[cfg(test)]
-pub(crate) fn watched_usage_paths(
-    home: &Path,
-    overrides: &PathOverrides,
-) -> Result<Vec<PathBuf>, String> {
-    Ok(list_watched_inputs(home, overrides)?
-        .into_iter()
-        .map(|input| input.path)
-        .collect())
-}
-
-fn scan_is_stale_cached(
-    cache: &ScanCache,
-    home: &Path,
-    overrides: &PathOverrides,
-) -> Result<bool, String> {
-    let watched = list_watched_inputs(home, overrides)?;
+pub fn scan_is_stale_with_env(cache: &ScanCache, env: &ScanEnv) -> Result<bool, String> {
+    let watched = list_watched_inputs(env)?;
     let seen: BTreeSet<String> = watched
         .iter()
         .map(|input| input.path.to_string_lossy().into_owned())
@@ -490,7 +412,36 @@ fn scan_is_stale_cached(
             return Ok(true);
         }
     }
-    cursor_session::scan_is_stale_cached(&cache.cursor_files, &cache.tracking_fingerprint, home)
+    cursor_session::scan_is_stale_with_env(&cache.cursor_files, &cache.tracking_fingerprint, env)
+}
+
+/// 供测试注入与摄取相同的路径覆盖表，避免心跳判定偷偷读进程环境变量。
+#[cfg(test)]
+pub(crate) fn scan_is_stale_with_overrides(
+    cache: &ScanCache,
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<bool, String> {
+    let env = ScanEnv::from_overrides(home, overrides);
+    scan_is_stale_with_env(cache, &env)
+}
+
+/// 心跳枚举出的消耗记录源文件路径。测试用同一份覆盖或 [`ScanEnv`] 与 ingested_files 对照。
+#[cfg(test)]
+pub(crate) fn watched_usage_paths(
+    home: &Path,
+    overrides: &PathOverrides,
+) -> Result<Vec<PathBuf>, String> {
+    let env = ScanEnv::from_overrides(home, overrides);
+    watched_usage_paths_with_env(&env)
+}
+
+#[cfg(test)]
+pub(crate) fn watched_usage_paths_with_env(env: &ScanEnv) -> Result<Vec<PathBuf>, String> {
+    Ok(list_watched_inputs(env)?
+        .into_iter()
+        .map(|input| input.path)
+        .collect())
 }
 
 struct WatchedInput {
@@ -503,14 +454,11 @@ fn cache_key(path: &Path, extra_fingerprint: &str) -> String {
     format!("{}|{extra_fingerprint}", metadata_fingerprint(path))
 }
 
-fn list_watched_inputs(
-    home: &Path,
-    overrides: &PathOverrides,
-) -> Result<Vec<WatchedInput>, String> {
+fn list_watched_inputs(env: &ScanEnv) -> Result<Vec<WatchedInput>, String> {
     let mut files = Vec::new();
     for source in Source::ALL {
         let adapter = usage_adapter(source);
-        let dirs = source_scan_dirs_with(overrides, home, source);
+        let dirs = env.usage_scan_dirs(source);
         for path in (adapter.discover)(&dirs)? {
             let extra_fingerprint = (adapter.sidecar_fingerprint)(&path, &dirs);
             files.push(WatchedInput {
@@ -530,25 +478,19 @@ pub(crate) fn ingest_all_with_overrides(
     home: &Path,
     overrides: &PathOverrides,
 ) -> Result<IngestReport, String> {
-    ingest_all_with_overrides_timed(conn, home, overrides, CatalogMode::Full)
-        .map(|(report, _)| report)
+    let env = ScanEnv::from_overrides(home, overrides);
+    ingest_all_with_env_timed(conn, &env, CatalogMode::Full).map(|(report, _)| report)
 }
 
-fn ingest_all_with_overrides_timed(
+fn ingest_all_with_env_timed(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     mode: CatalogMode,
 ) -> Result<(IngestReport, IngestPhaseTimings), String> {
     let total_started = Instant::now();
-    let (mut report, usage) = ingest_usage_with_overrides_timed(conn, home, overrides)?;
-    let (conversation_issues, catalog) = refresh_conversation_catalogs_timed(
-        || Ok::<_, String>(conn),
-        home,
-        overrides,
-        mode,
-        |_| {},
-    )?;
+    let (mut report, usage) = ingest_usage_with_env_timed(conn, env)?;
+    let (conversation_issues, catalog) =
+        refresh_conversation_catalogs_timed(|| Ok::<_, String>(conn), env, mode, |_| {})?;
     report.conversation_issues = conversation_issues;
     report.partial_success = report.partial_success || !report.conversation_issues.is_empty();
     let timings = IngestPhaseTimings {
@@ -559,10 +501,9 @@ fn ingest_all_with_overrides_timed(
     Ok((report, timings))
 }
 
-fn ingest_usage_with_overrides_timed(
+fn ingest_usage_with_env_timed(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
 ) -> Result<(IngestReport, UsagePhaseTimings), String> {
     let total_started = Instant::now();
     let mut timings = UsagePhaseTimings::default();
@@ -574,11 +515,11 @@ fn ingest_usage_with_overrides_timed(
 
     let mut report = IngestReport::default();
     let started = Instant::now();
-    ingest_all_sources(&transaction, home, overrides, &mut report)?;
+    ingest_all_sources(&transaction, env, &mut report)?;
     timings.records_ms = started.elapsed().as_millis();
 
     let started = Instant::now();
-    cursor_session::ingest(&transaction, home, &mut report);
+    cursor_session::ingest_with_env(&transaction, env, &mut report);
     timings.cursor_ms = started.elapsed().as_millis();
 
     report.records_removed += removed_unknown;
@@ -631,20 +572,30 @@ fn sync_rollup(conn: &Connection, report: &IngestReport) -> Result<(), String> {
 
 /// 路径文本用展示根；`detected` 用扫描根走适配器钩子，与摄取报告同一口径。
 pub fn source_diagnostics(conn: &Connection, home: &Path) -> Result<Vec<SourceDiagnostic>, String> {
-    source_diagnostics_with(conn, home, &path_overrides())
+    let env = ScanEnv::capture_for_home(home);
+    source_diagnostics_with_env(conn, &env)
 }
 
+#[cfg(test)]
 pub(crate) fn source_diagnostics_with(
     conn: &Connection,
     home: &Path,
     overrides: &PathOverrides,
 ) -> Result<Vec<SourceDiagnostic>, String> {
+    let env = ScanEnv::from_overrides(home, overrides);
+    source_diagnostics_with_env(conn, &env)
+}
+
+pub fn source_diagnostics_with_env(
+    conn: &Connection,
+    env: &ScanEnv,
+) -> Result<Vec<SourceDiagnostic>, String> {
     Source::ALL
         .iter()
         .map(|source| {
             let adapter = usage_adapter(*source);
-            let display_dirs = adapter.display_or_scan_dirs(overrides, home);
-            let scan_dirs = source_scan_dirs_with(overrides, home, *source);
+            let display_dirs = env.display_dirs(*source);
+            let scan_dirs = env.usage_scan_dirs(*source);
             let (cached_files, record_count, total_tokens, archived_record_count) =
                 store::source_cache_stats(conn, *source)?;
             Ok(SourceDiagnostic {
@@ -671,7 +622,15 @@ pub fn rebuild_cache(
     home: &Path,
     source: Option<Source>,
 ) -> Result<IngestReport, String> {
-    let overrides = path_overrides();
+    let env = ScanEnv::capture_for_home(home);
+    rebuild_cache_with_env(conn, &env, source)
+}
+
+pub fn rebuild_cache_with_env(
+    conn: &Connection,
+    env: &ScanEnv,
+    source: Option<Source>,
+) -> Result<IngestReport, String> {
     let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     let mut removed_unknown = 0;
     if let Some(selected) = source {
@@ -688,22 +647,25 @@ pub fn rebuild_cache(
         ..IngestReport::default()
     };
     if let Some(selected) = source {
-        ingest_source(&transaction, home, &overrides, selected, &mut report)?;
-        cursor_session::ingest_for_usage_source(&transaction, home, Some(selected), &mut report);
+        ingest_source(&transaction, env, selected, &mut report)?;
+        cursor_session::ingest_for_usage_source_with_env(
+            &transaction,
+            env,
+            Some(selected),
+            &mut report,
+        );
         refresh_conversation_catalog(
             &transaction,
-            home,
-            &overrides,
+            env,
             std::slice::from_ref(&selected),
             &mut report,
         );
     } else {
-        ingest_all_sources(&transaction, home, &overrides, &mut report)?;
-        cursor_session::ingest_for_usage_source(&transaction, home, None, &mut report);
+        ingest_all_sources(&transaction, env, &mut report)?;
+        cursor_session::ingest_for_usage_source_with_env(&transaction, env, None, &mut report);
         refresh_conversation_catalog(
             &transaction,
-            home,
-            &overrides,
+            env,
             crate::conversation::CONVERSATION_SOURCES,
             &mut report,
         );
@@ -727,8 +689,7 @@ fn merge_conversation_fts_after_commit(conn: &Connection) {
 
 fn refresh_conversation_catalog(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     sources: &[Source],
     report: &mut IngestReport,
 ) {
@@ -736,7 +697,7 @@ fn refresh_conversation_catalog(
         if !crate::conversation::CONVERSATION_SOURCES.contains(&source) {
             continue;
         }
-        let dirs = crate::conversation::catalog_roots(overrides, home, source);
+        let dirs = crate::conversation::catalog_roots_with_env(env, source);
         match refresh_catalog_with_mode(conn, source, &dirs, CatalogMode::Full) {
             Ok(issues) => report
                 .conversation_issues
@@ -750,14 +711,13 @@ fn refresh_conversation_catalog(
 
 fn ingest_all_sources(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     report: &mut IngestReport,
 ) -> Result<(), String> {
     for source in Source::ALL {
-        if let Err(error) = ingest_source(conn, home, overrides, source, report) {
+        if let Err(error) = ingest_source(conn, env, source, report) {
             if error.starts_with("扫描目录") {
-                let dirs = source_scan_dirs_with(overrides, home, source);
+                let dirs = env.usage_scan_dirs(source);
                 let path = dirs
                     .iter()
                     .map(|dir| dir.to_string_lossy().to_string())
@@ -774,13 +734,12 @@ fn ingest_all_sources(
 
 fn ingest_source(
     conn: &Connection,
-    home: &Path,
-    overrides: &PathOverrides,
+    env: &ScanEnv,
     source: Source,
     report: &mut IngestReport,
 ) -> Result<(), String> {
     let adapter = usage_adapter(source);
-    let dirs = source_scan_dirs_with(overrides, home, source);
+    let dirs = env.usage_scan_dirs(source);
     ingest_from_adapter(conn, adapter, &dirs, report)
 }
 
@@ -1062,61 +1021,6 @@ pub(crate) fn metadata_fingerprint(path: &Path) -> String {
     }
     #[cfg(not(any(unix, windows)))]
     format!("{}:{modified}", meta.len())
-}
-
-pub(crate) fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String> {
-    let connection =
-        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|error| error.to_string())?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| error.to_string())?;
-    Ok(connection)
-}
-
-/// 只读打开并跟随 WAL：`file:…?mode=ro` + `SQLITE_OPEN_URI`。
-///
-/// 不用 `immutable=1`——它会跳过未 checkpoint 的 WAL 页，正在写入的会话会静默读到旧数据。
-/// Hermes / agy 共用；`open_readonly`（仅 flags）留给 OpenCode 与代码量，避免改它们的打开语义。
-pub(crate) fn open_readonly_uri(path: &Path) -> Result<rusqlite::Connection, String> {
-    let connection = rusqlite::Connection::open_with_flags(
-        sqlite_file_uri(path, "mode=ro"),
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|error| error.to_string())?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| error.to_string())?;
-    Ok(connection)
-}
-
-/// SQLite URI：转义路径里的空格、`?`、`#`，再拼查询串。
-pub(crate) fn sqlite_file_uri(path: &Path, query: &str) -> String {
-    let raw = path.to_string_lossy().replace('\\', "/");
-    let mut uri = String::from("file:");
-    for ch in raw.chars() {
-        match ch {
-            ' ' => uri.push_str("%20"),
-            '?' => uri.push_str("%3F"),
-            '#' => uri.push_str("%23"),
-            c => uri.push(c),
-        }
-    }
-    uri.push('?');
-    uri.push_str(query);
-    uri
-}
-
-pub(crate) fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    PathBuf::from(format!("{}{suffix}", path.to_string_lossy()))
-}
-
-/// 主库旁 `-wal` 的元数据指纹（mtime+size 等），WAL 变化会让缓存失效。
-///
-/// 不算 `-shm`：它只是 WAL 索引，内容完全由主库与 `-wal` 决定；而每次只读打开都会
-/// 刷新它的 mtime，算进来的话摄取自己的读取就会让下一轮判定为已变化，每轮整份重解析。
-pub(crate) fn wal_fingerprint(path: &Path) -> String {
-    metadata_fingerprint(&sqlite_sidecar_path(path, "-wal"))
 }
 
 pub(crate) fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>, String> {

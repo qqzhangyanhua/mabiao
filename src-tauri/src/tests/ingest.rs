@@ -1469,10 +1469,11 @@ fn source_scan_dirs_env_override_replaces_defaults_with_same_leaf_join_rule() {
 #[test]
 fn opencode_scan_uses_xdg_data_home_and_opencode_db() {
     let home = std::path::Path::new("/home/example");
-    let mut xdg = ingest::PathOverrides::new();
-    crate::adapters::opencode::apply_env_values(&mut xdg, Some("/xdg"), Some("sessions.db"));
+    let xdg = crate::scan_paths::ScanEnv::new(home)
+        .with_xdg_data_home("/xdg")
+        .with_opencode_db("sessions.db");
     assert_eq!(
-        ingest::source_scan_dirs_with(&xdg, home, Source::Opencode),
+        xdg.usage_scan_dirs(Source::Opencode),
         vec![PathBuf::from("/xdg/opencode/sessions.db")],
     );
 
@@ -1482,24 +1483,18 @@ fn opencode_scan_uses_xdg_data_home_and_opencode_db() {
     let missing_db = missing_dir.path().join("custom.db");
     assert!(missing_db.is_absolute());
     assert!(!missing_db.exists());
-    let mut missing_absolute = ingest::PathOverrides::new();
-    crate::adapters::opencode::apply_env_values(
-        &mut missing_absolute,
-        None,
-        Some(missing_db.to_str().expect("temp path is utf-8")),
-    );
+    let missing_absolute = crate::scan_paths::ScanEnv::new(home).with_opencode_db(&missing_db);
     assert_eq!(
-        ingest::source_scan_dirs_with(&missing_absolute, home, Source::Opencode),
+        missing_absolute.usage_scan_dirs(Source::Opencode),
         vec![home.join(".local/share/opencode/opencode.db")],
     );
 
-    let mut settings = ingest::PathOverrides::from([(
-        "OPENCODE_DATA_DIR",
-        vec![PathBuf::from("/custom/opencode")],
-    )]);
-    crate::adapters::opencode::apply_env_values(&mut settings, Some("/xdg"), Some("custom.db"));
+    let settings = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("OPENCODE_DATA_DIR", vec![PathBuf::from("/custom/opencode")])
+        .with_xdg_data_home("/xdg")
+        .with_opencode_db("custom.db");
     assert_eq!(
-        ingest::source_scan_dirs_with(&settings, home, Source::Opencode),
+        settings.usage_scan_dirs(Source::Opencode),
         vec![PathBuf::from("/custom/opencode/custom.db")],
     );
 }
@@ -2609,6 +2604,107 @@ fn agy_shm_touch_does_not_reparse_usage() {
 }
 
 #[test]
+fn wal_sqlite_usage_adapters_do_not_self_invalidate_on_readonly_open_or_shm_touch() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    let agy_dir = home.join(".gemini/antigravity-cli/conversations");
+    std::fs::create_dir_all(&agy_dir).unwrap();
+    let agy_db =
+        write_agy_conversation_db(&agy_dir.join("sess.db"), &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    let alma_db = write_alma_ingest_db(home);
+    let cherry_db = write_default_cherry_home(home);
+    let crush_db = write_default_crush_home(home);
+    let goose_db = write_default_goose_home(home);
+    let hermes_db = write_default_hermes_home(home);
+    let warp_db = write_default_warp_home(home);
+    let zed_db = write_default_zed_home(home);
+
+    let zcode_db = home.join(".zcode/cli/db/db.sqlite");
+    std::fs::create_dir_all(zcode_db.parent().unwrap()).unwrap();
+    {
+        let db = rusqlite::Connection::open(&zcode_db).unwrap();
+        db.execute_batch(
+            "CREATE TABLE session (id TEXT PRIMARY KEY);
+             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, data TEXT NOT NULL);",
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO message VALUES ('m1', 'ses-z', ?1)",
+            [serde_json::json!({
+                "role": "assistant",
+                "modelID": "zcode-model",
+                "tokens": { "input": 100, "output": 20, "cache": { "read": 0, "write": 0 } },
+                "time": { "created": 1_780_000_000_000_i64, "completed": 1_780_000_001_000_i64 }
+            })
+            .to_string()],
+        )
+        .unwrap();
+    }
+
+    let db_paths = [
+        agy_db, alma_db, cherry_db, crush_db, goose_db, hermes_db, warp_db, zed_db, zcode_db,
+    ];
+
+    // 全部切到 WAL 模式并保持写连接打开，确保真实 -wal 与 -shm 侧车并存。
+    let mut writers = Vec::new();
+    for db_path in &db_paths {
+        let writer = rusqlite::Connection::open(db_path).unwrap();
+        writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+        writer.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+        // 触发一次真实写事务生成 -wal / -shm 侧车。
+        writer
+            .execute_batch("CREATE TABLE IF NOT EXISTS _wal_probe (id INTEGER PRIMARY KEY); INSERT INTO _wal_probe DEFAULT VALUES;")
+            .unwrap();
+        assert!(
+            crate::source_sqlite::sqlite_sidecar_path(db_path, "-wal").exists(),
+            "{} 应存在真实 -wal 侧车",
+            db_path.display()
+        );
+        writers.push(writer);
+    }
+
+    let conn = store::open_memory().unwrap();
+    let expected_count = db_paths.len() as u64;
+    let first = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(first.files_failed, 0, "unexpected first report: {first:?}");
+    assert_eq!(first.files_parsed, expected_count);
+    assert!(!ingest::scan_is_stale(&conn, home).unwrap());
+
+    // 逐库只读打开并刷新 -shm，绝不能触发虚假 stale 或重解析。
+    for db_path in &db_paths {
+        let reader = crate::source_sqlite::open_wal_readonly(db_path).unwrap();
+        let _: i64 = reader
+            .query_row("SELECT COUNT(*) FROM _wal_probe", [], |row| row.get(0))
+            .unwrap();
+        drop(reader);
+        let shm = crate::source_sqlite::sqlite_sidecar_path(db_path, "-shm");
+        let existing = std::fs::read(&shm).unwrap_or_default();
+        std::fs::write(&shm, &existing).unwrap();
+    }
+
+    assert!(
+        !ingest::scan_is_stale(&conn, home).unwrap(),
+        "只读打开或刷新 -shm 不得把任何 WAL SQLite 来源判为 stale"
+    );
+    let second = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(
+        second.files_parsed, 0,
+        "unexpected second report: {second:?}"
+    );
+    assert_eq!(second.files_skipped, expected_count);
+
+    // 真实未 checkpoint 的 -wal 写入必须立即让扫描判定为 stale。
+    writers[0]
+        .execute("INSERT INTO _wal_probe DEFAULT VALUES", [])
+        .unwrap();
+    assert!(
+        ingest::scan_is_stale(&conn, home).unwrap(),
+        "未 checkpoint 的 -wal 写入必须触发 stale"
+    );
+}
+
+#[test]
 fn agy_encrypted_pb_does_not_increment_failure_count() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
@@ -2884,7 +2980,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         !hermes.append_log,
         "Hermes 不是追加型日志，迁表时不能顺手补全标记"
     );
-    assert_eq!(hermes.path_env, "HERMES_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Hermes).path_env,
+        "HERMES_HOME"
+    );
     assert_eq!(hermes.coverage, "模型级 Token（含原生费用）");
 
     let agy = usage_adapter(Source::Agy);
@@ -2893,7 +2992,10 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         agy.soft_parse_failure,
         "agy 中途失败不得抬 files_failed，否则会按 ADR 0003 停掉整源对账"
     );
-    assert_eq!(agy.path_env, "AGY_DATA_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Agy).path_env,
+        "AGY_DATA_DIR"
+    );
     assert!(
         agy.detected.is_some(),
         "agy 必须用自定义「已检测到」判定，不能用目录存在即检测到"
@@ -2902,46 +3004,73 @@ fn usage_adapter_table_covers_every_registered_source_once() {
 
     let qoder = usage_adapter(Source::Qoder);
     assert!(qoder.append_log, "Qoder 会话 jsonl 是追加型日志");
-    assert_eq!(qoder.path_env, "QODER_CONFIG_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Qoder).path_env,
+        "QODER_CONFIG_DIR"
+    );
     assert_eq!(qoder.coverage, "轮级 Token");
 
     let qoder_cn = usage_adapter(Source::QoderCn);
     assert!(qoder_cn.append_log, "Qoder CN 会话 jsonl 是追加型日志");
-    assert_eq!(qoder_cn.path_env, "QODERCN_CONFIG_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::QoderCn).path_env,
+        "QODERCN_CONFIG_DIR"
+    );
 
     let cline = usage_adapter(Source::Cline);
     assert!(!cline.append_log, "Cline 会话文件整份重写，不是追加型日志");
-    assert_eq!(cline.path_env, "CLINE_SESSION_DATA_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Cline).path_env,
+        "CLINE_SESSION_DATA_DIR"
+    );
     assert_eq!(cline.coverage, "轮级 Token（input 不含 cache）");
 
     let workbuddy = usage_adapter(Source::WorkBuddy);
     assert!(workbuddy.append_log, "WorkBuddy 会话 jsonl 是追加型日志");
-    assert_eq!(workbuddy.path_env, "WORKBUDDY_CONFIG_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::WorkBuddy).path_env,
+        "WORKBUDDY_CONFIG_DIR"
+    );
     assert_eq!(workbuddy.coverage, "轮级 Token（input 不含 cache）");
 
     let zcode = usage_adapter(Source::Zcode);
     assert!(!zcode.append_log, "ZCode 会话库是 SQLite，不是追加型日志");
-    assert_eq!(zcode.path_env, "ZCODE_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Zcode).path_env,
+        "ZCODE_HOME"
+    );
     assert_eq!(zcode.coverage, "轮级 Token（input 不含 cache）");
 
     let alma = usage_adapter(Source::Alma);
     assert!(!alma.append_log, "Alma 会话库是 SQLite，不是追加型日志");
-    assert_eq!(alma.path_env, "ALMA_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Alma).path_env,
+        "ALMA_HOME"
+    );
     assert_eq!(alma.coverage, "轮级 Token（input 不含 cache）");
 
     let codebuddy = usage_adapter(Source::CodeBuddy);
     assert!(codebuddy.append_log, "CodeBuddy 会话 jsonl 是追加型日志");
-    assert_eq!(codebuddy.path_env, "CODEBUDDY_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::CodeBuddy).path_env,
+        "CODEBUDDY_DIR"
+    );
     assert_eq!(codebuddy.coverage, "轮级 Token（input 不含 cache）");
 
     let trae = usage_adapter(Source::Trae);
     assert!(trae.append_log, "Trae CLI 会话 jsonl 是追加型日志");
-    assert_eq!(trae.path_env, "TRAE_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Trae).path_env,
+        "TRAE_HOME"
+    );
     assert_eq!(trae.coverage, "轮级 Token");
 
     let goose = usage_adapter(Source::Goose);
     assert!(!goose.append_log, "Goose 会话库是 SQLite，不是追加型日志");
-    assert_eq!(goose.path_env, "GOOSE_PATH_ROOT");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Goose).path_env,
+        "GOOSE_PATH_ROOT"
+    );
     assert_eq!(goose.coverage, "会话级 Token");
 
     let roo = usage_adapter(Source::Roo);
@@ -2949,22 +3078,34 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         !roo.append_log,
         "Roo Code ui_messages.json 整份重写，不是追加型日志"
     );
-    assert_eq!(roo.path_env, "ROO_TASKS_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Roo).path_env,
+        "ROO_TASKS_DIR"
+    );
     assert_eq!(roo.coverage, "轮级 Token（input 不含 cache）");
     let kilo = usage_adapter(Source::Kilo);
     assert!(
         !kilo.append_log,
         "Kilo Code ui_messages.json 整份重写，不是追加型日志"
     );
-    assert_eq!(kilo.path_env, "KILO_TASKS_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Kilo).path_env,
+        "KILO_TASKS_DIR"
+    );
     assert_eq!(kilo.coverage, "轮级 Token（input 不含 cache）");
     let amp = usage_adapter(Source::Amp);
     assert!(!amp.append_log, "Amp 线程 JSON 整份重写，不是追加型日志");
-    assert_eq!(amp.path_env, "AMP_DATA_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Amp).path_env,
+        "AMP_DATA_DIR"
+    );
     assert_eq!(amp.coverage, "轮级 Token（input 不含 cache）");
     let zed = usage_adapter(Source::Zed);
     assert!(!zed.append_log, "Zed 会话库是 SQLite，不是追加型日志");
-    assert_eq!(zed.path_env, "ZED_DATA_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Zed).path_env,
+        "ZED_DATA_DIR"
+    );
     assert_eq!(
         zed.coverage,
         "轮级 Token（input 不含 cache；有消息时间用消息时间，否则会话 updated_at；子线程不入账）"
@@ -2974,26 +3115,41 @@ fn usage_adapter_table_covers_every_registered_source_once() {
         !cherry.append_log,
         "Cherry Studio 用量库是 SQLite，不是追加型日志"
     );
-    assert_eq!(cherry.path_env, "CHERRY_STUDIO_DATA_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Cherry).path_env,
+        "CHERRY_STUDIO_DATA_DIR"
+    );
     assert_eq!(cherry.coverage, "轮级 Token（input 不含 cache）");
     let openclaw = usage_adapter(Source::OpenClaw);
     assert!(openclaw.append_log, "OpenClaw 会话 jsonl 是追加型日志");
-    assert_eq!(openclaw.path_env, "OPENCLAW_STATE_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::OpenClaw).path_env,
+        "OPENCLAW_STATE_DIR"
+    );
     assert_eq!(openclaw.coverage, "轮级 Token（input 不含 cache）");
     let codebuddy_ide = usage_adapter(Source::CodeBuddyIde);
     assert!(
         !codebuddy_ide.append_log,
         "CodeBuddy IDE 用量是会话累计快照，不是追加型日志"
     );
-    assert_eq!(codebuddy_ide.path_env, "CODEBUDDY_IDE_DIR");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::CodeBuddyIde).path_env,
+        "CODEBUDDY_IDE_DIR"
+    );
     assert_eq!(codebuddy_ide.coverage, "会话级 Token（input 不含 cache）");
     let crush = usage_adapter(Source::Crush);
     assert!(!crush.append_log, "Crush 会话库是 SQLite，不是追加型日志");
-    assert_eq!(crush.path_env, "CRUSH_GLOBAL_DATA");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Crush).path_env,
+        "CRUSH_GLOBAL_DATA"
+    );
     assert_eq!(crush.coverage, "会话级 Token（含原生费用）");
     let aider = usage_adapter(Source::Aider);
     assert!(aider.append_log, "Aider analytics-log 是追加型 JSONL");
-    assert_eq!(aider.path_env, "AIDER_ANALYTICS_LOG");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Aider).path_env,
+        "AIDER_ANALYTICS_LOG"
+    );
     assert_eq!(aider.coverage, "轮级 Token（含原生费用）");
     assert!(
         aider.detected.is_some(),
@@ -3001,11 +3157,17 @@ fn usage_adapter_table_covers_every_registered_source_once() {
     );
     let warp = usage_adapter(Source::Warp);
     assert!(!warp.append_log, "Warp 会话库是 SQLite，不是追加型日志");
-    assert_eq!(warp.path_env, "WARP_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Warp).path_env,
+        "WARP_HOME"
+    );
     assert_eq!(warp.coverage, "会话级 Token（无 input/output 拆分）");
     let windsurf = usage_adapter(Source::Windsurf);
     assert!(windsurf.append_log, "Windsurf ACP ndjson 是追加型事件流");
-    assert_eq!(windsurf.path_env, "WINDSURF_ACP_HOME");
+    assert_eq!(
+        crate::scan_paths::source_path_spec(Source::Windsurf).path_env,
+        "WINDSURF_ACP_HOME"
+    );
     assert_eq!(windsurf.coverage, "会话级 Token（ACP usage_update）");
 }
 
@@ -3016,30 +3178,116 @@ fn usage_adapter_path_env_covers_every_registered_source_once() {
 
     let home = std::path::Path::new("/home/example");
     let mut seen = BTreeSet::new();
-    for adapter in usage_adapters() {
+    assert_eq!(usage_adapters().len(), Source::ALL.len());
+    for spec in crate::scan_paths::source_path_specs() {
         assert!(
-            !adapter.path_env.is_empty(),
+            !spec.path_env.is_empty(),
             "{} 必须登记路径覆盖环境变量",
-            adapter.source.as_str()
+            spec.source.as_str()
         );
         assert!(
-            seen.insert(adapter.path_env),
+            seen.insert(spec.path_env),
             "{} 与其它来源共用了路径环境变量 {}",
-            adapter.source.as_str(),
-            adapter.path_env
+            spec.source.as_str(),
+            spec.path_env
         );
-        let sentinel = PathBuf::from(format!("/override/{}", adapter.source.as_str()));
-        let overrides = ingest::PathOverrides::from([(adapter.path_env, vec![sentinel.clone()])]);
-        let dirs = (adapter.scan_dirs)(&overrides, home);
+        let sentinel = PathBuf::from(format!("/override/{}", spec.source.as_str()));
+        let env = crate::scan_paths::ScanEnv::new(home)
+            .with_env_override(spec.path_env, vec![sentinel.clone()]);
+        let dirs = env.usage_scan_dirs(spec.source);
         assert!(
             dirs.iter().any(|dir| dir.starts_with(&sentinel)),
-            "{} 的 scan_dirs 未消费 path_env {}，实际 {:?}",
-            adapter.source.as_str(),
-            adapter.path_env,
+            "{} 的声明式路径规格未消费 path_env {}，实际 {:?}",
+            spec.source.as_str(),
+            spec.path_env,
             dirs
         );
     }
     assert_eq!(seen.len(), Source::ALL.len());
+}
+
+#[test]
+fn ingest_and_diagnostics_with_scan_env_honor_wsl_and_opencode_db_suppression() {
+    let dir = tempfile::tempdir().unwrap();
+    let win_home = dir.path().join("win-home");
+    let wsl_home = dir.path().join("wsl-home");
+    std::fs::create_dir_all(&win_home).unwrap();
+
+    // Unoverridden Codex lives in WSL home.
+    let wsl_codex = wsl_home.join(".codex/sessions");
+    std::fs::create_dir_all(&wsl_codex).unwrap();
+    std::fs::write(wsl_codex.join("one.jsonl"), fixture("codex.jsonl")).unwrap();
+
+    // WSL OpenCode has a DB, while OPENCODE_DB overrides with an external DB:
+    // WSL OpenCode DB must NOT be ingested when OPENCODE_DB is set.
+    let wsl_opencode_dir = wsl_home.join(".local/share/opencode");
+    std::fs::create_dir_all(&wsl_opencode_dir).unwrap();
+    let wsl_db_path = wsl_opencode_dir.join("opencode.db");
+    {
+        let db = rusqlite::Connection::open(&wsl_db_path).unwrap();
+        db.execute_batch("CREATE TABLE message (session_id TEXT, data TEXT);")
+            .unwrap();
+        db.execute(
+            "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+            rusqlite::params![
+                "sess-wsl-ignored",
+                r#"{"role":"assistant","modelID":"wsl-model","time":{"created":1787000000000,"completed":1787000001000},"tokens":{"input":99,"output":1,"reasoning":0,"cache":{"read":0,"write":0}},"path":{"cwd":"/wsl"}}"#,
+            ],
+        )
+        .unwrap();
+    }
+    let custom_opencode_db = dir.path().join("external/custom-opencode.db");
+    std::fs::create_dir_all(custom_opencode_db.parent().unwrap()).unwrap();
+    {
+        let db = rusqlite::Connection::open(&custom_opencode_db).unwrap();
+        db.execute_batch("CREATE TABLE message (session_id TEXT, data TEXT);")
+            .unwrap();
+        db.execute(
+            "INSERT INTO message (session_id, data) VALUES (?1, ?2)",
+            rusqlite::params![
+                "sess-custom-db",
+                r#"{"role":"assistant","modelID":"custom-model","time":{"created":1787000000000,"completed":1787000001000},"tokens":{"input":10,"output":5,"reasoning":0,"cache":{"read":0,"write":0}},"path":{"cwd":"/custom"}}"#,
+            ],
+        )
+        .unwrap();
+    }
+
+    let custom_cursor_usage = dir.path().join("custom-cursor-usage");
+    std::fs::create_dir_all(&custom_cursor_usage).unwrap();
+
+    let env = crate::scan_paths::ScanEnv::new(&win_home)
+        .with_wsl_homes([wsl_home.clone()])
+        .with_opencode_db(&custom_opencode_db)
+        .with_env_override("CURSOR_AGENT_USAGE_DIR", vec![custom_cursor_usage.clone()]);
+
+    let conn = store::open_memory().unwrap();
+    let report = ingest::ingest_all_with_env(&conn, &env).unwrap();
+    assert_eq!(report.files_failed, 0, "issues={:?}", report.issues);
+
+    let records = store::load_all(&conn).unwrap();
+    assert!(records.iter().any(|r| r.source == Source::Codex));
+    let opencode_records: Vec<_> = records
+        .iter()
+        .filter(|r| r.source == Source::Opencode)
+        .collect();
+    assert_eq!(opencode_records.len(), 1);
+    assert_eq!(opencode_records[0].session_id, "sess-custom-db");
+
+    let diagnostics = ingest::source_diagnostics_with_env(&conn, &env).unwrap();
+    let cursor_diag = diagnostics
+        .iter()
+        .find(|d| d.source == "cursor_agent")
+        .unwrap();
+    assert!(
+        cursor_diag
+            .root_path
+            .contains(wsl_home.join(".cursor/projects").to_string_lossy().as_ref()),
+        "CursorAgent display roots must keep WSL .cursor/projects even when CURSOR_AGENT_USAGE_DIR is set: {}",
+        cursor_diag.root_path
+    );
+    assert!(cursor_diag
+        .root_path
+        .contains(custom_cursor_usage.to_string_lossy().as_ref()));
 }
 
 #[test]

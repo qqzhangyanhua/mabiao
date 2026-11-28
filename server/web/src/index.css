@@ -147,16 +147,6 @@
   --token-cache-read: #2563eb;
   --token-cache-write: #059669;
   --token-reasoning: #d97706;
-  --tone-claude: #ea580c;
-  --tone-codex: #6d28d9;
-  --tone-pi: #0891b2;
-  --tone-omp: #c026d3;
-  --tone-open: #2563eb;
-  --tone-kimi: #059669;
-  --tone-gemini: #0284c7;
-  --tone-grok: #db2777;
-  --tone-qwen: #7c3aed;
-  --tone-cursor: #64748b;
 }
 
 [data-theme="dark"] {
@@ -212,16 +202,6 @@
   --token-cache-read: #60a5fa;
   --token-cache-write: #34d399;
   --token-reasoning: #f59e0b;
-  --tone-claude: #fb923c;
-  --tone-codex: #9d82ff;
-  --tone-pi: #22d3ee;
-  --tone-omp: #e879f9;
-  --tone-open: #60a5fa;
-  --tone-kimi: #34d399;
-  --tone-gemini: #38bdf8;
-  --tone-grok: #f472b6;
-  --tone-qwen: #a78bfa;
-  --tone-cursor: #94a3b8;
 }
 
 /* 长表格、长列表所在的卡片：较不透明，不做模糊，滚动不掉帧。 */

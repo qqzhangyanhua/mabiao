@@ -17,6 +17,13 @@ pub fn overview(
     prices: &PriceTable,
 ) -> Result<OverviewDto, String> {
     install_prices(conn, prices)?;
+    overview_installed(conn, filter)
+}
+
+pub(super) fn overview_installed(
+    conn: &Connection,
+    filter: &Filter,
+) -> Result<OverviewDto, String> {
     let inner = rollup_source(
         &rollup_plan(
             filter.from.as_deref(),

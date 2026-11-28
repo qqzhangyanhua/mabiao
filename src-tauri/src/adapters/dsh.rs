@@ -2,11 +2,6 @@ use std::path::{Path, PathBuf};
 
 use crate::adapters::{discover_suffix, finish, i64_field, parse_jsonl_values, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "DSH_HOME", ".dsh", "sessions")
-}
 
 pub(crate) const LEGACY_SESSION_FILE: &str = "session.jsonl.zstd";
 pub(crate) const V4_SESSION_FILE: &str = "session.v4.jsonl.zstd";

@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::domain::{
     CodeVolumeBranchRow, CodeVolumeCommit, CodeVolumeDailyPoint, CodeVolumeSummary,
 };
-use crate::ingest::open_readonly;
+use crate::source_sqlite::open_plain_readonly;
 
 #[derive(Debug, Clone, Default)]
 pub struct CursorCommitRow {
@@ -159,7 +159,7 @@ pub fn load_code_volume(home: &Path) -> Result<CodeVolumeSummary, String> {
     if !db_path.exists() {
         return Ok(CodeVolumeSummary::empty());
     }
-    let source_db = open_readonly(&db_path)?;
+    let source_db = open_plain_readonly(&db_path)?;
     let mut stmt = source_db
         .prepare(
             r#"

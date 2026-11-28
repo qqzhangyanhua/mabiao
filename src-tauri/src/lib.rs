@@ -31,6 +31,7 @@ pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
 pub mod scan_paths;
+pub(crate) mod source_sqlite;
 pub(crate) mod staged;
 pub mod store;
 pub mod tray;
@@ -413,6 +414,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::ingest,
+            commands::get_overview_bundle,
             commands::get_overview,
             commands::get_report,
             commands::preview_work_notes,

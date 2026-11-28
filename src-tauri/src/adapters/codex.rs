@@ -7,18 +7,7 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    let roots = overrides
-        .get("CODEX_HOME")
-        .cloned()
-        .unwrap_or_else(|| vec![home.join(".codex")]);
-    roots
-        .into_iter()
-        .flat_map(|root| [root.join("sessions"), root.join("archived_sessions")])
-        .collect()
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

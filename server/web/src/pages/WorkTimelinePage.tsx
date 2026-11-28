@@ -1,5 +1,5 @@
 import { Clock, Coins, Folder, Layers, UserRound, Wallet } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { FilterSelect } from "../components/FilterSelect";
@@ -24,34 +24,36 @@ export function WorkTimelinePage() {
   const [projectId, setProjectId] = useState<number | undefined>();
   const [source, setSource] = useState<string>("");
 
-  const loadTimeline = useCallback(
+  const loadTimeline = useMemo(
     () =>
       bounds
-        ? api.workTimeline(
-            {
-              ...bounds,
-              accountId: profile.role === "admin" ? accountId : profile.id,
-              projectId,
-              source: source || undefined,
-            },
-            offset,
-          )
-        : Promise.reject(new Error("日期范围不正确")),
+        ? () =>
+            api.workTimeline(
+              {
+                ...bounds,
+                accountId: profile.role === "admin" ? accountId : profile.id,
+                projectId,
+                source: source || undefined,
+              },
+              offset,
+            )
+        : null,
     [api, bounds, offset, accountId, projectId, source, profile],
   );
   const timeline = useAsync(loadTimeline);
 
-  const loadFilters = useCallback(
+  const loadFilters = useMemo(
     () =>
       bounds
-        ? Promise.all([
-            api.summary(
-              { ...bounds, accountId: profile.role === "admin" ? accountId : profile.id },
-              offset,
-            ),
-            profile.role === "admin" ? api.accounts() : Promise.resolve([]),
-          ])
-        : Promise.reject(new Error("日期范围不正确")),
+        ? () =>
+            Promise.all([
+              api.summary(
+                { ...bounds, accountId: profile.role === "admin" ? accountId : profile.id },
+                offset,
+              ),
+              profile.role === "admin" ? api.accounts() : Promise.resolve([]),
+            ])
+        : null,
     [api, bounds, offset, accountId, profile],
   );
   const filters = useAsync(loadFilters);

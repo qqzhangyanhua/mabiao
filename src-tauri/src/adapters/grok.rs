@@ -7,11 +7,7 @@ use serde_json::Value;
 use crate::adapters::project::decode_url_dir;
 use crate::adapters::{finish, i64_field, parse_jsonl_values, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "GROK_HOME", ".grok", "sessions")
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

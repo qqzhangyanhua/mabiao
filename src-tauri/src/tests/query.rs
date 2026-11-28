@@ -1744,3 +1744,235 @@ fn ccusage_daily_json_matches_ccusage_shape_and_excludes_reasoning() {
     assert_eq!(claude_only.totals.total_tokens, 26);
     assert_eq!(claude_only.totals.input_tokens, 15);
 }
+
+#[test]
+fn overview_bundle_matches_individual_queries_with_cursor_overlay_and_budget() {
+    use crate::domain::{CursorUsageEvent, OverviewBundleRequest};
+
+    let conn = store::open_memory().unwrap();
+    let records = diverse_records();
+    store::insert_records(&conn, &records).unwrap();
+    store::rebuild_rollup(&conn).unwrap();
+
+    // Seed Cursor account usage events to verify overlays in trend, heatmap, projects, weekly window, and summary.
+    let cursor_events = vec![
+        CursorUsageEvent {
+            occurred_at: "2026-08-15T10:00:00.000Z".to_string(),
+            model: "claude-opus-4".to_string(),
+            input_tokens: 1_000,
+            output_tokens: 500,
+            cache_read_tokens: 200,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        },
+        CursorUsageEvent {
+            occurred_at: "2026-08-16T14:00:00.000Z".to_string(),
+            model: "gpt-5".to_string(),
+            input_tokens: 800,
+            output_tokens: 200,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 100,
+            is_headless: true,
+        },
+    ];
+    store::upsert_cursor_account_events(&conn, &cursor_events).unwrap();
+    store::set_cursor_account_as_of(&conn, "2026-08-17T12:00:00.000Z").unwrap();
+
+    let prices = diverse_prices();
+    let budget_config = BudgetConfig {
+        monthly_usd: Some(50.0),
+    };
+    let current_filter = Filter {
+        from: Some("2026-08-15T00:00:00.000Z".to_string()),
+        to: Some("2026-08-17T23:59:59.999Z".to_string()),
+        ..Filter::default()
+    };
+    let previous_filter = Filter {
+        from: Some("2026-08-12T00:00:00.000Z".to_string()),
+        to: Some("2026-08-14T23:59:59.999Z".to_string()),
+        ..Filter::default()
+    };
+    let heatmap_filter = Filter {
+        from: Some("2026-08-01T00:00:00.000Z".to_string()),
+        to: Some("2026-08-17T23:59:59.999Z".to_string()),
+        ..Filter::default()
+    };
+    let now_utc = Utc.with_ymd_and_hms(2026, 8, 17, 12, 0, 0).unwrap();
+    let now_local = now_utc.with_timezone(&Local);
+
+    let req = OverviewBundleRequest {
+        filter: current_filter.clone(),
+        previous_filter: Some(previous_filter.clone()),
+        heatmap_filter: heatmap_filter.clone(),
+        grain: "week".to_string(),
+        top_sessions_limit: Some(8),
+        include_options: true,
+    };
+
+    let bundle =
+        query::overview_bundle(&conn, &req, &prices, &budget_config, now_utc, now_local).unwrap();
+
+    assert_eq!(bundle.options, Some(query::filter_options(&conn).unwrap()));
+    assert_eq!(
+        bundle.overview,
+        query::overview(&conn, &current_filter, &prices).unwrap()
+    );
+    assert_eq!(
+        bundle.previous,
+        Some(query::overview(&conn, &previous_filter, &prices).unwrap())
+    );
+    assert_eq!(
+        bundle.trend,
+        query::trend(&conn, &current_filter, &prices, "week").unwrap()
+    );
+    assert_eq!(
+        bundle.heatmap,
+        query::trend(&conn, &heatmap_filter, &prices, "day").unwrap()
+    );
+    assert_eq!(
+        bundle.models,
+        query::breakdown(&conn, &current_filter, &prices, "model").unwrap()
+    );
+    assert_eq!(
+        bundle.projects,
+        query::breakdown(&conn, &current_filter, &prices, "project").unwrap()
+    );
+    assert_eq!(
+        bundle.sessions,
+        query::top_sessions(&conn, &current_filter, &prices, 8).unwrap()
+    );
+    assert_eq!(
+        bundle.billing_windows,
+        query::billing_windows(&conn, &current_filter, &prices, now_utc).unwrap()
+    );
+    assert_eq!(
+        bundle.cursor_account_usage,
+        crate::cursor_account::load_summary_filtered(&conn, Some(&current_filter)).unwrap()
+    );
+    assert_eq!(
+        bundle.budget_status,
+        budget::status(&conn, &prices, &budget_config, now_local).unwrap()
+    );
+    assert_eq!(bundle.cursor_account_usage.event_count, 2);
+
+    // Optional fields omitted when requested; default top_sessions_limit = 8.
+    let minimal_req = OverviewBundleRequest {
+        filter: Filter::default(),
+        previous_filter: None,
+        heatmap_filter,
+        grain: "day".to_string(),
+        top_sessions_limit: None,
+        include_options: false,
+    };
+    let minimal = query::overview_bundle(
+        &conn,
+        &minimal_req,
+        &prices,
+        &budget_config,
+        now_utc,
+        now_local,
+    )
+    .unwrap();
+    assert!(minimal.options.is_none());
+    assert!(minimal.previous.is_none());
+    assert!(minimal.sessions.len() <= 8);
+}
+
+#[test]
+fn overview_bundle_reflects_updated_prices_and_cleared_cursor_cache_on_same_connection() {
+    use crate::domain::{CursorUsageEvent, OverviewBundleRequest};
+
+    let conn = store::open_memory().unwrap();
+    let mut record = rec(
+        "2026-08-15T10:00:00.000Z",
+        Source::Codex,
+        "custom-model",
+        "openai",
+        "/proj/price",
+        "s-price",
+        1_000_000,
+    );
+    record.input_tokens = 1_000_000;
+    record.output_tokens = 0;
+    record.cache_read_tokens = 0;
+    record.cache_creation_tokens = 0;
+    record.reasoning_tokens = 0;
+    record.total_tokens = 1_000_000;
+    record.native_cost = None;
+    store::insert_records(&conn, &[record]).unwrap();
+    store::rebuild_rollup(&conn).unwrap();
+
+    store::upsert_cursor_account_events(
+        &conn,
+        &[CursorUsageEvent {
+            occurred_at: "2026-08-15T11:00:00.000Z".to_string(),
+            model: "custom-model".to_string(),
+            input_tokens: 500_000,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            is_headless: false,
+        }],
+    )
+    .unwrap();
+    store::set_cursor_account_as_of(&conn, "2026-08-15T12:00:00.000Z").unwrap();
+
+    let now_utc = Utc.with_ymd_and_hms(2026, 8, 15, 12, 0, 0).unwrap();
+    let now_local = now_utc.with_timezone(&Local);
+    let req = OverviewBundleRequest {
+        filter: Filter::default(),
+        previous_filter: None,
+        heatmap_filter: Filter::default(),
+        grain: "day".to_string(),
+        top_sessions_limit: Some(8),
+        include_options: false,
+    };
+    let budget_config = BudgetConfig {
+        monthly_usd: Some(20.0),
+    };
+
+    let price_v1 = PriceTable {
+        prices: vec![PriceEntry {
+            model: "custom-model".to_string(),
+            provider: None,
+            input: 2.0 / 1_000_000.0,
+            output: 0.0,
+            cache_read: 0.0,
+            cache_creation: 0.0,
+            cache_creation_1h: 0.0,
+            input_above_200k: 0.0,
+            output_above_200k: 0.0,
+            cache_read_above_200k: 0.0,
+            cache_creation_above_200k: 0.0,
+            cache_creation_1h_above_200k: 0.0,
+            origin: PriceOrigin::User,
+        }],
+    };
+    let first =
+        query::overview_bundle(&conn, &req, &price_v1, &budget_config, now_utc, now_local).unwrap();
+    assert!((first.overview.cost.unwrap() - 2.0).abs() < 1e-9);
+    assert!((first.budget_status.month_to_date_cost - 2.0).abs() < 1e-9);
+    assert_eq!(first.cursor_account_usage.event_count, 1);
+    assert!(first
+        .billing_windows
+        .weekly
+        .iter()
+        .any(|w| w.source == "cursor"));
+
+    let mut price_v2 = price_v1;
+    price_v2.prices[0].input = 5.0 / 1_000_000.0;
+    crate::cursor_account::clear_cache(&conn).unwrap();
+
+    let second =
+        query::overview_bundle(&conn, &req, &price_v2, &budget_config, now_utc, now_local).unwrap();
+    assert!((second.overview.cost.unwrap() - 5.0).abs() < 1e-9);
+    assert!((second.models[0].cost.unwrap() - 5.0).abs() < 1e-9);
+    assert!((second.sessions[0].cost.unwrap() - 5.0).abs() < 1e-9);
+    assert!((second.budget_status.month_to_date_cost - 5.0).abs() < 1e-9);
+    assert_eq!(second.cursor_account_usage.event_count, 0);
+    assert!(second
+        .billing_windows
+        .weekly
+        .iter()
+        .all(|w| w.source != "cursor"));
+}

@@ -1,17 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use crate::adapters::extension_tasks::{self, ROO_EXTENSION_ID};
+use crate::adapters::extension_tasks;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
-
-/// Roo Code VS Code 扩展任务目录。
-///
-/// `$ROO_TASKS_DIR` 整体替换，指向 `…/globalStorage/rooveterinaryinc.roo-cline/tasks`。
-/// 未覆盖时扫 VS Code / Insiders / VSCodium / Cursor / Windsurf / Trae 以及
-/// vscode-server 的同一相对路径。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    extension_tasks::scan_dirs(overrides, home, "ROO_TASKS_DIR", ROO_EXTENSION_ID)
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     extension_tasks::discover(roots)

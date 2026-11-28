@@ -18,12 +18,16 @@ function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(String(value));
 }
 
-/** `load` 必须用 `useCallback` 固定住：它变了就当成新请求，旧请求的结果丢弃。 */
-export function useAsync<T>(load: () => Promise<T>): AsyncState<T> {
+/**
+ * 异步数据钩子。传 `null` 进入空闲态（不发起请求，`loading` 为 `false`，不留下旧数据）。
+ * 非空时 `load` 必须用 `useCallback` / `useMemo` 固定住：它变了就当成新请求，旧请求的结果丢弃。
+ */
+export function useAsync<T>(load: (() => Promise<T>) | null): AsyncState<T> {
   const [settled, setSettled] = useState<Settled<T> | null>(null);
   const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
+    if (!load) return;
     let cancelled = false;
     load().then(
       (data) => {
@@ -38,11 +42,11 @@ export function useAsync<T>(load: () => Promise<T>): AsyncState<T> {
     };
   }, [load, nonce]);
 
-  const current = settled?.source === load ? settled : null;
+  const current = load !== null && settled?.source === load ? settled : null;
   return {
     data: current?.data,
     error: current?.error,
-    loading: current === null,
+    loading: load !== null && current === null,
     reload: () => setNonce((n) => n + 1),
   };
 }

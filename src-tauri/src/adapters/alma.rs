@@ -1,29 +1,9 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::adapters::sqlite::table_columns;
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Alma 桌面端的 Electron `userData`：OS 配置目录下的 `alma/`，
-/// **不是** XDG 数据目录 `~/.local/share/alma`。
-///
-/// - Linux：`~/.config/alma`
-/// - macOS：`~/Library/Application Support/alma`
-/// - Windows：`%APPDATA%\alma`
-///
-/// 默认三个平台根都列出来，Linux CI 的 tempfile home 也能落到 `.config/alma`。
-/// `ALMA_HOME` 整体替换默认根，指向数据目录（其下的 `chat_threads.db`）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides.get("ALMA_HOME").cloned().unwrap_or_else(|| {
-        vec![
-            home.join(".config/alma"),
-            home.join("Library/Application Support/alma"),
-            home.join("AppData/Roaming/alma"),
-        ]
-    })
-}
+use crate::source_sqlite::{open_wal_readonly, sql_coalesce, table_columns, wal_fingerprint};
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
@@ -34,11 +14,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let threads = table_columns(&db, "chat_threads")?;
     if !threads.contains("id") {
         return Ok(Vec::new());
@@ -215,12 +195,4 @@ pub fn alma_model(model: &str, provider_id: &str) -> String {
         return model.to_string();
     }
     rest.to_string()
-}
-
-fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({alias}.{name}, {fallback})")
-    } else {
-        fallback.to_string()
-    }
 }

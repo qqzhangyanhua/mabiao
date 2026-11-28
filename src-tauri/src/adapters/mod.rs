@@ -2,6 +2,7 @@ pub mod agy;
 pub mod aider;
 pub mod alma;
 pub mod amp;
+pub(crate) mod buddy_jsonl;
 pub mod cherry;
 pub mod claude;
 pub mod cline;
@@ -32,7 +33,6 @@ pub mod qoder;
 pub mod qoder_cn;
 pub mod qwen;
 pub mod roo;
-pub(crate) mod sqlite;
 pub mod trae;
 pub mod warp;
 pub mod windsurf;
@@ -43,9 +43,7 @@ pub mod zed;
 use std::path::{Path, PathBuf};
 
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
 
-type UsageScanDirsFn = fn(&PathOverrides, &Path) -> Vec<PathBuf>;
 type UsageDiscoverFn = fn(&[PathBuf]) -> Result<Vec<PathBuf>, String>;
 type UsageSidecarFn = fn(&Path, &[PathBuf]) -> String;
 type UsagePrepareDirFn = fn(&Path) -> Result<(), (PathBuf, String)>;
@@ -60,9 +58,6 @@ pub(crate) type UsageParseFn = fn(&Path, &Path) -> Result<Vec<UsageRecord>, Stri
 
 pub(crate) struct UsageAdapter {
     pub source: Source,
-    /// 整体覆盖默认扫描根的环境变量名。`env_overrides` 从表读取，不再手写一份名单。
-    pub path_env: &'static str,
-    pub scan_dirs: UsageScanDirsFn,
     pub discover: UsageDiscoverFn,
     pub sidecar_fingerprint: UsageSidecarFn,
     pub parse: UsageParseFn,
@@ -77,32 +72,11 @@ pub(crate) struct UsageAdapter {
     /// agy 单库中途失败走这条缝；Kimi / Grok 侧车失败仍走硬失败，避免打断既有对账推迟语义。
     pub soft_parse_failure: bool,
     pub coverage: &'static str,
-    pub display_dirs: Option<UsageScanDirsFn>,
     /// 「已检测到」：摄取报告与来源诊断共用。缺省为任一扫描目录存在。
     pub detected: Option<fn(&[PathBuf]) -> bool>,
 }
 
 impl UsageAdapter {
-    pub(crate) fn display_or_scan_dirs(
-        &self,
-        overrides: &PathOverrides,
-        home: &Path,
-    ) -> Vec<PathBuf> {
-        let scan = self.display_dirs.unwrap_or(self.scan_dirs);
-        if overrides.contains_key(self.path_env) {
-            return scan(overrides, home);
-        }
-        let mut dirs = Vec::new();
-        for scan_home in crate::wsl::scan_homes(home) {
-            for path in scan(overrides, &scan_home) {
-                if !dirs.contains(&path) {
-                    dirs.push(path);
-                }
-            }
-        }
-        dirs
-    }
-
     pub(crate) fn roots_detected(&self, dirs: &[PathBuf]) -> bool {
         self.detected.map_or_else(
             || dirs.iter().any(|root| root.exists()),
@@ -114,8 +88,6 @@ impl UsageAdapter {
 const USAGE_ADAPTERS: &[UsageAdapter] = &[
     UsageAdapter {
         source: Source::Codex,
-        path_env: "CODEX_HOME",
-        scan_dirs: codex::scan_dirs,
         discover: codex::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: codex::parse,
@@ -124,13 +96,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Claude,
-        path_env: "CLAUDE_CONFIG_DIR",
-        scan_dirs: claude::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: claude::parse,
@@ -139,13 +108,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Pi,
-        path_env: "PI_AGENT_DIR",
-        scan_dirs: pi::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: pi::parse,
@@ -154,13 +120,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Omp,
-        path_env: "OMP_AGENT_DIR",
-        scan_dirs: omp::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: omp::sidecar_fingerprint,
         parse: omp::parse,
@@ -169,13 +132,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Kimi,
-        path_env: "KIMI_DATA_DIR",
-        scan_dirs: kimi::scan_dirs,
         discover: kimi::discover,
         sidecar_fingerprint: kimi::sidecar_fingerprint,
         parse: kimi::parse,
@@ -184,13 +144,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: Some(kimi::detected),
     },
     UsageAdapter {
         source: Source::CursorAgent,
-        path_env: "CURSOR_AGENT_USAGE_DIR",
-        scan_dirs: cursor_agent::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: cursor_agent::parse,
@@ -199,13 +156,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "会话与 IDE 共用本机目录；token 仅包装落盘",
-        display_dirs: Some(cursor_agent::display_dirs),
         detected: None,
     },
     UsageAdapter {
         source: Source::Copilot,
-        path_env: "COPILOT_HOME",
-        scan_dirs: copilot::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: copilot::parse,
@@ -214,13 +168,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "仅会话结束时上报（累计）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Dsh,
-        path_env: "DSH_HOME",
-        scan_dirs: dsh::scan_dirs,
         discover: dsh::discover,
         sidecar_fingerprint: dsh::sidecar_fingerprint,
         parse: dsh::parse,
@@ -230,13 +181,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Gemini,
-        path_env: "GEMINI_DATA_DIR",
-        scan_dirs: gemini::scan_dirs,
         discover: gemini::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: gemini::parse,
@@ -245,13 +193,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Qwen,
-        path_env: "QWEN_DATA_DIR",
-        scan_dirs: qwen::scan_dirs,
         discover: qwen::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: qwen::parse,
@@ -260,13 +205,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Factory,
-        path_env: "FACTORY_SESSIONS_DIR",
-        scan_dirs: factory::scan_dirs,
         discover: factory::discover,
         sidecar_fingerprint: factory::sidecar_fingerprint,
         parse: factory::parse,
@@ -275,13 +217,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话累计 Token（jsonl 有 usage 则轮级）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Grok,
-        path_env: "GROK_HOME",
-        scan_dirs: grok::scan_dirs,
         discover: grok::discover,
         sidecar_fingerprint: grok::sidecar_fingerprint,
         parse: grok::parse,
@@ -290,13 +229,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Opencode,
-        path_env: "OPENCODE_DATA_DIR",
-        scan_dirs: opencode::scan_dirs,
         discover: opencode::discover,
         sidecar_fingerprint: opencode::sidecar_fingerprint,
         parse: opencode::parse,
@@ -305,13 +241,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Hermes,
-        path_env: "HERMES_HOME",
-        scan_dirs: hermes::scan_dirs,
         discover: hermes::discover,
         sidecar_fingerprint: hermes::sidecar_fingerprint,
         parse: hermes::parse,
@@ -320,13 +253,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "模型级 Token（含原生费用）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Agy,
-        path_env: agy::PATH_ENV,
-        scan_dirs: agy::scan_dirs,
         discover: agy::discover,
         sidecar_fingerprint: agy::sidecar_fingerprint,
         parse: agy::parse,
@@ -335,13 +265,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: true,
         coverage: "轮级六元组（无原生费用）",
-        display_dirs: None,
         detected: Some(agy::detected),
     },
     UsageAdapter {
         source: Source::Qoder,
-        path_env: "QODER_CONFIG_DIR",
-        scan_dirs: qoder::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: qoder::parse,
@@ -350,13 +277,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::QoderCn,
-        path_env: "QODERCN_CONFIG_DIR",
-        scan_dirs: qoder_cn::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: empty_sidecar,
         parse: qoder_cn::parse,
@@ -365,13 +289,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Cline,
-        path_env: "CLINE_SESSION_DATA_DIR",
-        scan_dirs: cline::scan_dirs,
         discover: cline::discover,
         sidecar_fingerprint: cline::sidecar_fingerprint,
         parse: cline::parse,
@@ -380,13 +301,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::WorkBuddy,
-        path_env: "WORKBUDDY_CONFIG_DIR",
-        scan_dirs: workbuddy::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: workbuddy::sidecar_fingerprint,
         parse: workbuddy::parse,
@@ -395,13 +313,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Zcode,
-        path_env: "ZCODE_HOME",
-        scan_dirs: zcode::scan_dirs,
         discover: zcode::discover,
         sidecar_fingerprint: zcode::sidecar_fingerprint,
         parse: zcode::parse,
@@ -410,13 +325,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Alma,
-        path_env: "ALMA_HOME",
-        scan_dirs: alma::scan_dirs,
         discover: alma::discover,
         sidecar_fingerprint: alma::sidecar_fingerprint,
         parse: alma::parse,
@@ -425,13 +337,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::CodeBuddy,
-        path_env: "CODEBUDDY_DIR",
-        scan_dirs: codebuddy::scan_dirs,
         discover: discover_jsonl,
         sidecar_fingerprint: codebuddy::sidecar_fingerprint,
         parse: codebuddy::parse,
@@ -440,13 +349,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::CodeBuddyIde,
-        path_env: "CODEBUDDY_IDE_DIR",
-        scan_dirs: codebuddy_ide::scan_dirs,
         discover: codebuddy_ide::discover,
         sidecar_fingerprint: codebuddy_ide::sidecar_fingerprint,
         parse: codebuddy_ide::parse,
@@ -455,13 +361,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Trae,
-        path_env: "TRAE_HOME",
-        scan_dirs: trae::scan_dirs,
         discover: trae::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: trae::parse,
@@ -470,13 +373,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Goose,
-        path_env: "GOOSE_PATH_ROOT",
-        scan_dirs: goose::scan_dirs,
         discover: goose::discover,
         sidecar_fingerprint: goose::sidecar_fingerprint,
         parse: goose::parse,
@@ -485,13 +385,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Roo,
-        path_env: "ROO_TASKS_DIR",
-        scan_dirs: roo::scan_dirs,
         discover: roo::discover,
         sidecar_fingerprint: roo::sidecar_fingerprint,
         parse: roo::parse,
@@ -500,13 +397,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Kilo,
-        path_env: "KILO_TASKS_DIR",
-        scan_dirs: kilo::scan_dirs,
         discover: kilo::discover,
         sidecar_fingerprint: kilo::sidecar_fingerprint,
         parse: kilo::parse,
@@ -515,13 +409,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Amp,
-        path_env: "AMP_DATA_DIR",
-        scan_dirs: amp::scan_dirs,
         discover: amp::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: amp::parse,
@@ -530,13 +421,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Zed,
-        path_env: "ZED_DATA_DIR",
-        scan_dirs: zed::scan_dirs,
         discover: zed::discover,
         sidecar_fingerprint: zed::sidecar_fingerprint,
         parse: zed::parse,
@@ -545,13 +433,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache；有消息时间用消息时间，否则会话 updated_at；子线程不入账）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Cherry,
-        path_env: "CHERRY_STUDIO_DATA_DIR",
-        scan_dirs: cherry::scan_dirs,
         discover: cherry::discover,
         sidecar_fingerprint: cherry::sidecar_fingerprint,
         parse: cherry::parse,
@@ -560,13 +445,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::OpenClaw,
-        path_env: "OPENCLAW_STATE_DIR",
-        scan_dirs: openclaw::scan_dirs,
         discover: openclaw::discover,
         sidecar_fingerprint: openclaw::sidecar_fingerprint,
         parse: openclaw::parse,
@@ -575,13 +457,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（input 不含 cache）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Crush,
-        path_env: "CRUSH_GLOBAL_DATA",
-        scan_dirs: crush::scan_dirs,
         discover: crush::discover,
         sidecar_fingerprint: crush::sidecar_fingerprint,
         parse: crush::parse,
@@ -590,13 +469,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token（含原生费用）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Aider,
-        path_env: "AIDER_ANALYTICS_LOG",
-        scan_dirs: aider::scan_dirs,
         discover: aider::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: aider::parse,
@@ -605,13 +481,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "轮级 Token（含原生费用）",
-        display_dirs: None,
         detected: Some(aider::detected),
     },
     UsageAdapter {
         source: Source::Warp,
-        path_env: "WARP_HOME",
-        scan_dirs: warp::scan_dirs,
         discover: warp::discover,
         sidecar_fingerprint: warp::sidecar_fingerprint,
         parse: warp::parse,
@@ -620,13 +493,10 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: false,
         soft_parse_failure: false,
         coverage: "会话级 Token（无 input/output 拆分）",
-        display_dirs: None,
         detected: None,
     },
     UsageAdapter {
         source: Source::Windsurf,
-        path_env: "WINDSURF_ACP_HOME",
-        scan_dirs: windsurf::scan_dirs,
         discover: windsurf::discover,
         sidecar_fingerprint: empty_sidecar,
         parse: windsurf::parse,
@@ -635,7 +505,6 @@ const USAGE_ADAPTERS: &[UsageAdapter] = &[
         append_log: true,
         soft_parse_failure: false,
         coverage: "会话级 Token（ACP usage_update）",
-        display_dirs: None,
         detected: None,
     },
 ];

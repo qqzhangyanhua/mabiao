@@ -60,3 +60,24 @@ fn roo_session_feeds_catalog_detail_and_search() {
         .any(|row| row.source == "roo" && row.session_id == "task-roo-1"));
     assert_conversation_index_matches_parse(&conn, home, "roo", "task-roo-1");
 }
+
+#[test]
+fn roo_conversation_reports_application_name_on_non_array_history() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let history = home.join(
+        ".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks/task-bad/api_conversation_history.json",
+    );
+    std::fs::create_dir_all(history.parent().unwrap()).unwrap();
+    std::fs::write(&history, "{}").unwrap();
+
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Roo);
+    let issues = conversation::refresh(&conn, Source::Roo, &roots).unwrap();
+    assert_eq!(issues.len(), 1);
+    assert!(
+        issues[0].message.contains("Roo Code"),
+        "expected Roo Code label in issue: {:?}",
+        issues[0]
+    );
+}

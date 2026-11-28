@@ -249,7 +249,7 @@ export function CursorAccountUsagePanel({
             </section>
           </div>
           <CursorAccountEventTable
-            revision={data.as_of ?? data.event_count}
+            revision={`${revision}:${data.as_of ?? data.event_count}`}
             eventCount={data.event_count}
             onError={(err) => setError(humanStatus(err))}
           />

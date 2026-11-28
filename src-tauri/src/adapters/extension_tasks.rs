@@ -17,56 +17,11 @@ use serde_json::Value;
 
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest;
 
-pub(crate) const ROO_EXTENSION_ID: &str = "rooveterinaryinc.roo-cline";
-pub(crate) const KILO_EXTENSION_ID: &str = "kilocode.kilo-code";
 pub(crate) const UI_MESSAGES: &str = "ui_messages.json";
 pub(crate) const API_HISTORY: &str = "api_conversation_history.json";
 pub(crate) const HISTORY_ITEM: &str = "history_item.json";
-
-const EDITOR_APPS: &[&str] = &[
-    "Code",
-    "Code - Insiders",
-    "Code - OSS",
-    "VSCodium",
-    "VSCodium - Insiders",
-    "Cursor",
-    "Windsurf",
-    "Trae",
-    "Trae CN",
-];
-
-const SERVER_ROOTS: &[&str] = &[
-    ".vscode-server/data",
-    ".vscode-insiders-server/data",
-    ".cursor-server/data",
-];
-
-pub(crate) fn scan_dirs(
-    overrides: &PathOverrides,
-    home: &Path,
-    env: &str,
-    extension_id: &str,
-) -> Vec<PathBuf> {
-    overrides.get(env).cloned().unwrap_or_else(|| {
-        let leaf = format!("User/globalStorage/{extension_id}/tasks");
-        let mut dirs = Vec::new();
-        for app in EDITOR_APPS {
-            for root in [
-                home.join(".config").join(app),
-                home.join("Library/Application Support").join(app),
-                home.join("AppData/Roaming").join(app),
-            ] {
-                dirs.push(root.join(&leaf));
-            }
-        }
-        for root in SERVER_ROOTS {
-            dirs.push(home.join(root).join(&leaf));
-        }
-        dirs
-    })
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::discover_suffix(roots, UI_MESSAGES)

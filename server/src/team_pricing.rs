@@ -13,7 +13,7 @@ use pricing::{
     PricingBasis,
 };
 use push_protocol::PricingSource;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgExecutor, PgPool};
 
 use crate::api::SetTeamPriceRequest;
@@ -103,7 +103,7 @@ pub fn unify<'p, 'r>(cache: &mut PriceCache<'p, 'r>, usage: PricedUsage<'r>) -> 
 
 // ---------- 价目维护 ----------
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct TeamPriceRow {
     pub id: i64,
     pub model: String,

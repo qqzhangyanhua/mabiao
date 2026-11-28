@@ -11,18 +11,18 @@
    - `application_name`：显示名。
    - `brand`：所属品牌。沿用已有品牌即可；新品牌还要在 `Brand` 枚举加成员。
    - `resume_template`：恢复命令模板，`{id}` 占位会话 ID；没有公开命令就返回 `None`。
-3. 实现 `src-tauri/src/adapters/<source>.rs`：扫描、发现、解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
-4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，含 `path_env`（漏了完备性测试会红）。
+3. 实现 `src-tauri/src/adapters/<source>.rs`：发现与解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
+4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，并在 `scan_paths/spec.rs` 的 `SOURCE_PATH_SPECS` 补声明式路径规格含 `path_env`（漏了完备性测试会红）。
 5. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
 6. `tests/adapters.rs` 断言去重与累计口径。
 7. **已有**适配器的归一化输出变了才递增 `store.rs::ADAPTER_VERSION`。只加新 Source、旧 parse 不变则不 bump（新来源没有旧缓存行，见 ADR 0003）。按来源拆版本这次不要做。
-8. 重新生成展示身份文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。不要手改 `src/generated/displayIdentity.ts`，也不要再写一份显示名、图标或恢复命令表。
+8. 重新生成双端展示身份与品牌图形文件（ADR 0028）。先设 `MABIAO_UPDATE_DISPLAY_IDENTITY=1` 重写，再去掉该环境变量跑同一条测试，第二次必须通过。`cargo test adapters` 匹配不到这条测试。命令：`MABIAO_UPDATE_DISPLAY_IDENTITY=1 cargo test --manifest-path src-tauri/Cargo.toml --lib tests::display_identity::display_identity_file_matches_committed_snapshot -- --exact`，然后不带该环境变量再跑一遍。它会同步写入 `src/generated/{displayIdentity,brandMarks}.ts` 与 `server/web/src/generated/{displayIdentity,brandMarks}.ts`；不要手改这些生成文件，也不要在桌面端或管理网页再写显示名、图标、图表色、恢复命令或无正文来源表。
 9. 把新来源加进 `src/lib/overviewLayout.ts` 的 `QUOTA_SOURCE_IDS`（手排顺序，常用项靠前）。`pnpm test` 里的集合断言要求它等于全部来源加上 `cursor`。
-10. 只有新品牌才改前端视觉：`src/components/sourceGlyph.tsx` 的品牌 SVG、`src/lib/sourceIcon.ts` 的 `BRAND_TONE`。少一条 tsc 报错。已有品牌到此为止，不用改其它前端文件。
+10. 引入新品牌时，在 `src-tauri/src/tests/display_identity/marks.rs` 给 `brand_mark_spec` 补矢量路径或指向 `src-tauri/assets/source-icons/` 的位图（漏补时 `cargo test` 编译失败），再执行第 8 步同步双端；桌面端徽章默认回落 `tone-other`，仅当需要专属色板时才在 `src/lib/sourceIcon.ts`（`CUSTOM_BRAND_TONES`）与 `src/styles/shared/tones.css` 增补。已有品牌到此为止，不用改其它前端文件。
 
 来源差异写在 Adapter 表与 `adapters/<source>.rs`。`ingest.rs` 保持来源无关。
 
-完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，展示身份快照测试在未设置 `MABIAO_UPDATE_DISPLAY_IDENTITY` 时通过，`cargo test adapters` 绿。新品牌时 `pnpm build` 绿。
+完成：`USAGE_ADAPTERS` 有该行，fixture 与去重/累计断言在，展示身份快照测试在未设置 `MABIAO_UPDATE_DISPLAY_IDENTITY` 时通过，`cargo test adapters` 绿；桌面端与 `server/web` 构建均绿。
 
 ## 聚合
 
@@ -35,7 +35,7 @@
 ## DTO
 
 1. 先改 Rust `domain`（`domain.rs` 全量 re-export），再改 `src/types.ts`，字段 snake_case。来源联合类型 `UsageSource` 不在 `types.ts` 手写，从 `src/generated/displayIdentity.ts` 推导后 re-export（ADR 0028）。
-2. 改了 `Source` 的 slug、`application_name`、`brand` 或 `resume_template`，或改了 `OfficialQuotaProvider` 的 slug、`display_name` 或 `brand` 后，重新生成展示身份文件。命令见 Adapter 节第 8 步。
+2. 改了 `Source` 的 slug、`application_name`、`brand` 或 `resume_template`，改了 `OfficialQuotaProvider` 的 slug、`display_name` 或 `brand`，或改了 `CONVERSATION_ADAPTERS` 的 `has_conversation_body` 后，重新生成双端展示身份文件。命令见 Adapter 节第 8 步。
 3. `pnpm build` 绿。
 
 ## 摄取
@@ -51,9 +51,9 @@
 
 ## 扫描路径
 
-1. 默认路径与 env 名写在 `USAGE_ADAPTERS`，由设置页或环境变量覆盖。`ingest.rs` 不拼 `home.join(...)`。
-2. 改默认路径或 env 名时同步 fixture 与 `tests/adapters.rs`。逗号多路径、Claude XDG 双路径见 ADR 0005。
-3. `cargo test adapters` 与 `cargo test ingest` 绿。
+1. 默认根、覆盖叶子、配对子目录与动态发现规则集中在 `scan_paths::SOURCE_PATH_SPECS`（`src-tauri/src/scan_paths/spec.rs`），所有维度（用量、设置页、诊断、对话目录与信任根、Cursor 会话、官方额度默认客户端配置根）统一从单次缓存 WSL 的 `scan_paths::ScanEnv` 投影，由设置页或环境变量覆盖。`ingest.rs` 与各适配器不各自拼 `home.join(...)` 或写路径闭包。
+2. 改默认路径或 env 名时同步 fixture、`tests/adapters.rs` 与 `tests/scan_paths.rs`。逗号多路径、Claude Desktop/Cowork、OpenCode `OPENCODE_DB`、WSL 规则见 ADR 0005。
+3. `cargo test adapters`、`cargo test scan_paths`、`cargo test wsl` 与 `cargo test ingest` 绿。
 
 ## Cursor 账号
 
@@ -85,7 +85,8 @@
 3. 会话行注水只有 `conversation/hydrate.rs` 一条：源文件清单、消耗记录汇总、Cursor 会话补模型、工作纪要打标。目录页、正文搜索、单条详情共用它，别在某一条路上单独补一项。没有价目表时传 `None` 跳过消耗记录汇总。
 4. 目录刷新有两种：`refresh` 整份写事件（重建缓存、`ingest_all`）；`refresh_catalog` 只写会话行与文件清单，需整份解析的会话置 `event_index_dirty = 1`，不写事件、不动 `event_index_generation`，事件游标不推进、目录已见指纹照常推进（ADR 0027）。所有来源都是「源文件修订号不变就跳过」。`catalog_writes_events = true` 的来源（OpenCode 整库快照）库一变就整份解析全部会话，`refresh_catalog` 对它仍整份写事件、永不置脏，否则补建要为每个会话各读一遍整库；它的归一化输出变了改 `conversation/opencode.rs` 的 `INDEX_REVISION`。两者共用一套实现，别复制。
 5. 就绪判断、权威事件读取（整场 / 分页 / 单条 / 计数 / 导出流式）、ADR 0025 外置正文回水与推导 `event_id` 还原、以及全量刷新 / 未变子集重解析 / 增量追加 / 目录待补建刷新 / 后台补建的原子写入全部集中在 `conversation/event_store/`。就绪只有一条：`adapter_version` 匹配、`event_index_generation` 非空、`event_index_dirty = 0`（读事件时另验可信路径与磁盘修订号）。目录表持久化可空 `event_count` 列，供工作纪要预览在不读正文时判定零星会话。正文搜索与工具筛选仍按 `event_index_generation` 连接事件。补建走 `backfill_event_index_step_prioritized`（优先队列，再 `ended_at` 倒序），成功后清标记；备份把标记置 0。
-6. `cargo test conversation` 与 `cargo test backup` 绿（含增量、回填、待补建、正文搜索）。
+6. 本机不存对话正文的来源（如 Aider / Warp / Windsurf）在 `CONVERSATION_ADAPTERS` 声明 `has_conversation_body: false`，由展示身份生成器输出 `BODYLESS_CONVERSATION_SOURCES` 驱动桌面端目录空态文案，不在前端手写名单。
+7. `cargo test conversation` 与 `cargo test backup` 绿（含增量、回填、待补建、正文搜索）。
 
 ## 全局指令
 
@@ -223,7 +224,7 @@
 接口：`GET /api/v1/usage/summary`、`GET /api/v1/usage/composition`、`GET /api/v1/usage`、`GET /api/v1/sessions`、`GET /api/v1/sessions/behavior`、`GET /api/v1/work-timeline`。
 
 1. 聚合在服务端做，网页只展示。费用与 token 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。按来源另外并上已推送会话：没有消耗记录的来源仍出现，`session_count` 是会话数，token 与费用为 0。
-2. 这些接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
+2. 这些接口都走 `scope::Scope::resolve`（经 `AuthedAccount::can_access` 判定账号隔离并统一校验可选 `project_id`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体；带了不存在、已合并或成员无数据的 `project_id` 一律得 404。新增同类接口要复用它并配越权测试。
 3. `from` 含、`to` 不含，RFC 3339。summary 按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。summary 每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
 4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。列表时间是 `COALESCE(ended_at, started_at, pushed_at)`。
 5. 工作时间线只铺已推送会话：按起止与区间**重叠**选（不是列表那种按结束时间落点），裁到本地日历日；当天 token / 费用只统计该场落在这天的消耗记录。不发明未推送的 Cursor 本机会话，不画账号用量或代码量。可选 `source` 精确匹配。最多 `MAX_SESSIONS` 场，超出标 `truncated`。
@@ -237,7 +238,7 @@
 接口：`GET /api/v1/sessions/{id}`、`GET /api/v1/projects/{id}`、`GET /api/v1/admin/projects`、`PUT /api/v1/admin/projects/{id}`、`POST /api/v1/admin/projects/{id}/merge`；`GET /api/v1/sessions` 另收 `project_id`、`generated_by_work_notes`，`/usage`、`/usage/summary` 另收 `project_id`。
 
 1. 会话详情与删除同一条判定：先 `owner_of` 再 `can_access`，别人的会话 403，响应里不带正文。详情带事件、上下文清单（原样，证据层级与 `from_cache` / `has_injected_snapshot` 不改写）和本场消耗；本场消耗按（账号, 设备, 来源, session_id）对 `usage_records`，不混入别的成员同名 `session_id`。
-2. 项目页是团队共享实体，但用量走 `scope_account`：成员只看到自己在项目上的那部分，指定别人的 `account_id` 得 403，管理员看全体。成员只能打开自己有会话或消耗记录的项目（`project_admin::has_data_of`），否则 404，免得靠遍历 id 看到别人的仓库名与 remote。已被合并的项目也返回 404。新增按项目的接口要补成员越权测试。
+2. 项目页是团队共享实体，与其它 6 个带 `project_id` 的只读接口共用 `scope::Scope`（`resolve_project` / `resolve`）：成员只看到自己在项目上的那部分，指定别人的 `account_id` 得 403，管理员看全体；成员只能访问自己有会话或消耗记录的项目（`project_admin::has_data_of`），否则 404，免得靠遍历 id 看到别人的仓库名与 remote；已被合并的项目一律返回 404。新增按项目的接口要复用 `Scope` 并补成员越权测试。
 3. 合并不删项目行：被合并项目带 `projects.merged_into` 留着，`merged_into` 始终直指最终目标（再次合并时把原来指向被合并项目的别名一并改指新目标）。会话、消耗记录、`project_paths` 在同一事务里改挂目标。`projects::settle` 沿 `merged_into` 解析并对项目行加共享锁，合并对两行按 id 序加排他锁，所以在途推送先提交、之后的推送一定归到目标；归并键没变，同一个 remote 或同名目录再推送不会长出重复项目。
 4. 改名只改 `name`，`find_or_create` 冲突时不碰它，再推送不会改回自动名字。已合并的项目不能改名（409）。合并要求双方都未被合并过（409）、不能合并进自己（400）、都存在（404）。三个管理员接口都用 `AdminAccount`。
 5. 「码表生成」过滤是 `generated_by_work_notes`（`true` 只看、`false` 排除、不传不过滤），在 `SessionFilter` 里与范围条件一起生效，总数 `total` 也按它算。
@@ -257,6 +258,7 @@ React + Vite + Tailwind，独立前端项目（自己的 `package.json` 与 `pnp
 8. token 构成与缓存命中率走 `GET /api/v1/usage/composition`。总览、成员页、项目页、来源页有消耗明细：按定价来源（全部 / 来源自带 / 团队价目 / 内置快照 / 未定价）、来源、模型筛选，每页 50 条。统一价 KPI 上的「未计入」把筛选设成未定价。未定价模型来自 `unpriced_models`；管理员可去 `#/pricing`，成员只筛到该模型。有 `session_pk` 的时间链到会话详情。成员列在总览始终显示，管理员在项目页和来源页也显示。项目列表只要构成，不铺明细，也不放行为面板。
 9. 行为面板在总览、成员页、项目页，和费用 KPI 分开。失败率用行为接口的定义，没有工具调用时显示「—」。文案写明只统计已推送会话的语义事件，不是桌面端 Cursor 会话失败率。来源页和项目列表不放。
 10. 成员页在会话列表上方列设备名、首次出现、最后出现，按最后出现从新到旧，不展示设备 ID。没有设备时写「还没有推送过的设备」。这一块自己的错误不替换整页。成员列表继续只显示设备数。接口是已有的 `GET /api/v1/accounts/{id}/devices`。
+11. 来源显示名、品牌映射、品牌图形与确定性品牌图表色全部来自 `server/web/src/generated/{displayIdentity,brandMarks}.ts`（由 Rust `tests::display_identity` 同步生成，见 ADR 0028）。不要手改生成文件，不要另写来源/品牌手写表，也不要在 `server/web/src/assets/` 复制品牌位图或写跨目录 `node:fs` 测试。
 
 完成：服务端三条命令绿，且网页四条命令绿。
 

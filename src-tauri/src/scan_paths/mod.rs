@@ -1,8 +1,10 @@
-//! 设置页扫描根目录覆盖。
+//! 数据源扫描路径配置、声明式规格与 [`ScanEnv`] 解析模块。
 //!
-//! 语义与环境变量相同：值为「根目录」，适配器再按原规则拼接叶子路径。
-//! 优先级：设置页 > 环境变量 > 默认路径。从 Dock 启动读不到 shell 环境变量时，
-//! 靠这里的绝对路径避免漏扫。
+//! 语义与环境变量相同：值为「根目录」，再按声明式规则拼接叶子路径与动态发现目录。
+//! 优先级：设置页 > 环境变量 > 默认路径（Windows 未覆盖时包含单次缓存的 WSL 家目录）。
+
+mod env;
+mod spec;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -10,9 +12,14 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use crate::adapters::usage_adapter;
 use crate::domain::Source;
-use crate::ingest::{self, PathOverrides};
+use crate::ingest::PathOverrides;
+
+pub use env::ScanEnv;
+pub use spec::{
+    source_path_spec, source_path_specs, DefaultRoot, DefaultRoots, DisplayRule, DynamicExpansion,
+    SourcePathSpec, SOURCE_PATH_SPECS,
+};
 
 pub const CONFIG_NAME: &str = "scan_paths.json";
 
@@ -41,7 +48,7 @@ pub struct ScanPathRowDto {
     pub env_roots: Vec<String>,
     pub default_roots: Vec<String>,
     pub effective_scan_dirs: Vec<String>,
-    /// 适配器拼在根目录后的叶子。空表示根目录本身就是扫描目标。
+    /// 声明式规格中拼在根目录后的首项叶子。空表示根目录本身就是扫描目标。
     pub join_leaf: String,
     /// `ui` / `env` / `default`
     pub active: String,
@@ -83,7 +90,7 @@ pub fn config_to_overrides(config: &ScanPathConfig) -> PathOverrides {
             .map(PathBuf::from)
             .collect();
         if !paths.is_empty() {
-            overrides.insert(usage_adapter(source).path_env, paths);
+            overrides.insert(source_path_spec(source).path_env, paths);
         }
     }
     overrides
@@ -139,102 +146,45 @@ pub fn expand_home(raw: &str, home: &Path) -> PathBuf {
 }
 
 pub fn panel(config_path: &Path, home: &Path) -> ScanPathPanelDto {
-    let config = load(config_path);
-    let env = ingest::env_overrides();
-    let merged = ingest::merge_path_overrides(env.clone(), config_to_overrides(&config));
-    let empty = PathOverrides::new();
+    let env = ScanEnv::capture_with_config(home, config_path);
+    panel_with_env(&env)
+}
+
+pub fn panel_with_env(env: &ScanEnv) -> ScanPathPanelDto {
     ScanPathPanelDto {
         rows: Source::ALL
             .iter()
             .copied()
-            .map(|source| row(source, &config, &env, &merged, &empty, home))
+            .map(|source| row(env, source))
             .collect(),
     }
 }
 
-fn row(
-    source: Source,
-    config: &ScanPathConfig,
-    env: &PathOverrides,
-    merged: &PathOverrides,
-    empty: &PathOverrides,
-    home: &Path,
-) -> ScanPathRowDto {
-    let adapter = usage_adapter(source);
-    let override_roots = config
-        .overrides
-        .get(source.as_str())
-        .cloned()
-        .unwrap_or_default();
-    let env_roots = env
-        .get(adapter.path_env)
-        .map(|paths| path_strings(paths))
-        .unwrap_or_default();
-    let join_leaf = join_leaf(source);
-    let default_scan = (adapter.scan_dirs)(empty, home);
-    let mut default_roots = Vec::new();
-    for dir in default_scan.iter().map(|dir| strip_leaf(dir, &join_leaf)) {
-        if !default_roots.contains(&dir) {
-            default_roots.push(dir);
-        }
-    }
-    let effective_scan_dirs = path_strings(&(adapter.scan_dirs)(merged, home));
-    let active = if !override_roots.is_empty() {
-        "ui"
-    } else if !env_roots.is_empty() {
-        "env"
-    } else {
-        "default"
-    };
+fn row(env: &ScanEnv, source: Source) -> ScanPathRowDto {
+    let spec = source_path_spec(source);
+    let override_roots = path_strings(&env.ui_roots(source));
+    let env_roots = path_strings(&env.env_display_roots(source));
+    let default_roots = path_strings(&env.default_roots(source));
+    let effective_scan_dirs = path_strings(&env.usage_scan_dirs(source));
+    let active = env.active_layer(source);
+
     ScanPathRowDto {
         source: source.as_str().to_string(),
         application: source.application_name().to_string(),
-        env_var: adapter.path_env.to_string(),
+        env_var: spec.path_env.to_string(),
         override_roots,
         env_roots,
         default_roots,
         effective_scan_dirs,
-        join_leaf,
+        join_leaf: spec.join_leaf().to_string(),
         active: active.to_string(),
         note: row_note(source),
     }
 }
 
-pub(crate) fn join_leaf(source: Source) -> String {
-    let sentinel = PathBuf::from("/__mabiao_scan_root__");
-    let env = usage_adapter(source).path_env;
-    let overrides = PathOverrides::from([(env, vec![sentinel.clone()])]);
-    let dirs = (usage_adapter(source).scan_dirs)(&overrides, Path::new("/home"));
-    let Some(dir) = dirs.first() else {
-        return String::new();
-    };
-    let Ok(rel) = dir.strip_prefix(&sentinel) else {
-        return String::new();
-    };
-    rel.iter()
-        .filter_map(|component| component.to_str())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-fn strip_leaf(scan: &Path, leaf: &str) -> String {
-    if leaf.is_empty() {
-        return scan.to_string_lossy().into_owned();
-    }
-    if leaf == "sessions"
-        && scan.file_name().and_then(|name| name.to_str()) == Some("archived_sessions")
-    {
-        return scan.parent().unwrap_or(scan).to_string_lossy().into_owned();
-    }
-    let mut current = scan.to_path_buf();
-    for component in leaf.split('/').rev() {
-        if current.file_name().and_then(|name| name.to_str()) == Some(component) {
-            if let Some(parent) = current.parent() {
-                current = parent.to_path_buf();
-            }
-        }
-    }
-    current.to_string_lossy().into_owned()
+#[cfg(test)]
+pub(crate) fn join_leaf(source: Source) -> &'static str {
+    source_path_spec(source).join_leaf()
 }
 
 fn row_note(source: Source) -> String {
@@ -316,17 +266,24 @@ pub struct SourcePresenceDto {
     pub rows: Vec<SourcePresenceRow>,
 }
 
-/// 用空覆盖表走各 Adapter 的默认 `scan_dirs`，再问目录在不在。
+/// 用默认配置走声明式路径规格（含活跃 WSL 家目录），再问目录在不在。
 pub fn detect_default_presence(home: &Path, has_usage_records: bool) -> SourcePresenceDto {
-    let empty = PathOverrides::new();
+    let env = ScanEnv::capture_defaults_for_home(home);
+    detect_default_presence_with_env(&env, has_usage_records)
+}
+
+pub fn detect_default_presence_with_env(
+    env: &ScanEnv,
+    has_usage_records: bool,
+) -> SourcePresenceDto {
+    let defaults = env.defaults_only();
     SourcePresenceDto {
         has_usage_records,
         rows: Source::ALL
             .iter()
             .copied()
             .map(|source| {
-                let adapter = usage_adapter(source);
-                let dirs = adapter.display_or_scan_dirs(&empty, home);
+                let dirs = defaults.display_dirs(source);
                 SourcePresenceRow {
                     source: source.as_str().to_string(),
                     application: source.application_name().to_string(),

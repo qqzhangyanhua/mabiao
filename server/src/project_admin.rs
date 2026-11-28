@@ -3,6 +3,7 @@
 //! 合并不删项目行：被合并项目带 `merged_into` 留着，归并键继续指向目标，见 `projects::settle`。
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::{PgConnection, PgPool};
 
 use crate::error::AppError;
@@ -10,17 +11,19 @@ use crate::error::AppError;
 pub const MAX_PROJECT_NAME_CHARS: usize = 200;
 const MAX_LISTED_PROJECTS: i64 = 2000;
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProjectRow {
     pub id: i64,
     pub key: String,
     pub name: String,
     pub git_remote: Option<String>,
+    /// 仅用于服务端合并转发判断，不输出到线上 JSON。
+    #[serde(default, skip_serializing)]
     pub merged_into: Option<i64>,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct ProjectListRow {
     pub id: i64,
     pub key: String,
