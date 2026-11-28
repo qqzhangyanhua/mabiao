@@ -8,20 +8,7 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// CodeBuddy CLI 会话：`$CODEBUDDY_DIR`，否则 `~/.codebuddy`，扫 `projects/**/*.jsonl`。
-/// 目录布局像 Claude Code，行格式是 OpenAI Responses 形态，用量在
-/// `providerData.rawUsage` / `providerData.usage`（`prompt_tokens` 含 cache）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("CODEBUDDY_DIR")
-        .cloned()
-        .unwrap_or_else(|| vec![home.join(".codebuddy")])
-        .into_iter()
-        .map(|root| root.join("projects"))
-        .collect()
-}
+use crate::ingest;
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
     match meta_beside(path) {

@@ -6,19 +6,7 @@ use crate::adapters::{
     discover_suffix, finish, has_billable_tokens, i64_field, parse_whole_json, text_field,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Cline CLI 会话目录：`$CLINE_SESSION_DATA_DIR`，否则 `~/.cline/data/sessions`。
-/// 每个会话一个文件夹，主文件是 `<id>.messages.json`（整份重写）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(
-        overrides,
-        home,
-        "CLINE_SESSION_DATA_DIR",
-        ".cline/data/sessions",
-        "",
-    )
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     discover_suffix(roots, ".messages.json")

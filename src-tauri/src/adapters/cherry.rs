@@ -5,28 +5,7 @@ use crate::adapters::goose::unix_seconds_to_rfc3339;
 use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Cherry Studio v2 把用量写进 Electron userData 下的 `cherrystudio.sqlite`。
-///
-/// `$CHERRY_STUDIO_DATA_DIR` 覆盖 userData 根。未覆盖时扫 Linux `.config`、
-/// macOS Application Support、Windows AppData，目录名同时覆盖
-/// `CherryStudio`（package.json `name`）与 `Cherry Studio`（productName）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("CHERRY_STUDIO_DATA_DIR")
-        .cloned()
-        .unwrap_or_else(|| {
-            let names = ["CherryStudio", "Cherry Studio"];
-            let mut dirs = Vec::new();
-            for name in names {
-                dirs.push(home.join(".config").join(name));
-                dirs.push(home.join("Library/Application Support").join(name));
-                dirs.push(home.join("AppData/Roaming").join(name));
-            }
-            dirs
-        })
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots

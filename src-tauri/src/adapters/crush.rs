@@ -9,46 +9,7 @@ use crate::adapters::{finish, has_billable_tokens};
 
 pub(crate) use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Crush 把每个项目的会话写进 `{data_dir}/crush.db`。
-///
-/// 项目清单在全局 `projects.json`（charmbracelet/crush `internal/projects`）。
-/// `$CRUSH_GLOBAL_DATA` 覆盖该全局数据目录；未覆盖时扫
-/// `~/.local/share/crush` 与 Windows `%LOCALAPPDATA%/crush`。
-/// 不遍历 `$HOME` 下的 `.crush` 目录。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    let registries = registry_dirs(overrides, home);
-    let mut dirs = registries.clone();
-    for root in &registries {
-        let Ok(projects) = load_projects(root) else {
-            continue;
-        };
-        for project in projects {
-            let data_dir = project.data_dir.trim();
-            if data_dir.is_empty() {
-                continue;
-            }
-            let data_dir = PathBuf::from(data_dir);
-            if !dirs.contains(&data_dir) {
-                dirs.push(data_dir);
-            }
-        }
-    }
-    dirs
-}
-
-fn registry_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("CRUSH_GLOBAL_DATA")
-        .cloned()
-        .unwrap_or_else(|| {
-            vec![
-                home.join(".local/share/crush"),
-                home.join("AppData/Local/crush"),
-            ]
-        })
-}
+use crate::ingest;
 
 #[derive(Deserialize)]
 struct ProjectList {
@@ -244,6 +205,24 @@ pub(crate) fn project_for_db(db_path: &Path, scan_dir: &Path) -> String {
         return data_dir.to_string_lossy().into_owned();
     }
     String::new()
+}
+
+pub(crate) fn project_data_dirs(root: &Path) -> Vec<PathBuf> {
+    let Ok(projects) = load_projects(root) else {
+        return Vec::new();
+    };
+    let mut dirs = Vec::new();
+    for project in projects {
+        let data_dir = project.data_dir.trim();
+        if data_dir.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(data_dir);
+        if !dirs.contains(&path) {
+            dirs.push(path);
+        }
+    }
+    dirs
 }
 
 fn load_projects(root: &Path) -> Result<Vec<TrackedProject>, String> {

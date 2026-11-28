@@ -19,9 +19,11 @@ use std::time::Duration;
 use chrono::Utc;
 use serde_json::Value;
 
-use crate::domain::OfficialQuotaWindow;
+use crate::domain::{OfficialQuotaWindow, Source};
+#[cfg(test)]
 use crate::ingest::PathOverrides;
 use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::scan_paths::ScanEnv;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA: &str = "oauth-2025-04-20";
@@ -57,35 +59,16 @@ pub(crate) fn fetch_with_access_token_at(
 }
 
 pub fn credentials_path() -> PathBuf {
-    first_existing_credentials(
-        &crate::ingest::default_home(),
-        &crate::ingest::path_overrides(),
-    )
+    first_existing_credentials_in(&ScanEnv::capture_for_home(&crate::ingest::default_home()))
 }
 
+pub(crate) fn first_existing_credentials_in(env: &ScanEnv) -> PathBuf {
+    env.client_credential_path(Source::Claude, ".credentials.json")
+}
+
+#[cfg(test)]
 pub(crate) fn first_existing_credentials(home: &Path, overrides: &PathOverrides) -> PathBuf {
-    let candidates = credentials_candidates_with(home, overrides);
-    candidates
-        .into_iter()
-        .find(|path| path.exists())
-        .unwrap_or_else(|| home.join(".claude").join(".credentials.json"))
-}
-
-pub(crate) fn credentials_candidates_with(home: &Path, overrides: &PathOverrides) -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-    if let Some(paths) = overrides.get("CLAUDE_CONFIG_DIR") {
-        roots.extend(paths.iter().cloned());
-    }
-    roots.push(home.join(".claude"));
-    roots.push(home.join(".config/claude"));
-    let mut paths = Vec::new();
-    for root in roots {
-        let path = root.join(".credentials.json");
-        if !paths.contains(&path) {
-            paths.push(path);
-        }
-    }
-    paths
+    first_existing_credentials_in(&ScanEnv::from_overrides(home, overrides))
 }
 
 /// 顶层三个固定窗口用 `utilization`，按模型拆的周窗口在 `limits[]` 里用 `percent`。

@@ -4,26 +4,7 @@ use std::path::{Path, PathBuf};
 use crate::adapters::sqlite::table_columns;
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Alma 桌面端的 Electron `userData`：OS 配置目录下的 `alma/`，
-/// **不是** XDG 数据目录 `~/.local/share/alma`。
-///
-/// - Linux：`~/.config/alma`
-/// - macOS：`~/Library/Application Support/alma`
-/// - Windows：`%APPDATA%\alma`
-///
-/// 默认三个平台根都列出来，Linux CI 的 tempfile home 也能落到 `.config/alma`。
-/// `ALMA_HOME` 整体替换默认根，指向数据目录（其下的 `chat_threads.db`）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides.get("ALMA_HOME").cloned().unwrap_or_else(|| {
-        vec![
-            home.join(".config/alma"),
-            home.join("Library/Application Support/alma"),
-            home.join("AppData/Roaming/alma"),
-        ]
-    })
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots

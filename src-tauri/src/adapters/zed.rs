@@ -9,25 +9,7 @@ use crate::adapters::goose::parse_sql_timestamp;
 use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Zed 把内置 Agent 线程写进一份 SQLite：`threads/threads.db`。
-///
-/// `$ZED_DATA_DIR` 覆盖 Zed 数据根并拼 `threads/`（对齐上游 `paths::data_dir()`）。
-/// 未覆盖时扫 Linux XDG、macOS Application Support、Windows LocalAppData。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("ZED_DATA_DIR")
-        .cloned()
-        .map(|roots| roots.into_iter().map(|root| root.join("threads")).collect())
-        .unwrap_or_else(|| {
-            vec![
-                home.join(".local/share/zed/threads"),
-                home.join("Library/Application Support/Zed/threads"),
-                home.join("AppData/Local/Zed/threads"),
-            ]
-        })
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots

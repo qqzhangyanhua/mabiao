@@ -6,11 +6,7 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "OMP_AGENT_DIR", ".omp/agent/sessions", "")
-}
+use crate::ingest;
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
     let mut records = parse_streaming_jsonl(path, parse_omp_jsonl)?;

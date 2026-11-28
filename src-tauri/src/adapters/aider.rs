@@ -7,16 +7,6 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// 只读用户用 `--analytics-log` 主动打开的 JSONL。
-///
-/// 默认只认 `~/.aider/analytics.jsonl`（用户自己把日志指到这里时才能扫到）。
-/// `AIDER_ANALYTICS_LOG` 可改成目录或日志文件。不读、不写 `.aider.conf.yml`，
-/// 也不读 `~/.aider/analytics.json`（那是 opt-in UUID，不是用量）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "AIDER_ANALYTICS_LOG", ".aider", "")
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

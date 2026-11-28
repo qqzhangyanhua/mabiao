@@ -11,8 +11,8 @@
    - `application_name`：显示名。
    - `brand`：所属品牌。沿用已有品牌即可；新品牌还要在 `Brand` 枚举加成员。
    - `resume_template`：恢复命令模板，`{id}` 占位会话 ID；没有公开命令就返回 `None`。
-3. 实现 `src-tauri/src/adapters/<source>.rs`：扫描、发现、解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
-4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，含 `path_env`（漏了完备性测试会红）。
+3. 实现 `src-tauri/src/adapters/<source>.rs`：发现与解析；需要时加 sidecar 指纹或 `prepare_dir` / `prepare_file`。
+4. 在 `adapters/mod.rs` 的 `USAGE_ADAPTERS` 加一行，并在 `scan_paths/spec.rs` 的 `SOURCE_PATH_SPECS` 补声明式路径规格含 `path_env`（漏了完备性测试会红）。
 5. 脱敏 fixture 放到 `src-tauri/tests/fixtures/`。
 6. `tests/adapters.rs` 断言去重与累计口径。
 7. **已有**适配器的归一化输出变了才递增 `store.rs::ADAPTER_VERSION`。只加新 Source、旧 parse 不变则不 bump（新来源没有旧缓存行，见 ADR 0003）。按来源拆版本这次不要做。
@@ -51,9 +51,9 @@
 
 ## 扫描路径
 
-1. 默认路径与 env 名写在 `USAGE_ADAPTERS`，由设置页或环境变量覆盖。`ingest.rs` 不拼 `home.join(...)`。
-2. 改默认路径或 env 名时同步 fixture 与 `tests/adapters.rs`。逗号多路径、Claude XDG 双路径见 ADR 0005。
-3. `cargo test adapters` 与 `cargo test ingest` 绿。
+1. 默认根、覆盖叶子、配对子目录与动态发现规则集中在 `scan_paths::SOURCE_PATH_SPECS`（`src-tauri/src/scan_paths/spec.rs`），所有维度（用量、设置页、诊断、对话目录与信任根、Cursor 会话、官方额度默认客户端配置根）统一从单次缓存 WSL 的 `scan_paths::ScanEnv` 投影，由设置页或环境变量覆盖。`ingest.rs` 与各适配器不各自拼 `home.join(...)` 或写路径闭包。
+2. 改默认路径或 env 名时同步 fixture、`tests/adapters.rs` 与 `tests/scan_paths.rs`。逗号多路径、Claude Desktop/Cowork、OpenCode `OPENCODE_DB`、WSL 规则见 ADR 0005。
+3. `cargo test adapters`、`cargo test scan_paths`、`cargo test wsl` 与 `cargo test ingest` 绿。
 
 ## Cursor 账号
 

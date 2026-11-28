@@ -61,12 +61,13 @@ pub fn parse_plan_type(raw: &str) -> Option<String> {
 }
 
 pub fn auth_path() -> PathBuf {
-    std::env::var("CODEX_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| crate::ingest::default_home().join(".codex"))
-        .join("auth.json")
+    auth_path_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
+}
+
+pub(crate) fn auth_path_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    env.client_credential_path(crate::domain::Source::Codex, "auth.json")
 }
 
 #[derive(Debug, Clone, PartialEq)]

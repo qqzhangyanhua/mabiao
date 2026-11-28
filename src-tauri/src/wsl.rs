@@ -2,10 +2,12 @@
 //!
 //! 未安装 WSL、UNC 枚举失败或超时都静默跳过，不拖慢摄取。非 Windows 平台恒为空。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[cfg(any(windows, test))]
 use std::fs;
+#[cfg(any(windows, test))]
+use std::path::Path;
 #[cfg(any(windows, test))]
 use std::sync::mpsc;
 #[cfg(any(windows, test))]
@@ -38,17 +40,6 @@ pub(crate) fn extra_scan_homes() -> Vec<PathBuf> {
     }
     #[cfg(not(windows))]
     Vec::new()
-}
-
-/// `home` 加上 WSL 发行版用户目录。设置页/环境变量覆盖某一来源时不要用这个列表替换覆盖值。
-pub(crate) fn scan_homes(home: &Path) -> Vec<PathBuf> {
-    let mut homes = vec![home.to_path_buf()];
-    for extra in extra_scan_homes() {
-        if extra != home && !homes.contains(&extra) {
-            homes.push(extra);
-        }
-    }
-    homes
 }
 
 #[cfg(any(windows, test))]
