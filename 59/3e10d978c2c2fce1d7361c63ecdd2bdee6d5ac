@@ -1,0 +1,158 @@
+docs/adr/0017-rust-module-boundaries.md
+  h_4132837b09b7e7 18,25
+src-tauri/src/conversation/agy.rs
+  h_4132837b09b7e7 20-23,27-30
+src-tauri/src/conversation/aider.rs
+  h_4132837b09b7e7 5
+src-tauri/src/conversation/alma.rs
+  h_4132837b09b7e7 7-11,13-15
+src-tauri/src/conversation/amp.rs
+  h_4132837b09b7e7 11-16,19-22
+src-tauri/src/conversation/attachments.rs
+  h_4132837b09b7e7 1,3,7,10,13-17,19-22,24-85,112-204,206-414,441,467,482,500
+src-tauri/src/conversation/buddy_jsonl.rs
+  h_4132837b09b7e7 8-9,12,14,16-18
+src-tauri/src/conversation/cherry.rs
+  h_4132837b09b7e7 11-15,18-21
+src-tauri/src/conversation/claude.rs
+  h_4132837b09b7e7 7-14,16-18
+src-tauri/src/conversation/claude_test.rs
+  h_4132837b09b7e7 1-4
+src-tauri/src/conversation/cline.rs
+  h_4132837b09b7e7 6-10,12-14
+src-tauri/src/conversation/codebuddy.rs
+  h_4132837b09b7e7 4
+src-tauri/src/conversation/codebuddy_ide.rs
+  h_4132837b09b7e7 5-9,12-14
+src-tauri/src/conversation/codex.rs
+  h_4132837b09b7e7 7-14,16-18
+src-tauri/src/conversation/codex_test.rs
+  h_4132837b09b7e7 1-5
+src-tauri/src/conversation/copilot.rs
+  h_4132837b09b7e7 5-10,15-17
+src-tauri/src/conversation/copilot_test.rs
+  h_4132837b09b7e7 5-6
+src-tauri/src/conversation/crush.rs
+  h_4132837b09b7e7 13-17,20-23
+src-tauri/src/conversation/cursor.rs
+  h_4132837b09b7e7 8-13,19-22
+src-tauri/src/conversation/cursor_bridge.rs
+  h_4132837b09b7e7 17
+src-tauri/src/conversation/cursor_test.rs
+  h_4132837b09b7e7 5-6
+src-tauri/src/conversation/discover.rs
+  h_4132837b09b7e7 6
+src-tauri/src/conversation/droid.rs
+  h_4132837b09b7e7 5-11,14-17
+src-tauri/src/conversation/droid_test.rs
+  h_4132837b09b7e7 1-4
+src-tauri/src/conversation/dsh.rs
+  h_4132837b09b7e7 6-10,12-14
+src-tauri/src/conversation/dsh_test.rs
+  h_4132837b09b7e7 4-7
+src-tauri/src/conversation/event_store/incremental.rs
+  h_4132837b09b7e7 12
+src-tauri/src/conversation/event_store/read.rs
+  h_4132837b09b7e7 22
+src-tauri/src/conversation/event_store/storage.rs
+  h_4132837b09b7e7 18
+src-tauri/src/conversation/event_store/write.rs
+  h_4132837b09b7e7 22
+src-tauri/src/conversation/export.rs
+  h_4132837b09b7e7 10-11
+src-tauri/src/conversation/extension_tasks.rs
+  h_4132837b09b7e7 8,12,18-20
+src-tauri/src/conversation/gemini.rs
+  h_4132837b09b7e7 7-15
+src-tauri/src/conversation/goose.rs
+  h_4132837b09b7e7 12-16,21-24
+src-tauri/src/conversation/grok.rs
+  h_4132837b09b7e7 7-12,18-20
+src-tauri/src/conversation/grok_test.rs
+  h_4132837b09b7e7 5-6
+src-tauri/src/conversation/hermes.rs
+  h_4132837b09b7e7 13-17,20-23
+src-tauri/src/conversation/incremental.rs
+  h_4132837b09b7e7 56
+src-tauri/src/conversation/kilo.rs
+  h_4132837b09b7e7 4
+src-tauri/src/conversation/kimi.rs
+  h_4132837b09b7e7 7-12,17-19
+src-tauri/src/conversation/kimi_code.rs
+  h_4132837b09b7e7 5-7,9-12
+src-tauri/src/conversation/kimi_test.rs
+  h_4132837b09b7e7 3-4
+src-tauri/src/conversation/line_direct.rs
+  h_4132837b09b7e7 1,6-8
+src-tauri/src/conversation/merge.rs
+  h_4132837b09b7e7 13
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 51,61,74,76,97
+src-tauri/src/conversation/normalize/events.rs
+  h_4132837b09b7e7 1-293
+src-tauri/src/conversation/normalize/mod.rs
+  h_4132837b09b7e7 1,3-8,13,18-29,71,177,219,407,463
+src-tauri/src/conversation/omp.rs
+  h_4132837b09b7e7 5-14
+src-tauri/src/conversation/omp_test.rs
+  h_4132837b09b7e7 1-2
+src-tauri/src/conversation/openclaw.rs
+  h_4132837b09b7e7 7-13,15-17
+src-tauri/src/conversation/opencode.rs
+  h_4132837b09b7e7 6
+src-tauri/src/conversation/opencode_json.rs
+  h_4132837b09b7e7 6
+src-tauri/src/conversation/opencode_project.rs
+  h_4132837b09b7e7 9-13,15-18
+src-tauri/src/conversation/opencode_snapshot.rs
+  h_4132837b09b7e7 9
+src-tauri/src/conversation/opencode_test.rs
+  h_4132837b09b7e7 3-4
+src-tauri/src/conversation/pi.rs
+  h_4132837b09b7e7 5-14
+src-tauri/src/conversation/pi_test.rs
+  h_4132837b09b7e7 1-2
+src-tauri/src/conversation/qoder.rs
+  h_4132837b09b7e7 3,5
+src-tauri/src/conversation/qwen.rs
+  h_4132837b09b7e7 8-13,16
+src-tauri/src/conversation/qwen_test.rs
+  h_4132837b09b7e7 3-4
+src-tauri/src/conversation/read.rs
+  h_4132837b09b7e7 21
+src-tauri/src/conversation/refresh.rs
+  h_4132837b09b7e7 16
+src-tauri/src/conversation/responses_wire.rs
+  h_4132837b09b7e7 1-403
+src-tauri/src/conversation/roo.rs
+  h_4132837b09b7e7 4
+src-tauri/src/conversation/session_store.rs
+  h_4132837b09b7e7 17
+src-tauri/src/conversation/trae.rs
+  h_4132837b09b7e7 4
+src-tauri/src/conversation/warp.rs
+  h_4132837b09b7e7 5
+src-tauri/src/conversation/windsurf.rs
+  h_4132837b09b7e7 5
+src-tauri/src/conversation/workbuddy.rs
+  h_4132837b09b7e7 4
+src-tauri/src/conversation/zcode.rs
+  h_4132837b09b7e7 7-11,13-15
+src-tauri/src/conversation/zed.rs
+  h_4132837b09b7e7 10-14,20-23
+src-tauri/src/test_support/conversation_boundary.rs
+  h_4132837b09b7e7 25-26,81,83,88,117-126,128-129,132-175
+src-tauri/src/tests/conversation_boundary.rs
+  h_4132837b09b7e7 11-15,46,49-72,74-76,78,83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "593e10d978c2c2fce1d7361c63ecdd2bdee6d5ac",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
