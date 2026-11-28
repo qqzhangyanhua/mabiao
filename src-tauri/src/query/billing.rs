@@ -3,7 +3,7 @@ use rusqlite::{params_from_iter, types::Value, Connection};
 
 use crate::billing_window;
 use crate::cursor_account;
-use crate::domain::{BillingWindowsDto, Filter, PriceTable, Source};
+use crate::domain::{BillingWindowsDto, CursorUsageEvent, Filter, PriceTable, Source};
 
 use super::sql::*;
 
@@ -14,6 +14,17 @@ pub fn billing_windows(
     now: DateTime<Utc>,
 ) -> Result<BillingWindowsDto, String> {
     install_prices(conn, prices)?;
+    let cursor_events = cursor_account::events_for_weekly_window(conn, filter)?;
+    billing_windows_installed_with_cursor(conn, filter, prices, now, &cursor_events)
+}
+
+pub(super) fn billing_windows_installed_with_cursor(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+    now: DateTime<Utc>,
+    cursor_events: &[CursorUsageEvent],
+) -> Result<BillingWindowsDto, String> {
     let scoped = Filter {
         from: None,
         to: None,
@@ -67,10 +78,9 @@ pub fn billing_windows(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
     let dto = billing_window::summarize_events(&events, now);
-    let cursor_events = cursor_account::events_for_weekly_window(conn, filter)?;
     Ok(billing_window::attach_cursor_weekly(
         dto,
-        &cursor_events,
+        cursor_events,
         prices,
         now,
     ))

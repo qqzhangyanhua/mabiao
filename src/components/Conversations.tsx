@@ -4,7 +4,7 @@ import {
   conversationFocusToRestore,
   hashForConversation,
   replaceLocationHash,
-} from "../hooks/viewCache";
+} from "../lib/viewHash";
 import { conversationKey } from "../lib/conversationCache";
 import { conversationSourcesFromUsageFilter } from "../lib/conversationDisplay";
 import {

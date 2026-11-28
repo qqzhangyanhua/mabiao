@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons";
-import { hashForWorktime, parseWorktimeDay, replaceLocationHash } from "../hooks/viewCache";
+import { hashForWorktime, parseWorktimeDay, replaceLocationHash } from "../lib/viewHash";
 import { parseDateValue, toDateValue } from "../lib/calendar";
 import {
   sourceLabel,

@@ -50,6 +50,8 @@ export function Settings({
   observedModels,
   budgetStatus,
   savingBudget,
+  restoreRevision,
+  pricingRevision,
   themeMode,
   autoRefresh,
   cursorAccountAutoRefresh,
@@ -58,7 +60,10 @@ export function Settings({
   onSave,
   onRebuild,
   onPurgeArchived,
-  onSnapshotRefreshed,
+  onScanPathsSaved,
+  onPriceSnapshotChanged,
+  onBackupRestored,
+  onClearCursorAccountUsage,
   onSaveBudget,
   officialQuota,
   onOfficialQuota,
@@ -79,6 +84,8 @@ export function Settings({
   observedModels: string[];
   budgetStatus: BudgetStatusDto | null;
   savingBudget: boolean;
+  restoreRevision: number;
+  pricingRevision: number;
   themeMode: ThemeMode;
   autoRefresh: string;
   cursorAccountAutoRefresh: boolean;
@@ -87,7 +94,10 @@ export function Settings({
   onSave: () => void | Promise<void>;
   onRebuild: (source: string | null) => void;
   onPurgeArchived: (source: string | null) => void;
-  onSnapshotRefreshed: () => void;
+  onScanPathsSaved: () => void;
+  onPriceSnapshotChanged: () => void;
+  onBackupRestored: () => void;
+  onClearCursorAccountUsage: () => Promise<void>;
   onSaveBudget: (monthlyUsd: number | null) => void;
   officialQuota: OfficialQuotaDto | null;
   onOfficialQuota: (value: OfficialQuotaDto) => void;
@@ -104,7 +114,6 @@ export function Settings({
     const hash = window.location.hash.replace(/^#/, "");
     return hash.startsWith("settings-") ? hash : null;
   });
-  const [diagnosisEpoch, setDiagnosisEpoch] = useState(0);
   const [prefillKey, setPrefillKey] = useState<string | null>(null);
 
   useEffect(() => {
@@ -207,7 +216,11 @@ export function Settings({
         ) : null}
         {tab === "sources" ? (
           <>
-            <ScanPathPanel operationBusy={operationBusy} onSaved={onSnapshotRefreshed} />
+            <ScanPathPanel
+              key={restoreRevision}
+              operationBusy={operationBusy}
+              onSaved={onScanPathsSaved}
+            />
             <SourceDiagnosticsPanel
               diagnostics={diagnostics}
               ingestReport={ingestReport}
@@ -220,30 +233,29 @@ export function Settings({
             />
             <ConversationIndexPanel />
             <WorkNotesEnginePanel />
-            <BackupPanel onRestored={onSnapshotRefreshed} />
+            <BackupPanel onRestored={onBackupRestored} />
           </>
         ) : null}
         {tab === "quota" ? (
           <>
             <OfficialQuotaSettingsPanel
+              key={restoreRevision}
               quota={officialQuota}
               onQuota={onOfficialQuota}
               onError={onQuotaError}
             />
-            <CustomQuotaProviderPanel onQuota={onOfficialQuota} />
+            <CustomQuotaProviderPanel key={restoreRevision} onQuota={onOfficialQuota} />
           </>
         ) : null}
         {tab === "pricing" ? (
           <>
             <BudgetPanel status={budgetStatus} saving={savingBudget} onSave={onSaveBudget} />
             <LiteLlmSnapshotPanel
-              onRefreshed={() => {
-                onSnapshotRefreshed();
-                setDiagnosisEpoch((value) => value + 1);
-              }}
+              key={restoreRevision}
+              onRefreshed={onPriceSnapshotChanged}
             />
             <UnpricedDiagnosisPanel
-              key={diagnosisEpoch}
+              key={`${restoreRevision}-${pricingRevision}`}
               prices={prices}
               onChange={onChange}
               onPrefillHighlight={setPrefillKey}
@@ -255,7 +267,6 @@ export function Settings({
               onChange={onChange}
               onSave={() => {
                 void Promise.resolve(onSave()).finally(() => {
-                  setDiagnosisEpoch((value) => value + 1);
                   setPrefillKey(null);
                 });
               }}
@@ -267,6 +278,7 @@ export function Settings({
             autoRefresh={cursorAccountAutoRefresh}
             autoRefreshError={cursorAccountRefreshError}
             onAutoRefreshChange={onCursorAccountAutoRefreshChange}
+            onClearCache={onClearCursorAccountUsage}
           />
         ) : null}
       </div>

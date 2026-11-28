@@ -1,7 +1,7 @@
 use rusqlite::{params_from_iter, Connection};
 
 use crate::cursor_account;
-use crate::domain::{Filter, NamedAmount, PriceTable, SeriesPoint, Source};
+use crate::domain::{CursorUsageEvent, Filter, NamedAmount, PriceTable, SeriesPoint, Source};
 use crate::rollup_source::rollup_source;
 use crate::rollup_split::rollup_plan;
 
@@ -14,6 +14,17 @@ pub fn trend(
     grain: &str,
 ) -> Result<Vec<SeriesPoint>, String> {
     install_prices(conn, prices)?;
+    let events = cursor_account::events_for_application_analytics(conn, filter)?;
+    trend_installed_with_cursor(conn, filter, prices, grain, &events)
+}
+
+pub(super) fn trend_installed_with_cursor(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+    grain: &str,
+    cursor_events: &[CursorUsageEvent],
+) -> Result<Vec<SeriesPoint>, String> {
     let inner = rollup_source(
         &rollup_plan(
             filter.from.as_deref(),
@@ -57,9 +68,11 @@ pub fn trend(
     let points = rows
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
-    let events = cursor_account::events_for_application_analytics(conn, filter)?;
     Ok(crate::cursor_overlay::attach_cursor_trend(
-        points, &events, prices, grain,
+        points,
+        cursor_events,
+        prices,
+        grain,
     ))
 }
 
@@ -171,6 +184,23 @@ pub fn breakdown(
     dimension: &str,
 ) -> Result<Vec<NamedAmount>, String> {
     install_prices(conn, prices)?;
+    let cursor_events = if dimension == "project" {
+        Some(cursor_account::events_for_application_analytics(
+            conn, filter,
+        )?)
+    } else {
+        None
+    };
+    breakdown_installed_with_cursor(conn, filter, prices, dimension, cursor_events.as_deref())
+}
+
+pub(super) fn breakdown_installed_with_cursor(
+    conn: &Connection,
+    filter: &Filter,
+    prices: &PriceTable,
+    dimension: &str,
+    cursor_events: Option<&[CursorUsageEvent]>,
+) -> Result<Vec<NamedAmount>, String> {
     let name_expr = breakdown_name_expr(dimension)?;
     let inner = rollup_source(
         &rollup_plan(
@@ -226,10 +256,11 @@ pub fn breakdown(
             .then_with(|| a.name.cmp(&b.name))
     });
     if dimension == "project" {
-        let events = cursor_account::events_for_application_analytics(conn, filter)?;
-        return Ok(crate::cursor_overlay::attach_cursor_project_breakdown(
-            rows, &events, prices,
-        ));
+        if let Some(events) = cursor_events {
+            return Ok(crate::cursor_overlay::attach_cursor_project_breakdown(
+                rows, events, prices,
+            ));
+        }
     }
     Ok(rows)
 }
