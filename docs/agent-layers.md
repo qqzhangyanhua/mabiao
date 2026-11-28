@@ -224,7 +224,7 @@
 接口：`GET /api/v1/usage/summary`、`GET /api/v1/usage/composition`、`GET /api/v1/usage`、`GET /api/v1/sessions`、`GET /api/v1/sessions/behavior`、`GET /api/v1/work-timeline`。
 
 1. 聚合在服务端做，网页只展示。费用与 token 只对 `usage_records` 求和（统一费用、客户端快照并列），不另算价格；改计价先改 `crates/pricing/` 与 `team_pricing`。按来源另外并上已推送会话：没有消耗记录的来源仍出现，`session_count` 是会话数，token 与费用为 0。
-2. 这些接口都走 `routes::scope_account`（即 `can_access`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体。新增同类接口要复用它并配越权测试。
+2. 这些接口都走 `scope::Scope::resolve`（经 `AuthedAccount::can_access` 判定账号隔离并统一校验可选 `project_id`）：成员只看自己、指定别人的 `account_id` 得 403，管理员默认看全体；带了不存在、已合并或成员无数据的 `project_id` 一律得 404。新增同类接口要复用它并配越权测试。
 3. `from` 含、`to` 不含，RFC 3339。summary 按天的日界由 `tz_offset_minutes`（-720 到 840，东为正）决定，默认 UTC。summary 每个维度最多 `MAX_BREAKDOWN_ROWS` 行，按统一费用从高到低。
 4. 会话列表只给目录元数据，永远不带 `events` 与上下文清单；正文属于会话详情。列表时间是 `COALESCE(ended_at, started_at, pushed_at)`。
 5. 工作时间线只铺已推送会话：按起止与区间**重叠**选（不是列表那种按结束时间落点），裁到本地日历日；当天 token / 费用只统计该场落在这天的消耗记录。不发明未推送的 Cursor 本机会话，不画账号用量或代码量。可选 `source` 精确匹配。最多 `MAX_SESSIONS` 场，超出标 `truncated`。
@@ -238,7 +238,7 @@
 接口：`GET /api/v1/sessions/{id}`、`GET /api/v1/projects/{id}`、`GET /api/v1/admin/projects`、`PUT /api/v1/admin/projects/{id}`、`POST /api/v1/admin/projects/{id}/merge`；`GET /api/v1/sessions` 另收 `project_id`、`generated_by_work_notes`，`/usage`、`/usage/summary` 另收 `project_id`。
 
 1. 会话详情与删除同一条判定：先 `owner_of` 再 `can_access`，别人的会话 403，响应里不带正文。详情带事件、上下文清单（原样，证据层级与 `from_cache` / `has_injected_snapshot` 不改写）和本场消耗；本场消耗按（账号, 设备, 来源, session_id）对 `usage_records`，不混入别的成员同名 `session_id`。
-2. 项目页是团队共享实体，但用量走 `scope_account`：成员只看到自己在项目上的那部分，指定别人的 `account_id` 得 403，管理员看全体。成员只能打开自己有会话或消耗记录的项目（`project_admin::has_data_of`），否则 404，免得靠遍历 id 看到别人的仓库名与 remote。已被合并的项目也返回 404。新增按项目的接口要补成员越权测试。
+2. 项目页是团队共享实体，与其它 6 个带 `project_id` 的只读接口共用 `scope::Scope`（`resolve_project` / `resolve`）：成员只看到自己在项目上的那部分，指定别人的 `account_id` 得 403，管理员看全体；成员只能访问自己有会话或消耗记录的项目（`project_admin::has_data_of`），否则 404，免得靠遍历 id 看到别人的仓库名与 remote；已被合并的项目一律返回 404。新增按项目的接口要复用 `Scope` 并补成员越权测试。
 3. 合并不删项目行：被合并项目带 `projects.merged_into` 留着，`merged_into` 始终直指最终目标（再次合并时把原来指向被合并项目的别名一并改指新目标）。会话、消耗记录、`project_paths` 在同一事务里改挂目标。`projects::settle` 沿 `merged_into` 解析并对项目行加共享锁，合并对两行按 id 序加排他锁，所以在途推送先提交、之后的推送一定归到目标；归并键没变，同一个 remote 或同名目录再推送不会长出重复项目。
 4. 改名只改 `name`，`find_or_create` 冲突时不碰它，再推送不会改回自动名字。已合并的项目不能改名（409）。合并要求双方都未被合并过（409）、不能合并进自己（400）、都存在（404）。三个管理员接口都用 `AdminAccount`。
 5. 「码表生成」过滤是 `generated_by_work_notes`（`true` 只看、`false` 排除、不传不过滤），在 `SessionFilter` 里与范围条件一起生效，总数 `total` 也按它算。

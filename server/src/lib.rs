@@ -17,6 +17,7 @@ pub mod project_admin;
 pub mod projects;
 pub mod push;
 pub mod routes;
+pub mod scope;
 pub mod sessions;
 pub mod summary;
 pub mod team_pricing;

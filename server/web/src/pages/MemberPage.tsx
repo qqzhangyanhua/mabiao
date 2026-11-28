@@ -19,7 +19,7 @@ import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { sessionRows, summaryRows } from "../lib/export";
-import { useScopeInsights } from "../useInsights";
+import { useScopeBehavior, useScopeComposition } from "../useInsights";
 import { useView } from "../view";
 
 const PAGE_SIZE = 50;
@@ -34,7 +34,8 @@ export function MemberPage({ accountId }: { accountId: number }) {
     () => (bounds ? { ...bounds, accountId } : null),
     [bounds, accountId],
   );
-  const insights = useScopeInsights(scope);
+  const insights = useScopeComposition(scope);
+  const behavior = useScopeBehavior(scope);
   const loadDevices = useCallback(() => api.devices(accountId), [api, accountId]);
   const devices = useAsync(loadDevices);
 
@@ -47,25 +48,23 @@ export function MemberPage({ accountId }: { accountId: number }) {
   );
   const name = useAsync(loadName);
 
-  const loadSummary = useCallback(
-    () =>
-      bounds
-        ? api.summary({ ...bounds, accountId }, offset)
-        : Promise.reject(new Error("日期范围不正确")),
+  const loadSummary = useMemo(
+    () => (bounds ? () => api.summary({ ...bounds, accountId }, offset) : null),
     [api, bounds, offset, accountId],
   );
   const summary = useAsync(loadSummary);
 
-  const loadSessions = useCallback(
+  const loadSessions = useMemo(
     () =>
       bounds
-        ? api.sessions(
-            { ...bounds, accountId },
-            PAGE_SIZE,
-            page * PAGE_SIZE,
-            generatedParam(generated),
-          )
-        : Promise.reject(new Error("日期范围不正确")),
+        ? () =>
+            api.sessions(
+              { ...bounds, accountId },
+              PAGE_SIZE,
+              page * PAGE_SIZE,
+              generatedParam(generated),
+            )
+        : null,
     [api, bounds, accountId, page, generated],
   );
   const sessions = useAsync(loadSessions);
@@ -117,60 +116,60 @@ export function MemberPage({ accountId }: { accountId: number }) {
       ) : summary.loading || !summary.data ? (
         <Loading />
       ) : (
-        <SummaryView
-          summary={summary.data}
-          mode={view.mode}
-          range={{ fromDay: view.fromDay, toDay: view.toDay }}
-          showAccounts={false}
-          linkAccounts={false}
-          sessions={sessions.data?.total}
-          cacheHit={insights.cacheHit}
-          onUnpriced={insights.showUnpriced}
-          modelSplits={insights.modelSplits}
-          sourceSplits={insights.sourceSplits}
-          projectSplits={insights.projectSplits}
-        />
-      )}
-
-      <DeviceList devices={devices} />
-      {insights.scope && (
         <>
-          <BehaviorPanel report={insights.behavior} />
-          <UsageSection
-            scope={insights.scope}
-            showAccount={false}
-            composition={insights.composition.data}
-            costSource={insights.costSource}
-            model={insights.model}
-            onCostSource={insights.setCostSource}
-            onModel={insights.setModel}
-            isAdmin={profile.role === "admin"}
+          <SummaryView
+            summary={summary.data}
+            mode={view.mode}
+            range={{ fromDay: view.fromDay, toDay: view.toDay }}
+            showAccounts={false}
+            linkAccounts={false}
+            sessions={sessions.data?.total}
+            cacheHit={insights.cacheHit}
+            onUnpriced={insights.showUnpriced}
+            modelSplits={insights.modelSplits}
+            sourceSplits={insights.sourceSplits}
+            projectSplits={insights.projectSplits}
           />
-        </>
-      )}
 
-      {bounds && (
-        <SessionListSection
-          title={<>会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}</>}
-          generated={generated}
-          onGeneratedChange={(value) => {
-            setPage(0);
-            setGenerated(value);
-          }}
-          footer={
-            sessions.data ? (
-              <TablePager page={page} pageCount={pageCount} onPageChange={setPage} />
-            ) : null
-          }
-        >
-          {sessions.error ? (
-            <ErrorNote error={sessions.error} onRetry={sessions.reload} />
-          ) : sessions.loading || !sessions.data ? (
-            <Loading />
-          ) : (
-            <SessionTable sessions={sessions.data.sessions} />
+          <DeviceList devices={devices} />
+          {insights.scope && (
+            <>
+              <BehaviorPanel report={behavior} />
+              <UsageSection
+                scope={insights.scope}
+                showAccount={false}
+                composition={insights.composition.data}
+                costSource={insights.costSource}
+                model={insights.model}
+                onCostSource={insights.setCostSource}
+                onModel={insights.setModel}
+                isAdmin={profile.role === "admin"}
+              />
+            </>
           )}
-        </SessionListSection>
+
+          <SessionListSection
+            title={<>会话{sessions.data ? `（共 ${sessions.data.total} 场）` : ""}</>}
+            generated={generated}
+            onGeneratedChange={(value) => {
+              setPage(0);
+              setGenerated(value);
+            }}
+            footer={
+              sessions.data ? (
+                <TablePager page={page} pageCount={pageCount} onPageChange={setPage} />
+              ) : null
+            }
+          >
+            {sessions.error ? (
+              <ErrorNote error={sessions.error} onRetry={sessions.reload} />
+            ) : sessions.loading || !sessions.data ? (
+              <Loading />
+            ) : (
+              <SessionTable sessions={sessions.data.sessions} />
+            )}
+          </SessionListSection>
+        </>
       )}
     </>
   );

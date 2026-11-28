@@ -1,5 +1,5 @@
 import { Folder } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useAuth } from "../auth";
 import { DimensionCards } from "../components/DimensionCards";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -8,7 +8,7 @@ import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { summaryRows } from "../lib/export";
-import { useScopeInsights } from "../useInsights";
+import { useScopeComposition } from "../useInsights";
 import { useHref, useView } from "../view";
 
 export function ProjectsPage() {
@@ -16,12 +16,12 @@ export function ProjectsPage() {
   const view = useView();
   const href = useHref();
   const { bounds, offset } = view;
-  const load = useCallback(
-    () => (bounds ? api.summary(bounds, offset) : Promise.reject(new Error("日期范围不正确"))),
+  const load = useMemo(
+    () => (bounds ? () => api.summary(bounds, offset) : null),
     [api, bounds, offset],
   );
   const summary = useAsync(load);
-  const insights = useScopeInsights(bounds);
+  const insights = useScopeComposition(bounds);
   const data = summary.data;
 
   usePageExports(

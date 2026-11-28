@@ -1,5 +1,5 @@
 import { Bot } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useAuth } from "../auth";
 import { DimensionCards } from "../components/DimensionCards";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
@@ -11,19 +11,19 @@ import { downloadCsv } from "../lib/csv";
 import { UsageSection } from "../components/UsageSection";
 import { summaryRows } from "../lib/export";
 import { sourceLabel } from "../lib/source";
-import { useScopeInsights } from "../useInsights";
+import { useScopeComposition } from "../useInsights";
 import { useView } from "../view";
 
 export function SourcesPage() {
   const { api, profile } = useAuth();
   const view = useView();
   const { bounds, offset } = view;
-  const load = useCallback(
-    () => (bounds ? api.summary(bounds, offset) : Promise.reject(new Error("日期范围不正确"))),
+  const load = useMemo(
+    () => (bounds ? () => api.summary(bounds, offset) : null),
     [api, bounds, offset],
   );
   const summary = useAsync(load);
-  const insights = useScopeInsights(bounds);
+  const insights = useScopeComposition(bounds);
   const data = summary.data;
 
   usePageExports(
@@ -57,32 +57,34 @@ export function SourcesPage() {
       ) : summary.loading || !data ? (
         <Loading />
       ) : (
-        <DimensionCards
-          title="按 Agent 工具"
-          kind="source"
-          rows={data.by_source}
-          mode={view.mode}
-          limit={null}
-          splits={insights.sourceSplits}
-          labelOf={(row) => sourceLabel(row.label)}
-          markOf={(row) => (
-            <span className="grid size-7 shrink-0 place-items-center">
-              <SourceIcon source={row.key} size={22} />
-            </span>
+        <>
+          <DimensionCards
+            title="按 Agent 工具"
+            kind="source"
+            rows={data.by_source}
+            mode={view.mode}
+            limit={null}
+            splits={insights.sourceSplits}
+            labelOf={(row) => sourceLabel(row.label)}
+            markOf={(row) => (
+              <span className="grid size-7 shrink-0 place-items-center">
+                <SourceIcon source={row.key} size={22} />
+              </span>
+            )}
+          />
+          {insights.scope && (
+            <UsageSection
+              scope={insights.scope}
+              showAccount={profile.role === "admin"}
+              composition={insights.composition.data}
+              costSource={insights.costSource}
+              model={insights.model}
+              onCostSource={insights.setCostSource}
+              onModel={insights.setModel}
+              isAdmin={profile.role === "admin"}
+            />
           )}
-        />
-      )}
-      {insights.scope && (
-        <UsageSection
-          scope={insights.scope}
-          showAccount={profile.role === "admin"}
-          composition={insights.composition.data}
-          costSource={insights.costSource}
-          model={insights.model}
-          onCostSource={insights.setCostSource}
-          onModel={insights.setModel}
-          isAdmin={profile.role === "admin"}
-        />
+        </>
       )}
     </>
   );

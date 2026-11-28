@@ -1,25 +1,15 @@
 //! 消耗记录查询：同时给出统一费用与客户端费用快照，供跨人对比。
 
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::error::AppError;
+use crate::scope::{self, Scope};
 use crate::summary::BreakdownRow;
 
 pub const DEFAULT_LIMIT: i64 = 100;
 pub const MAX_LIMIT: i64 = 1000;
-
-/// 已校验的过滤条件。`account_id` 为空表示全体，由调用方按角色决定能不能传空。
-#[derive(Debug, Clone)]
-pub struct Filter {
-    pub account_id: Option<i64>,
-    /// 含。
-    pub from: Option<DateTime<Utc>>,
-    /// 不含。
-    pub to: Option<DateTime<Utc>>,
-    /// 只看这个项目。项目是团队共享的实体，成员仍只看到自己的那部分用量（账号过滤照常生效）。
-    pub project_id: Option<i64>,
-}
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct UsageRow {
@@ -49,7 +39,7 @@ pub struct UsageRow {
     pub unified_cost_source: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Totals {
     pub record_count: i64,
     pub total_tokens: i64,
@@ -89,15 +79,15 @@ pub async fn list(
           AND s.device_pk = u.device_pk
           AND s.source = u.source
           AND s.session_id = u.session_id
-         WHERE {LIST_WHERE}
+         WHERE {usage_where}
+           AND {LIST_EXTRA_WHERE}
          ORDER BY u.occurred_at DESC, u.id DESC
-         LIMIT $8 OFFSET $9"
+         LIMIT $8 OFFSET $9",
+        usage_where = scope::USAGE_WHERE,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.scope.account_id)
-        .bind(filter.scope.from)
-        .bind(filter.scope.to)
-        .bind(filter.scope.project_id)
+    Ok(filter
+        .scope
+        .bind_query_as(&sql)
         .bind(&filter.source)
         .bind(&filter.model)
         .bind(&filter.unified_cost_source)
@@ -117,13 +107,13 @@ pub async fn filtered_totals(pool: &PgPool, filter: &ListFilter) -> Result<Total
                 (count(*) FILTER (WHERE unified_pricing_source = 'unpriced'))::bigint
                     AS unified_unpriced_count
          FROM usage_records u
-         WHERE {LIST_WHERE}"
+         WHERE {usage_where}
+           AND {LIST_EXTRA_WHERE}",
+        usage_where = scope::USAGE_WHERE,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.scope.account_id)
-        .bind(filter.scope.from)
-        .bind(filter.scope.to)
-        .bind(filter.scope.project_id)
+    Ok(filter
+        .scope
+        .bind_query_as(&sql)
         .bind(&filter.source)
         .bind(&filter.model)
         .bind(&filter.unified_cost_source)
@@ -134,17 +124,13 @@ pub async fn filtered_totals(pool: &PgPool, filter: &ListFilter) -> Result<Total
 /// 明细列表额外的精确筛选。空表示不过滤。
 #[derive(Debug, Clone)]
 pub struct ListFilter {
-    pub scope: Filter,
+    pub scope: Scope,
     pub source: Option<String>,
     pub model: Option<String>,
     pub unified_cost_source: Option<String>,
 }
 
-const LIST_WHERE: &str = "($1::bigint IS NULL OR u.account_id = $1)
-           AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-           AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
-           AND ($4::bigint IS NULL OR u.project_id = $4)
-           AND ($5::text IS NULL OR u.source = $5)
+const LIST_EXTRA_WHERE: &str = "($5::text IS NULL OR u.source = $5)
            AND ($6::text IS NULL OR u.model = $6)
            AND ($7::text IS NULL OR u.unified_cost_source = $7)";
 
@@ -167,11 +153,6 @@ pub fn parse_exact(value: Option<&str>) -> Option<String> {
         .map(str::to_owned)
 }
 
-const SCOPE_WHERE: &str = "($1::bigint IS NULL OR u.account_id = $1)
-           AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-           AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
-           AND ($4::bigint IS NULL OR u.project_id = $4)";
-
 const TOKEN_SUMS: &str = "COALESCE(sum(u.input_tokens), 0)::bigint AS input,
                 COALESCE(sum(u.output_tokens), 0)::bigint AS output,
                 COALESCE(sum(u.cache_read_tokens), 0)::bigint AS cache_read,
@@ -179,7 +160,7 @@ const TOKEN_SUMS: &str = "COALESCE(sum(u.input_tokens), 0)::bigint AS input,
                 COALESCE(sum(u.reasoning_tokens), 0)::bigint AS reasoning";
 
 /// 过滤条件下全部记录的合计，不受分页影响。
-pub async fn totals(pool: &PgPool, filter: &Filter) -> Result<Totals, AppError> {
+pub async fn totals(pool: &PgPool, filter: &Scope) -> Result<Totals, AppError> {
     let sql = format!(
         "SELECT count(*)::bigint AS record_count,
                 COALESCE(sum(total_tokens), 0)::bigint AS total_tokens,
@@ -188,19 +169,14 @@ pub async fn totals(pool: &PgPool, filter: &Filter) -> Result<Totals, AppError> 
                 (count(*) FILTER (WHERE unified_pricing_source = 'unpriced'))::bigint
                     AS unified_unpriced_count
          FROM usage_records u
-         WHERE {SCOPE_WHERE}"
+         WHERE {usage_where}",
+        usage_where = scope::USAGE_WHERE,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
-        .fetch_one(pool)
-        .await?)
+    Ok(filter.bind_query_as(&sql).fetch_one(pool).await?)
 }
 
 /// 五口径 token。网页用来画构成，不再把明细拉到浏览器里加总。
-#[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct TokenParts {
     pub input: i64,
     pub output: i64,
@@ -220,19 +196,20 @@ struct CompositionSql {
     reasoning: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KeyedTokens {
     pub key: String,
+    #[serde(flatten)]
     pub tokens: TokenParts,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct UnpricedModel {
     pub model: String,
     pub count: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Composition {
     pub totals: TokenParts,
     pub by_model: Vec<KeyedTokens>,
@@ -242,27 +219,22 @@ pub struct Composition {
 }
 
 /// 全量 token 构成。`unified_cost_source = 'none'` 才算未定价，三列都空是还没算过。
-pub async fn composition(pool: &PgPool, filter: &Filter) -> Result<Composition, AppError> {
+pub async fn composition(pool: &PgPool, filter: &Scope) -> Result<Composition, AppError> {
+    let usage_where = scope::USAGE_WHERE;
     let sql = format!(
         "SELECT 'total'::text AS dimension, ''::text AS key, {TOKEN_SUMS}
-         FROM usage_records u WHERE {SCOPE_WHERE}
+         FROM usage_records u WHERE {usage_where}
          UNION ALL
          SELECT 'model', u.model, {TOKEN_SUMS}
-         FROM usage_records u WHERE {SCOPE_WHERE} GROUP BY u.model
+         FROM usage_records u WHERE {usage_where} GROUP BY u.model
          UNION ALL
          SELECT 'source', u.source, {TOKEN_SUMS}
-         FROM usage_records u WHERE {SCOPE_WHERE} GROUP BY u.source
+         FROM usage_records u WHERE {usage_where} GROUP BY u.source
          UNION ALL
          SELECT 'project', COALESCE(u.project_id::text, ''), {TOKEN_SUMS}
-         FROM usage_records u WHERE {SCOPE_WHERE} GROUP BY u.project_id"
+         FROM usage_records u WHERE {usage_where} GROUP BY u.project_id"
     );
-    let rows: Vec<CompositionSql> = sqlx::query_as(&sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
-        .fetch_all(pool)
-        .await?;
+    let rows: Vec<CompositionSql> = filter.bind_query_as(&sql).fetch_all(pool).await?;
     let mut out = Composition {
         totals: TokenParts::default(),
         by_model: Vec::new(),
@@ -292,17 +264,11 @@ pub async fn composition(pool: &PgPool, filter: &Filter) -> Result<Composition, 
     let unpriced_sql = format!(
         "SELECT u.model, count(*)::bigint AS count
          FROM usage_records u
-         WHERE {SCOPE_WHERE} AND u.unified_cost_source = 'none'
+         WHERE {usage_where} AND u.unified_cost_source = 'none'
          GROUP BY u.model
          ORDER BY count DESC, u.model ASC
          LIMIT 200"
     );
-    out.unpriced_models = sqlx::query_as(&unpriced_sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
-        .fetch_all(pool)
-        .await?;
+    out.unpriced_models = filter.bind_query_as(&unpriced_sql).fetch_all(pool).await?;
     Ok(out)
 }

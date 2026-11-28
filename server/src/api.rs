@@ -1,14 +1,17 @@
-//! 管理接口与账号接口的响应形状。只有服务端与它自带的网页用，不进 `push-protocol`。
+//! 管理接口与账号接口的请求 / 响应形状。只有服务端与它自带的网页用，不进 `push-protocol`。
+//!
+//! 不含敏感列、且字段形状与线上一致的只读查询结构（`DeviceRow`、`TeamPriceRow`、`Totals`、
+//! `MemberCoverage`、`BreakdownRow`、`Summary`、`SessionListRow`、`Composition`、`Behavior` 等）
+//! 直接序列化返回；这里只保留需要脱敏（如 `AccountView` 剔除 `password_hash`）、需要结构转换
+//! （如 `UsageRecordView` 聚合 `tokens`）或组合封包的类型。
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use push_protocol::{RemoteRole, UsageTokens};
 use serde::{Deserialize, Serialize};
 
 use crate::accounts::AccountRow;
-use crate::coverage::MemberCoverage;
-use crate::devices::DeviceRow;
+use crate::scope::ScopeInput;
 use crate::sessions::SessionListRow;
-use crate::summary::{BreakdownRow, Summary};
 use crate::team_pricing::TeamPriceRow;
 use crate::usage_query::{Totals, UsageRow};
 
@@ -43,25 +46,6 @@ pub struct CreateMemberRequest {
     pub password: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DeviceView {
-    pub device_id: String,
-    pub device_name: String,
-    pub first_seen_at: DateTime<Utc>,
-    pub last_seen_at: DateTime<Utc>,
-}
-
-impl From<DeviceRow> for DeviceView {
-    fn from(row: DeviceRow) -> Self {
-        Self {
-            device_id: row.device_id,
-            device_name: row.device_name,
-            first_seen_at: row.first_seen_at,
-            last_seen_at: row.last_seen_at,
-        }
-    }
-}
-
 /// 管理员提交一条团队价目。单价是每 token 的价格，与桌面端价目一致。
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SetTeamPriceRequest {
@@ -75,33 +59,6 @@ pub struct SetTeamPriceRequest {
     pub cache_creation: f64,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TeamPriceView {
-    pub id: i64,
-    pub model: String,
-    pub provider: Option<String>,
-    pub input: f64,
-    pub output: f64,
-    pub cache_read: f64,
-    pub cache_creation: f64,
-    pub updated_at: DateTime<Utc>,
-}
-
-impl From<TeamPriceRow> for TeamPriceView {
-    fn from(row: TeamPriceRow) -> Self {
-        Self {
-            id: row.id,
-            model: row.model,
-            provider: row.provider,
-            input: row.input,
-            output: row.output,
-            cache_read: row.cache_read,
-            cache_creation: row.cache_creation,
-            updated_at: row.updated_at,
-        }
-    }
-}
-
 /// 内置 LiteLLM 快照的元信息，不带逐条单价。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SnapshotMetaView {
@@ -112,13 +69,13 @@ pub struct SnapshotMetaView {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PricingOverview {
-    pub prices: Vec<TeamPriceView>,
+    pub prices: Vec<TeamPriceRow>,
     pub snapshot: SnapshotMetaView,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SetTeamPriceResponse {
-    pub price: TeamPriceView,
+    pub price: TeamPriceRow,
     /// 因此变更重算了多少条已入库的消耗记录。
     pub recomputed: u64,
 }
@@ -143,6 +100,17 @@ pub struct UsageQuery {
     pub model: Option<String>,
     /// `native` / `team` / `snapshot` / `none`。
     pub unified_cost_source: Option<String>,
+}
+
+impl UsageQuery {
+    pub fn scope_input(&self) -> ScopeInput<'_> {
+        ScopeInput {
+            account_id: self.account_id,
+            project_id: self.project_id,
+            from: self.from.as_deref(),
+            to: self.to.as_deref(),
+        }
+    }
 }
 
 /// 一条消耗记录：客户端费用快照与服务端统一费用并列。跨人比较看 `unified_*`。
@@ -206,55 +174,10 @@ impl From<UsageRow> for UsageRecordView {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct UsageTotalsView {
-    pub record_count: i64,
-    pub total_tokens: i64,
-    pub cost_snapshot_total: f64,
-    pub unified_cost_total: f64,
-    pub unified_unpriced_count: i64,
-}
-
-impl From<Totals> for UsageTotalsView {
-    fn from(totals: Totals) -> Self {
-        Self {
-            record_count: totals.record_count,
-            total_tokens: totals.total_tokens,
-            cost_snapshot_total: totals.cost_snapshot_total,
-            unified_cost_total: totals.unified_cost_total,
-            unified_unpriced_count: totals.unified_unpriced_count,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct UsageResponse {
     pub records: Vec<UsageRecordView>,
     /// 过滤条件下全部记录的合计，不受分页影响。
-    pub totals: UsageTotalsView,
-}
-
-/// 管理员看的成员推送覆盖情况。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CoverageView {
-    pub account_id: i64,
-    pub account: String,
-    pub active: bool,
-    pub device_count: i64,
-    pub last_push_at: Option<DateTime<Utc>>,
-    pub covered_through: Option<NaiveDate>,
-}
-
-impl From<MemberCoverage> for CoverageView {
-    fn from(row: MemberCoverage) -> Self {
-        Self {
-            account_id: row.account_id,
-            account: row.account,
-            active: row.active,
-            device_count: row.device_count,
-            last_push_at: row.last_push_at,
-            covered_through: row.covered_through,
-        }
-    }
+    pub totals: Totals,
 }
 
 /// `GET /api/v1/usage/summary` 的查询串。`from` 含、`to` 不含，RFC 3339。
@@ -268,64 +191,13 @@ pub struct SummaryQuery {
     pub tz_offset_minutes: Option<i32>,
 }
 
-/// 一个分组的合计：统一费用与客户端快照并列。
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BreakdownView {
-    /// 日期（`YYYY-MM-DD`）、账号名、来源、模型，或项目 key（没有项目为空串）。
-    pub key: String,
-    pub label: String,
-    /// 账号或项目的 id，其它维度为空。
-    pub id: Option<i64>,
-    pub record_count: i64,
-    pub total_tokens: i64,
-    pub cost_snapshot: f64,
-    pub unified_cost: f64,
-    /// 统一价未定价的记录数；大于 0 时统一费用是下限。
-    pub unpriced_count: i64,
-    /// 已推送会话数。只有按来源的行有数，其它维度是 0。
-    pub session_count: i64,
-}
-
-impl From<BreakdownRow> for BreakdownView {
-    fn from(row: BreakdownRow) -> Self {
-        Self {
-            key: row.key,
-            label: row.label,
-            id: row.id,
-            record_count: row.record_count,
-            total_tokens: row.total_tokens,
-            cost_snapshot: row.cost_snapshot,
-            unified_cost: row.unified_cost,
-            unpriced_count: row.unpriced_count,
-            session_count: row.session_count,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SummaryResponse {
-    pub totals: UsageTotalsView,
-    /// 按日期升序。
-    pub by_day: Vec<BreakdownView>,
-    /// 以下四个维度按统一费用从高到低。
-    pub by_account: Vec<BreakdownView>,
-    pub by_source: Vec<BreakdownView>,
-    pub by_model: Vec<BreakdownView>,
-    pub by_project: Vec<BreakdownView>,
-}
-
-impl From<Summary> for SummaryResponse {
-    fn from(summary: Summary) -> Self {
-        fn views(rows: Vec<BreakdownRow>) -> Vec<BreakdownView> {
-            rows.into_iter().map(Into::into).collect()
-        }
-        Self {
-            totals: summary.totals.into(),
-            by_day: views(summary.by_day),
-            by_account: views(summary.by_account),
-            by_source: views(summary.by_source),
-            by_model: views(summary.by_model),
-            by_project: views(summary.by_project),
+impl SummaryQuery {
+    pub fn scope_input(&self) -> ScopeInput<'_> {
+        ScopeInput {
+            account_id: self.account_id,
+            project_id: self.project_id,
+            from: self.from.as_deref(),
+            to: self.to.as_deref(),
         }
     }
 }
@@ -343,53 +215,20 @@ pub struct SessionListQuery {
     pub offset: Option<i64>,
 }
 
-/// 列表里的会话只有目录元数据；正文在会话详情里，不在这里。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SessionListItem {
-    pub id: i64,
-    pub account_id: i64,
-    pub account: String,
-    pub device_name: String,
-    pub source: String,
-    pub session_id: String,
-    pub title: String,
-    pub project: String,
-    pub project_id: Option<i64>,
-    pub project_name: Option<String>,
-    pub model: String,
-    pub started_at: Option<DateTime<Utc>>,
-    pub ended_at: Option<DateTime<Utc>>,
-    pub event_count: i32,
-    pub generated_by_work_notes: bool,
-    pub pushed_at: DateTime<Utc>,
-}
-
-impl From<SessionListRow> for SessionListItem {
-    fn from(row: SessionListRow) -> Self {
-        Self {
-            id: row.id,
-            account_id: row.account_id,
-            account: row.account,
-            device_name: row.device_name,
-            source: row.source,
-            session_id: row.session_id,
-            title: row.title,
-            project: row.project_path,
-            project_id: row.project_id,
-            project_name: row.project_name,
-            model: row.model,
-            started_at: row.started_at,
-            ended_at: row.ended_at,
-            event_count: row.event_count,
-            generated_by_work_notes: row.generated_by_work_notes,
-            pushed_at: row.pushed_at,
+impl SessionListQuery {
+    pub fn scope_input(&self) -> ScopeInput<'_> {
+        ScopeInput {
+            account_id: self.account_id,
+            project_id: self.project_id,
+            from: self.from.as_deref(),
+            to: self.to.as_deref(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionListResponse {
-    pub sessions: Vec<SessionListItem>,
+    pub sessions: Vec<SessionListRow>,
     /// 过滤条件下的会话总数，不受分页影响。
     pub total: i64,
 }
@@ -403,53 +242,136 @@ pub struct ScopeQuery {
     pub to: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TokenPartsView {
-    pub input: i64,
-    pub output: i64,
-    pub cache_read: i64,
-    pub cache_creation: i64,
-    pub reasoning: i64,
+impl ScopeQuery {
+    pub fn scope_input(&self) -> ScopeInput<'_> {
+        ScopeInput {
+            account_id: self.account_id,
+            project_id: self.project_id,
+            from: self.from.as_deref(),
+            to: self.to.as_deref(),
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CompositionBucketView {
-    pub key: String,
-    pub input: i64,
-    pub output: i64,
-    pub cache_read: i64,
-    pub cache_creation: i64,
-    pub reasoning: i64,
-}
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+    use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UnpricedModelView {
-    pub model: String,
-    pub count: i64,
-}
+    use super::*;
+    use crate::api_detail::SessionDetailView;
+    use crate::project_admin::{ProjectListRow, ProjectRow};
+    use crate::sessions::SessionDetailRow;
+    use crate::usage_query::{KeyedTokens, TokenParts};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UsageCompositionView {
-    pub totals: TokenPartsView,
-    pub by_model: Vec<CompositionBucketView>,
-    pub by_source: Vec<CompositionBucketView>,
-    pub by_project: Vec<CompositionBucketView>,
-    pub unpriced_models: Vec<UnpricedModelView>,
-}
+    #[test]
+    fn direct_query_projections_preserve_exact_wire_shapes() {
+        let ts = Utc.with_ymd_and_hms(2026, 3, 1, 0, 0, 0).unwrap();
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ToolStatView {
-    pub name: String,
-    pub calls: i64,
-    pub failures: i64,
-}
+        let bucket = serde_json::to_value(KeyedTokens {
+            key: "codex".into(),
+            tokens: TokenParts {
+                input: 10,
+                output: 4,
+                cache_read: 6,
+                cache_creation: 1,
+                reasoning: 2,
+            },
+        })
+        .unwrap();
+        assert_eq!(bucket["key"], "codex");
+        assert_eq!(bucket["input"], 10);
+        assert_eq!(bucket["reasoning"], 2);
+        assert!(
+            bucket.get("tokens").is_none(),
+            "composition bucket must stay flat: {bucket}"
+        );
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BehaviorView {
-    pub tool_calls: i64,
-    pub tool_failures: i64,
-    pub other_errors: i64,
-    pub failure_rate: Option<f64>,
-    pub tools: Vec<ToolStatView>,
-    pub tools_truncated: bool,
+        let project = serde_json::to_value(ProjectRow {
+            id: 7,
+            key: "git:github.com/team/alpha".into(),
+            name: "alpha".into(),
+            git_remote: Some("github.com/team/alpha".into()),
+            merged_into: Some(99),
+            created_at: ts,
+        })
+        .unwrap();
+        assert_eq!(project["id"], 7);
+        assert_eq!(project["name"], "alpha");
+        assert!(
+            project.get("merged_into").is_none(),
+            "merged_into must not leak: {project}"
+        );
+
+        let admin_project = serde_json::to_value(ProjectListRow {
+            id: 7,
+            key: "git:github.com/team/alpha".into(),
+            name: "alpha".into(),
+            git_remote: None,
+            created_at: ts,
+            session_count: 2,
+            usage_record_count: 3,
+            merged_count: 1,
+        })
+        .unwrap();
+        assert_eq!(admin_project["session_count"], 2);
+        assert_eq!(admin_project["merged_count"], 1);
+        assert!(
+            admin_project.get("project").is_none(),
+            "admin project must stay flat"
+        );
+
+        let session = SessionListRow {
+            id: 1,
+            account_id: 2,
+            account: "alice".into(),
+            device_name: "laptop".into(),
+            source: "codex".into(),
+            session_id: "s-1".into(),
+            title: "t".into(),
+            project_path: "/w/alpha".into(),
+            project_id: Some(7),
+            project_name: Some("alpha".into()),
+            model: "gpt-5".into(),
+            started_at: Some(ts),
+            ended_at: Some(ts),
+            event_count: 3,
+            generated_by_work_notes: false,
+            pushed_at: ts,
+        };
+        let session_json = serde_json::to_value(&session).unwrap();
+        assert_eq!(session_json["project"], "/w/alpha");
+        assert!(session_json.get("project_path").is_none());
+
+        let detail = serde_json::to_value(SessionDetailView::new(
+            SessionDetailRow {
+                item: session,
+                device_pk: 42,
+                source_files: vec!["/a.jsonl".into()],
+                redaction_count: 0,
+                events: vec![],
+                context_manifest: None,
+            },
+            vec![],
+        ))
+        .unwrap();
+        assert!(
+            detail.get("device_pk").is_none(),
+            "device_pk must not leak: {detail}"
+        );
+        assert_eq!(detail["session"]["project"], "/w/alpha");
+
+        let account = serde_json::to_value(AccountView {
+            id: 2,
+            account: "alice".into(),
+            role: RemoteRole::Member,
+            active: true,
+            created_at: ts,
+            deactivated_at: None,
+        })
+        .unwrap();
+        assert!(account.get("password_hash").is_none());
+        let obj: &serde_json::Map<String, Value> = account.as_object().unwrap();
+        assert_eq!(obj.len(), 6);
+    }
 }
