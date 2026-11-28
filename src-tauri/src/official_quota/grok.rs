@@ -523,19 +523,23 @@ pub fn auth_file_exists() -> bool {
 }
 
 pub(crate) fn auth_path() -> PathBuf {
-    grok_home().join("auth.json")
+    auth_path_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
+}
+
+pub(crate) fn auth_path_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    grok_home_in(env).join("auth.json")
+}
+
+pub(crate) fn grok_home_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    env.client_credential_root(crate::domain::Source::Grok, "auth.json")
 }
 
 fn grok_home() -> PathBuf {
-    std::env::var("GROK_HOME")
-        .ok()
-        .and_then(|raw| {
-            raw.split(',')
-                .map(str::trim)
-                .find(|segment| !segment.is_empty())
-                .map(PathBuf::from)
-        })
-        .unwrap_or_else(|| crate::ingest::default_home().join(".grok"))
+    grok_home_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
 }
 
 fn request_json(token: &str, user_id: Option<&str>, url: &str) -> Result<String, String> {

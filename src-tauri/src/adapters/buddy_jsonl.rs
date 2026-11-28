@@ -13,12 +13,10 @@ use crate::adapters::{
     finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest;
 
 pub(crate) struct BuddyUsageProfile {
     pub source: Source,
-    pub path_env: &'static str,
-    pub default_roots: &'static [&'static str],
     pub skip_run_and_incomplete: bool,
     pub dedupe_provider_keys: &'static [&'static str],
     pub dedupe_fallback_root_id: bool,
@@ -30,26 +28,6 @@ pub(crate) struct BuddyUsageProfile {
     pub output_keys: &'static [&'static str],
     pub reasoning_keys: &'static [&'static str],
     pub model_fallback_message: bool,
-}
-
-pub(crate) fn scan_dirs(
-    overrides: &PathOverrides,
-    home: &Path,
-    profile: &BuddyUsageProfile,
-) -> Vec<PathBuf> {
-    overrides
-        .get(profile.path_env)
-        .cloned()
-        .unwrap_or_else(|| {
-            profile
-                .default_roots
-                .iter()
-                .map(|root| home.join(root))
-                .collect()
-        })
-        .into_iter()
-        .map(|root| root.join("projects"))
-        .collect()
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path) -> String {

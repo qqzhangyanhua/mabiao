@@ -27,13 +27,9 @@ use std::path::{Path, PathBuf};
 use crate::adapters::finish;
 use crate::adapters::project::session_id_from_source_file;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest;
 use crate::proto_wire;
 use crate::source_sqlite;
-
-pub(crate) const PATH_ENV: &str = "AGY_DATA_DIR";
-const DEFAULT_ROOTS: [&str; 2] = [".gemini/antigravity-cli", ".gemini/antigravity-ide"];
-const CONVERSATIONS: &str = "conversations";
 
 /// `CortexStepMetadata` 字段号（agy 二进制 Go protobuf tag）。
 const STEP_CREATED_AT: u32 = 1;
@@ -59,19 +55,6 @@ const GEN_MODEL: u32 = 19;
 /// FileDescriptorProto：字段 1（嵌套消息）→ 字段 1（workspace URI string）。
 const TRAJECTORY_WORKSPACE: u32 = 1;
 const WORKSPACE_URI: u32 = 1;
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    let roots = overrides.get(PATH_ENV).cloned().unwrap_or_else(|| {
-        DEFAULT_ROOTS
-            .iter()
-            .map(|relative| home.join(relative))
-            .collect()
-    });
-    roots
-        .into_iter()
-        .map(|root| root.join(CONVERSATIONS))
-        .collect()
-}
 
 /// 只白名单 `.db`。同目录旧版加密 `.pb` 必须显式排除：尝试解析失败会计入
 /// `files_failed`，进而按既有对账规则拖停整个来源。

@@ -8,11 +8,7 @@ use crate::adapters::{
     parse_whole_json, text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "QWEN_DATA_DIR", ".qwen", "")
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();

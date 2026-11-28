@@ -10,6 +10,7 @@ use crate::adapters::cursor_session::{
     load_hash_enrichments, merge_parsed_sessions, parse_cursor_session_transcript, TranscriptGroup,
 };
 use crate::domain::{IngestIssue, IngestReport, Source};
+use crate::scan_paths::ScanEnv;
 use crate::store;
 
 pub const SOURCE_LABEL: &str = "cursor-session";
@@ -23,26 +24,46 @@ pub fn ingest_for_usage_source(
     source: Option<Source>,
     report: &mut IngestReport,
 ) {
+    ingest_for_usage_source_with_env(conn, &ScanEnv::capture_for_home(home), source, report);
+}
+
+pub fn ingest_for_usage_source_with_env(
+    conn: &Connection,
+    env: &ScanEnv,
+    source: Option<Source>,
+    report: &mut IngestReport,
+) {
     if source.is_none() || source == Some(Source::CursorAgent) {
-        ingest(conn, home, report);
+        ingest_with_env(conn, env, report);
     }
 }
 
 pub fn ingest(conn: &Connection, home: &Path, report: &mut IngestReport) {
-    let root = home.join(".cursor").join("projects");
-    if !root.exists() {
+    ingest_with_env(conn, &ScanEnv::capture_for_home(home), report);
+}
+
+pub fn ingest_with_env(conn: &Connection, env: &ScanEnv, report: &mut IngestReport) {
+    let roots = env.cursor_session_roots();
+    let existing_roots: Vec<&PathBuf> = roots.iter().filter(|root| root.exists()).collect();
+    if existing_roots.is_empty() {
         return;
     }
 
-    let transcripts = match walk_transcripts(&root) {
-        Ok(paths) => paths,
-        Err(error) => {
-            record_issue(report, &root.to_string_lossy(), &error);
-            return;
+    let mut transcripts = Vec::new();
+    for root in &existing_roots {
+        match walk_transcripts(root) {
+            Ok(paths) => transcripts.extend(paths),
+            Err(error) => {
+                record_issue(report, &root.to_string_lossy(), &error);
+                return;
+            }
         }
-    };
+    }
+    transcripts.sort();
+    transcripts.dedup();
+    let roots_display = format_roots(&roots);
 
-    let current_fp = tracking_db_fingerprint(home);
+    let current_fp = tracking_db_fingerprint(env);
     let stored_fp = store::cursor_tracking_fingerprint(conn).unwrap_or_default();
     let tracking_changed = current_fp != stored_fp;
     let force_rebuild = store::cursor_session_schema_version(conn).unwrap_or_default()
@@ -100,10 +121,10 @@ pub fn ingest(conn: &Connection, home: &Path, report: &mut IngestReport) {
     }
 
     let enrichments = if tracking_changed || !pending.is_empty() || force_rebuild {
-        match load_hash_enrichments(home) {
+        match load_hash_enrichments(env.home()) {
             Ok(map) => Some(map),
             Err(error) => {
-                record_issue(report, &root.to_string_lossy(), &error);
+                record_issue(report, &roots_display, &error);
                 None
             }
         }
@@ -120,16 +141,16 @@ pub fn ingest(conn: &Connection, home: &Path, report: &mut IngestReport) {
     if !any_failed {
         match store::reconcile_cursor_sessions(conn, &seen_session_paths) {
             Ok(removed) => report.records_removed += removed,
-            Err(error) => record_issue(report, &root.to_string_lossy(), &error),
+            Err(error) => record_issue(report, &roots_display, &error),
         }
         if let Err(error) = store::reconcile_cursor_session_files(conn, &seen_file_paths) {
-            record_issue(report, &root.to_string_lossy(), &error);
+            record_issue(report, &roots_display, &error);
         }
         if force_rebuild {
             if let Err(error) =
                 store::set_cursor_session_schema_version(conn, store::CURSOR_SESSION_SCHEMA_VERSION)
             {
-                record_issue(report, &root.to_string_lossy(), &error);
+                record_issue(report, &roots_display, &error);
             }
         }
     }
@@ -139,10 +160,10 @@ pub fn ingest(conn: &Connection, home: &Path, report: &mut IngestReport) {
             match refresh_hash_enrichments(conn, map) {
                 Ok(()) => {
                     if let Err(error) = store::set_cursor_tracking_fingerprint(conn, &current_fp) {
-                        record_issue(report, &root.to_string_lossy(), &error);
+                        record_issue(report, &roots_display, &error);
                     }
                 }
-                Err(error) => record_issue(report, &root.to_string_lossy(), &error),
+                Err(error) => record_issue(report, &roots_display, &error),
             }
         }
     }
@@ -358,17 +379,19 @@ fn refresh_hash_enrichments(
 
 /// 托盘心跳用：transcript 指纹或代码量 sqlite 变化时视为 stale。
 /// 缓存由调用方在读锁内取出，本函数只扫盘比对，不再碰数据库。
-pub(crate) fn scan_is_stale_cached(
+pub(crate) fn scan_is_stale_with_env(
     cached: &BTreeMap<String, (i64, i64)>,
     tracking_fingerprint: &str,
-    home: &Path,
+    env: &ScanEnv,
 ) -> Result<bool, String> {
-    let root = home.join(".cursor").join("projects");
-    let transcripts = if root.exists() {
-        walk_transcripts(&root)?
-    } else {
-        Vec::new()
-    };
+    let mut transcripts = Vec::new();
+    for root in env.cursor_session_roots() {
+        if root.exists() {
+            transcripts.extend(walk_transcripts(&root)?);
+        }
+    }
+    transcripts.sort();
+    transcripts.dedup();
     if transcripts.is_empty() && cached.is_empty() {
         return Ok(false);
     }
@@ -392,15 +415,23 @@ pub(crate) fn scan_is_stale_cached(
         }
     }
 
-    Ok(tracking_db_fingerprint(home) != tracking_fingerprint)
+    Ok(tracking_db_fingerprint(env) != tracking_fingerprint)
 }
 
-fn tracking_db_fingerprint(home: &Path) -> String {
-    let path = home.join(".cursor/ai-tracking/ai-code-tracking.db");
+fn tracking_db_fingerprint(env: &ScanEnv) -> String {
+    let path = env.cursor_tracking_db_path();
     match fs::metadata(&path) {
         Ok(meta) => format!("{}|{}", modified_millis(&meta), meta.len()),
         Err(_) => String::new(),
     }
+}
+
+fn format_roots(roots: &[PathBuf]) -> String {
+    roots
+        .iter()
+        .map(|root| root.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn walk_transcripts(root: &Path) -> Result<Vec<PathBuf>, String> {

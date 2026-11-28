@@ -5,26 +5,10 @@ use serde_json::Value;
 
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest;
 
-const PATH_ENV: &str = "CODEBUDDY_IDE_DIR";
 const MAX_WALK_DEPTH: usize = 12;
 const WORKSPACE_FOLDER_PREFIX: &str = "Workspace Folder:";
-
-/// CodeBuddy IDE 把每条消息写成独立 JSON，用量在助手消息 `extra`（字符串）里的累计 `statsSnapshot`。
-///
-/// `$CODEBUDDY_IDE_DIR` 覆盖 Data 根。未覆盖时扫 Electron / VS Code 风格的
-/// `CodeBuddyExtension/Data`（Linux `.config`、macOS Application Support、Windows Roaming 与 Local）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides.get(PATH_ENV).cloned().unwrap_or_else(|| {
-        vec![
-            home.join(".config/CodeBuddyExtension/Data"),
-            home.join("Library/Application Support/CodeBuddyExtension/Data"),
-            home.join("AppData/Roaming/CodeBuddyExtension/Data"),
-            home.join("AppData/Local/CodeBuddyExtension/Data"),
-        ]
-    })
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut conversations = Vec::new();

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 
 use crate::domain::Source;
-use crate::ingest;
+use crate::scan_paths::ScanEnv;
 
 use super::catalog::conversation_source_paths;
 use super::cursor_bridge::{sync_cursor_hash_models, sync_cursor_usage_only_sessions};
@@ -30,7 +30,7 @@ pub fn refresh_codex(
     conn: &Connection,
     home: &Path,
 ) -> Result<Vec<ConversationIndexIssue>, String> {
-    let roots = ingest::source_scan_dirs(home, Source::Codex);
+    let roots = ScanEnv::capture_for_home(home).conversation_catalog_roots(Source::Codex);
     refresh(conn, Source::Codex, &roots)
 }
 
@@ -38,7 +38,7 @@ pub fn refresh_claude(
     conn: &Connection,
     home: &Path,
 ) -> Result<Vec<ConversationIndexIssue>, String> {
-    let roots = ingest::source_scan_dirs(home, Source::Claude);
+    let roots = ScanEnv::capture_for_home(home).conversation_catalog_roots(Source::Claude);
     refresh(conn, Source::Claude, &roots)
 }
 

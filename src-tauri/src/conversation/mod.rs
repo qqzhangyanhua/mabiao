@@ -108,7 +108,9 @@ pub(crate) use read::{
     event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
     prepare_detail_read,
 };
+#[cfg(test)]
 pub(crate) use scan_roots::catalog_roots;
+pub(crate) use scan_roots::catalog_roots_with_env;
 pub use session_store::load_session;
 
 pub use export::build_export;

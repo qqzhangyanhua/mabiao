@@ -3,14 +3,11 @@ use std::path::{Path, PathBuf};
 use crate::adapters::buddy_jsonl::{self, BuddyUsageProfile};
 use crate::adapters::{parse_streaming_jsonl, LineFactory};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
 
 /// WorkBuddy 会话：`$WORKBUDDY_CONFIG_DIR`，否则 `~/.workbuddy` 和 `~/.workbuddy-ai`，各扫 `projects/`。
 /// 桌面端 `WorkBuddy AI.app` 把会话写在 `~/.workbuddy-ai`，而 `~/.workbuddy` 里只有日志。
 const PROFILE: BuddyUsageProfile = BuddyUsageProfile {
     source: Source::WorkBuddy,
-    path_env: "WORKBUDDY_CONFIG_DIR",
-    default_roots: &[".workbuddy", ".workbuddy-ai"],
     skip_run_and_incomplete: false,
     dedupe_provider_keys: &["messageId"],
     dedupe_fallback_root_id: false,
@@ -23,10 +20,6 @@ const PROFILE: BuddyUsageProfile = BuddyUsageProfile {
     reasoning_keys: &[],
     model_fallback_message: false,
 };
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    buddy_jsonl::scan_dirs(overrides, home, &PROFILE)
-}
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
     buddy_jsonl::sidecar_fingerprint(path)

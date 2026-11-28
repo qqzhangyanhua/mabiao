@@ -4,33 +4,7 @@ use serde::Deserialize;
 
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
 use crate::source_sqlite::{open_wal_readonly, sql_int, sql_text, table_columns, wal_fingerprint};
-
-/// Goose 把 CLI / 桌面会话写进一份 SQLite。
-///
-/// `$GOOSE_PATH_ROOT` 覆盖根目录，扫 `data/sessions/sessions.db`。
-/// 未覆盖时扫 aaif 默认目录与 Block 旧路径。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("GOOSE_PATH_ROOT")
-        .cloned()
-        .map(|roots| {
-            roots
-                .into_iter()
-                .map(|root| root.join("data/sessions"))
-                .collect()
-        })
-        .unwrap_or_else(|| {
-            vec![
-                home.join(".local/share/goose/sessions"),
-                home.join("Library/Application Support/goose/sessions"),
-                home.join("Library/Application Support/Block/goose/sessions"),
-                home.join(".local/share/Block/goose/sessions"),
-                home.join("AppData/Roaming/Block/goose/data/sessions"),
-            ]
-        })
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
