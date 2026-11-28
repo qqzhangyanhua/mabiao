@@ -2609,6 +2609,107 @@ fn agy_shm_touch_does_not_reparse_usage() {
 }
 
 #[test]
+fn wal_sqlite_usage_adapters_do_not_self_invalidate_on_readonly_open_or_shm_touch() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+
+    let agy_dir = home.join(".gemini/antigravity-cli/conversations");
+    std::fs::create_dir_all(&agy_dir).unwrap();
+    let agy_db =
+        write_agy_conversation_db(&agy_dir.join("sess.db"), &[STEP_SIX_TUPLE], &[GEN_CLAUDE]);
+    let alma_db = write_alma_ingest_db(home);
+    let cherry_db = write_default_cherry_home(home);
+    let crush_db = write_default_crush_home(home);
+    let goose_db = write_default_goose_home(home);
+    let hermes_db = write_default_hermes_home(home);
+    let warp_db = write_default_warp_home(home);
+    let zed_db = write_default_zed_home(home);
+
+    let zcode_db = home.join(".zcode/cli/db/db.sqlite");
+    std::fs::create_dir_all(zcode_db.parent().unwrap()).unwrap();
+    {
+        let db = rusqlite::Connection::open(&zcode_db).unwrap();
+        db.execute_batch(
+            "CREATE TABLE session (id TEXT PRIMARY KEY);
+             CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, data TEXT NOT NULL);",
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO message VALUES ('m1', 'ses-z', ?1)",
+            [serde_json::json!({
+                "role": "assistant",
+                "modelID": "zcode-model",
+                "tokens": { "input": 100, "output": 20, "cache": { "read": 0, "write": 0 } },
+                "time": { "created": 1_780_000_000_000_i64, "completed": 1_780_000_001_000_i64 }
+            })
+            .to_string()],
+        )
+        .unwrap();
+    }
+
+    let db_paths = [
+        agy_db, alma_db, cherry_db, crush_db, goose_db, hermes_db, warp_db, zed_db, zcode_db,
+    ];
+
+    // 全部切到 WAL 模式并保持写连接打开，确保真实 -wal 与 -shm 侧车并存。
+    let mut writers = Vec::new();
+    for db_path in &db_paths {
+        let writer = rusqlite::Connection::open(db_path).unwrap();
+        writer.pragma_update(None, "journal_mode", "WAL").unwrap();
+        writer.pragma_update(None, "wal_autocheckpoint", 0).unwrap();
+        // 触发一次真实写事务生成 -wal / -shm 侧车。
+        writer
+            .execute_batch("CREATE TABLE IF NOT EXISTS _wal_probe (id INTEGER PRIMARY KEY); INSERT INTO _wal_probe DEFAULT VALUES;")
+            .unwrap();
+        assert!(
+            crate::source_sqlite::sqlite_sidecar_path(db_path, "-wal").exists(),
+            "{} 应存在真实 -wal 侧车",
+            db_path.display()
+        );
+        writers.push(writer);
+    }
+
+    let conn = store::open_memory().unwrap();
+    let expected_count = db_paths.len() as u64;
+    let first = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(first.files_failed, 0, "unexpected first report: {first:?}");
+    assert_eq!(first.files_parsed, expected_count);
+    assert!(!ingest::scan_is_stale(&conn, home).unwrap());
+
+    // 逐库只读打开并刷新 -shm，绝不能触发虚假 stale 或重解析。
+    for db_path in &db_paths {
+        let reader = crate::source_sqlite::open_wal_readonly(db_path).unwrap();
+        let _: i64 = reader
+            .query_row("SELECT COUNT(*) FROM _wal_probe", [], |row| row.get(0))
+            .unwrap();
+        drop(reader);
+        let shm = crate::source_sqlite::sqlite_sidecar_path(db_path, "-shm");
+        let existing = std::fs::read(&shm).unwrap_or_default();
+        std::fs::write(&shm, &existing).unwrap();
+    }
+
+    assert!(
+        !ingest::scan_is_stale(&conn, home).unwrap(),
+        "只读打开或刷新 -shm 不得把任何 WAL SQLite 来源判为 stale"
+    );
+    let second = ingest::ingest_all(&conn, home).unwrap();
+    assert_eq!(
+        second.files_parsed, 0,
+        "unexpected second report: {second:?}"
+    );
+    assert_eq!(second.files_skipped, expected_count);
+
+    // 真实未 checkpoint 的 -wal 写入必须立即让扫描判定为 stale。
+    writers[0]
+        .execute("INSERT INTO _wal_probe DEFAULT VALUES", [])
+        .unwrap();
+    assert!(
+        ingest::scan_is_stale(&conn, home).unwrap(),
+        "未 checkpoint 的 -wal 写入必须触发 stale"
+    );
+}
+
+#[test]
 fn agy_encrypted_pb_does_not_increment_failure_count() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();

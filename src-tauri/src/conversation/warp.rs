@@ -25,5 +25,5 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Warp")
+    crate::source_sqlite::wal_source_revision(path, "Warp")
 }

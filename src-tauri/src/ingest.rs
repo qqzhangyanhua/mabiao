@@ -1064,61 +1064,6 @@ pub(crate) fn metadata_fingerprint(path: &Path) -> String {
     format!("{}:{modified}", meta.len())
 }
 
-pub(crate) fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String> {
-    let connection =
-        rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
-            .map_err(|error| error.to_string())?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| error.to_string())?;
-    Ok(connection)
-}
-
-/// 只读打开并跟随 WAL：`file:…?mode=ro` + `SQLITE_OPEN_URI`。
-///
-/// 不用 `immutable=1`——它会跳过未 checkpoint 的 WAL 页，正在写入的会话会静默读到旧数据。
-/// Hermes / agy 共用；`open_readonly`（仅 flags）留给 OpenCode 与代码量，避免改它们的打开语义。
-pub(crate) fn open_readonly_uri(path: &Path) -> Result<rusqlite::Connection, String> {
-    let connection = rusqlite::Connection::open_with_flags(
-        sqlite_file_uri(path, "mode=ro"),
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|error| error.to_string())?;
-    connection
-        .pragma_update(None, "query_only", true)
-        .map_err(|error| error.to_string())?;
-    Ok(connection)
-}
-
-/// SQLite URI：转义路径里的空格、`?`、`#`，再拼查询串。
-pub(crate) fn sqlite_file_uri(path: &Path, query: &str) -> String {
-    let raw = path.to_string_lossy().replace('\\', "/");
-    let mut uri = String::from("file:");
-    for ch in raw.chars() {
-        match ch {
-            ' ' => uri.push_str("%20"),
-            '?' => uri.push_str("%3F"),
-            '#' => uri.push_str("%23"),
-            c => uri.push(c),
-        }
-    }
-    uri.push('?');
-    uri.push_str(query);
-    uri
-}
-
-pub(crate) fn sqlite_sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    PathBuf::from(format!("{}{suffix}", path.to_string_lossy()))
-}
-
-/// 主库旁 `-wal` 的元数据指纹（mtime+size 等），WAL 变化会让缓存失效。
-///
-/// 不算 `-shm`：它只是 WAL 索引，内容完全由主库与 `-wal` 决定；而每次只读打开都会
-/// 刷新它的 mtime，算进来的话摄取自己的读取就会让下一轮判定为已变化，每轮整份重解析。
-pub(crate) fn wal_fingerprint(path: &Path) -> String {
-    metadata_fingerprint(&sqlite_sidecar_path(path, "-wal"))
-}
-
 pub(crate) fn walk_files(root: &Path, extension: &str) -> Result<Vec<PathBuf>, String> {
     walk_matching(root, |path| {
         path.extension()

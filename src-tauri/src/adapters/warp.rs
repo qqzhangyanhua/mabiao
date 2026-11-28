@@ -2,10 +2,10 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest::PathOverrides;
+use crate::source_sqlite::{open_wal_readonly, sql_text, table_columns, wal_fingerprint};
 
 /// Warp 把 Agent 会话用量写进本机 `warp.sqlite` 的 `agent_conversations.conversation_data`。
 ///
@@ -44,11 +44,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let columns = table_columns(&db, "agent_conversations")?;
     if !columns.contains("conversation_id") || !columns.contains("conversation_data") {
         return Ok(Vec::new());

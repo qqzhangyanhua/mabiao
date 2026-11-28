@@ -411,12 +411,7 @@ pub fn apply_hash_enrichment(
 }
 
 fn open_readonly(path: &Path) -> Result<rusqlite::Connection, String> {
-    let uri = format!("file:{}?mode=ro", path.to_string_lossy());
-    rusqlite::Connection::open_with_flags(
-        uri,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(|e| e.to_string())
+    crate::source_sqlite::open_wal_readonly(path)
 }
 
 fn millis_to_rfc3339(millis: i64) -> Option<String> {

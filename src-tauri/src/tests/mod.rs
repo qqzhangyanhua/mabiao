@@ -88,6 +88,7 @@ mod rollup_source;
 mod rollup_split;
 mod roo_conversation;
 mod scan_paths;
+mod source_sqlite;
 mod staged;
 mod store;
 mod trae_conversation;

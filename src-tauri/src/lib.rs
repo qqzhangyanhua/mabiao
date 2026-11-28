@@ -31,6 +31,7 @@ pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
 pub mod scan_paths;
+pub(crate) mod source_sqlite;
 pub(crate) mod staged;
 pub mod store;
 pub mod tray;
