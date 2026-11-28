@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { Suspense, useEffect } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingOverlay } from "./components/LoadingOverlay";
@@ -9,10 +8,10 @@ import { useOfficialQuotaUpdates } from "./hooks/useOfficialQuotaUpdates";
 import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
-import { parseWorktimeDay } from "./hooks/viewCache";
 import { clearDimensionFilters, withModelFilter, withProviderFilter } from "./lib/filterChips";
 import { persistOfficialQuotaConfig } from "./lib/officialQuotaConfig";
 import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
+import { parseWorktimeDay } from "./lib/viewHash";
 import {
   LazyApplicationAnalytics,
   LazyBreakdown,
@@ -160,7 +159,7 @@ export default function App() {
                     points={data.trend}
                     theme={theme}
                     filter={data.filter}
-                    revision={String(data.sessionsRevision)}
+                    revision={`${data.sessionsRevision}-${data.pricingRevision}`}
                     onRangeSelect={data.drillRange}
                     onRangeBack={data.canGoBack ? data.popRange : undefined}
                     onOpenConversation={(session) => data.openConversations(session)}
@@ -189,7 +188,7 @@ export default function App() {
                     projectNames={view === "project"}
                     showCallDetails={view === "provider"}
                     filter={view === "provider" || view === "project" ? data.filter : undefined}
-                    revision={String(data.sessionsRevision)}
+                    revision={`${data.sessionsRevision}-${data.pricingRevision}`}
                     theme={theme}
                     onProviderClick={
                       view === "provider"
@@ -230,7 +229,7 @@ export default function App() {
                 {view === "conversations" ? (
                   <LazyConversations
                     filter={data.filter}
-                    revision={data.sessionsRevision}
+                    revision={data.sessionsRevision + data.pricingRevision}
                     focus={data.conversationFocus}
                     onFocusConsumed={data.clearConversationFocus}
                     onOpenRemoteServerSettings={data.openRemoteServerSettings}
@@ -257,18 +256,22 @@ export default function App() {
                     observedModels={data.options.models}
                     budgetStatus={data.budgetStatus}
                     savingBudget={data.savingBudget}
+                    restoreRevision={data.restoreRevision}
+                    pricingRevision={data.pricingRevision}
                     onChange={data.setPrices}
                     onRebuild={data.runRebuild}
                     onPurgeArchived={data.runPurgeArchived}
-                    onSave={async () => {
-                      try {
-                        await invoke("save_price_table", { prices: data.prices });
-                        data.setStatus("单价已保存");
-                      } catch (error) {
-                        data.reportError(error);
-                      }
+                    onSave={() => data.savePrices().catch(() => undefined)}
+                    onScanPathsSaved={() => {
+                      void data.runIngest("刷新");
                     }}
-                    onSnapshotRefreshed={() => data.runIngest("刷新")}
+                    onPriceSnapshotChanged={() => {
+                      void data.invalidatePricing().catch(data.reportError);
+                    }}
+                    onBackupRestored={() => {
+                      void data.reloadAfterRestore().catch(() => undefined);
+                    }}
+                    onClearCursorAccountUsage={data.clearCursorAccountUsage}
                     onSaveBudget={(monthlyUsd: number | null) =>
                       data.saveBudget({ monthly_usd: monthlyUsd }).catch(() => undefined)
                     }

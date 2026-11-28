@@ -37,6 +37,29 @@ export type OverviewDto = {
   cost_sources: OverviewCostSources;
 };
 
+export type OverviewBundleRequest = {
+  filter: Filter;
+  previous_filter: Filter | null;
+  heatmap_filter: Filter;
+  grain: Grain;
+  top_sessions_limit?: number | null;
+  include_options: boolean;
+};
+
+export type OverviewBundleDto = {
+  options: FilterOptions | null;
+  overview: OverviewDto;
+  previous: OverviewDto | null;
+  trend: SeriesPoint[];
+  heatmap: SeriesPoint[];
+  models: NamedAmount[];
+  projects: NamedAmount[];
+  sessions: SessionRow[];
+  billing_windows: BillingWindowsDto;
+  cursor_account_usage: CursorAccountUsageDto;
+  budget_status: BudgetStatusDto;
+};
+
 export type BurnRateDto = {
   tokens_per_minute: number;
   cost_per_hour: number | null;
