@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use crate::domain::{
     InstructionCheckupFinding, InstructionCheckupKind, InstructionCheckupSeverity,
 };
+use crate::source_sqlite;
 
 const PENDING_KEY: &str = "cursor/pendingMemories";
 
@@ -29,12 +30,12 @@ fn candidate_paths(home: &Path) -> Vec<PathBuf> {
 }
 
 fn read_residue(path: &Path) -> Option<Residue> {
-    let conn = open_readonly(path).ok()?;
+    let conn = source_sqlite::open_wal_readonly(path).ok()?;
     let raw = conn
         .query_row(
             "SELECT value FROM ItemTable WHERE key = ?1",
             [PENDING_KEY],
-            read_text,
+            |row| source_sqlite::row_text_lossy(row, 0),
         )
         .ok()?;
     parse_residue(&raw)
@@ -99,24 +100,5 @@ fn problem(residue: &Residue) -> String {
             )
         }
         _ => format!("检测到 Cursor 残留 {} 条 memories。", residue.count),
-    }
-}
-
-fn open_readonly(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> {
-    let uri = format!("file:{}?mode=ro", path.to_string_lossy());
-    rusqlite::Connection::open_with_flags(
-        uri,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
-    )
-}
-
-fn read_text(row: &rusqlite::Row<'_>) -> rusqlite::Result<String> {
-    match row.get_ref(0)? {
-        rusqlite::types::ValueRef::Text(bytes) | rusqlite::types::ValueRef::Blob(bytes) => {
-            Ok(String::from_utf8_lossy(bytes).into_owned())
-        }
-        rusqlite::types::ValueRef::Integer(n) => Ok(n.to_string()),
-        rusqlite::types::ValueRef::Real(n) => Ok(n.to_string()),
-        rusqlite::types::ValueRef::Null => Ok(String::new()),
     }
 }

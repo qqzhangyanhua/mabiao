@@ -2,12 +2,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::adapters::sqlite::{sql_int, sql_text};
 use crate::adapters::{finish, has_billable_tokens};
-
-pub(crate) use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest::PathOverrides;
+use crate::source_sqlite::{open_wal_readonly, sql_int, sql_text, table_columns, wal_fingerprint};
 
 /// Goose 把 CLI / 桌面会话写进一份 SQLite。
 ///
@@ -43,11 +41,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let columns = table_columns(&db, "sessions")?;
     if !columns.contains("id") {
         return Ok(Vec::new());

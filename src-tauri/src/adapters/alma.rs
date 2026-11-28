@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::adapters::sqlite::table_columns;
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
+use crate::ingest::PathOverrides;
+use crate::source_sqlite::{open_wal_readonly, sql_coalesce, table_columns, wal_fingerprint};
 
 /// Alma 桌面端的 Electron `userData`：OS 配置目录下的 `alma/`，
 /// **不是** XDG 数据目录 `~/.local/share/alma`。
@@ -34,11 +34,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let threads = table_columns(&db, "chat_threads")?;
     if !threads.contains("id") {
         return Ok(Vec::new());
@@ -215,12 +215,4 @@ pub fn alma_model(model: &str, provider_id: &str) -> String {
         return model.to_string();
     }
     rest.to_string()
-}
-
-fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({alias}.{name}, {fallback})")
-    } else {
-        fallback.to_string()
-    }
 }
