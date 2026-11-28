@@ -1,0 +1,108 @@
+docs/adr/0003-trusted-ingestion-cache.md
+  h_4132837b09b7e7 14
+src-tauri/src/adapters/agy.rs
+  h_4132837b09b7e7 32,97,101,138-139
+src-tauri/src/adapters/alma.rs
+  h_4132837b09b7e7 6-7,37,41
+src-tauri/src/adapters/buddy_jsonl.rs
+  h_4132837b09b7e7 1-269
+src-tauri/src/adapters/cherry.rs
+  h_4132837b09b7e7 6-9,41,45,79-85,87
+src-tauri/src/adapters/codebuddy.rs
+  h_4132837b09b7e7 3-4,6,11-46,48,52,60
+src-tauri/src/adapters/crush.rs
+  h_4132837b09b7e7 9-12,97,101
+src-tauri/src/adapters/cursor.rs
+  h_4132837b09b7e7 7,162
+src-tauri/src/adapters/cursor_session.rs
+  h_4132837b09b7e7 414
+src-tauri/src/adapters/goose.rs
+  h_4132837b09b7e7 7-8,44,48
+src-tauri/src/adapters/hermes.rs
+  h_4132837b09b7e7 6-8,63,67,98-99
+src-tauri/src/adapters/mod.rs
+  h_4132837b09b7e7 5
+src-tauri/src/adapters/opencode.rs
+  h_4132837b09b7e7 12,108,145
+src-tauri/src/adapters/warp.rs
+  h_4132837b09b7e7 7-8,47,51
+src-tauri/src/adapters/workbuddy.rs
+  h_4132837b09b7e7 3-4,6,10-26,28,32,40
+src-tauri/src/adapters/zcode.rs
+  h_4132837b09b7e7 8,21,25
+src-tauri/src/adapters/zed.rs
+  h_4132837b09b7e7 11-14,43,64,69,111
+src-tauri/src/conversation/agy.rs
+  h_4132837b09b7e7 25,68,81,84
+src-tauri/src/conversation/alma.rs
+  h_4132837b09b7e7 9-11,39,56,120-123,131-135,158-160,170
+src-tauri/src/conversation/buddy_jsonl.rs
+  h_4132837b09b7e7 1-211
+src-tauri/src/conversation/cherry.rs
+  h_4132837b09b7e7 15-17,41,72,115-118,152-154
+src-tauri/src/conversation/codebuddy.rs
+  h_4132837b09b7e7 3-6,9,17,20-22
+src-tauri/src/conversation/crush.rs
+  h_4132837b09b7e7 15,17-19,43,75,121-125,149-151
+src-tauri/src/conversation/cursor_inject.rs
+  h_4132837b09b7e7 12,20,102
+src-tauri/src/conversation/extension_tasks.rs
+  h_4132837b09b7e7 1-216
+src-tauri/src/conversation/goose.rs
+  h_4132837b09b7e7 15,18,42,75,111-117,150
+src-tauri/src/conversation/hermes.rs
+  h_4132837b09b7e7 16,40,77,79-80,84-85,110-111,113,120-125,167,176-179,321-322
+src-tauri/src/conversation/kilo.rs
+  h_4132837b09b7e7 3-5,9,13,21
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 16,42
+src-tauri/src/conversation/opencode.rs
+  h_4132837b09b7e7 2,101
+src-tauri/src/conversation/opencode_snapshot.rs
+  h_4132837b09b7e7 13-16,19,158-162,169-171,190-191,247,332-336,343-345
+src-tauri/src/conversation/roo.rs
+  h_4132837b09b7e7 3-5,9,13,21
+src-tauri/src/conversation/warp.rs
+  h_4132837b09b7e7 28
+src-tauri/src/conversation/workbuddy.rs
+  h_4132837b09b7e7 3-6,9,17,20-22
+src-tauri/src/conversation/zcode.rs
+  h_4132837b09b7e7 1,9-12,64,81,136,139-143,151-153,207,216,243,252-253,261
+src-tauri/src/conversation/zed.rs
+  h_4132837b09b7e7 40
+src-tauri/src/instructions/cursor_memories.rs
+  h_4132837b09b7e7 6,33,38
+src-tauri/src/lib.rs
+  h_4132837b09b7e7 34
+src-tauri/src/source_sqlite.rs
+  h_4132837b09b7e7 1-5,7-37,39-105,108-114,128-133,135-150,152-156,158,162-167,169-173,175,179,181,183-210
+src-tauri/src/tests/adapters.rs
+  h_4132837b09b7e7 1740-1781,2781
+src-tauri/src/tests/alma_conversation.rs
+  h_4132837b09b7e7 2,5,41,89-174
+src-tauri/src/tests/codebuddy_conversation.rs
+  h_4132837b09b7e7 91-111
+src-tauri/src/tests/ingest.rs
+  h_4132837b09b7e7 2611-2711
+src-tauri/src/tests/kilo_conversation.rs
+  h_4132837b09b7e7 63-83
+src-tauri/src/tests/mod.rs
+  h_4132837b09b7e7 91
+src-tauri/src/tests/roo_conversation.rs
+  h_4132837b09b7e7 63-83
+src-tauri/src/tests/source_sqlite.rs
+  h_4132837b09b7e7 1-202
+src-tauri/src/tests/zcode_conversation.rs
+  h_4132837b09b7e7 4,147-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "75a3076893691c8984997d70ed8bd66e2ca0145e",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
