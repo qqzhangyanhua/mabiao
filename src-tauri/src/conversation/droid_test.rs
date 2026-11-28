@@ -1,4 +1,7 @@
-use super::{index, EventKind, EventStatus};
+use super::index;
+use crate::domain::{
+    ConversationEventCapabilityStatus as EventStatus, ConversationEventKind as EventKind,
+};
 
 #[test]
 fn adapter_uses_droid_filename_identity_and_reports_partial_records_structurally() {

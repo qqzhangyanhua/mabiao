@@ -1,7 +1,8 @@
 use std::path::Path;
 
-use super::toolbox::*;
+use super::normalize::ParsedConversation;
 use super::{claude, single_detail, ConversationIndexBatch, ConversationIndexIssue};
+use crate::domain::Source;
 
 fn wrap_index(
     path: &Path,

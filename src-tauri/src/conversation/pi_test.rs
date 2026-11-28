@@ -1,4 +1,5 @@
-use super::{parse, EventKind};
+use super::parse;
+use crate::domain::ConversationEventKind as EventKind;
 
 #[test]
 fn adapter_maps_lifecycle_kinds_and_typeless_messages() {

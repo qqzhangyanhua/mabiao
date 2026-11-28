@@ -2,9 +2,14 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::super::toolbox::*;
+use super::super::normalize::{
+    optional_text, push_projected_message, semantic_event, unadapted_event,
+};
 use super::super::ConversationIndexIssue;
-use crate::domain::ConversationMessage;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage,
+};
 
 pub(super) enum WireAccept {
     /// 记账、镜像或注入，不进对话正文，也不报未适配。

@@ -4,8 +4,18 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, first_text, normalize_tool_call_details,
+    normalize_tool_result_details, optional_text, parse_jsonl_conversation_values,
+    push_projected_message, semantic_event, strip_prompt_wrappers, text_field, tool_result_event,
+    truncate_title, update_time_bounds, ConversationFinishPrep, FileIndexCursor,
+    ParsedConversation,
+};
+use super::responses_wire::event_msg_semantic_event;
 use super::ConversationIndexIssue;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 #[cfg(test)]
 #[path = "claude_test.rs"]

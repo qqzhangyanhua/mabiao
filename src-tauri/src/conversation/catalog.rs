@@ -3,18 +3,15 @@ use std::path::PathBuf;
 use rusqlite::{params_from_iter, Connection};
 
 use crate::domain::{
-    ConversationEvent, ConversationPage, ConversationQuery, ConversationUsagePage, PriceTable,
-    Source,
+    ConversationPage, ConversationQuery, ConversationUsagePage, PriceTable, Source,
 };
 
 use super::catalog_search;
 use super::conversation_adapter;
-use super::event_index;
+use super::event_store::event_index_ready_sql;
 use super::hydrate;
-use super::session_store::{event_index_ready_sql, load_session, load_usage_records, row_from_sql};
-use super::toolbox::compare_event_order;
-use super::trusted_path::session_source_paths;
-use super::{parse_conversation_files, CONVERSATION_SOURCES};
+use super::session_store::{load_usage_records, row_from_sql};
+use super::CONVERSATION_SOURCES;
 use super::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 pub(crate) fn conversation_source_paths(
@@ -205,27 +202,6 @@ pub fn sessions_page(
     query: &ConversationQuery,
 ) -> Result<ConversationPage, String> {
     sessions_page_with_prices(conn, query, &PriceTable::default())
-}
-
-/// 外置正文回不了源文件时，按库里登记的会话文件整份解析（ADR 0025）。
-pub fn indexed_events(
-    conn: &Connection,
-    source: &str,
-    session_id: &str,
-) -> Result<Vec<ConversationEvent>, String> {
-    if let Some(events) = event_index::indexed_events(conn, source, session_id)? {
-        return Ok(events);
-    }
-    let parsed_source = Source::parse(source).ok_or_else(|| "未知来源".to_string())?;
-    let session =
-        load_session(conn, source, session_id)?.ok_or_else(|| "未找到该对话记录".to_string())?;
-    let paths = session_source_paths(&session)?;
-    let mut events = parse_conversation_files(parsed_source, &paths, session_id, false)?.events;
-    events.sort_by(compare_event_order);
-    for (sequence, event) in events.iter_mut().enumerate() {
-        event.sequence = sequence as u32;
-    }
-    Ok(events)
 }
 
 pub fn usage_records_page(

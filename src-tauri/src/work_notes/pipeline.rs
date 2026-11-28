@@ -46,6 +46,7 @@ pub(super) struct PreparedWorkNotes {
 
 pub(super) fn prepare(
     conn: &Connection,
+    home: Option<&Path>,
     prices: &PriceTable,
     params: &WorkNotesParams,
     now: DateTime<Local>,
@@ -58,7 +59,7 @@ pub(super) fn prepare(
     let filter = period::usage_filter(&resolved);
     let numbers = hard_numbers(conn, prices, &filter)?;
     let sessions = load_sessions(conn, prices, &resolved.from, &resolved.to)?;
-    let (skipped_sparse, eligible_sessions) = classify_sessions(conn, sessions)?;
+    let (mut skipped_sparse, eligible_sessions) = classify_sessions(conn, sessions)?;
     let selected = resolve_selection(&eligible_sessions, &params.sessions, !skip_gate)?;
     let latest = cache::load_latest_notes(conn, &resolved, &engine, &model)?;
 
@@ -79,16 +80,27 @@ pub(super) fn prepare(
         if !selected.contains(&(session.source.clone(), session.session_id.clone())) {
             continue;
         }
+        let events = if skip_gate || cached_summary.is_some() {
+            Vec::new()
+        } else {
+            let home = home.ok_or_else(|| "生成工作纪要缺少用户主目录".to_string())?;
+            let resolved_events = conversation::load_session_events(
+                conn,
+                home,
+                &session.source,
+                &session.session_id,
+            )?;
+            if resolved_events.len() < 3 {
+                skipped_sparse += 1;
+                continue;
+            }
+            resolved_events
+        };
         parts.push((
             session.source.clone(),
             session.session_id.clone(),
             fingerprint.clone(),
         ));
-        let events = if skip_gate || cached_summary.is_some() {
-            Vec::new()
-        } else {
-            conversation::indexed_events(conn, &session.source, &session.session_id)?
-        };
         eligible.push(EligibleSession {
             session,
             events,
@@ -469,9 +481,13 @@ fn classify_sessions(
         if generated.contains(&session.source, &session.session_id, &session.project) {
             continue;
         }
-        let event_count =
-            conversation::indexed_event_count(conn, &session.source, &session.session_id)? as usize;
-        if input::is_sparse(event_count, session.total_tokens) {
+        let event_count = if !session.file_available {
+            Some(0)
+        } else {
+            conversation::catalog_event_count(conn, &session.source, &session.session_id)?
+                .map(|count| count as usize)
+        };
+        if input::is_catalog_sparse(event_count, session.total_tokens) {
             skipped_sparse += 1;
             continue;
         }

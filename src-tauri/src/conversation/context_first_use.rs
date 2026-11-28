@@ -17,8 +17,8 @@ use crate::domain::{
     ConversationContextLayer, ConversationEvent, ConversationEventKind as EventKind, Source,
 };
 
-use super::event_storage::restore_event_id;
-use super::{context_manifest, event_index};
+use super::context_manifest;
+use super::event_store::{restore_event_id, session_generation};
 
 const SUBAGENT_TOOLS: &[&str] = &["task", "agent", "spawn_agent"];
 const COMPACTION_STATUS: &[&str] = &[
@@ -73,8 +73,7 @@ pub(crate) fn candidates_from_index(
     source: Source,
     session_id: &str,
 ) -> Result<Vec<Candidate>, String> {
-    let Some(generation) = event_index::session_generation(conn, source.as_str(), session_id)?
-    else {
+    let Some(generation) = session_generation(conn, source.as_str(), session_id)? else {
         return Ok(Vec::new());
     };
     let mut statement = conn

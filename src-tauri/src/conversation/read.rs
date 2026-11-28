@@ -5,10 +5,9 @@
 //! 索引与解析分流、Cursor transcript 缺失、上下文清单接线都留在 implementation 里。
 //! 事件分页、按行重建、导出只用「准备」，不走「收尾」。
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 
 use crate::domain::{
     ConversationAgentRelations, ConversationContextItem, ConversationDetailDto,
@@ -18,20 +17,19 @@ use crate::domain::{
 };
 
 use super::agent_graph::load_agent_relations;
+use super::event_store;
+use super::normalize::{compare_event_order, semantic_event, ParsedConversation};
 use super::scan_roots::conversation_source_roots;
 use super::session_store::{
-    ensure_matching_session, load_session, load_usage_records, session_events_ready,
-    usage_record_identity,
+    ensure_matching_session, load_session, load_usage_records, usage_record_identity,
 };
-use super::toolbox::{compare_event_order, semantic_event, ParsedConversation};
 use super::trusted_path::{
     detail_file_revision, detail_files_revision, files_revision, session_source_paths,
     trusted_paths_for_session,
 };
 use super::{
-    context_cache, context_first_use, context_manifest, conversation_adapter, cursor, event_index,
-    parse_conversation_files, PreparedConversationDetail, PreparedDetailRead, CONVERSATION_SOURCES,
-    DETAIL_READ_ATTEMPTS,
+    context_cache, context_first_use, context_manifest, cursor, parse_conversation_files,
+    PreparedConversationDetail, PreparedDetailRead, CONVERSATION_SOURCES, DETAIL_READ_ATTEMPTS,
 };
 
 pub fn load_detail(
@@ -55,8 +53,8 @@ pub(crate) fn prepare_detail_read(
     } else {
         None
     };
-    if event_index_ready(conn, home, &prepared)? {
-        let event_count = event_index::indexed_event_count(conn, source, session_id)?;
+    if event_store::event_index_ready(conn, home, &prepared)? {
+        let event_count = event_store::indexed_event_count(conn, source, session_id)?;
         let supported = context_manifest::supported_source(prepared.source);
         let observed_context = if supported {
             context_manifest::observed_from_index(conn, prepared.source, session_id)?
@@ -219,20 +217,6 @@ pub(crate) fn load_prepared_parsed(
     })
 }
 
-pub(crate) fn event_index_ready(
-    conn: &Connection,
-    home: &Path,
-    prepared: &PreparedConversationDetail,
-) -> Result<bool, String> {
-    if !session_events_ready(conn, prepared.source.as_str(), &prepared.session.session_id)? {
-        return Ok(false);
-    }
-    let Ok(paths) = trusted_paths_for_session(home, prepared.source, &prepared.session) else {
-        return Ok(false);
-    };
-    stored_revisions_match(conn, prepared.source, &prepared.session.session_id, &paths)
-}
-
 fn assemble_indexed_detail(
     home: &Path,
     prepared: PreparedConversationDetail,
@@ -305,58 +289,6 @@ fn assemble_detail(home: &Path, source: Source, parts: DetailParts<'_>) -> Conve
     dto
 }
 
-fn stored_revisions_match(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-    paths: &[PathBuf],
-) -> Result<bool, String> {
-    let mut statement = conn
-        .prepare(
-            r#"
-            SELECT source_file, source_revision
-            FROM conversation_session_files
-            WHERE source = ?1 AND session_id = ?2
-            "#,
-        )
-        .map_err(|error| error.to_string())?;
-    let stored = statement
-        .query_map(params![source.as_str(), session_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeMap<_, _>, _>>()
-        .map_err(|error| error.to_string())?;
-    let adapter = conversation_adapter(source)?;
-    if stored.is_empty() {
-        let stored_revision = conn
-            .query_row(
-                r#"
-                SELECT source_revision
-                FROM conversation_sessions
-                WHERE source = ?1 AND session_id = ?2
-                "#,
-                params![source.as_str(), session_id],
-                |row| row.get::<_, String>(0),
-            )
-            .map_err(|error| error.to_string())?;
-        return Ok(files_revision(source, paths)? == stored_revision);
-    }
-    if stored.len() != paths.len() {
-        return Ok(false);
-    }
-    for path in paths {
-        let key = path.to_string_lossy().to_string();
-        let Some(stored_revision) = stored.get(&key) else {
-            return Ok(false);
-        };
-        if &(adapter.revision)(path)? != stored_revision {
-            return Ok(false);
-        }
-    }
-    Ok(true)
-}
-
 fn load_exact_cursor_session(
     conn: &Connection,
     session_id: &str,
@@ -381,7 +313,9 @@ fn cursor_behavior_dto(
     stats.map(|record| crate::cursor_session_detail::detail_from_record(home, record))
 }
 
-fn cursor_missing_transcript_events(session: &ConversationSessionRow) -> Vec<ConversationEvent> {
+pub(super) fn cursor_missing_transcript_events(
+    session: &ConversationSessionRow,
+) -> Vec<ConversationEvent> {
     let mut event = semantic_event(
         0,
         EventKind::SystemStatus,

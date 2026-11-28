@@ -28,6 +28,15 @@ pub fn is_sparse(event_count: usize, total_tokens: i64) -> bool {
     event_count < 3 || total_tokens < 1000
 }
 
+/// 目录阶段的零星判定（不读正文）：有持久化 `event_count` 时与 `is_sparse` 一致；
+/// 老库未刷新行为 `None`，先只按 token 阈值过滤，生成阶段再对解析后的事件执行 `events.len() < 3`。
+pub fn is_catalog_sparse(event_count: Option<usize>, total_tokens: i64) -> bool {
+    match event_count {
+        Some(count) => is_sparse(count, total_tokens),
+        None => total_tokens < 1000,
+    }
+}
+
 pub fn compress(session: &ConversationSessionRow, events: &[ConversationEvent]) -> String {
     let project = project_dir_name(&session.project);
     let users: Vec<&str> = events

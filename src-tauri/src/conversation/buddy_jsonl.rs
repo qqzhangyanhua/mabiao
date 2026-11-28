@@ -5,14 +5,17 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::toolbox::{
-    event_msg_semantic_event, finish_source_conversation, first_text, normalize_tool_call_details,
+use super::normalize::{
+    finish_source_conversation, first_text, normalize_tool_call_details,
     normalize_tool_result_details, optional_text, parse_jsonl_conversation_values,
     push_projected_message, semantic_event, tool_result_event, update_time_bounds,
-    ConversationFinishPrep, EventActor, EventKind, ParsedConversation,
+    ConversationFinishPrep, ParsedConversation,
 };
+use super::responses_wire::event_msg_semantic_event;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
-use crate::domain::Source;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 pub(super) fn index(
     path: &Path,

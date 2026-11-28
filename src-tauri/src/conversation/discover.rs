@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ingest;
 
-use super::toolbox::ParsedConversation;
+use super::normalize::ParsedConversation;
 use super::trusted_path::metadata_revision;
 use super::{claude, gemini, omp, pi, ConversationIndexBatch, ConversationIndexIssue};
 

@@ -29,7 +29,7 @@ use crate::domain::{
 };
 
 use super::context_cache::CachedContextMetrics;
-use super::{cursor_inject, event_index, grok_inject};
+use super::{cursor_inject, event_store, grok_inject};
 
 const INJECTED_EMPTY: &str = "未发现本轮注入条目。";
 const INJECTED_PRESENT: &str = "下列条目已注入本会话首轮上下文。";
@@ -466,7 +466,7 @@ pub(crate) fn observed_from_index(
     source: Source,
     session_id: &str,
 ) -> Result<Vec<ConversationContextItem>, String> {
-    let Some(generation) = event_index::session_generation(conn, source.as_str(), session_id)?
+    let Some(generation) = event_store::session_generation(conn, source.as_str(), session_id)?
     else {
         return Ok(Vec::new());
     };

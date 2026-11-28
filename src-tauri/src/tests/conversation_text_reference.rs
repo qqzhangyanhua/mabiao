@@ -169,3 +169,175 @@ fn adopting_legacy_rows_compacts_ids_and_backfill_moves_texts_out() {
         expected
     );
 }
+
+#[test]
+fn ready_session_text_ref_mismatch_falls_back_on_general_readers_and_preserves_deferred_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let big_output = format!("{}DEFERRED-END-MARKER", "B".repeat(5_000));
+    let path = home.join(".codex/sessions/2026/08/rollout-defer-1.jsonl");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let lines = [
+        serde_json::json!({
+            "type": "session_meta",
+            "timestamp": "2026-08-20T00:00:00Z",
+            "payload": {"id": "defer-1", "cwd": "/workspace/app", "model_provider": "openai"}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-08-20T00:00:01Z",
+            "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "检查大输出"}]}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-08-20T00:00:02Z",
+            "payload": {"type": "function_call", "name": "Bash", "arguments": "{}", "call_id": "call-1"}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-08-20T00:00:03Z",
+            "payload": {"type": "function_call_output", "call_id": "call-1", "output": big_output}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-08-20T00:00:04Z",
+            "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "检查完成"}]}
+        }),
+    ];
+    let body = lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    std::fs::write(&path, format!("{body}\n")).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+
+    // 正常就绪态：分页保持 Deferred；单条展开、导出、推送展开全文。
+    let ready_page = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        crate::domain::ConversationEventAnchor::First,
+        50,
+    )
+    .unwrap();
+    let deferred_event = ready_page
+        .events
+        .iter()
+        .find(|event| event.content_status == ConversationEventContentStatus::Deferred)
+        .expect("分页应保留 >4KB 工具输出为 Deferred");
+    assert!(
+        !deferred_event
+            .text
+            .as_deref()
+            .unwrap_or("")
+            .contains("DEFERRED-END-MARKER"),
+        "分页不应展开延迟正文"
+    );
+    let expanded = crate::conversation::load_event_content(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        &deferred_event.event_id,
+    )
+    .unwrap();
+    assert!(expanded
+        .text
+        .as_deref()
+        .unwrap_or("")
+        .contains("DEFERRED-END-MARKER"));
+
+    let exported = crate::conversation::build_export(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        ConversationExportFormat::Markdown,
+    )
+    .unwrap();
+    assert!(String::from_utf8(exported.content)
+        .unwrap()
+        .contains("DEFERRED-END-MARKER"));
+
+    let row = crate::conversation::load_session(&conn, "codex", "defer-1")
+        .unwrap()
+        .unwrap();
+    let pushed = crate::conversation::read_push_session(&conn, home, &row).unwrap();
+    assert!(pushed.events.iter().any(|event| event
+        .text
+        .as_deref()
+        .unwrap_or("")
+        .contains("DEFERRED-END-MARKER")));
+
+    // 破坏外置正文指纹而保持源文件不动（索引仍处于就绪态）：
+    // 常规读取方（分页、单条展开、导出）走整份解析回退；推送按 ADR-0026 整场跳过。
+    let changed = conn
+        .execute(
+            "UPDATE conversation_events SET text_hash = text_hash + 1
+             WHERE source = 'codex' AND session_id = 'defer-1' AND text_hash IS NOT NULL",
+            [],
+        )
+        .unwrap();
+    assert!(changed > 0);
+    let prepared = crate::conversation::prepare_detail(&conn, "codex", "defer-1").unwrap();
+    assert!(crate::conversation::event_index_ready(&conn, home, &prepared).unwrap());
+
+    let fallback_page = crate::conversation::load_events(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        crate::domain::ConversationEventAnchor::First,
+        50,
+    )
+    .unwrap();
+    assert!(fallback_page
+        .events
+        .iter()
+        .any(|event| event.text.as_deref() == Some("检查大输出")));
+    let fallback_deferred = fallback_page
+        .events
+        .iter()
+        .find(|event| event.content_status == ConversationEventContentStatus::Deferred)
+        .expect("分页回退也应保持 >4KB 工具输出为 Deferred");
+    assert!(!fallback_deferred
+        .text
+        .as_deref()
+        .unwrap_or("")
+        .contains("DEFERRED-END-MARKER"));
+
+    let fallback_expanded = crate::conversation::load_event_content(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        &deferred_event.event_id,
+    )
+    .unwrap();
+    assert!(fallback_expanded
+        .text
+        .as_deref()
+        .unwrap_or("")
+        .contains("DEFERRED-END-MARKER"));
+
+    let fallback_exported = crate::conversation::build_export(
+        &conn,
+        home,
+        "codex",
+        "defer-1",
+        ConversationExportFormat::Markdown,
+    )
+    .unwrap();
+    assert!(String::from_utf8(fallback_exported.content)
+        .unwrap()
+        .contains("DEFERRED-END-MARKER"));
+
+    let push_err = crate::conversation::read_push_session(&conn, home, &row)
+        .err()
+        .expect("推送在已就绪外置正文失配时必须整场跳过");
+    assert!(push_err.contains("外置正文"), "{push_err}");
+}

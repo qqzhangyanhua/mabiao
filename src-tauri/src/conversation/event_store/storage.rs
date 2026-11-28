@@ -14,9 +14,9 @@ use rusqlite::{params, Connection};
 use crate::domain::{ConversationEvent, ConversationEventKind as EventKind, Source};
 use crate::store::STORAGE_STALE_ADAPTER_VERSION;
 
-use super::line_direct::rebuild_events_from_raw;
-use super::toolbox::{event_id_for, FileIndexCursor};
-use super::CONVERSATION_ADAPTER_VERSION;
+use super::super::line_direct::rebuild_events_from_raw;
+use super::super::normalize::{event_id_for, FileIndexCursor};
+use super::super::CONVERSATION_ADAPTER_VERSION;
 
 /// 本机各抽 1500 条，按行重建的正文与整份解析逐条一致。Claude 会跨行合并，不在此列。
 const TEXT_REFERENCE_SOURCES: &[Source] = &[Source::Codex, Source::Trae, Source::Pi, Source::Omp];
@@ -27,9 +27,9 @@ const TEXT_REFERENCE_KINDS: &[EventKind] =
 const ADOPT_BATCH_ROWS: i64 = 10_000;
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct TextRef {
-    pub(super) line_offset: i64,
-    pub(super) text_hash: i64,
+pub(in crate::conversation) struct TextRef {
+    pub(in crate::conversation) line_offset: i64,
+    pub(in crate::conversation) text_hash: i64,
 }
 
 pub(super) fn stored_event_id(event: &ConversationEvent) -> String {
@@ -46,7 +46,11 @@ fn compact_event_id(event_id: &str, derived: &str) -> String {
     }
 }
 
-pub(super) fn restore_event_id(stored: String, source_file: &str, source_sequence: u32) -> String {
+pub(in crate::conversation) fn restore_event_id(
+    stored: String,
+    source_file: &str,
+    source_sequence: u32,
+) -> String {
     if stored.is_empty() || stored.starts_with(':') {
         format!("{}{stored}", event_id_for(source_file, source_sequence))
     } else {
@@ -172,8 +176,8 @@ fn trim_line_end(buffer: &[u8]) -> &[u8] {
     buffer.strip_suffix(b"\r").unwrap_or(buffer)
 }
 
-/// 按位置回源文件取外置正文。任何一条读不到或指纹对不上就返回 `false`，调用方整份退回
-/// 解析源文件，不拼「部分正文」。
+/// 按位置回源文件取外置正文。任何一条读不到或指纹对不上就返回 `false`，调用方按自身策略
+/// 退回整份解析或整场跳过，不拼「部分正文」。
 pub(super) fn hydrate_texts(
     source: Source,
     session_id: &str,
@@ -224,16 +228,19 @@ fn hydrate_file(
     Ok(())
 }
 
-pub(super) struct ReferencedLine<'a> {
-    pub(super) source: Source,
-    pub(super) session_id: &'a str,
-    pub(super) path: &'a Path,
-    pub(super) event_id: &'a str,
-    pub(super) source_sequence: u32,
+pub(in crate::conversation) struct ReferencedLine<'a> {
+    pub(in crate::conversation) source: Source,
+    pub(in crate::conversation) session_id: &'a str,
+    pub(in crate::conversation) path: &'a Path,
+    pub(in crate::conversation) event_id: &'a str,
+    pub(in crate::conversation) source_sequence: u32,
 }
 
 /// 单条外置正文；读不到或指纹对不上返回 `None`。
-pub(super) fn referenced_text(line: &ReferencedLine<'_>, text_ref: TextRef) -> Option<String> {
+pub(in crate::conversation) fn referenced_text(
+    line: &ReferencedLine<'_>,
+    text_ref: TextRef,
+) -> Option<String> {
     let mut reader = BufReader::new(fs::File::open(line.path).ok()?);
     read_referenced_text(&mut reader, line, text_ref).ok()
 }

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::toolbox::ParsedConversation;
+use super::normalize::ParsedConversation;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {

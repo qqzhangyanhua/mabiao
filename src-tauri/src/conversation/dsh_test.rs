@@ -1,7 +1,10 @@
 use std::io::Cursor;
 use std::path::Path;
 
-use super::{index, EventKind, EventStatus};
+use super::index;
+use crate::domain::{
+    ConversationEventCapabilityStatus as EventStatus, ConversationEventKind as EventKind,
+};
 
 fn write_compressed(path: &Path, content: &str) {
     let compressed = zstd::stream::encode_all(Cursor::new(content.as_bytes()), 1).unwrap();

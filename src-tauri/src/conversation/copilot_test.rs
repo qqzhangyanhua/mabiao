@@ -2,7 +2,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::{index, EventKind};
+use super::index;
+use crate::domain::ConversationEventKind as EventKind;
 
 fn write_events(path: &Path, prepend_unknown: bool) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

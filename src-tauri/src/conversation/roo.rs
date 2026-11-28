@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::extension_tasks;
-use super::toolbox::ParsedConversation;
+use super::normalize::ParsedConversation;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::domain::Source;
 
