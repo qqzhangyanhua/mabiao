@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { BODYLESS_CONVERSATION_SOURCES as GENERATED_BODYLESS_SOURCES } from "../generated/displayIdentity";
 import type { ConversationSessionRow } from "../types";
 import {
+  BODYLESS_CONVERSATION_SOURCES,
   conversationCatalogEmptyCopy,
   conversationCatalogItems,
   conversationIndexIncomplete,
+  isBodylessConversationFilter,
 } from "./conversationCatalogItems";
 
 function row(
@@ -52,6 +55,14 @@ describe("conversationCatalogItems", () => {
 });
 
 describe("conversationCatalogEmptyCopy", () => {
+  it("uses generated bodyless conversation metadata directly", () => {
+    expect(BODYLESS_CONVERSATION_SOURCES).toBe(GENERATED_BODYLESS_SOURCES);
+    for (const source of GENERATED_BODYLESS_SOURCES) {
+      expect(isBodylessConversationFilter([source])).toBe(true);
+    }
+    expect(isBodylessConversationFilter(["claude"])).toBe(false);
+  });
+
   it("explains that aider / warp / windsurf have no local conversation body", () => {
     expect(
       conversationCatalogEmptyCopy({

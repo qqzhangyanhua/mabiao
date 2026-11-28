@@ -1,4 +1,6 @@
+import { BODYLESS_CONVERSATION_SOURCES } from "../generated/displayIdentity";
 import type { ConversationIndexProgressDto, ConversationSessionRow } from "../types";
+import { sourceLabel } from "./format";
 
 export const BODY_SEARCH_MIN_CHARS = 3;
 export const CATALOG_PAGE_SIZE = 20;
@@ -33,8 +35,8 @@ export function conversationIndexIncomplete(
   return progress != null && progress.total > 0 && progress.indexed < progress.total;
 }
 
-/** 本机不存会话正文，对话目录按设计为空。 */
-export const BODYLESS_CONVERSATION_SOURCES = ["aider", "warp", "windsurf"] as const;
+/** 本机不存会话正文，对话目录按设计为空；由 Rust `CONVERSATION_ADAPTERS` 生成。 */
+export { BODYLESS_CONVERSATION_SOURCES };
 
 export function isBodylessConversationFilter(sources: string[]): boolean {
   return (
@@ -57,9 +59,10 @@ export function conversationCatalogEmptyCopy({
   sources?: string[];
 }): { title: string; hint: string } {
   if (!searching && isBodylessConversationFilter(sources)) {
+    const names = BODYLESS_CONVERSATION_SOURCES.map(sourceLabel).join(" / ");
     return {
       title: "该来源没有本机会话正文",
-      hint: "Aider / Warp / Windsurf 只记消耗，本机不存对话正文，目录为空是预期。",
+      hint: `${names} 只记消耗，本机不存对话正文，目录为空是预期。`,
     };
   }
   if (!searching) {

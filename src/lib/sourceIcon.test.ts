@@ -1,47 +1,10 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BRAND_IDS } from "../generated/displayIdentity";
+import { BRAND_IDS, SOURCE_SLUGS } from "../generated/displayIdentity";
 import { officialQuotaAttributionId } from "./overviewLayout";
 import { brandToneClass, resolveSourceIconId } from "./sourceIcon";
 
-const KNOWN_SOURCES = [
-  "claude",
-  "codex",
-  "pi",
-  "omp",
-  "opencode",
-  "kimi",
-  "dsh",
-  "gemini",
-  "grok",
-  "qwen",
-  "factory",
-  "cursor",
-  "cursor_agent",
-  "copilot",
-  "hermes",
-  "agy",
-  "qoder",
-  "qoder_cn",
-  "cline",
-  "workbuddy",
-  "zcode",
-  "alma",
-  "codebuddy",
-  "codebuddy_ide",
-  "trae",
-  "goose",
-  "roo",
-  "kilo",
-  "amp",
-  "zed",
-  "cherry",
-  "openclaw",
-  "crush",
-  "aider",
-  "warp",
-  "windsurf",
-] as const;
+const KNOWN_SOURCES = [...SOURCE_SLUGS, "cursor"] as const;
 
 describe("resolveSourceIconId", () => {
   it("gives every known application source a dedicated glyph id", () => {
@@ -110,7 +73,7 @@ describe("resolveSourceIconId", () => {
     };
     expect(face({ provider: "acct:droid:ab12" })).toEqual({
       iconId: "factory",
-      tone: "tone-factory",
+      tone: "tone-other",
     });
     expect(face({ provider: "acct:antigravity:ab12" })).toEqual({
       iconId: "agy",
@@ -122,7 +85,7 @@ describe("resolveSourceIconId", () => {
     });
     expect(face({ provider: "acct:copilot:ab12" })).toEqual({
       iconId: "copilot",
-      tone: "tone-copilot",
+      tone: "tone-other",
     });
     expect(face({ provider: "acct:codex:ab12", base_provider: "claude" })).toEqual({
       iconId: "claude",
@@ -143,11 +106,32 @@ function toneSelectorExists(css: string, tone: string): boolean {
 }
 
 describe("brandToneClass", () => {
-  it("uses a tone class that exists in the tone stylesheet", () => {
+  it("uses dedicated tone classes for custom-palette brands and tone-other for neutral brands", () => {
+    expect(brandToneClass("claude")).toBe("tone-claude");
+    expect(brandToneClass("codex")).toBe("tone-codex");
+    expect(brandToneClass("grok")).toBe("tone-grok");
+    expect(brandToneClass("gemini")).toBe("tone-gemini");
+    expect(brandToneClass("agy")).toBe("tone-gemini");
+    expect(brandToneClass("kimi")).toBe("tone-kimi");
+    expect(brandToneClass("qwen")).toBe("tone-qwen");
+    expect(brandToneClass("opencode")).toBe("tone-open");
+    expect(brandToneClass("pi")).toBe("tone-pi");
+    expect(brandToneClass("omp")).toBe("tone-omp");
+
+    expect(brandToneClass("factory")).toBe("tone-other");
+    expect(brandToneClass("cursor")).toBe("tone-other");
+    expect(brandToneClass("copilot")).toBe("tone-other");
+    expect(brandToneClass("windsurf")).toBe("tone-other");
+  });
+
+  it("uses a tone class that exists in the tone stylesheet without no-op brand aliases", () => {
     const css = readFileSync(new URL("../styles/shared/tones.css", import.meta.url), "utf8");
     for (const brand of BRAND_IDS) {
       const tone = brandToneClass(brand);
       expect(toneSelectorExists(css, tone), `${brand} -> ${tone}`).toBe(true);
+      if (tone === "tone-other") {
+        expect(toneSelectorExists(css, `tone-${brand}`), `no-op .tone-${brand} alias`).toBe(false);
+      }
     }
   });
 });
