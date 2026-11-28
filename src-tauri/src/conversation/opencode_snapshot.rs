@@ -6,7 +6,7 @@ use std::path::Path;
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::super::toolbox::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_USAGE};
+use super::super::normalize::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_USAGE};
 use super::{
     diagnostic, ConversationIndexIssue, DatabaseSnapshot, MessageRow, PartRow, SessionRow,
 };

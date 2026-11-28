@@ -19,8 +19,8 @@ use super::super::merge::{
     event_identity_hash, format_identity_hash, merge_indexed_files, summarize_for_index,
     IndexedFile,
 };
+use super::super::normalize::{compare_optional_timestamps, FileIndexCursor, ParsedConversation};
 use super::super::session_store::{update_session_files, upsert_session};
-use super::super::toolbox::{compare_optional_timestamps, FileIndexCursor, ParsedConversation};
 use super::super::trusted_path::modified_nanos;
 use super::incremental::persist_session_file_cursors;
 use super::readiness::{mark_session_events_dirty, session_generation};

@@ -5,17 +5,19 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::toolbox::{
+use super::normalize::{
     finish_source_conversation, first_text, normalize_tool_call_details,
     normalize_tool_result_details, optional_text, push_projected_message, semantic_event,
     tool_result_event, update_time_bounds, CapabilityDegradationPrep, ConversationFinishPrep,
-    EventActor, EventKind, NativeEventIdPrep, ParsedConversation,
+    NativeEventIdPrep, ParsedConversation,
 };
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::extension_tasks::{
     content_blob, extract_tags, project_from_sidecars, API_HISTORY, HISTORY_ITEM,
 };
-use crate::domain::Source;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::discover_suffix(roots, API_HISTORY)

@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::buddy_jsonl;
-use super::toolbox::ParsedConversation;
+use super::normalize::ParsedConversation;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::domain::Source;
 

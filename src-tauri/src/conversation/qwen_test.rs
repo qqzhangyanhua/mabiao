@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use super::{detail, index, EventKind};
+use super::{detail, index};
+use crate::domain::ConversationEventKind as EventKind;
 
 fn write_records(path: &Path, prepend_unknown: bool) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();

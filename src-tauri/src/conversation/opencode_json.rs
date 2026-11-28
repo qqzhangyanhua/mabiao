@@ -3,7 +3,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::super::toolbox::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_USAGE};
+use super::super::normalize::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_USAGE};
 use super::project::project_snapshot;
 use super::{
     diagnostic, fatal_issue, ConversationIndexBatch, ConversationIndexIssue, DatabaseSnapshot,

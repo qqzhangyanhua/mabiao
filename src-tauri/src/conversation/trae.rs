@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::codex;
-use super::toolbox::ParsedConversation;
+use super::normalize::ParsedConversation;
 use super::{single_detail, ConversationIndexBatch, ConversationIndexIssue};
 use crate::domain::Source;
 

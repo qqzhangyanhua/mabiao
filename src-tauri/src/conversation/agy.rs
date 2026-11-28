@@ -17,10 +17,17 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, push_projected_message, semantic_event, update_time_bounds,
+    CapabilityDegradationPrep, ConversationFinishPrep, NativeEventIdPrep, ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::agy::{load_model_names, load_project, timestamp_at};
 use crate::adapters::project::session_id_from_source_file;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    Source,
+};
 use crate::proto_wire;
 use crate::source_sqlite;
 

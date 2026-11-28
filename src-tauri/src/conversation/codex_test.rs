@@ -1,4 +1,8 @@
-use super::{index, index_suffix, ConversationEvent, EventActor, EventKind, ParsedConversation};
+use super::super::normalize::ParsedConversation;
+use super::{index, index_suffix};
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+};
 use crate::test_support::fixture;
 use serde_json::{json, Value};
 

@@ -19,11 +19,11 @@ use super::super::line_direct::{
     line_event_matches_index, parse_session_events, rebuild_events_from_line,
     source_maps_line_to_events,
 };
+use super::super::normalize::compare_event_order;
 use super::super::read::{cursor_missing_transcript_events, load_prepared_parsed, prepare_detail};
 use super::super::session_store::{
     ensure_matching_session, load_session, load_trusted_session_files,
 };
-use super::super::toolbox::compare_event_order;
 use super::super::trusted_path::session_source_paths;
 use super::super::{
     parse_conversation_files, PreparedConversationDetail, CONVERSATION_SOURCES, MAX_PAGE_SIZE,

@@ -1,18 +1,13 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::attachments::{
-    attachment_data_url, attachment_thumbnail_data_url, ensure_attachment_path_allowed,
-    read_source_line, read_source_payload,
-};
-use super::event_store::{read_event_by_id, read_indexed_event_if_ready, ReadOptions};
+use super::attachments::read_source_line;
+use super::event_store::{read_event_by_id, ReadOptions};
+use super::parse_conversation_files;
 use super::session_store::{ensure_matching_session, load_trusted_session_files};
-use super::toolbox::{attachment_candidates, AttachmentCandidate};
-use super::{parse_conversation_file, parse_conversation_files};
 use crate::domain::{
-    ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
     ConversationEvent, ConversationEventContentDto,
     ConversationEventContentStatus as ContentStatus, Source,
 };
@@ -124,123 +119,6 @@ pub fn load_event_content(
     })
 }
 
-pub fn load_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-pub fn load_attachment_thumbnail(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<ConversationAttachmentContentDto, String> {
-    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
-    let data_url = attachment_thumbnail_data_url(&candidate)?;
-    Ok(ConversationAttachmentContentDto {
-        attachment: candidate.attachment,
-        data_url,
-    })
-}
-
-fn resolve_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<AttachmentCandidate, String> {
-    if let Some(candidate) = try_resolve_attachment(conn, home, source, session_id, attachment_id)?
-    {
-        return Ok(candidate);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .iter()
-        .find(|event| {
-            event
-                .attachments
-                .iter()
-                .any(|attachment| attachment.id == attachment_id)
-        })
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment_index = event
-        .attachments
-        .iter()
-        .position(|attachment| attachment.id == attachment_id)
-        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    let attachment = event.attachments[attachment_index].clone();
-    if attachment.kind != AttachmentKind::Image {
-        return Err("该附件不是可预览的图片".to_string());
-    }
-    let source_path = PathBuf::from(&event.source_file);
-    let source_fragment = parse_conversation_file(source, &source_path, session_id, true)?;
-    let payload = read_source_payload(source, &source_path, event.source_sequence)?;
-    let mut candidate = attachment_candidates(
-        event.source_sequence,
-        &payload,
-        &source_fragment.session.project,
-    )
-    .into_iter()
-    .nth(attachment_index)
-    .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
-    candidate.attachment = attachment;
-    ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
-    Ok(candidate)
-}
-
-fn try_resolve_attachment(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    attachment_id: &str,
-) -> Result<Option<AttachmentCandidate>, String> {
-    let Some((event_id, attachment_index)) = split_attachment_id(attachment_id) else {
-        return Ok(None);
-    };
-    let Some((prepared, indexed)) =
-        read_indexed_event_if_ready(conn, home, source, session_id, event_id)?
-    else {
-        return Ok(None);
-    };
-    let Some(attachment) = indexed.attachments.get(attachment_index).cloned() else {
-        return Ok(None);
-    };
-    if attachment.kind != AttachmentKind::Image {
-        return Err("该附件不是可预览的图片".to_string());
-    }
-    let source_path = PathBuf::from(&indexed.source_file);
-    let Ok(payload) = read_source_payload(prepared.source, &source_path, indexed.source_sequence)
-    else {
-        return Ok(None);
-    };
-    let Some(mut candidate) =
-        attachment_candidates(indexed.source_sequence, &payload, &prepared.session.project)
-            .into_iter()
-            .nth(attachment_index)
-    else {
-        return Ok(None);
-    };
-    candidate.attachment = attachment;
-    ensure_attachment_path_allowed(&candidate, &prepared.session.project)?;
-    Ok(Some(candidate))
-}
-
 fn rebuild_codex(
     source: Source,
     path: &Path,
@@ -319,9 +197,4 @@ pub(super) fn line_event_matches_index(
         && rebuilt.source_file == indexed.source_file
         && rebuilt.source_sequence == indexed.source_sequence
         && (indexed.content_status == ContentStatus::Deferred || rebuilt.text == indexed.text)
-}
-
-fn split_attachment_id(attachment_id: &str) -> Option<(&str, usize)> {
-    let (event_id, index) = attachment_id.rsplit_once(':')?;
-    Some((event_id, index.parse().ok()?))
 }

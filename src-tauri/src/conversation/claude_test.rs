@@ -1,5 +1,7 @@
-use super::{
-    parse, tool_payload_failed, ConversationEvent, EventActor, EventKind, ParsedConversation,
+use super::super::normalize::{tool_payload_failed, ParsedConversation};
+use super::parse;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
 };
 use crate::test_support::fixture;
 use serde_json::{json, Value};

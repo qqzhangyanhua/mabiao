@@ -15,7 +15,7 @@ use crate::domain::{ConversationEvent, ConversationEventKind as EventKind, Sourc
 use crate::store::STORAGE_STALE_ADAPTER_VERSION;
 
 use super::super::line_direct::rebuild_events_from_raw;
-use super::super::toolbox::{event_id_for, FileIndexCursor};
+use super::super::normalize::{event_id_for, FileIndexCursor};
 use super::super::CONVERSATION_ADAPTER_VERSION;
 
 /// 本机各抽 1500 条，按行重建的正文与整份解析逐条一致。Claude 会跨行合并，不在此列。

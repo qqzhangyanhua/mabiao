@@ -2,10 +2,16 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, push_projected_message, semantic_event, strip_prompt_wrappers,
+    truncate_title, update_time_bounds, CapabilityDegradationPrep, ConversationFinishPrep,
+    NativeEventIdPrep, ParsedConversation,
+};
 use super::{single_detail, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::codebuddy_ide::{conversation_messages, source_revision as usage_revision};
-use crate::domain::Source;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::codebuddy_ide::discover(roots)
