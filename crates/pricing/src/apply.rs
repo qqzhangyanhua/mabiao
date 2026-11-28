@@ -496,4 +496,76 @@ mod tests {
             price_usage(usage("m", "", None), &prices, false).derived
         );
     }
+
+    #[test]
+    fn price_index_matches_find_price_across_normalization_precedence_and_duplicates() {
+        use crate::lookup::{find_price, PriceIndex};
+
+        let prices = table(vec![
+            // Duplicate entries: first must win, matching find_price.
+            entry("gpt-4o", None, 2.0, PriceOrigin::User),
+            entry("GPT-4o", None, 99.0, PriceOrigin::Snapshot),
+            entry("gpt-4o", Some("openai"), 1.0, PriceOrigin::User),
+            entry("GPT-4o", Some("OpenAI"), 88.0, PriceOrigin::User),
+            // Exact model-only beats normalized provider-specific.
+            entry("anthropic/claude-sonnet-4-6", None, 4.0, PriceOrigin::User),
+            entry(
+                "claude-sonnet-4-6",
+                Some("openrouter"),
+                5.0,
+                PriceOrigin::User,
+            ),
+            entry("claude-sonnet-4-6", None, 3.0, PriceOrigin::Snapshot),
+            // Version hyphen normalization + provider override.
+            entry("claude-4.5-sonnet", Some("warp"), 6.0, PriceOrigin::User),
+            entry("claude-4.5-sonnet", None, 3.0, PriceOrigin::Snapshot),
+            // Dated key beats stripped generic.
+            entry("claude-3-5-sonnet", None, 1.0, PriceOrigin::Snapshot),
+            entry(
+                "claude-3-5-sonnet-20241022",
+                None,
+                9.0,
+                PriceOrigin::Snapshot,
+            ),
+            // Provider-only entry with no fallback.
+            entry("only-prov", Some("acme"), 7.0, PriceOrigin::User),
+        ]);
+        let index = PriceIndex::new(&prices);
+
+        let models = [
+            "gpt-4o",
+            "GPT-4o",
+            "anthropic/claude-sonnet-4-6",
+            "openrouter/anthropic/claude-sonnet-4-6-20250929",
+            "claude-sonnet-4-6-20250929",
+            "claude-4-5-sonnet",
+            "anthropic/claude-3-5-sonnet-20241022",
+            "only-prov",
+            "anthropic/only-prov-20250101",
+            "unknown-model",
+        ];
+        let providers = [
+            "",
+            "openai",
+            "OpenAI",
+            "openrouter",
+            "warp",
+            "acme",
+            "other",
+        ];
+
+        for model in models {
+            let (fallback, exact) = index.resolve_model_rows(model);
+            let exact_map: std::collections::HashMap<String, &PriceEntry> =
+                exact.into_iter().collect();
+            for provider in providers {
+                let got = exact_map
+                    .get(&provider.to_ascii_lowercase())
+                    .copied()
+                    .or(fallback);
+                let expected = find_price(model, provider, &prices);
+                assert_eq!(got, expected, "model={model} provider={provider}");
+            }
+        }
+    }
 }

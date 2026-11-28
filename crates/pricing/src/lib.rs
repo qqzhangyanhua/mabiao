@@ -16,5 +16,7 @@ pub use apply::{
     CostAttribution, PricedCost, PricedUsage, PricingBasis, CACHE_CREATE_1H_MULTIPLIER,
     LONG_CONTEXT_THRESHOLD,
 };
-pub use lookup::{find_price, find_price_by_signature, resolve_entry, PriceCache};
+pub use lookup::{
+    find_price, find_price_by_signature, model_lookup_keys, resolve_entry, PriceCache, PriceIndex,
+};
 pub use types::{CostSource, DerivedCost, PriceEntry, PriceOrigin, PriceTable};

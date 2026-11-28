@@ -47,9 +47,11 @@ pub fn builtin_snapshot() -> &'static Snapshot {
 }
 
 /// 合并出生效价表。与桌面端 `litellm::merge` 同一规则：团队价目始终优先，快照只补齐团队
-/// 完全没配过的模型；团队只要给某模型配了任意单价（精确或按模型），该模型就不再引入快照兜底。
+/// 完全没配过的模型（不分 ASCII 大小写）；团队只要给某模型配了任意单价（精确或按模型），
+/// 该模型就不再引入快照兜底。
 pub fn effective_table(team: &[PriceEntry], snapshot: &[PriceEntry]) -> PriceTable {
-    let priced: std::collections::HashSet<&str> = team.iter().map(|p| p.model.as_str()).collect();
+    let mut seen_models: std::collections::HashSet<String> =
+        team.iter().map(|p| p.model.to_ascii_lowercase()).collect();
     let mut prices: Vec<PriceEntry> = team
         .iter()
         .cloned()
@@ -59,11 +61,12 @@ pub fn effective_table(team: &[PriceEntry], snapshot: &[PriceEntry]) -> PriceTab
         })
         .collect();
     for entry in snapshot {
-        if !priced.contains(entry.model.as_str()) {
-            let mut fallback = entry.clone();
-            fallback.origin = PriceOrigin::Snapshot;
-            prices.push(fallback);
+        if !seen_models.insert(entry.model.to_ascii_lowercase()) {
+            continue;
         }
+        let mut fallback = entry.clone();
+        fallback.origin = PriceOrigin::Snapshot;
+        prices.push(fallback);
     }
     PriceTable { prices }
 }
@@ -404,12 +407,30 @@ mod tests {
         assert!(!snapshot.as_of.is_empty());
         assert!(snapshot.entries.len() > 100);
         assert!(snapshot.entries.iter().all(|e| e.provider.is_none()));
+        let mut seen = std::collections::HashSet::new();
+        for entry in &snapshot.entries {
+            assert_eq!(entry.model, entry.model.to_ascii_lowercase());
+            assert!(
+                seen.insert(entry.model.as_str()),
+                "duplicate snapshot model {}",
+                entry.model
+            );
+            assert!(
+                entry.input <= 0.001 && entry.output <= 0.001,
+                "corrupt snapshot price for {}",
+                entry.model
+            );
+        }
     }
 
     #[test]
     fn team_model_hides_the_snapshot_entries_of_that_model_only() {
-        let team = [entry("a", Some("p"), 1.0)];
-        let snapshot = [entry("a", None, 9.0), entry("b", None, 9.0)];
+        let team = [entry("A", Some("p"), 1.0)];
+        let snapshot = [
+            entry("a", None, 9.0),
+            entry("A", None, 8.0),
+            entry("b", None, 9.0),
+        ];
 
         let table = effective_table(&team, &snapshot);
 
