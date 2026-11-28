@@ -1,0 +1,68 @@
+src-tauri/src/conversation/cursor_bridge.rs
+  h_4132837b09b7e7 18,96-101
+src-tauri/src/conversation/event_store/incremental.rs
+  h_4132837b09b7e7 13,108-113,225,248-251
+src-tauri/src/conversation/event_store/write.rs
+  h_4132837b09b7e7 23,129-134
+src-tauri/src/conversation/session_store.rs
+  h_4132837b09b7e7 24-30,36,78-79,81,84
+src-tauri/src/lib.rs
+  h_4132837b09b7e7 187-189
+src-tauri/src/official_quota/accounts/capture.rs
+  h_4132837b09b7e7 150
+src-tauri/src/official_quota/accounts/fetch_row.rs
+  h_4132837b09b7e7 23,237-240,249-265,268,286,295-296,315-316,319-321,327,333,340,351
+src-tauri/src/official_quota/accounts/mod.rs
+  h_4132837b09b7e7 13,27,33,41-45,308-319,450,663,689-696,699,716
+src-tauri/src/official_quota/accounts/refresh.rs
+  h_4132837b09b7e7 12
+src-tauri/src/official_quota/accounts/storage.rs
+  h_4132837b09b7e7 1-153
+src-tauri/src/official_quota/antigravity.rs
+  h_4132837b09b7e7 109-110,127
+src-tauri/src/official_quota/droid.rs
+  h_4132837b09b7e7 62
+src-tauri/src/official_quota/fetch.rs
+  h_4132837b09b7e7 167,282
+src-tauri/src/official_quota/grok.rs
+  h_4132837b09b7e7 10-11,133,141,151,157-160,168,183,190
+src-tauri/src/official_quota/identity.rs
+  h_4132837b09b7e7 11,30-37,43,99,101
+src-tauri/src/official_quota/lifecycle.rs
+  h_4132837b09b7e7 27,75-81,91-118,123-124,127,137,167,183,187,193-197
+src-tauri/src/official_quota/mod.rs
+  h_4132837b09b7e7 52,215-226
+src-tauri/src/push/mod.rs
+  h_4132837b09b7e7 29
+src-tauri/src/store.rs
+  h_4132837b09b7e7 17
+src-tauri/src/store/connect.rs
+  h_4132837b09b7e7 1-2,7-15
+src-tauri/src/test_support/work_notes_conn.rs
+  h_4132837b09b7e7 12
+src-tauri/src/tests/quota_account_import.rs
+  h_4132837b09b7e7 693-695,722-723,735-772
+src-tauri/src/tests/quota_env_loopback.rs
+  h_4132837b09b7e7 44-46,80-81,109-146
+src-tauri/src/tests/quota_lifecycle.rs
+  h_4132837b09b7e7 127,972-1219
+src-tauri/src/work_notes.rs
+  h_4132837b09b7e7 44
+src/hooks/usage/legacyQuotaVisibility.ts
+  h_4132837b09b7e7 1-77
+src/hooks/usage/usageViewController.ts
+  h_4132837b09b7e7 4,36,38-68,173,182,196-197,336-339,553,557,559,595,684,773-783,822-824
+src/hooks/usage/viewFreshness.ts
+  h_4132837b09b7e7 1-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "33ae3f63b8c683ec3f01877266a350046cd91e34",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
