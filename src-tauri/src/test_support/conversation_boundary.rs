@@ -22,7 +22,8 @@ const ORCHESTRATION_ENTRY_FNS: &[&str] = &[
 /// 当前已生效的依赖方向规则。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConversationBoundaryRule {
-    /// 对话记录目录下任何文件不得出现 `use super::*`。
+    /// 对话记录目录下任何文件不得出现 `use super::*`、`use super::<mod>::*` 或
+    /// `use super::super::<mod>::*` 等 `super::` 通配导入。
     NoSuperWildcard,
     /// 模块根不得定义白名单之外的 `fn`。re-export 不受此规则约束。
     RootFnWhitelist,
@@ -77,13 +78,14 @@ where
 }
 
 fn inspect_file(file: &str, source: &str, violations: &mut Vec<ConversationBoundaryViolation>) {
+    let mut open_super_use: Option<String> = None;
     for (index, line) in source.lines().enumerate() {
-        if let Some(symbol) = super_wildcard_symbol(line) {
+        if let Some(symbol) = super_wildcard_symbol(line, &mut open_super_use) {
             violations.push(ConversationBoundaryViolation {
                 file: file.to_string(),
                 line: index + 1,
                 rule: ConversationBoundaryRule::NoSuperWildcard,
-                symbol: symbol.to_string(),
+                symbol,
             });
         }
         if is_conversation_module_root(file) {
@@ -112,21 +114,65 @@ fn strip_line_comment(line: &str) -> &str {
     }
 }
 
-fn super_wildcard_symbol(line: &str) -> Option<&'static str> {
-    let code = strip_line_comment(line);
-    let tokens: Vec<&str> = code.split_whitespace().collect();
-    let use_at = tokens.iter().position(|token| *token == "use")?;
-    if use_at > 0 && !is_visibility(tokens[0]) {
-        return None;
+fn strip_inline_block_comments(code: &str) -> String {
+    let mut cleaned = String::with_capacity(code.len());
+    let mut rest = code;
+    while let Some(start) = rest.find("/*") {
+        cleaned.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        match after.find("*/") {
+            Some(end) => rest = &after[end + 2..],
+            None => return cleaned,
+        }
     }
-    match tokens.get(use_at + 1) {
-        Some(token) if token.starts_with("super::*") => Some("use super::*"),
-        _ => None,
-    }
+    cleaned.push_str(rest);
+    cleaned
 }
 
-fn is_visibility(token: &str) -> bool {
-    token == "pub" || token.starts_with("pub(")
+fn super_wildcard_symbol(line: &str, open_super_use: &mut Option<String>) -> Option<String> {
+    let code = strip_line_comment(line).trim();
+    if let Some(prefix) = open_super_use.clone() {
+        let (segment, closed) = match code.find(';') {
+            Some(end) => (&code[..end], true),
+            None => (code, false),
+        };
+        if closed {
+            *open_super_use = None;
+        }
+        let cleaned = strip_inline_block_comments(segment);
+        if cleaned.contains('*') {
+            return Some(format!("use {prefix}*"));
+        }
+        return None;
+    }
+
+    let mut rest = code;
+    if let Some(after_vis) = strip_visibility(rest) {
+        rest = after_vis;
+    }
+    let after_use = strip_keyword(rest, "use")?;
+    if !after_use.starts_with("super::") {
+        return None;
+    }
+    let (segment, closed) = match after_use.find(';') {
+        Some(end) => (&after_use[..end], true),
+        None => (after_use, false),
+    };
+    if !closed {
+        let prefix = segment
+            .split('{')
+            .next()
+            .unwrap_or("super::")
+            .trim()
+            .to_string();
+        *open_super_use = Some(prefix);
+    }
+    let cleaned = strip_inline_block_comments(segment);
+    if cleaned.contains('*') {
+        Some(format!("use {}", cleaned.trim()))
+    } else {
+        None
+    }
 }
 
 /// 从一行源码里取出「正在定义的 `fn` 名」。函数指针类型与 re-export 返回 `None`。

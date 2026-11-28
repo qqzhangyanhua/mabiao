@@ -14,8 +14,8 @@ use crate::domain::{ConversationSessionRow, Source};
 use super::catalog::sql_placeholders;
 use super::cursor;
 use super::merge::IndexedAgentMetadata;
+use super::normalize::{CAPABILITY_EVENTS, CAPABILITY_USAGE, EXPERIMENTAL};
 use super::session_store::{load_session, load_usage_records, upsert_session};
-use super::toolbox::{CAPABILITY_EVENTS, CAPABILITY_USAGE, EXPERIMENTAL};
 
 pub(crate) fn sync_cursor_usage_only_sessions(conn: &Connection) -> Result<(), String> {
     let mut statement = conn

@@ -7,12 +7,12 @@ use serde_json::Value;
 
 use super::event_store::{stream_events_for_export, ExportRecord};
 #[cfg(test)]
+use super::normalize::ParsedConversation;
+#[cfg(test)]
 use super::parse_conversation_files;
 #[cfg(test)]
 use super::session_store::ensure_matching_session;
 use super::session_store::load_trusted_session_files;
-#[cfg(test)]
-use super::toolbox::ParsedConversation;
 use super::{qwen, raw_export_extension};
 use crate::domain::{
     ConversationAttachmentStatus as AttachmentStatus, ConversationEvent, ConversationExportDto,

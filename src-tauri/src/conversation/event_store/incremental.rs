@@ -9,7 +9,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::domain::{ConversationEvent, Source};
 
 use super::super::incremental::new_events_precede_existing;
-use super::super::toolbox::{FileIndexCursor, ParsedConversation};
+use super::super::normalize::{FileIndexCursor, ParsedConversation};
 use super::super::trusted_path::modified_nanos;
 use super::super::{
     conversation_adapter, CachedConversationFingerprint, ConversationIndexSuffixFn,

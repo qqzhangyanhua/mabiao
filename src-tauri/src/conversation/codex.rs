@@ -4,8 +4,18 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, first_text, message_event, semantic_event, text_field,
+    unadapted_event, ConversationFinishPrep, FileIndexCursor, ParsedConversation,
+};
+use super::responses_wire::{
+    append_message_delta, event_message, event_msg_semantic_event, failed_tool_end_event,
+    flush_message_delta, response_message, response_semantic_event,
+};
 use super::{single_detail, ConversationIndexBatch, ConversationIndexIssue};
+use crate::domain::{
+    ConversationEvent, ConversationEventKind as EventKind, ConversationMessage, Source,
+};
 
 const VSCODE_CONTEXT_PREFIX: &str = "# Context from my IDE setup:";
 const CODEX_REQUEST_MARKER: &str = "my request for codex";

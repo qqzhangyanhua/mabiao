@@ -4,7 +4,15 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    compression_boundary_text, finish_source_conversation, first_text, normalize_tool_call_details,
+    normalize_tool_result_details, optional_text, parse_jsonl_conversation_values,
+    push_projected_message, semantic_event, text_field, tool_result_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 #[cfg(test)]
 #[path = "gemini_test.rs"]

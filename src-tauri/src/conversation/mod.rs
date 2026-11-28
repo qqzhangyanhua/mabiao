@@ -48,6 +48,7 @@ mod kilo;
 mod kimi;
 mod line_direct;
 mod merge;
+mod normalize;
 mod omp;
 mod openclaw;
 mod opencode;
@@ -57,10 +58,10 @@ mod qoder;
 mod qwen;
 mod read;
 mod refresh;
+mod responses_wire;
 mod roo;
 mod scan_roots;
 mod session_store;
-mod toolbox;
 mod trae;
 pub(crate) mod trusted_path;
 mod warp;
@@ -70,8 +71,9 @@ mod zcode;
 mod zed;
 
 use merge::merge_parsed_conversations;
-use toolbox::{FileIndexCursor, ParsedConversation};
+use normalize::{FileIndexCursor, ParsedConversation};
 
+pub use attachments::{load_attachment, load_attachment_thumbnail};
 pub use backfill::{
     backfill_event_index, backfill_event_index_step, backfill_event_index_step_prioritized,
     event_index_progress, session_needs_event_backfill,
@@ -92,10 +94,7 @@ pub(crate) use discover::{
 pub(crate) use event_store::event_index_ready;
 pub use event_store::{adopt_text_references, indexed_events};
 pub(crate) use event_store::{catalog_event_count, load_session_events};
-pub use line_direct::{
-    load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
-    rebuild_events_from_line,
-};
+pub use line_direct::{load_event_content, parse_session_events, rebuild_events_from_line};
 pub use push_source::{list_sessions as list_push_sessions, read_session as read_push_session};
 pub use push_source::{PushContext, PushSessionSource};
 pub use read::{detail_state, load_detail, load_parsed_detail};

@@ -6,8 +6,16 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::super::toolbox::*;
+use super::super::normalize::{
+    assign_event_provenance, content_text, finish_source_conversation, first_text, message_event,
+    optional_text, semantic_event, tool_result_event, unadapted_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
 use super::{DatabaseSnapshot, MessageRow, PartRow, SessionRow};
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
+};
 
 pub(super) fn project_snapshot(
     path: &Path,

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::ParsedConversation;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::ingest;
 

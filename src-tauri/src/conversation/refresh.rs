@@ -13,11 +13,11 @@ use super::event_store::{
     commit_incremental_append, commit_session, has_live_generation, prepare_incremental,
     IncrementalPrepare, PendingIncremental, SessionCommit, SessionEventStager,
 };
+use super::normalize::FileIndexCursor;
 use super::session_store::{
     failed_session_paths, load_cached_fingerprints, load_session_files, mark_session_unavailable,
     tombstone_missing_sessions, update_session_files,
 };
-use super::toolbox::FileIndexCursor;
 use super::trusted_path::modified_nanos;
 use super::{
     context_cache, conversation_adapter, plan_conversation_file_index, ConversationFileFingerprint,
