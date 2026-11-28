@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{parse_resets_at, sanitize_percent, QuotaEnv};
 
 const TIMEOUT: Duration = Duration::from_secs(12);
 
@@ -16,6 +16,12 @@ pub fn fetch_rate_limits() -> Result<(Vec<OfficialQuotaWindow>, String), String>
     let raw = query_app_server()?;
     let windows = parse_rate_limits(&raw)?;
     Ok((windows, Utc::now().to_rfc3339()))
+}
+
+pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let raw = env.transport.codex_app_server_rate_limits()?;
+    let windows = parse_rate_limits(&raw)?;
+    Ok((windows, env.now().to_rfc3339()))
 }
 
 pub fn parse_rate_limits(raw: &str) -> Result<Vec<OfficialQuotaWindow>, String> {
@@ -89,7 +95,7 @@ fn label_for(mins: Option<i64>, bucket: &str, slot: &str) -> String {
     }
 }
 
-fn query_app_server() -> Result<String, String> {
+pub(crate) fn query_app_server() -> Result<String, String> {
     let mut child = Command::new("codex")
         .arg("app-server")
         .stdin(Stdio::piped())

@@ -2,7 +2,7 @@ use crate::{backup, clipboard, litellm, store, tray};
 use std::fs;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use crate::AppState;
 
@@ -13,8 +13,8 @@ fn app_data_paths(state: &AppState) -> backup::AppDataPaths {
         snapshot_path: state.snapshot_path.clone(),
         budget_path: state.budget_path.clone(),
         budget_notify_path: state.budget_notify_path.clone(),
-        official_quota_path: state.official_quota_path.clone(),
-        official_quota_notify_path: state.official_quota_notify_path.clone(),
+        official_quota_path: state.quota_paths.config.clone(),
+        official_quota_notify_path: state.quota_paths.notify_state.clone(),
     }
 }
 
@@ -69,6 +69,12 @@ pub async fn restore_data(app: tauri::AppHandle) -> Result<bool, String> {
         restored?;
         let (snapshot, _) = litellm::load_snapshot(&paths.snapshot_path);
         *state.snapshot.lock().map_err(|e| e.to_string())? = snapshot;
+        if let Ok(conn) = state.lock_read() {
+            let env = crate::official_quota::QuotaEnv::live(state.quota_paths.clone());
+            let dto = crate::official_quota::snapshot(&conn, &env);
+            drop(conn);
+            let _ = app.emit(crate::official_quota::EVENT_UPDATED, &dto);
+        }
         let _ = tray::refresh(&app);
         crate::staged::resume_conversation_maintenance(&app);
         Ok(true)

@@ -5,11 +5,11 @@ import { chartPalette } from "../lib/chartTheme";
 import type { ResolvedTheme } from "../hooks/useTheme";
 import {
   collectPresentSources,
-  filterOfficialQuotaRows,
   filterQuotaItems,
   isModuleVisible,
-  isOfficialProviderVisible,
   visibleModuleCount,
+  visibleOfficialQuotaRows,
+  visibleUndetectedOfficialProviders,
   type OverviewLayout,
 } from "../lib/overviewLayout";
 import { Icon } from "../icons";
@@ -105,6 +105,7 @@ export const Overview = memo(function Overview({
   onModelClick,
   layout,
   onLayoutChange,
+  onHiddenOfficialProvidersChange,
   detectedSources,
   onOfficialQuota,
   onQuotaError,
@@ -138,6 +139,7 @@ export const Overview = memo(function Overview({
   onModelClick?: (model: string) => void;
   layout: OverviewLayout;
   onLayoutChange: (layout: OverviewLayout) => void;
+  onHiddenOfficialProvidersChange: (hiddenProviders: string[]) => void;
   detectedSources: string[];
   onOfficialQuota: (value: OfficialQuotaDto) => void;
   onQuotaError: (error: unknown) => void;
@@ -180,16 +182,20 @@ export const Overview = memo(function Overview({
       weekly: filterQuotaItems(billingWindows.weekly, layout),
     };
   }, [billingWindows, layout]);
+  const hiddenOfficialProviders = officialQuota?.hidden_providers ?? [];
   const visibleOfficialQuota = useMemo(() => {
     if (!officialQuota) {
       return null;
     }
     return {
       ...officialQuota,
-      rows: filterOfficialQuotaRows(officialQuota.rows, layout),
-      undetected: officialQuota.undetected.filter((id) => isOfficialProviderVisible(layout, id)),
+      rows: visibleOfficialQuotaRows(officialQuota.rows, officialQuota.hidden_providers),
+      undetected: visibleUndetectedOfficialProviders(
+        officialQuota.undetected,
+        officialQuota.hidden_providers,
+      ),
     };
-  }, [officialQuota, layout]);
+  }, [officialQuota]);
   const activeWindows = (visibleBilling?.current ?? []).filter((window) => window.is_active).length;
   const weeklyDays = visibleBilling?.weekly_window_days ?? 7;
   const weeklyCount = visibleBilling?.weekly.length ?? 0;
@@ -241,9 +247,11 @@ export const Overview = memo(function Overview({
       <div className="overview-head">
         <OverviewLayoutBar
           layout={layout}
+          hiddenOfficialProviders={hiddenOfficialProviders}
           detectedSources={detectedSources}
           presentSources={presentSources}
           onChange={onLayoutChange}
+          onHiddenOfficialProvidersChange={onHiddenOfficialProvidersChange}
         />
         <div className="overview-report-entry">
           <Button variant="text" className="overview-share-btn" onClick={() => setReportOpen(true)}>

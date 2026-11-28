@@ -12,6 +12,8 @@ import type {
   IngestIssue,
   IngestReport,
   NamedAmount,
+  OfficialQuotaConfig,
+  OfficialQuotaConfigPatch,
   OfficialQuotaDto,
   OverviewBundleDto,
   OverviewBundleRequest,
@@ -38,6 +40,7 @@ export interface UsageBackend {
   saveBudget(config: BudgetConfig): Promise<void>;
   getOfficialQuota(): Promise<OfficialQuotaDto>;
   refreshOfficialQuota(): Promise<OfficialQuotaDto>;
+  patchOfficialQuotaConfig(patch: OfficialQuotaConfigPatch): Promise<OfficialQuotaConfig>;
   getCursorAccountUsage(filter?: Filter): Promise<CursorAccountUsageDto>;
   refreshCursorAccountUsage(): Promise<CursorAccountUsageDto>;
   clearCursorAccountUsage(): Promise<CursorAccountUsageDto>;
@@ -66,6 +69,8 @@ export const tauriUsageBackend: UsageBackend = {
   saveBudget: (config) => invoke<void>("save_budget", { config }),
   getOfficialQuota: () => invoke<OfficialQuotaDto>("get_official_quota"),
   refreshOfficialQuota: () => invoke<OfficialQuotaDto>("refresh_official_quota"),
+  patchOfficialQuotaConfig: (patch) =>
+    invoke<OfficialQuotaConfig>("patch_official_quota_config", { patch }),
   getCursorAccountUsage: (filter) =>
     filter === undefined
       ? invoke<CursorAccountUsageDto>("get_cursor_account_usage")

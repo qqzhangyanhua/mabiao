@@ -2,6 +2,12 @@ import { heatmapFilter } from "../../lib/calendar";
 import { customRangeFilter, humanStatus, previousFilter, rangeFromPreset } from "../../lib/format";
 import { ingestFailureStatus, usageStageStatus } from "../../lib/ingestStatus";
 import {
+  extractLegacyHiddenOfficialProviders,
+  OVERVIEW_LAYOUT_STORAGE_KEY,
+  sanitizeHiddenOfficialProviders,
+  stripLegacyOfficialProvidersFromStorage,
+} from "../../lib/overviewLayout";
+import {
   popRangeHistory,
   pushRangeHistory,
   rangeSnapshot,
@@ -316,10 +322,19 @@ export type UsageControllerOptions = {
   initialView?: View;
   initialPreset?: string;
   initialConversationFocus?: ConversationFocus | null;
+  storage?: Storage | null;
   onClearSessionDetailCache?: () => void;
   onBeginUsageStage?: () => void;
   onPublishUsageStatus?: (text: string) => void;
 };
+
+function defaultControllerStorage(): Storage | null {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
 
 function deriveSnapshot(
   state: InternalState,
@@ -344,6 +359,7 @@ function deriveSnapshot(
 
 export class UsageViewController {
   private readonly backend: UsageBackend;
+  private readonly storage: Storage | null;
   private readonly onClearSessionDetailCache: () => void;
   private onBeginUsageStage: () => void;
   private onPublishUsageStatus: (text: string) => void;
@@ -359,12 +375,16 @@ export class UsageViewController {
   private wideRefreshGeneration: number | null = null;
   private cursorRefreshInflight: Promise<void> | null = null;
   private ingestOperationInFlight = false;
+  private legacyQuotaVisibilityChecked = false;
+  private legacyMigrationInFlight: Promise<string[] | null> | null = null;
+  private quotaVisibilityGeneration = 0;
 
   private state: InternalState;
   private snapshot: UsageControllerSnapshot;
 
   constructor(options: UsageControllerOptions) {
     this.backend = options.backend;
+    this.storage = options.storage === undefined ? defaultControllerStorage() : options.storage;
     this.onClearSessionDetailCache = options.onClearSessionDetailCache ?? (() => undefined);
     this.onBeginUsageStage = options.onBeginUsageStage ?? (() => undefined);
     this.onPublishUsageStatus =
@@ -464,6 +484,95 @@ export class UsageViewController {
   setOfficialQuota = (next: StateUpdater<OfficialQuotaDto | null>): void => {
     this.patch({ officialQuota: resolveUpdater(this.state.officialQuota, next) });
   };
+
+  setHiddenOfficialProviders = async (hiddenProviders: readonly string[]): Promise<void> => {
+    const sanitized = sanitizeHiddenOfficialProviders(hiddenProviders);
+    const prevHidden = this.state.officialQuota?.hidden_providers ?? [];
+    const generation = ++this.quotaVisibilityGeneration;
+    if (this.state.officialQuota) {
+      this.patch({
+        officialQuota: {
+          ...this.state.officialQuota,
+          hidden_providers: sanitized,
+        },
+      });
+    }
+    try {
+      const saved = await this.backend.patchOfficialQuotaConfig({
+        hidden_providers: sanitized,
+      });
+      if (generation === this.quotaVisibilityGeneration && this.state.officialQuota) {
+        this.patch({
+          officialQuota: {
+            ...this.state.officialQuota,
+            hidden_providers: saved.hidden_providers,
+            alerts_enabled: saved.alerts_enabled,
+          },
+        });
+      }
+    } catch (error) {
+      if (generation === this.quotaVisibilityGeneration && this.state.officialQuota) {
+        this.patch({
+          officialQuota: {
+            ...this.state.officialQuota,
+            hidden_providers: prevHidden,
+          },
+        });
+      }
+      this.reportError(error);
+    }
+  };
+
+  private async reconcileLegacyOfficialProviders(
+    quota: OfficialQuotaDto,
+  ): Promise<OfficialQuotaDto> {
+    if (this.legacyQuotaVisibilityChecked) {
+      return quota;
+    }
+    const raw = this.readLegacyLayoutRaw();
+    const legacy = extractLegacyHiddenOfficialProviders(raw);
+    if (!legacy.hasLegacyField) {
+      this.legacyQuotaVisibilityChecked = true;
+      return quota;
+    }
+    if ((quota.hidden_providers?.length ?? 0) > 0 || legacy.hiddenProviders.length === 0) {
+      stripLegacyOfficialProvidersFromStorage(this.storage);
+      this.legacyQuotaVisibilityChecked = true;
+      return quota;
+    }
+    if (!this.legacyMigrationInFlight) {
+      this.legacyMigrationInFlight = this.backend
+        .patchOfficialQuotaConfig({ hidden_providers: legacy.hiddenProviders })
+        .then((saved) => {
+          stripLegacyOfficialProvidersFromStorage(this.storage);
+          this.legacyQuotaVisibilityChecked = true;
+          return saved.hidden_providers;
+        })
+        .catch(() => null)
+        .finally(() => {
+          this.legacyMigrationInFlight = null;
+        });
+    }
+    const migrated = await this.legacyMigrationInFlight;
+    if (migrated === null) {
+      return quota;
+    }
+    return {
+      ...quota,
+      hidden_providers: migrated,
+    };
+  }
+
+  private readLegacyLayoutRaw(): string | null {
+    if (!this.storage) {
+      return null;
+    }
+    try {
+      return this.storage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
 
   setConversationIssues = (issues: IngestIssue[]): void => {
     this.patch({ conversationIssues: issues });
@@ -817,6 +926,9 @@ export class UsageViewController {
    * 月度预算、诊断/扫描路径与官方额度，并使全部视图缓存失效。
    */
   reloadAfterRestore = async (): Promise<void> => {
+    // 备份恢复时以恢复后的 official_quota.json 为唯一权威，清理残留旧字段，禁止旧 localStorage 反盖。
+    this.legacyQuotaVisibilityChecked = true;
+    stripLegacyOfficialProvidersFromStorage(this.storage);
     this.onClearSessionDetailCache();
     this.revisions = {
       data: this.revisions.data + 1,
@@ -1097,8 +1209,9 @@ export class UsageViewController {
           }),
       );
       tasks.push(
-        this.backend.getOfficialQuota().then((officialQuota) => {
-          commit({ officialQuota });
+        this.backend.getOfficialQuota().then(async (officialQuota) => {
+          const reconciled = await this.reconcileLegacyOfficialProviders(officialQuota);
+          commit({ officialQuota: reconciled });
           void this.backend
             .refreshOfficialQuota()
             .then((refreshed) => {
@@ -1194,8 +1307,9 @@ export class UsageViewController {
           this.backend.getBudgetStatus().then((budgetStatus) => {
             commit({ budgetStatus });
           }),
-          this.backend.getOfficialQuota().then((officialQuota) => {
-            commit({ officialQuota });
+          this.backend.getOfficialQuota().then(async (officialQuota) => {
+            const reconciled = await this.reconcileLegacyOfficialProviders(officialQuota);
+            commit({ officialQuota: reconciled });
           }),
         );
       }

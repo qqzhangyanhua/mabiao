@@ -13,7 +13,11 @@ const STATE_DB: &str = "state.vscdb";
 /// Win `%APPDATA%\<app>\...`、mac `~/Library/Application Support/<app>\...`、
 /// Linux `~/.config/<app>/...` —— 三个平台都正好落在 `dirs::config_dir()` 下。
 pub fn global_storage_dir(app_dir: &str) -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join(app_dir).join("User").join("globalStorage"))
+    dirs::config_dir().map(|dir| global_storage_dir_in(&dir, app_dir))
+}
+
+pub fn global_storage_dir_in(config_dir: &Path, app_dir: &str) -> PathBuf {
+    config_dir.join(app_dir).join("User").join("globalStorage")
 }
 
 pub fn open_read_only(global_storage: &Path) -> Result<Option<Connection>, String> {

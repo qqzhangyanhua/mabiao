@@ -758,11 +758,11 @@ fn browser_command(url: &str) -> Result<Command, String> {
     {
         let mut command = Command::new("open");
         command.arg(url);
-        return Ok(command);
+        Ok(command)
     }
     #[cfg(target_os = "windows")]
     {
-        return windows_open(url);
+        windows_open(url)
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {

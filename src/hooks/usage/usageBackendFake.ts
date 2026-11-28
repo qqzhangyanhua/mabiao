@@ -12,6 +12,8 @@ import type {
   IngestIssue,
   IngestReport,
   NamedAmount,
+  OfficialQuotaConfig,
+  OfficialQuotaConfigPatch,
   OfficialQuotaDto,
   OverviewBundleDto,
   OverviewBundleRequest,
@@ -22,6 +24,8 @@ import type {
   SessionRow,
   SourceDiagnostic,
 } from "../../types";
+import { DEFAULT_OFFICIAL_QUOTA_CONFIG } from "../../lib/officialQuotaConfig";
+import { sanitizeHiddenOfficialProviders } from "../../lib/overviewLayout";
 import type { BreakdownDimension, UsageBackend } from "./usageBackend";
 
 export type FakeUsageRecord = {
@@ -65,8 +69,31 @@ export type FakeBackendSnapshot = {
   cursorAsOf: string | null;
   diagnostics: SourceDiagnostic[];
   officialQuota: OfficialQuotaDto;
+  officialQuotaConfig: OfficialQuotaConfig;
   conversationIssues: IngestIssue[];
 };
+
+export type FakeBackendSnapshotInput = Omit<FakeBackendSnapshot, "officialQuotaConfig"> & {
+  officialQuotaConfig?: OfficialQuotaConfig;
+};
+
+function deriveQuotaConfig(
+  quota: OfficialQuotaDto,
+  explicit?: OfficialQuotaConfig,
+): OfficialQuotaConfig {
+  return {
+    alerts_enabled: explicit?.alerts_enabled ?? quota.alerts_enabled,
+    hidden_providers: sanitizeHiddenOfficialProviders(
+      explicit?.hidden_providers ?? quota.hidden_providers,
+    ),
+    alert_thresholds: [...(explicit?.alert_thresholds ?? DEFAULT_OFFICIAL_QUOTA_CONFIG.alert_thresholds)],
+    reset_reminder_hours:
+      explicit?.reset_reminder_hours ?? DEFAULT_OFFICIAL_QUOTA_CONFIG.reset_reminder_hours,
+    reset_reminder_max_used_percent:
+      explicit?.reset_reminder_max_used_percent ??
+      DEFAULT_OFFICIAL_QUOTA_CONFIG.reset_reminder_max_used_percent,
+  };
+}
 
 type MethodName = keyof UsageBackend;
 
@@ -146,6 +173,11 @@ export function makeDefaultFakeSnapshot(): FakeBackendSnapshot {
       undetected: [],
       hidden_providers: [],
     },
+    officialQuotaConfig: {
+      ...DEFAULT_OFFICIAL_QUOTA_CONFIG,
+      hidden_providers: [],
+      alert_thresholds: [...DEFAULT_OFFICIAL_QUOTA_CONFIG.alert_thresholds],
+    },
     conversationIssues: [],
   };
 }
@@ -163,6 +195,7 @@ export class StatefulUsageBackendFake implements UsageBackend {
 
   constructor(initial?: Partial<FakeBackendSnapshot>) {
     const base = makeDefaultFakeSnapshot();
+    const officialQuota = initial?.officialQuota ?? base.officialQuota;
     this.state = {
       ...base,
       ...initial,
@@ -171,6 +204,8 @@ export class StatefulUsageBackendFake implements UsageBackend {
       snapshotPrices: [...(initial?.snapshotPrices ?? base.snapshotPrices)],
       cursorEvents: [...(initial?.cursorEvents ?? base.cursorEvents)],
       diagnostics: [...(initial?.diagnostics ?? base.diagnostics)],
+      officialQuota,
+      officialQuotaConfig: deriveQuotaConfig(officialQuota, initial?.officialQuotaConfig),
       conversationIssues: [...(initial?.conversationIssues ?? base.conversationIssues)],
     };
   }
@@ -197,7 +232,8 @@ export class StatefulUsageBackendFake implements UsageBackend {
     this.state.snapshotPrices = [...entries];
   }
 
-  applyBackupSnapshot(next: FakeBackendSnapshot): void {
+  applyBackupSnapshot(next: FakeBackendSnapshotInput): void {
+    const officialQuotaConfig = deriveQuotaConfig(next.officialQuota, next.officialQuotaConfig);
     this.state = {
       ...next,
       records: [...next.records],
@@ -205,6 +241,12 @@ export class StatefulUsageBackendFake implements UsageBackend {
       snapshotPrices: [...next.snapshotPrices],
       cursorEvents: [...next.cursorEvents],
       diagnostics: [...next.diagnostics],
+      officialQuota: {
+        ...next.officialQuota,
+        alerts_enabled: officialQuotaConfig.alerts_enabled,
+        hidden_providers: [...officialQuotaConfig.hidden_providers],
+      },
+      officialQuotaConfig,
       conversationIssues: [...next.conversationIssues],
     };
   }
@@ -693,15 +735,71 @@ export class StatefulUsageBackendFake implements UsageBackend {
 
   async getOfficialQuota(): Promise<OfficialQuotaDto> {
     await this.intercept("getOfficialQuota", []);
-    return this.state.officialQuota;
+    return {
+      ...this.state.officialQuota,
+      alerts_enabled: this.state.officialQuotaConfig.alerts_enabled,
+      hidden_providers: [...this.state.officialQuotaConfig.hidden_providers],
+    };
   }
 
   async refreshOfficialQuota(): Promise<OfficialQuotaDto> {
     await this.intercept("refreshOfficialQuota", []);
     if (this.refreshedOfficialQuota) {
-      this.state.officialQuota = this.refreshedOfficialQuota;
+      this.state.officialQuota = {
+        ...this.refreshedOfficialQuota,
+        alerts_enabled: this.state.officialQuotaConfig.alerts_enabled,
+        hidden_providers: [...this.state.officialQuotaConfig.hidden_providers],
+      };
     }
-    return this.state.officialQuota;
+    return {
+      ...this.state.officialQuota,
+      alerts_enabled: this.state.officialQuotaConfig.alerts_enabled,
+      hidden_providers: [...this.state.officialQuotaConfig.hidden_providers],
+    };
+  }
+
+  async patchOfficialQuotaConfig(patch: OfficialQuotaConfigPatch): Promise<OfficialQuotaConfig> {
+    await this.intercept("patchOfficialQuotaConfig", [patch]);
+    const current = this.state.officialQuotaConfig;
+    const nextThresholds =
+      patch.alert_thresholds !== undefined
+        ? [...new Set(patch.alert_thresholds.filter((v) => Number.isInteger(v) && v >= 1 && v <= 100))].sort(
+            (a, b) => a - b,
+          )
+        : [...current.alert_thresholds];
+    const next: OfficialQuotaConfig = {
+      alerts_enabled: patch.alerts_enabled ?? current.alerts_enabled,
+      hidden_providers:
+        patch.hidden_providers !== undefined
+          ? sanitizeHiddenOfficialProviders(patch.hidden_providers)
+          : [...current.hidden_providers],
+      alert_thresholds:
+        nextThresholds.length > 0
+          ? nextThresholds
+          : [...DEFAULT_OFFICIAL_QUOTA_CONFIG.alert_thresholds],
+      reset_reminder_hours: Math.min(
+        168,
+        Math.max(0, patch.reset_reminder_hours ?? current.reset_reminder_hours),
+      ),
+      reset_reminder_max_used_percent: Math.min(
+        100,
+        Math.max(
+          0,
+          patch.reset_reminder_max_used_percent ?? current.reset_reminder_max_used_percent,
+        ),
+      ),
+    };
+    this.state.officialQuotaConfig = next;
+    this.state.officialQuota = {
+      ...this.state.officialQuota,
+      alerts_enabled: next.alerts_enabled,
+      hidden_providers: [...next.hidden_providers],
+    };
+    return {
+      ...next,
+      hidden_providers: [...next.hidden_providers],
+      alert_thresholds: [...next.alert_thresholds],
+    };
   }
 
   async getCursorAccountUsage(filter?: Filter): Promise<CursorAccountUsageDto> {

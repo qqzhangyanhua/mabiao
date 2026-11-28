@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaHookDto;
+use crate::official_quota::QuotaEnv;
 use crate::scan_paths::ScanEnv;
 
 pub fn default_settings_path() -> PathBuf {
@@ -12,6 +13,14 @@ pub fn default_settings_path() -> PathBuf {
 
 pub(crate) fn default_settings_path_in(env: &ScanEnv) -> PathBuf {
     env.claude_hook_settings_path()
+}
+
+pub fn preview_in(env: &QuotaEnv, command: &str) -> OfficialQuotaHookDto {
+    preview(&env.claude_hook_settings_path(), command)
+}
+
+pub fn apply_in(env: &QuotaEnv, command: &str) -> Result<OfficialQuotaHookDto, String> {
+    apply(&env.claude_hook_settings_path(), command)
 }
 
 pub fn hook_command() -> String {

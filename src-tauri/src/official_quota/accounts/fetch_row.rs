@@ -20,7 +20,7 @@ use super::{
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
     antigravity, claude_usage, codex_usage, copilot, cursor, devin, droid, grok, opencode,
-    QuotaSnapshot,
+    QuotaEnv, QuotaSnapshot,
 };
 
 /// 一次账号取数要带上的材料。`refresh` 只在已分离快照上有值。
@@ -41,7 +41,8 @@ pub struct AccountTarget {
 }
 
 /// 自动刷新名单用。现场凭证读不到，或者没有能取数的材料，就不放进名单。
-pub(crate) fn prepare_auto_target(
+pub(crate) fn prepare_auto_target_in(
+    env: &QuotaEnv,
     placement: &Placement<'_>,
     logins: &[LocalLogin],
 ) -> Option<AccountTarget> {
@@ -49,7 +50,7 @@ pub(crate) fn prepare_auto_target(
     let provider = OfficialQuotaProvider::parse(&account.config.provider)?;
     if placement.active_local {
         let login = matching_login(account, logins)?;
-        return live_from_login(account, provider, login, true);
+        return live_from_login_in(env, account, provider, login, true);
     }
     if account.config.source == QuotaAccountSource::ProfileDir {
         let dir = profile_dir(account)?;
@@ -64,14 +65,27 @@ pub(crate) fn prepare_auto_target(
     separated_target(account, provider)
 }
 
+#[cfg(test)]
 pub(crate) fn prepare_manual_target(
+    account: &ResolvedQuotaAccount,
+    logins: &[LocalLogin],
+) -> Result<AccountTarget, String> {
+    prepare_manual_target_in(
+        &QuotaEnv::live(crate::official_quota::QuotaPaths::app_data()),
+        account,
+        logins,
+    )
+}
+
+pub(crate) fn prepare_manual_target_in(
+    env: &QuotaEnv,
     account: &ResolvedQuotaAccount,
     logins: &[LocalLogin],
 ) -> Result<AccountTarget, String> {
     let provider = OfficialQuotaProvider::parse(&account.config.provider)
         .ok_or_else(|| format!("未知的官方额度账号：{}", account.config.id))?;
     if let Some(login) = matching_login(account, logins) {
-        return live_from_login(account, provider, login, false)
+        return live_from_login_in(env, account, provider, login, false)
             .ok_or_else(|| MISSING_SECRET_TODO.to_string());
     }
     if account.config.source == QuotaAccountSource::ProfileDir {
@@ -87,7 +101,8 @@ pub(crate) fn prepare_manual_target(
     separated_target(account, provider).ok_or_else(|| MISSING_SECRET_TODO.to_string())
 }
 
-fn live_from_login(
+fn live_from_login_in(
+    env: &QuotaEnv,
     account: &ResolvedQuotaAccount,
     provider: OfficialQuotaProvider,
     login: &LocalLogin,
@@ -97,7 +112,7 @@ fn live_from_login(
         if !require_access {
             return Some(default_live_target(account, provider, String::new(), None));
         }
-        let secret = capture::capture_default(provider).ok()?;
+        let secret = capture::capture_default_in(env, provider).ok()?;
         if secret.access_token.trim().is_empty() {
             return None;
         }
@@ -111,7 +126,7 @@ fn live_from_login(
     if !require_access {
         return Some(live_target(account, provider, String::new(), None, root));
     }
-    let secret = capture::capture_secret(provider, &root).ok()?;
+    let secret = capture::capture_secret_at(provider, &root, env.now()).ok()?;
     if secret.access_token.trim().is_empty() {
         return None;
     }
@@ -280,7 +295,7 @@ pub fn fetch_managed_account(
     let mut token = target.access_token.clone();
     let mut refreshed = false;
     if access_needs_refresh(&token, target.refresh.as_ref(), Utc::now()) {
-        token = apply_refresh(target)?;
+        token = apply_refresh(target, None)?;
         refreshed = true;
     }
     match dispatch(
@@ -291,7 +306,7 @@ pub fn fetch_managed_account(
     ) {
         Ok(snapshot) => Ok(snapshot),
         Err(error) if !refreshed && is_auth_failure(&error) => {
-            let token = apply_refresh(target)?;
+            let token = apply_refresh(target, None)?;
             dispatch(
                 target.provider,
                 &token,
@@ -303,17 +318,77 @@ pub fn fetch_managed_account(
     }
 }
 
-fn apply_refresh(target: &AccountTarget) -> Result<String, String> {
+pub fn fetch_managed_account_in(
+    env: &QuotaEnv,
+    target: &AccountTarget,
+) -> Result<QuotaSnapshot, String> {
+    if target.live_default {
+        let secret = capture::capture_default_in(env, target.provider)?;
+        if secret.access_token.trim().is_empty() {
+            return Err(MISSING_SECRET_TODO.to_string());
+        }
+        return dispatch_in(
+            env,
+            target.provider,
+            &secret.access_token,
+            secret.account_id.as_deref(),
+        );
+    }
+    if let Some(root) = target.live_root.as_deref() {
+        let secret = capture::capture_secret_at(target.provider, root, env.now())?;
+        if secret.access_token.trim().is_empty() {
+            return Err(MISSING_SECRET_TODO.to_string());
+        }
+        return dispatch_in(
+            env,
+            target.provider,
+            &secret.access_token,
+            secret.account_id.as_deref(),
+        );
+    }
+    if target.refresh.is_none() {
+        let token = target.access_token.trim();
+        if token.is_empty() {
+            return Err(MISSING_SECRET_TODO.to_string());
+        }
+        let account_id = target
+            .account_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        return dispatch_in(env, target.provider, token, account_id);
+    }
+    let mut token = target.access_token.clone();
+    let mut refreshed = false;
+    if access_needs_refresh(&token, target.refresh.as_ref(), env.now()) {
+        token = apply_refresh(target, Some(env))?;
+        refreshed = true;
+    }
+    match dispatch_in(env, target.provider, &token, target.account_id.as_deref()) {
+        Ok(snapshot) => Ok(snapshot),
+        Err(error) if !refreshed && is_auth_failure(&error) => {
+            let token = apply_refresh(target, Some(env))?;
+            dispatch_in(env, target.provider, &token, target.account_id.as_deref())
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn apply_refresh(target: &AccountTarget, env: Option<&QuotaEnv>) -> Result<String, String> {
     let Some(secret) = target.refresh.as_ref() else {
         return Err(MISSING_SECRET_TODO.to_string());
     };
     let Some(path) = target.secrets_path.as_deref() else {
         return Err(MISSING_SECRET_TODO.to_string());
     };
-    let refreshed = refresh::refresh_separated(&refresh::RefreshRequest {
+    let request = refresh::RefreshRequest {
         provider: target.provider,
         secret,
-    })
+    };
+    let refreshed = match env {
+        Some(env) => refresh::refresh_separated_in(env, &request),
+        None => refresh::refresh_separated(&request),
+    }
     .map_err(|fail| match fail {
         RefreshFail::Rejected => LOGIN_EXPIRED.to_string(),
         RefreshFail::Other(message) => message,
@@ -406,5 +481,34 @@ fn dispatch(
         }
         OfficialQuotaProvider::Copilot => copilot::fetch_with_access_token_at(token, quota_base),
         OfficialQuotaProvider::Devin => devin::fetch_with_access_token_at(token, quota_base),
+    }
+}
+
+fn dispatch_in(
+    env: &QuotaEnv,
+    provider: OfficialQuotaProvider,
+    token: &str,
+    account_id: Option<&str>,
+) -> Result<QuotaSnapshot, String> {
+    match provider {
+        OfficialQuotaProvider::Claude => {
+            claude_usage::fetch_with_access_token_in(env, token).map(Into::into)
+        }
+        OfficialQuotaProvider::Codex => {
+            let auth = codex_usage::CodexAuth {
+                access_token: token.to_string(),
+                account_id: account_id.map(str::to_string),
+            };
+            codex_usage::fetch_with_access_token_in(env, &auth)
+        }
+        OfficialQuotaProvider::Cursor => cursor::fetch_with_session_token_in(env, token),
+        OfficialQuotaProvider::Grok => grok::fetch_with_access_token_in(env, token, account_id),
+        OfficialQuotaProvider::Droid => droid::fetch_with_access_token_in(env, token),
+        OfficialQuotaProvider::Antigravity => antigravity::fetch_with_access_token_in(env, token),
+        OfficialQuotaProvider::OpenCode => {
+            opencode::fetch_with_access_token_in(env, token).map(Into::into)
+        }
+        OfficialQuotaProvider::Copilot => copilot::fetch_with_access_token_in(env, token),
+        OfficialQuotaProvider::Devin => devin::fetch_with_access_token_in(env, token),
     }
 }

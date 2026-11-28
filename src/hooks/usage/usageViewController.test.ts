@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { StatefulUsageBackendFake } from "./usageBackendFake";
+import {
+  defaultOverviewLayout,
+  OVERVIEW_LAYOUT_STORAGE_KEY,
+  setModuleVisible,
+  writeOverviewLayout,
+} from "../../lib/overviewLayout";
+import { makeDefaultFakeSnapshot, StatefulUsageBackendFake } from "./usageBackendFake";
 import {
   emptyViewScope,
   filtersEqual,
@@ -8,14 +14,50 @@ import {
   UsageViewController,
 } from "./usageViewController";
 
+function makeMemoryStorage(initial: Record<string, string> = {}): Storage {
+  const store = new Map<string, string>(Object.entries(initial));
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key) {
+      return store.get(key) ?? null;
+    },
+    key(index) {
+      return [...store.keys()][index] ?? null;
+    },
+    removeItem(key) {
+      store.delete(key);
+    },
+    setItem(key, value) {
+      store.set(key, value);
+    },
+  };
+}
+
 function makeController(
   backend = new StatefulUsageBackendFake(),
-  initialView: "overview" | "settings" | "trend" | "model" | "project" | "provider" | "application" | "cursor" | "cursor-sessions" | "conversations" = "overview",
+  initialView:
+    | "overview"
+    | "settings"
+    | "trend"
+    | "model"
+    | "project"
+    | "provider"
+    | "application"
+    | "cursor"
+    | "cursor-sessions"
+    | "conversations" = "overview",
+  storage: Storage | null = makeMemoryStorage(),
 ) {
   return new UsageViewController({
     backend,
     initialView,
     initialPreset: "all",
+    storage,
   });
 }
 
@@ -656,5 +698,182 @@ describe("UsageViewController — grain switches, concurrency, ingest, and range
     backend.failMethod.getTrend = new Error("sqlite busy");
     await expect(controller.refreshActiveView()).rejects.toThrow("sqlite busy");
     expect(controller.getSnapshot().loading).toBe(false);
+  });
+});
+
+describe("UsageViewController — Official Quota visibility authority and legacy migration", () => {
+  it("migrates legacy localStorage officialProviders once when official_quota.json has no hidden_providers and strips the legacy key", async () => {
+    const backend = new StatefulUsageBackendFake();
+    backend.state.officialQuotaConfig = {
+      alerts_enabled: false,
+      hidden_providers: [],
+      alert_thresholds: [60, 95],
+      reset_reminder_hours: 6,
+      reset_reminder_max_used_percent: 40,
+    };
+    backend.state.officialQuota = {
+      ...backend.state.officialQuota,
+      alerts_enabled: false,
+      hidden_providers: [],
+    };
+    const storage = makeMemoryStorage({
+      [OVERVIEW_LAYOUT_STORAGE_KEY]: JSON.stringify({
+        modules: { heatmap: false, kpi: true },
+        quotaSources: { claude: false },
+        officialProviders: {
+          claude: false,
+          cursor: true,
+          grok: false,
+          "custom:a3f9c1": false,
+        },
+      }),
+    });
+
+    const controller = makeController(backend, "overview", storage);
+    await controller.refreshActiveView();
+
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(1);
+    expect(backend.state.officialQuotaConfig).toEqual({
+      alerts_enabled: false,
+      hidden_providers: ["claude", "grok"],
+      alert_thresholds: [60, 95],
+      reset_reminder_hours: 6,
+      reset_reminder_max_used_percent: 40,
+    });
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual(["claude", "grok"]);
+
+    // Legacy officialProviders key is stripped while modules and quotaSources remain intact
+    const stored = JSON.parse(
+      storage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY) ?? "{}",
+    ) as Record<string, unknown>;
+    expect("officialProviders" in stored).toBe(false);
+    expect(stored.modules).toEqual({ heatmap: false, kpi: true });
+    expect(stored.quotaSources).toEqual({ claude: false });
+
+    // Subsequent refreshes never re-patch
+    await controller.refreshActiveView();
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(1);
+  });
+
+  it("does not overwrite persisted official_quota.json hidden_providers when already recorded, and still strips legacy storage", async () => {
+    const backend = new StatefulUsageBackendFake();
+    backend.state.officialQuotaConfig = {
+      ...backend.state.officialQuotaConfig,
+      hidden_providers: ["codex"],
+    };
+    backend.state.officialQuota = {
+      ...backend.state.officialQuota,
+      hidden_providers: ["codex"],
+    };
+    const storage = makeMemoryStorage({
+      [OVERVIEW_LAYOUT_STORAGE_KEY]: JSON.stringify({
+        modules: { heatmap: true },
+        quotaSources: { codex: true },
+        officialProviders: { claude: false, droid: false },
+      }),
+    });
+
+    const controller = makeController(backend, "overview", storage);
+    await controller.refreshActiveView();
+
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(0);
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual(["codex"]);
+    const stored = JSON.parse(
+      storage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY) ?? "{}",
+    ) as Record<string, unknown>;
+    expect("officialProviders" in stored).toBe(false);
+    expect(stored.modules).toEqual({ heatmap: true });
+  });
+
+  it("preserves restored hidden_providers (non-empty and empty) after backup restore without browser storage overwrite", async () => {
+    const backend = new StatefulUsageBackendFake();
+    const storage = makeMemoryStorage({
+      [OVERVIEW_LAYOUT_STORAGE_KEY]: JSON.stringify({
+        modules: { heatmap: false },
+        quotaSources: { claude: true },
+        officialProviders: { claude: false, codex: false },
+      }),
+    });
+    // Start directly on settings (before officialQuota was loaded/migrated), simulating immediate restore
+    const controller = makeController(backend, "settings", storage);
+
+    // 1) Restore a backup whose official_quota.json hides only ["grok"]
+    const restoredWithGrok = makeDefaultFakeSnapshot();
+    restoredWithGrok.officialQuota = {
+      ...restoredWithGrok.officialQuota,
+      alerts_enabled: false,
+      hidden_providers: ["grok"],
+    };
+    restoredWithGrok.officialQuotaConfig = {
+      ...restoredWithGrok.officialQuotaConfig,
+      alerts_enabled: false,
+      hidden_providers: ["grok"],
+    };
+    backend.applyBackupSnapshot(restoredWithGrok);
+    await controller.reloadAfterRestore();
+
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(0);
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual(["grok"]);
+    expect(
+      "officialProviders" in
+        (JSON.parse(storage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY) ?? "{}") as Record<
+          string,
+          unknown
+        >),
+    ).toBe(false);
+
+    // 2) Restore a backup whose official_quota.json has hidden_providers: [] (all visible)
+    const restoredAllVisible = makeDefaultFakeSnapshot();
+    restoredAllVisible.officialQuota = {
+      ...restoredAllVisible.officialQuota,
+      hidden_providers: [],
+    };
+    restoredAllVisible.officialQuotaConfig = {
+      ...restoredAllVisible.officialQuotaConfig,
+      hidden_providers: [],
+    };
+    backend.applyBackupSnapshot(restoredAllVisible);
+    await controller.reloadAfterRestore();
+
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(0);
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual([]);
+
+    // Updating overview layout in browser storage never rewrites officialProviders or backend visibility
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: storage });
+    writeOverviewLayout(setModuleVisible(defaultOverviewLayout(), "heatmap", false));
+    await controller.navigate("overview");
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(0);
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual([]);
+  });
+
+  it("patches hidden_providers atomically without clobbering alerts_enabled or alert_thresholds", async () => {
+    const backend = new StatefulUsageBackendFake();
+    backend.state.officialQuotaConfig = {
+      alerts_enabled: false,
+      hidden_providers: [],
+      alert_thresholds: [75, 95],
+      reset_reminder_hours: 18,
+      reset_reminder_max_used_percent: 30,
+    };
+    backend.state.officialQuota = {
+      ...backend.state.officialQuota,
+      alerts_enabled: false,
+      hidden_providers: [],
+    };
+    const controller = makeController(backend, "overview");
+    await controller.refreshActiveView();
+
+    await controller.setHiddenOfficialProviders(["claude", "custom:ignored", "claude", "droid"]);
+
+    expect(backend.count("patchOfficialQuotaConfig")).toBe(1);
+    expect(backend.state.officialQuotaConfig).toEqual({
+      alerts_enabled: false,
+      hidden_providers: ["claude", "droid"],
+      alert_thresholds: [75, 95],
+      reset_reminder_hours: 18,
+      reset_reminder_max_used_percent: 30,
+    });
+    expect(controller.getSnapshot().officialQuota?.hidden_providers).toEqual(["claude", "droid"]);
+    expect(controller.getSnapshot().officialQuota?.alerts_enabled).toBe(false);
   });
 });

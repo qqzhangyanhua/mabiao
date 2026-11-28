@@ -380,28 +380,75 @@ pub fn fetch_quota(
     secret: Option<&str>,
     access_key_id: Option<&str>,
 ) -> super::ProviderFetch {
+    fetch_quota_via(
+        &super::LiveQuotaTransport,
+        Utc::now(),
+        preset,
+        base_url,
+        secret,
+        access_key_id,
+    )
+}
+
+pub fn fetch_quota_in(
+    env: &super::QuotaEnv,
+    preset: CustomQuotaPreset,
+    base_url: &str,
+    secret: Option<&str>,
+    access_key_id: Option<&str>,
+) -> super::ProviderFetch {
+    fetch_quota_via(
+        env.transport.as_ref(),
+        env.now(),
+        preset,
+        base_url,
+        secret,
+        access_key_id,
+    )
+}
+
+fn fetch_quota_via(
+    transport: &dyn super::QuotaTransport,
+    now: chrono::DateTime<Utc>,
+    preset: CustomQuotaPreset,
+    base_url: &str,
+    secret: Option<&str>,
+    access_key_id: Option<&str>,
+) -> super::ProviderFetch {
     let secret = ready(preset, secret, access_key_id)?;
     if preset == CustomQuotaPreset::VolcengineArk {
-        return volcengine_ark::fetch(base_url, access_key_id, Some(secret));
+        return volcengine_ark::fetch_via(transport, now, base_url, access_key_id, Some(secret));
     }
-    let requests = request_urls(preset, base_url, Utc::now().date_naive())?;
+    let requests = request_urls(preset, base_url, now.date_naive())?;
     // 可选接口拿不到就当没有这个口径：只实现了用量接口的中转站仍然显示金额。
     // 必需的那条失败才让整次取数失败，错误照旧是人话。
     let bodies = requests
         .iter()
-        .map(|entry| match request(preset, &entry.url, secret) {
-            Ok(body) => Ok(body),
-            Err(error) if entry.required => Err(error),
-            Err(_) => Ok(String::new()),
-        })
+        .map(
+            |entry| match request_via(transport, preset, &entry.url, secret) {
+                Ok(body) => Ok(body),
+                Err(error) if entry.required => Err(error),
+                Err(_) => Ok(String::new()),
+            },
+        )
         .collect::<Result<Vec<String>, String>>()?;
     let borrowed: Vec<&str> = bodies.iter().map(String::as_str).collect();
     let windows = parse_quota(preset, &borrowed)?;
-    Ok(super::QuotaSnapshot::new(windows, Utc::now().to_rfc3339()))
+    Ok(super::QuotaSnapshot::new(windows, now.to_rfc3339()))
 }
 
 pub fn fetch(provider: &ResolvedProvider) -> super::ProviderFetch {
     fetch_quota(
+        provider.config.preset,
+        &provider.config.base_url,
+        provider.secret.as_deref(),
+        provider.access_key_id.as_deref(),
+    )
+}
+
+pub fn fetch_in(env: &super::QuotaEnv, provider: &ResolvedProvider) -> super::ProviderFetch {
+    fetch_quota_in(
+        env,
         provider.config.preset,
         &provider.config.base_url,
         provider.secret.as_deref(),
@@ -454,28 +501,30 @@ pub fn is_precheck_error(error: &str) -> bool {
 
 /// 错误一律翻成人话：用户要判断的是「去充值 / 换密钥 / 等网络」，
 /// 一个裸的 HTTP 码回答不了这个问题。
-fn request(preset: CustomQuotaPreset, url: &str, secret: &str) -> Result<String, String> {
+fn request_via(
+    transport: &dyn super::QuotaTransport,
+    preset: CustomQuotaPreset,
+    url: &str,
+    secret: &str,
+) -> Result<String, String> {
     // 默认 Bearer。智谱 / Z.ai Coding Plan 要裸密钥，Authorization 不加 Bearer。
     let authorization = authorization_value(preset, secret);
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(url)
-        .set("Authorization", &authorization)
-        .set("Accept", "application/json");
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+    let request = super::HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", authorization)
+        .header("Accept", "application/json");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "网络不通，连不上这个地址，请检查网络或代理设置".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|_| "读取响应失败，接口返回的内容不是文本".to_string()),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("密钥无效或已失效，请在设置页更新密钥".to_string())
-        }
-        Err(ureq::Error::Status(404, _)) => {
-            Err("地址不对：接口不存在，请检查 base URL 与预设类型是否匹配".to_string())
-        }
-        Err(ureq::Error::Status(429, _)) => Err("对方限流了，稍后会自动重试".to_string()),
-        Err(ureq::Error::Status(code, _)) => Err(format!(
+        401 | 403 => Err("密钥无效或已失效，请在设置页更新密钥".to_string()),
+        404 => Err("地址不对：接口不存在，请检查 base URL 与预设类型是否匹配".to_string()),
+        429 => Err("对方限流了，稍后会自动重试".to_string()),
+        code => Err(format!(
             "接口返回异常（HTTP {code}），请确认 base URL 与预设类型是否匹配"
         )),
-        Err(_) => Err("网络不通，连不上这个地址，请检查网络或代理设置".to_string()),
     }
 }
 
