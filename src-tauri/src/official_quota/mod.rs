@@ -49,7 +49,7 @@ pub use fetch::{
     resolve_target_with_accounts, resolve_target_with_accounts_in, targets_for_fetch,
     targets_for_fetch_in, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget, ThrottledFetch,
 };
-pub use identity::{read_identity, QuotaIdentity};
+pub use identity::{read_identity, read_identity_at, QuotaIdentity};
 pub use lifecycle::{
     load_dto_in, refresh_and_notify, refresh_saved_account, refresh_target_forced,
     refresh_target_throttled, run_cli_in, snapshot, snapshot_visible, sync_claude_capture_at,
@@ -212,69 +212,18 @@ pub fn load_dto_with_accounts(
     logins: &[accounts::LocalLogin],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
-    let accounts = accounts::with_live_profiles(accounts);
-    let mut rows = Vec::new();
-    for provider in OfficialQuotaProvider::ALL {
-        match accounts::plan::plan_provider(provider, &accounts, logins) {
-            accounts::plan::ProviderPlan::Unchanged => {
-                // 本机没凭证、也没历史缓存的 provider 不占一行。
-                let row = load_row(conn, provider, now);
-                if !row.windows.is_empty()
-                    || row.captured_at.is_some()
-                    || detect::has_local_credentials(provider)
-                {
-                    rows.push(row);
-                }
-            }
-            accounts::plan::ProviderPlan::Managed {
-                show_builtin,
-                placements,
-            } => {
-                if show_builtin {
-                    let mut row = load_row(conn, provider, now);
-                    row.is_active_local = true;
-                    row.application = quota_row_title(provider.display_name(), None, true);
-                    rows.push(row);
-                }
-                for placement in placements {
-                    rows.push(load_account_row(
-                        conn,
-                        placement.account,
-                        placement.active_local,
-                        now,
-                    ));
-                }
-            }
-        }
-    }
-    let undetected = OfficialQuotaProvider::ALL
-        .into_iter()
-        .filter(|provider| {
-            let slug = provider.as_str();
-            let present = rows
-                .iter()
-                .any(|row| row.provider == slug || row.base_provider.as_deref() == Some(slug));
-            let registered = accounts
-                .iter()
-                .any(|account| account.config.provider == slug);
-            !present && !registered
-        })
-        .map(|provider| provider.as_str().to_string())
-        .collect();
-    // 自定义行不套「没凭证就不占位」：用户自己登记的，停用的才不占行。
-    rows.extend(
-        custom
-            .iter()
-            .filter(|provider| provider.config.enabled)
-            .map(|provider| load_custom_row(conn, provider, now)),
-    );
-    OfficialQuotaDto {
-        rows,
-        alerts_enabled: config.alerts_enabled,
-        stale_after_minutes: STALE_AFTER_MINUTES,
-        undetected,
-        hidden_providers: config.hidden_providers.clone(),
-    }
+    lifecycle::assemble_dto(
+        conn,
+        lifecycle::DtoAssemblyInputs {
+            config,
+            custom,
+            accounts,
+            logins,
+        },
+        now,
+        None,
+        detect::has_local_credentials,
+    )
 }
 
 /// 按 `hidden_providers` 挑出用户还想看的行，托盘额度面板用它瘦身。
@@ -357,14 +306,6 @@ pub fn quota_row_title(
         title = format!("{title} · 当前本机");
     }
     title
-}
-
-fn load_row(
-    conn: &Connection,
-    provider: OfficialQuotaProvider,
-    now: DateTime<Utc>,
-) -> OfficialQuotaRow {
-    load_row_by_id(conn, provider.as_str(), provider.display_name(), now)
 }
 
 pub(crate) fn load_account_row(

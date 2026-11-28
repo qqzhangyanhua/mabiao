@@ -7,8 +7,8 @@ use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
 use crate::official_quota::{
-    display_plan_label, parse_resets_at, rebase_quota_url, sanitize_percent, HttpRequest, QuotaEnv,
-    QuotaPaths, QuotaSnapshot, QuotaTransport,
+    display_plan_label, parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths,
+    QuotaSnapshot, QuotaTransport,
 };
 
 const BILLING_CREDITS_URL: &str = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
@@ -120,47 +120,17 @@ pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
 }
 
 /// 只用现成的 access token 取额度。不发现 OIDC，也不拿 refresh token 去换新的。
-/// `quota_base` 把额度 URL 换到调用方给的根上（本地桩）；生产传 `None`。
-pub(crate) fn fetch_with_access_token(
-    token: &str,
-    user_id: Option<&str>,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_via(
-        &super::LiveQuotaTransport,
-        token,
-        user_id,
-        quota_base,
-        Utc::now(),
-    )
-}
-
 pub(crate) fn fetch_with_access_token_in(
     env: &QuotaEnv,
     token: &str,
     user_id: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_via(
-        env.transport.as_ref(),
-        token,
-        user_id,
-        env.quota_base.as_deref(),
-        env.now(),
-    )
-}
-
-fn fetch_with_access_token_via(
-    transport: &dyn QuotaTransport,
-    token: &str,
-    user_id: Option<&str>,
-    quota_base: Option<&str>,
-    now: DateTime<Utc>,
 ) -> Result<QuotaSnapshot, String> {
     let token = token.trim();
     if token.is_empty() {
         return Err("Grok 登录已过期，请重新运行 grok login".to_string());
     }
     let version = DEFAULT_GROK_CLI_VERSION;
+    let transport = env.transport.as_ref();
     let user_id_owned = if let Some(id) = user_id.map(str::trim).filter(|id| !id.is_empty()) {
         id.to_string()
     } else {
@@ -168,7 +138,7 @@ fn fetch_with_access_token_via(
             transport,
             token,
             None,
-            &rebase_quota_url(USER_URL, quota_base),
+            &env.rebase_url(USER_URL),
             TIMEOUT,
             version,
         )?;
@@ -178,14 +148,16 @@ fn fetch_with_access_token_via(
         transport,
         token,
         Some(&user_id_owned),
-        &rebase_quota_url(BILLING_CREDITS_URL, quota_base),
+        &env.rebase_url(BILLING_CREDITS_URL),
         TIMEOUT,
         version,
     );
     let mut windows = match credits_result {
         Ok(raw) => parse_credits(&raw)?,
-        Err(error) if quota_base.is_none() && super::grok_grpc::should_fallback_to_grpc(&error) => {
-            super::grok_grpc::fetch_credits(token, Some(&user_id_owned), version)?
+        Err(error)
+            if env.quota_base.is_none() && super::grok_grpc::should_fallback_to_grpc(&error) =>
+        {
+            super::grok_grpc::fetch_credits_in(env, token, Some(&user_id_owned), version)?
         }
         Err(error) => return Err(error),
     };
@@ -193,7 +165,7 @@ fn fetch_with_access_token_via(
         transport,
         token,
         Some(&user_id_owned),
-        &rebase_quota_url(BILLING_MONTHLY_URL, quota_base),
+        &env.rebase_url(BILLING_MONTHLY_URL),
         TIMEOUT,
         version,
     ) {
@@ -208,14 +180,14 @@ fn fetch_with_access_token_via(
         transport,
         token,
         Some(&user_id_owned),
-        &rebase_quota_url(SETTINGS_URL, quota_base),
+        &env.rebase_url(SETTINGS_URL),
         SETTINGS_TIMEOUT,
         version,
     )
     .ok()
     .and_then(|raw| parse_settings_plan(&raw))
     .or_else(|| parse_jwt_plan(token));
-    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(plan))
+    Ok(QuotaSnapshot::new(windows, env.now().to_rfc3339()).with_plan(plan))
 }
 
 /// 本地已知过期时提前现刷，省一次注定 401 的往返；没有刷新凭证才把过期错误原样交回。

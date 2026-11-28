@@ -20,7 +20,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use base64::Engine;
-use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
@@ -99,36 +98,16 @@ pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
 }
 
 /// 只用 access token 取摘要。401 直接报登录失效，不走 refresh。
-/// `quota_base` 把摘要地址换到本地桩；生产传 `None`。
-pub(crate) fn fetch_with_access_token_at(
-    token: &str,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_via(&super::LiveQuotaTransport, token, quota_base, Utc::now())
-}
-
 pub(crate) fn fetch_with_access_token_in(
     env: &QuotaEnv,
     token: &str,
-) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_via(
-        env.transport.as_ref(),
-        token,
-        env.quota_base.as_deref(),
-        env.now(),
-    )
-}
-
-fn fetch_with_access_token_via(
-    transport: &dyn QuotaTransport,
-    token: &str,
-    quota_base: Option<&str>,
-    now: chrono::DateTime<Utc>,
 ) -> Result<QuotaSnapshot, String> {
     let token = token.trim();
     if token.is_empty() {
         return Err(NOT_SIGNED_IN.to_string());
     }
+    let transport = env.transport.as_ref();
+    let quota_base = env.quota_base.as_deref();
     let raw =
         request_summary_at_via(transport, token, quota_base).map_err(|error| match error {
             SummaryError::Unauthorized => {
@@ -145,7 +124,7 @@ fn fetch_with_access_token_via(
             fetch_plan_via(transport, token)
         }
     });
-    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(plan))
+    Ok(QuotaSnapshot::new(windows, env.now().to_rfc3339()).with_plan(plan))
 }
 
 fn fetch_summary_in(env: &QuotaEnv) -> Result<(String, String), String> {

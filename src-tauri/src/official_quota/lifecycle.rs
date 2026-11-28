@@ -24,8 +24,7 @@ use crate::domain::{
     OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaProvider,
     OfficialQuotaRow,
 };
-use crate::store;
-use crate::work_notes::ConnectionSource;
+use crate::store::{self, ConnectionSource};
 
 /// 刷新或配置变更后广播给主窗口与托盘悬浮面板的全量快照事件名。
 pub const EVENT_UPDATED: &str = "official-quota-updated";
@@ -73,6 +72,13 @@ pub fn snapshot_visible(conn: &Connection, env: &QuotaEnv) -> OfficialQuotaDto {
     dto
 }
 
+pub(crate) struct DtoAssemblyInputs<'a> {
+    pub config: &'a OfficialQuotaConfig,
+    pub custom: &'a [custom::ResolvedProvider],
+    pub accounts: &'a [accounts::ResolvedQuotaAccount],
+    pub logins: &'a [accounts::LocalLogin],
+}
+
 /// 用显式注入的 [`QuotaEnv`] 拼装官方额度快照（纯读，含内存 Claude statusline 叠加）。
 pub fn load_dto_in(
     conn: &Connection,
@@ -82,16 +88,43 @@ pub fn load_dto_in(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> OfficialQuotaDto {
-    let now = env.now();
-    let accounts = accounts::with_live_profiles(accounts);
+    assemble_dto(
+        conn,
+        DtoAssemblyInputs {
+            config,
+            custom,
+            accounts,
+            logins,
+        },
+        env.now(),
+        Some(&env.paths.claude_capture),
+        |provider| detect::has_local_credentials_in(env, provider),
+    )
+}
+
+pub(crate) fn assemble_dto(
+    conn: &Connection,
+    inputs: DtoAssemblyInputs<'_>,
+    now: DateTime<Utc>,
+    claude_capture: Option<&Path>,
+    has_local_credentials: impl Fn(OfficialQuotaProvider) -> bool,
+) -> OfficialQuotaDto {
+    let DtoAssemblyInputs {
+        config,
+        custom,
+        accounts,
+        logins,
+    } = inputs;
+    let accounts = accounts::with_live_profiles_at(accounts, now);
     let mut rows = Vec::new();
     for provider in OfficialQuotaProvider::ALL {
         match accounts::plan::plan_provider(provider, &accounts, logins) {
             accounts::plan::ProviderPlan::Unchanged => {
-                let row = load_builtin_row_in(conn, env, provider, now);
+                // 本机没凭证、也没历史缓存的 provider 不占一行。
+                let row = load_builtin_row(conn, provider, now, claude_capture);
                 if !row.windows.is_empty()
                     || row.captured_at.is_some()
-                    || detect::has_local_credentials_in(env, provider)
+                    || has_local_credentials(provider)
                 {
                     rows.push(row);
                 }
@@ -101,7 +134,7 @@ pub fn load_dto_in(
                 placements,
             } => {
                 if show_builtin {
-                    let mut row = load_builtin_row_in(conn, env, provider, now);
+                    let mut row = load_builtin_row(conn, provider, now, claude_capture);
                     row.is_active_local = true;
                     row.application = quota_row_title(provider.display_name(), None, true);
                     rows.push(row);
@@ -131,6 +164,7 @@ pub fn load_dto_in(
         })
         .map(|provider| provider.as_str().to_string())
         .collect();
+    // 自定义行不套「没凭证就不占位」：用户自己登记的，停用的才不占行。
     rows.extend(
         custom
             .iter()
@@ -146,20 +180,21 @@ pub fn load_dto_in(
     }
 }
 
-fn load_builtin_row_in(
+fn load_builtin_row(
     conn: &Connection,
-    env: &QuotaEnv,
     provider: OfficialQuotaProvider,
     now: DateTime<Utc>,
+    claude_capture: Option<&Path>,
 ) -> OfficialQuotaRow {
     let id = provider.as_str();
     let display_name = provider.display_name();
     match store::load_official_quota_row(conn, id) {
         Ok(stored) => {
-            let stored = if provider == OfficialQuotaProvider::Claude {
-                overlay_claude_capture(stored, &env.paths.claude_capture)
-            } else {
-                stored
+            let stored = match (provider, claude_capture) {
+                (OfficialQuotaProvider::Claude, Some(capture_path)) => {
+                    overlay_claude_capture(stored, capture_path)
+                }
+                _ => stored,
             };
             match stored {
                 Some(row) => row_from_stored(id, display_name, row, now),

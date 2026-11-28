@@ -111,28 +111,6 @@ pub(crate) fn catalog_event_count(
     Ok(count.map(|value| value.max(0) as u32))
 }
 
-/// 权威会话事件总数：已就绪走索引计数，未就绪回退整份源文件解析。
-#[allow(dead_code)]
-pub(in crate::conversation) fn read_event_count(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-) -> Result<u32, String> {
-    let (parsed_source, session) = resolve_session(conn, source, session_id)?;
-    if is_session_ready(conn, home, parsed_source, &session)? {
-        return indexed_event_count(conn, parsed_source.as_str(), session_id);
-    }
-    let events = parse_canonical_session_events(
-        conn,
-        home,
-        parsed_source,
-        &session,
-        ReadOptions::indexed_with_fallback(),
-    )?;
-    Ok(events.len() as u32)
-}
-
 /// 仅在调用方已经确认会话就绪时使用的快速索引计数。
 pub(in crate::conversation) fn indexed_event_count(
     conn: &Connection,

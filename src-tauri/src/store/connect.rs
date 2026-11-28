@@ -1,6 +1,17 @@
+use std::sync::MutexGuard;
+
 use rusqlite::{Connection, OpenFlags};
 
 use super::schema::init_schema;
+
+/// 连接来源。生产上是读池加写锁两把，测试上是同一条内存连接。
+///
+/// **实现不得同时持有 `read()` 与 `write()` 的 guard。** 生产上嵌套持有会在整段外部调用期间
+/// 堵住写路径（ADR 0021 / ADR 0026）；测试 adapter 只有一条连接，嵌套会直接撞上自己。
+pub trait ConnectionSource {
+    fn read(&self) -> Result<MutexGuard<'_, Connection>, String>;
+    fn write(&self) -> Result<MutexGuard<'_, Connection>, String>;
+}
 
 const WAL_SIZE_LIMIT_BYTES: i64 = 32 * 1024 * 1024;
 

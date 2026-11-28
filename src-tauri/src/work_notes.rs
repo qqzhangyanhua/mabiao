@@ -25,7 +25,6 @@ mod usage;
 use chrono::{DateTime, Local};
 use rusqlite::Connection;
 use std::path::Path;
-use std::sync::MutexGuard;
 
 use crate::domain::{
     ConversationEvent, ConversationSessionRow, PriceTable, WorkNotesDto, WorkNotesHistoryPage,
@@ -42,15 +41,7 @@ pub use engines::{
 pub use engines::{detect_engines, EngineRunner, ProcessRunner};
 pub use job::WorkNotesJob;
 
-/// 连接来源。生产上是读池加写锁两把，测试上是同一条内存连接。
-///
-/// **实现不得同时持有 `read()` 与 `write()` 的 guard。** 生产上嵌套持有会在整段引擎调用期间
-/// 堵住写路径——那正是 ADR 0021 要求 spawn 前放开连接的原因；测试 adapter 只有一条连接，
-/// 嵌套会直接撞上自己。
-pub trait ConnectionSource {
-    fn read(&self) -> Result<MutexGuard<'_, Connection>, String>;
-    fn write(&self) -> Result<MutexGuard<'_, Connection>, String>;
-}
+pub use crate::store::ConnectionSource;
 
 /// 参与本次纪要的一条会话。只在 `pipeline` / `orchestrate` / `estimate` 之间流转，不上 interface。
 struct EligibleSession {

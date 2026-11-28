@@ -10,15 +10,7 @@ use super::AccountSecret;
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
     antigravity, claude_usage, codex_usage, copilot, devin, droid, grok, opencode, QuotaEnv,
-    QuotaPaths,
 };
-
-pub fn capture_secret(
-    provider: OfficialQuotaProvider,
-    root: &Path,
-) -> Result<AccountSecret, String> {
-    capture_secret_at(provider, root, Utc::now())
-}
 
 pub fn capture_secret_at(
     provider: OfficialQuotaProvider,
@@ -155,11 +147,7 @@ pub(crate) fn antigravity_secret_from_tokens(
     })
 }
 
-/// 没传目录时和零配置取数读同一份登录。显式目录仍走 `capture_secret`，不进这里。
-pub(crate) fn capture_default(provider: OfficialQuotaProvider) -> Result<AccountSecret, String> {
-    capture_default_in(&QuotaEnv::live(QuotaPaths::app_data()), provider)
-}
-
+/// 没传目录时和零配置取数读同一份登录。显式目录仍走 `capture_secret_at`，不进这里。
 pub(crate) fn capture_default_in(
     env: &QuotaEnv,
     provider: OfficialQuotaProvider,

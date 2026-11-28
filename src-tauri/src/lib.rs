@@ -184,9 +184,9 @@ impl AppState {
     }
 }
 
-/// 工作纪要的连接来源：读走连接池，写走那把写锁。两者是不同的锁，因而 `work_notes` 能在
-/// spawn 引擎前放开读连接而不堵住写路径（ADR 0021）。
-impl work_notes::ConnectionSource for AppState {
+/// 共享连接来源：读走连接池，写走那把写锁。两者是不同的锁，因而工作纪要、推送与官方额度
+/// 能在阻塞 IO / 外部调用前放开读连接而不堵住写路径（ADR 0021 / ADR 0026）。
+impl store::ConnectionSource for AppState {
     fn read(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.lock_read()
     }

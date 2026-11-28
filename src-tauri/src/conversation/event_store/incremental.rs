@@ -10,6 +10,7 @@ use crate::domain::{ConversationEvent, Source};
 
 use super::super::incremental::new_events_precede_existing;
 use super::super::normalize::{FileIndexCursor, ParsedConversation};
+use super::super::session_store::SessionFileMetadata;
 use super::super::trusted_path::modified_nanos;
 use super::super::{
     conversation_adapter, CachedConversationFingerprint, ConversationIndexSuffixFn,
@@ -104,10 +105,12 @@ pub(in crate::conversation) fn commit_incremental_append(
             source,
             &session_id,
             &parsed,
-            mtime_ns,
-            size,
-            &source_revision,
-            total_event_count,
+            SessionFileMetadata {
+                mtime_ns,
+                size,
+                source_revision: &source_revision,
+                event_count: Some(total_event_count),
+            },
         )
     })
 }
@@ -214,16 +217,12 @@ fn append_live_events(
     Ok((max_seq, total_count))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn touch_session_after_append(
     conn: &Connection,
     source: Source,
     session_id: &str,
     parsed: &ParsedConversation,
-    mtime_ns: i64,
-    size: i64,
-    source_revision: &str,
-    event_count: u32,
+    file: SessionFileMetadata<'_>,
 ) -> Result<(), String> {
     let ended_at = parsed.session.ended_at.as_str();
     conn.execute(
@@ -246,10 +245,10 @@ fn touch_session_after_append(
             session_id,
             ended_at,
             parsed.session.model,
-            mtime_ns,
-            size,
-            source_revision,
-            i64::from(event_count),
+            file.mtime_ns,
+            file.size,
+            file.source_revision,
+            file.event_count.map(i64::from),
         ],
     )
     .map_err(|error| error.to_string())?;

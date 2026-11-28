@@ -21,16 +21,19 @@ use super::CachedConversationFingerprint;
 use super::ConversationIndexIssue;
 use super::{CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES};
 
-#[allow(clippy::too_many_arguments)]
+pub(crate) struct SessionFileMetadata<'a> {
+    pub(crate) mtime_ns: i64,
+    pub(crate) size: i64,
+    pub(crate) source_revision: &'a str,
+    pub(crate) event_count: Option<u32>,
+}
+
 pub(crate) fn upsert_session(
     conn: &Connection,
     session: &ConversationSessionRow,
     is_top_level: bool,
     agent_metadata: &IndexedAgentMetadata,
-    source_file_mtime_ns: i64,
-    source_file_size: i64,
-    source_revision: &str,
-    event_count: Option<u32>,
+    file: SessionFileMetadata<'_>,
 ) -> Result<(), String> {
     let capabilities = serde_json::to_string(&session.capabilities).map_err(|e| e.to_string())?;
     let agent_metadata = serde_json::to_string(agent_metadata).map_err(|e| e.to_string())?;
@@ -72,13 +75,13 @@ pub(crate) fn upsert_session(
             capabilities,
             session.support_status,
             session.file_available,
-            source_file_mtime_ns,
-            source_file_size,
+            file.mtime_ns,
+            file.size,
             CONVERSATION_ADAPTER_VERSION,
-            source_revision,
+            file.source_revision,
             is_top_level,
             agent_metadata,
-            event_count.map(i64::from),
+            file.event_count.map(i64::from),
         ],
     )
     .map_err(|e| e.to_string())?;

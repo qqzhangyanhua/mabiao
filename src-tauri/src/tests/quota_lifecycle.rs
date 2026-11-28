@@ -124,7 +124,7 @@ mod quota_env_tests {
 
     use crate::domain::OfficialQuotaProvider;
     use crate::official_quota::{
-        self, accounts, detect, hook, HttpRequest, HttpResponse, QuotaEnv, QuotaPaths,
+        self, accounts, detect, hook, HttpRequest, HttpResponse, QuotaEnv, QuotaPaths, QuotaTarget,
         QuotaTransport,
     };
     use crate::scan_paths::{ScanEnv, ScanPathConfig};
@@ -968,5 +968,253 @@ mod quota_env_tests {
             claude.windows[0].exhaust.as_ref().map(|e| e.kind),
             Some(crate::domain::QuotaExhaustKind::Hits)
         );
+    }
+
+    fn antigravity_nested_refresh_blob(refresh: &str) -> String {
+        let engine = base64::engine::general_purpose::STANDARD;
+        fn field1(bytes: &[u8]) -> Vec<u8> {
+            let mut out = vec![0x0a];
+            let mut len = bytes.len();
+            while len >= 0x80 {
+                out.push((len as u8) | 0x80);
+                len >>= 7;
+            }
+            out.push(len as u8);
+            out.extend_from_slice(bytes);
+            out
+        }
+        let mut inner = field1(b"ya29.inner-access-ignored");
+        inner.extend(field1(refresh.as_bytes()));
+        engine.encode(field1(&engine.encode(&inner).into_bytes()))
+    }
+
+    #[test]
+    fn active_local_antigravity_fetch_via_transport_uses_live_access_token_and_skips_refresh() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let app_data = dir.path().join("app_data");
+        let source = dir.path().join("antigravity_storage");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&app_data).unwrap();
+
+        let refresh = "1//antigravity-refresh-STABLE-should-not-leak-t9k2";
+        let stored_access = "ya29.antigravity-STORED-ACCESS-should-not-use";
+        let live_access = "ya29.antigravity-LIVE-ACCESS-should-use";
+
+        let write_ag = |access: &str| {
+            let _ = std::fs::remove_file(source.join("state.vscdb"));
+            seed_vscdb(
+                &source,
+                &[
+                    (
+                        "antigravityAuthStatus",
+                        &format!(r#"{{"apiKey":"{access}"}}"#),
+                    ),
+                    (
+                        "antigravityUnifiedStateSync.oauthToken",
+                        &antigravity_nested_refresh_blob(refresh),
+                    ),
+                ],
+            );
+        };
+
+        write_ag(stored_access);
+        let paths = QuotaPaths::in_dir(&app_data);
+        let saved = accounts::import_local_login(
+            &paths.accounts,
+            OfficialQuotaProvider::Antigravity,
+            &source,
+            &paths.backoff,
+        )
+        .unwrap();
+
+        write_ag(live_access);
+        let identity =
+            official_quota::read_identity(OfficialQuotaProvider::Antigravity, &source).unwrap();
+        let resolved = accounts::load_resolved(&paths.accounts);
+        let login = accounts::LocalLogin {
+            provider: OfficialQuotaProvider::Antigravity,
+            fingerprint: identity.fingerprint,
+            root: Some(source.clone()),
+        };
+
+        let transport = Arc::new(FakeTransport::new());
+        let env = QuotaEnv::isolated(ScanEnv::new(&home), paths.clone(), fixed_time())
+            .with_transport(transport.clone());
+
+        let targets = official_quota::targets_for_fetch_in(&env, &[], &resolved, &[login]);
+        let official_quota::FetchTarget::Account(target) = targets
+            .into_iter()
+            .find(|t| t.quota_id() == saved.saved_id)
+            .expect("active local antigravity account should be a fetch target")
+        else {
+            panic!("expected FetchTarget::Account");
+        };
+        assert!(target.live_root.is_some());
+        assert!(target.refresh.is_none());
+
+        let snapshot = accounts::fetch_managed_account_in(&env, &target).unwrap();
+        assert_eq!(snapshot.windows[0].used_percent, Some(35.0));
+        assert_eq!(snapshot.captured_at, fixed_time().to_rfc3339());
+
+        let requests = transport.requests.lock().unwrap();
+        assert!(requests.iter().any(|req| {
+            req.url.contains("retrieveUserQuotaSummary")
+                && req.headers.iter().any(|(k, v)| {
+                    k.eq_ignore_ascii_case("authorization") && v == &format!("Bearer {live_access}")
+                })
+        }));
+        assert!(requests
+            .iter()
+            .all(|req| { req.headers.iter().all(|(_, v)| !v.contains(stored_access)) }));
+        assert!(requests.iter().all(|req| !req.url.contains("/token")));
+
+        let secrets_raw = std::fs::read_to_string(&paths.accounts.secrets).unwrap();
+        assert!(secrets_raw.contains(refresh));
+        assert!(!secrets_raw.contains(live_access));
+    }
+
+    fn encode_varint(mut value: u64) -> Vec<u8> {
+        let mut out = Vec::new();
+        while value >= 0x80 {
+            out.push(((value as u8) & 0x7f) | 0x80);
+            value >>= 7;
+        }
+        out.push(value as u8);
+        out
+    }
+
+    fn grok_grpc_credits_frame(fraction: f32, reset_secs: u64) -> Vec<u8> {
+        let mut ts = vec![0x08];
+        ts.extend(encode_varint(reset_secs));
+        let mut config = Vec::new();
+        config.push(0x0d); // field 1 fixed32
+        config.extend_from_slice(&fraction.to_le_bytes());
+        config.push(0x2a); // field 5 length-delimited
+        config.extend(encode_varint(ts.len() as u64));
+        config.extend(ts);
+        let mut payload = vec![0x0a]; // field 1 length-delimited
+        payload.extend(encode_varint(config.len() as u64));
+        payload.extend(config);
+        let mut frame = vec![0u8];
+        frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+        frame.extend(payload);
+        frame
+    }
+
+    #[test]
+    fn grok_managed_account_5xx_fallback_uses_injected_transport_and_clock() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let app_data = dir.path().join("app_data");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&app_data).unwrap();
+
+        let injected_now = DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let reset_at = DateTime::parse_from_rfc3339("2020-01-02T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let grpc_body = grok_grpc_credits_frame(0.42, reset_at.timestamp() as u64);
+
+        struct Grok5xxFallbackTransport {
+            grpc_body: Vec<u8>,
+            seen_urls: Mutex<Vec<String>>,
+        }
+        impl QuotaTransport for Grok5xxFallbackTransport {
+            fn http(&self, request: &HttpRequest) -> Result<HttpResponse, String> {
+                self.seen_urls.lock().unwrap().push(request.url.clone());
+                if request.url.contains("/v1/billing?format=credits") {
+                    return Ok(HttpResponse {
+                        status: 500,
+                        headers: Vec::new(),
+                        body: br#"{"error":"Failed to serialize billing response"}"#.to_vec(),
+                    });
+                }
+                if request.url.contains("GetGrokCreditsConfig") {
+                    return Ok(HttpResponse {
+                        status: 200,
+                        headers: vec![("grpc-status".into(), "0".into())],
+                        body: self.grpc_body.clone(),
+                    });
+                }
+                if request.url.contains("/v1/billing") {
+                    return Ok(HttpResponse {
+                        status: 200,
+                        headers: Vec::new(),
+                        body: br#"{"config":{}}"#.to_vec(),
+                    });
+                }
+                if request.url.contains("/v1/settings") {
+                    return Ok(HttpResponse {
+                        status: 200,
+                        headers: Vec::new(),
+                        body: br#"{"config":{"subscription_tier_display":"SuperGrok"}}"#.to_vec(),
+                    });
+                }
+                Err(format!("unexpected url: {}", request.url))
+            }
+        }
+
+        let transport = Arc::new(Grok5xxFallbackTransport {
+            grpc_body,
+            seen_urls: Mutex::new(Vec::new()),
+        });
+        let paths = QuotaPaths::in_dir(&app_data);
+        let env = QuotaEnv::isolated(ScanEnv::new(&home), paths, injected_now)
+            .with_transport(transport.clone());
+
+        let target = accounts::AccountTarget {
+            id: "acct:grok:0000000000000001".into(),
+            name: "Grok Managed".into(),
+            provider: OfficialQuotaProvider::Grok,
+            access_token: "grok-managed-access-token".into(),
+            account_id: Some("user-42".into()),
+            live_root: None,
+            live_default: false,
+            refresh: None,
+            secrets_path: None,
+        };
+
+        let snapshot = accounts::fetch_managed_account_in(&env, &target).unwrap();
+        assert_eq!(snapshot.captured_at, injected_now.to_rfc3339());
+        assert_eq!(snapshot.plan.as_deref(), Some("SuperGrok"));
+        assert_eq!(snapshot.windows.len(), 1);
+        assert!((snapshot.windows[0].used_percent.unwrap() - 42.0).abs() < 0.01);
+        assert_eq!(
+            snapshot.windows[0].resets_at.as_deref(),
+            Some(reset_at.to_rfc3339().as_str())
+        );
+        assert!(transport
+            .seen_urls
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|u| u.contains("GetGrokCreditsConfig")));
+    }
+
+    #[test]
+    fn import_default_in_respects_injected_clock_for_grok_expiry() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join("home");
+        let app_data = dir.path().join("app_data");
+        std::fs::create_dir_all(&app_data).unwrap();
+
+        // Expires in 2020-06-01: expired against wall-clock Utc::now(), valid at injected_now (2020-01-01).
+        write_file(
+            &home.join(".grok/auth.json"),
+            r#"{"https://auth.x.ai::openid":{"key":"grok-clock-token","auth_mode":"oidc","user_id":"user-clock-1","expires_at":"2020-06-01T00:00:00Z"}}"#,
+        );
+
+        let injected_now = DateTime::parse_from_rfc3339("2020-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let paths = QuotaPaths::in_dir(&app_data);
+        let env = QuotaEnv::isolated(ScanEnv::new(&home), paths, injected_now);
+
+        let saved = accounts::import_default_in(&env, OfficialQuotaProvider::Grok).unwrap();
+        assert_eq!(saved.panel.accounts.len(), 1);
+        assert_eq!(saved.panel.accounts[0].hint, "user-clock-1");
     }
 }
