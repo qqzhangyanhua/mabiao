@@ -152,6 +152,7 @@ export function useUsageData(options: UseUsageDataOptions = {}) {
   return {
     ...snapshot,
     setOfficialQuota: controller.setOfficialQuota,
+    setHiddenOfficialProviders: controller.setHiddenOfficialProviders,
     setPrices: controller.setPrices,
     setStatus: controller.setStatus,
     savePrices: controller.savePrices,

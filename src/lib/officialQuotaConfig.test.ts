@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import {
   DEFAULT_OFFICIAL_QUOTA_CONFIG,
   formatAlertThresholdsInput,
   mergeOfficialQuotaConfig,
   parseAlertThresholdsInput,
+  persistOfficialQuotaConfig,
 } from "./officialQuotaConfig";
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
 
 describe("mergeOfficialQuotaConfig", () => {
   it("keeps custom thresholds when only hidden providers change", () => {
@@ -43,5 +49,27 @@ describe("parseAlertThresholdsInput", () => {
 describe("formatAlertThresholdsInput", () => {
   it("joins with a comma and space", () => {
     expect(formatAlertThresholdsInput([50, 90])).toBe("50, 90");
+  });
+});
+
+describe("persistOfficialQuotaConfig", () => {
+  beforeEach(() => {
+    vi.mocked(invoke).mockReset();
+  });
+
+  it("uses a single atomic patch_official_quota_config IPC without reading first", async () => {
+    const saved = {
+      ...DEFAULT_OFFICIAL_QUOTA_CONFIG,
+      alerts_enabled: false,
+      hidden_providers: ["claude"],
+    };
+    vi.mocked(invoke).mockResolvedValueOnce(saved);
+
+    const result = await persistOfficialQuotaConfig({ alerts_enabled: false });
+    expect(result).toEqual(saved);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("patch_official_quota_config", {
+      patch: { alerts_enabled: false },
+    });
   });
 });

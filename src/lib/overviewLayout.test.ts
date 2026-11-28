@@ -1,40 +1,43 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { OFFICIAL_QUOTA_PROVIDER_SLUGS, SOURCE_SLUGS } from "../generated/displayIdentity";
 import {
+  acctProviderSlug,
   applyDetectedQuotaSources,
   applyFavoriteQuotaSources,
   collectPresentSources,
   defaultOverviewLayout,
-  acctProviderSlug,
-  filterOfficialQuotaRows,
+  extractLegacyHiddenOfficialProviders,
   filterQuotaItems,
   isModuleVisible,
   isOfficialProviderVisible,
-  officialQuotaAttributionId,
   isQuotaSourceVisible,
-  officialQuotaProviderLabel,
   OFFICIAL_QUOTA_PROVIDER_IDS,
+  officialQuotaAttributionId,
+  officialQuotaProviderLabel,
   OVERVIEW_LAYOUT_STORAGE_KEY,
   OVERVIEW_MODULE_IDS,
   parseOverviewLayout,
   QUOTA_SOURCE_IDS,
   quotaSourceChipIds,
   readOverviewLayout,
+  sanitizeHiddenOfficialProviders,
   setAllModulesVisible,
   setAllOfficialProvidersVisible,
   setAllQuotaSourcesVisible,
   setModuleVisible,
   setOfficialProviderVisible,
   setQuotaSourceVisible,
+  stripLegacyOfficialProvidersFromStorage,
   summarizeOverviewLayout,
   visibleModuleCount,
   visibleOfficialProviderCount,
   visibleOfficialQuotaRows,
   visibleQuotaSourceCount,
+  visibleUndetectedOfficialProviders,
   writeOverviewLayout,
 } from "./overviewLayout";
 
-function installMemoryStorage() {
+function installMemoryStorage(): Storage {
   const store = new Map<string, string>();
   const memory: Storage = {
     get length() {
@@ -60,24 +63,26 @@ function installMemoryStorage() {
     configurable: true,
     value: memory,
   });
+  return memory;
 }
 
 describe("parseOverviewLayout", () => {
-  it("returns all-visible defaults for empty input", () => {
+  it("returns all-visible defaults for empty input without officialProviders", () => {
     const layout = parseOverviewLayout(null);
     expect(layout).toEqual(defaultOverviewLayout());
+    expect("officialProviders" in layout).toBe(false);
     expect(OVERVIEW_MODULE_IDS.every((id) => layout.modules[id])).toBe(true);
     expect(QUOTA_SOURCE_IDS.every((id) => layout.quotaSources[id])).toBe(true);
-    expect(OFFICIAL_QUOTA_PROVIDER_IDS.every((id) => layout.officialProviders[id])).toBe(true);
-    expect(visibleOfficialProviderCount(layout)).toBe(OFFICIAL_QUOTA_PROVIDER_IDS.length);
+    expect(visibleOfficialProviderCount([])).toBe(OFFICIAL_QUOTA_PROVIDER_IDS.length);
     expect(OFFICIAL_QUOTA_PROVIDER_IDS).toBe(OFFICIAL_QUOTA_PROVIDER_SLUGS);
   });
 
-  it("merges partial stored config and keeps unknown sources", () => {
+  it("merges partial stored config, keeps unknown sources, and ignores legacy officialProviders", () => {
     const layout = parseOverviewLayout(
       JSON.stringify({
         modules: { heatmap: false, kpi: true },
         quotaSources: { codex: true, claude: false, custom_src: false },
+        officialProviders: { claude: false, droid: false },
       }),
     );
     expect(layout.modules.heatmap).toBe(false);
@@ -88,46 +93,75 @@ describe("parseOverviewLayout", () => {
     expect(layout.quotaSources.claude).toBe(false);
     expect(layout.quotaSources.cursor_agent).toBe(true);
     expect(layout.quotaSources.custom_src).toBe(false);
-    expect(layout.officialProviders.claude).toBe(true);
-    expect(layout.officialProviders.codex).toBe(true);
-    expect(layout.officialProviders.droid).toBe(true);
-    expect(layout.officialProviders.antigravity).toBe(true);
-    expect(layout.officialProviders.opencode).toBe(true);
-    expect(layout.officialProviders.copilot).toBe(true);
-    expect(layout.officialProviders.devin).toBe(true);
-  });
-
-  it("reads official provider flags independently of billing sources", () => {
-    const layout = parseOverviewLayout(
-      JSON.stringify({
-        officialProviders: { claude: false, cursor: true },
-        quotaSources: { claude: true },
-      }),
-    );
-    expect(layout.officialProviders.claude).toBe(false);
-    expect(layout.officialProviders.codex).toBe(true);
-    expect(layout.officialProviders.cursor).toBe(true);
-    expect(layout.officialProviders.grok).toBe(true);
-    expect(layout.officialProviders.droid).toBe(true);
-    expect(layout.quotaSources.claude).toBe(true);
-  });
-
-  it("keeps extra official account flags so newly added providers can be hidden", () => {
-    const layout = parseOverviewLayout(
-      JSON.stringify({
-        officialProviders: { droid: false, antigravity: false, custom_acct: false },
-      }),
-    );
-    expect(layout.officialProviders.droid).toBe(false);
-    expect(layout.officialProviders.antigravity).toBe(false);
-    expect(layout.officialProviders.custom_acct).toBe(false);
-    expect(layout.officialProviders.claude).toBe(true);
+    expect("officialProviders" in layout).toBe(false);
   });
 
   it("falls back for invalid JSON or non-object payloads", () => {
     expect(parseOverviewLayout("{")).toEqual(defaultOverviewLayout());
     expect(parseOverviewLayout("[]")).toEqual(defaultOverviewLayout());
     expect(parseOverviewLayout('"nope"')).toEqual(defaultOverviewLayout());
+  });
+});
+
+describe("legacy officialProviders migration helpers", () => {
+  beforeEach(() => {
+    installMemoryStorage();
+  });
+
+  afterEach(() => {
+    localStorage.removeItem(OVERVIEW_LAYOUT_STORAGE_KEY);
+  });
+
+  it("extracts hidden built-in providers and excludes custom:* from legacy storage", () => {
+    expect(extractLegacyHiddenOfficialProviders(null)).toEqual({
+      hasLegacyField: false,
+      hiddenProviders: [],
+    });
+    expect(
+      extractLegacyHiddenOfficialProviders(
+        JSON.stringify({ modules: { heatmap: false }, quotaSources: { claude: false } }),
+      ),
+    ).toEqual({
+      hasLegacyField: false,
+      hiddenProviders: [],
+    });
+    expect(
+      extractLegacyHiddenOfficialProviders(
+        JSON.stringify({
+          modules: { heatmap: false },
+          officialProviders: {
+            claude: false,
+            cursor: true,
+            droid: false,
+            "custom:a3f9c1": false,
+          },
+        }),
+      ),
+    ).toEqual({
+      hasLegacyField: true,
+      hiddenProviders: ["claude", "droid"],
+    });
+  });
+
+  it("strips officialProviders from storage while preserving modules and quotaSources", () => {
+    localStorage.setItem(
+      OVERVIEW_LAYOUT_STORAGE_KEY,
+      JSON.stringify({
+        modules: { heatmap: false },
+        quotaSources: { claude: false },
+        officialProviders: { claude: false },
+      }),
+    );
+
+    expect(stripLegacyOfficialProvidersFromStorage()).toBe(true);
+    const stored = JSON.parse(
+      localStorage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY) ?? "{}",
+    ) as Record<string, unknown>;
+    expect(stored).toEqual({
+      modules: { heatmap: false },
+      quotaSources: { claude: false },
+    });
+    expect(stripLegacyOfficialProvidersFromStorage()).toBe(false);
   });
 });
 
@@ -154,13 +188,13 @@ describe("visibility helpers", () => {
     expect(rows.map((row) => row.source)).toEqual(["codex", "cursor_agent"]);
   });
 
-  it("filters official quota rows by selected accounts", () => {
-    const layout = setOfficialProviderVisible(
-      setOfficialProviderVisible(defaultOverviewLayout(), "claude", false),
+  it("filters official quota rows and undetected providers by persisted hidden_providers", () => {
+    const hidden = setOfficialProviderVisible(
+      setOfficialProviderVisible([], "claude", false),
       "droid",
       false,
     );
-    const rows = filterOfficialQuotaRows(
+    const rows = visibleOfficialQuotaRows(
       [
         { provider: "codex" },
         { provider: "claude" },
@@ -168,12 +202,15 @@ describe("visibility helpers", () => {
         { provider: "droid" },
         { provider: "antigravity" },
       ],
-      layout,
+      hidden,
     );
     expect(rows.map((row) => row.provider)).toEqual(["codex", "cursor", "antigravity"]);
-    expect(isOfficialProviderVisible(layout, "claude")).toBe(false);
-    expect(isOfficialProviderVisible(layout, "droid")).toBe(false);
-    expect(isOfficialProviderVisible(layout, "unknown")).toBe(true);
+    expect(
+      visibleUndetectedOfficialProviders(["claude", "grok", "droid", "devin"], hidden),
+    ).toEqual(["grok", "devin"]);
+    expect(isOfficialProviderVisible(hidden, "claude")).toBe(false);
+    expect(isOfficialProviderVisible(hidden, "droid")).toBe(false);
+    expect(isOfficialProviderVisible(hidden, "unknown")).toBe(true);
   });
 
   it("labels built-in official quota providers with display identity names", () => {
@@ -184,7 +221,7 @@ describe("visibility helpers", () => {
     expect(officialQuotaProviderLabel("custom_acct")).toBe("custom_acct");
   });
 
-  it("filters tray quota rows by hidden_providers without touching the rest", () => {
+  it("filters quota rows by hidden_providers without touching the rest", () => {
     const rows = [{ provider: "claude" }, { provider: "cursor" }, { provider: "grok" }];
     expect(visibleOfficialQuotaRows(rows, undefined)).toEqual(rows);
     expect(visibleOfficialQuotaRows(rows, [])).toEqual(rows);
@@ -193,43 +230,35 @@ describe("visibility helpers", () => {
     ]);
   });
 
-  it("keeps custom providers in the tray list when every built-in account is hidden", () => {
-    // 托盘按 hidden_providers 瘦身，那份名单只来自「配置显示」。自定义提供商
-    // 不进那个面板，因此把内置账号全藏起来，它仍然要和内置并排出现。
+  it("keeps custom providers visible even when every built-in account or custom:* appears in hidden_providers", () => {
+    expect(OFFICIAL_QUOTA_PROVIDER_IDS.some((id) => id.startsWith("custom:"))).toBe(false);
     const rows = [
       { provider: "claude" },
       { provider: "cursor" },
       { provider: "custom:a3f9c1" },
     ];
-    expect(
-      visibleOfficialQuotaRows(rows, [...OFFICIAL_QUOTA_PROVIDER_IDS]).map((row) => row.provider),
-    ).toEqual(["custom:a3f9c1"]);
-  });
-
-  it("does not let 配置显示 hide or list custom quota providers", () => {
-    // 自定义提供商的开关管的是「取不取数」，刻意不进「配置显示」。
-    // 即便 localStorage 里被人写进了 custom: 的 false，首页也不得按这份配置藏它。
-    expect(OFFICIAL_QUOTA_PROVIDER_IDS.some((id) => id.startsWith("custom:"))).toBe(false);
-    const leftover = parseOverviewLayout(
-      JSON.stringify({ officialProviders: { claude: false, "custom:a3f9c1": false } }),
-    );
-    expect(isOfficialProviderVisible(leftover, "custom:a3f9c1")).toBe(true);
-    expect(
-      filterOfficialQuotaRows(
-        [{ provider: "claude" }, { provider: "custom:a3f9c1" }],
-        leftover,
-      ).map((row) => row.provider),
-    ).toEqual(["custom:a3f9c1"]);
-    expect(summarizeOverviewLayout(leftover).hiddenOfficialProviders).toEqual(["claude"]);
-    const hiddenAll = setAllOfficialProvidersVisible(leftover, false);
-    expect(isOfficialProviderVisible(hiddenAll, "custom:a3f9c1")).toBe(true);
-    expect(summarizeOverviewLayout(hiddenAll).hiddenOfficialProviders).not.toContain(
+    const noisyHidden = ["claude", "custom:a3f9c1", "claude", "  "];
+    expect(sanitizeHiddenOfficialProviders(noisyHidden)).toEqual(["claude"]);
+    expect(isOfficialProviderVisible(noisyHidden, "custom:a3f9c1")).toBe(true);
+    expect(visibleOfficialQuotaRows(rows, noisyHidden).map((row) => row.provider)).toEqual([
+      "cursor",
       "custom:a3f9c1",
-    );
+    ]);
+    expect(
+      summarizeOverviewLayout(defaultOverviewLayout(), [], noisyHidden).hiddenOfficialProviders,
+    ).toEqual(["claude"]);
+    const hiddenAll = setAllOfficialProvidersVisible(false);
+    expect(isOfficialProviderVisible(hiddenAll, "custom:a3f9c1")).toBe(true);
+    expect(visibleOfficialQuotaRows(rows, hiddenAll).map((row) => row.provider)).toEqual([
+      "custom:a3f9c1",
+    ]);
+    expect(
+      summarizeOverviewLayout(defaultOverviewLayout(), [], hiddenAll).hiddenOfficialProviders,
+    ).not.toContain("custom:a3f9c1");
   });
 
   it("hides quota-account rows with the built-in provider and keeps custom rows", () => {
-    const hiddenCodex = setOfficialProviderVisible(defaultOverviewLayout(), "codex", false);
+    const hiddenCodex = setOfficialProviderVisible([], "codex", false);
     const rows = [
       { provider: "codex" },
       { provider: "acct:codex:ab12" },
@@ -238,7 +267,7 @@ describe("visibility helpers", () => {
       { provider: "claude" },
       { provider: "custom:a3f9c1", base_provider: "codex" },
     ];
-    expect(filterOfficialQuotaRows(rows, hiddenCodex).map((row) => row.provider)).toEqual([
+    expect(visibleOfficialQuotaRows(rows, hiddenCodex).map((row) => row.provider)).toEqual([
       "acct:codex:ee56",
       "claude",
       "custom:a3f9c1",
@@ -253,13 +282,10 @@ describe("visibility helpers", () => {
       officialQuotaAttributionId({ provider: "acct:codex:ee56", base_provider: " claude " }),
     ).toBe("claude");
 
-    const hiddenAll = setAllOfficialProvidersVisible(defaultOverviewLayout(), false);
-    expect(filterOfficialQuotaRows(rows, hiddenAll).map((row) => row.provider)).toEqual([
+    const hiddenAll = setAllOfficialProvidersVisible(false);
+    expect(visibleOfficialQuotaRows(rows, hiddenAll).map((row) => row.provider)).toEqual([
       "custom:a3f9c1",
     ]);
-    expect(
-      visibleOfficialQuotaRows(rows, [...OFFICIAL_QUOTA_PROVIDER_IDS]).map((row) => row.provider),
-    ).toEqual(["custom:a3f9c1"]);
   });
 
   it("toggles modules and sources without mutating the original", () => {
@@ -281,13 +307,11 @@ describe("visibility helpers", () => {
     expect(visibleModuleCount(hidden)).toBe(0);
     expect(visibleQuotaSourceCount(shown)).toBe(QUOTA_SOURCE_IDS.length);
     expect(shown.modules.kpi).toBe(false);
-    const onlyCodex = setAllOfficialProvidersVisible(
-      setOfficialProviderVisible(defaultOverviewLayout(), "claude", false),
-      false,
-    );
-    expect(visibleOfficialProviderCount(setOfficialProviderVisible(onlyCodex, "codex", true))).toBe(
+    const allHidden = setAllOfficialProvidersVisible(false);
+    expect(visibleOfficialProviderCount(setOfficialProviderVisible(allHidden, "codex", true))).toBe(
       1,
     );
+    expect(setAllOfficialProvidersVisible(true)).toEqual([]);
   });
 
   it("applies favorite and detected source sets", () => {
@@ -311,22 +335,19 @@ describe("visibility helpers", () => {
     expect(quotaSourceChipIds([], false)).toEqual([...QUOTA_SOURCE_IDS]);
   });
 
-  it("summarizes hidden modules and present sources", () => {
+  it("summarizes hidden modules, present sources, and official providers", () => {
     const layout = setModuleVisible(
       setQuotaSourceVisible(defaultOverviewLayout(), "claude", false),
       "heatmap",
       false,
     );
-    const summary = summarizeOverviewLayout(layout, ["codex", "claude", "cursor_agent"]);
+    const summary = summarizeOverviewLayout(layout, ["codex", "claude", "cursor_agent"], []);
     expect(summary.hiddenModules).toEqual(["heatmap"]);
     expect(summary.hiddenPresentSources).toEqual(["claude"]);
     expect(summary.hiddenOfficialProviders).toEqual([]);
-    const official = setOfficialProviderVisible(
-      setOfficialProviderVisible(layout, "cursor", false),
-      "devin",
-      false,
-    );
-    expect(summarizeOverviewLayout(official).hiddenOfficialProviders).toEqual(["cursor", "devin"]);
+    expect(
+      summarizeOverviewLayout(layout, [], ["devin", "cursor"]).hiddenOfficialProviders,
+    ).toEqual(["cursor", "devin"]);
   });
 });
 
@@ -339,13 +360,17 @@ describe("readOverviewLayout / writeOverviewLayout", () => {
     localStorage.removeItem(OVERVIEW_LAYOUT_STORAGE_KEY);
   });
 
-  it("persists and reloads a customized layout", () => {
+  it("persists and reloads a customized layout without writing officialProviders", () => {
     const next = setModuleVisible(
       setQuotaSourceVisible(defaultOverviewLayout(), "cursor_agent", false),
       "billing",
       false,
     );
     writeOverviewLayout(next);
+    const raw = JSON.parse(
+      localStorage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY) ?? "{}",
+    ) as Record<string, unknown>;
+    expect("officialProviders" in raw).toBe(false);
     const loaded = readOverviewLayout();
     expect(loaded.modules.billing).toBe(false);
     expect(loaded.quotaSources.cursor_agent).toBe(false);

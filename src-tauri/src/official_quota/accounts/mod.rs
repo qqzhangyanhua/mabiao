@@ -28,10 +28,14 @@ use serde::{Deserialize, Serialize};
 use super::backoff;
 use super::custom;
 use crate::domain::OfficialQuotaProvider;
-use crate::official_quota::{self, read_identity, QuotaIdentity};
+use crate::official_quota::{read_identity, QuotaEnv, QuotaIdentity, QuotaPaths};
 
-pub use fetch_row::{fetch_account_row, fetch_managed_account, AccountTarget};
-pub(crate) use fetch_row::{prepare_auto_target, prepare_manual_target};
+#[cfg(test)]
+pub(crate) use fetch_row::prepare_manual_target;
+pub use fetch_row::{
+    fetch_account_row, fetch_managed_account, fetch_managed_account_in, AccountTarget,
+};
+pub(crate) use fetch_row::{prepare_auto_target_in, prepare_manual_target_in};
 
 pub const CONFIG_NAME: &str = "quota_accounts.json";
 pub const SECRET_NAME: &str = "quota_account_secrets.json";
@@ -376,9 +380,21 @@ pub fn import_default(
     provider: OfficialQuotaProvider,
     backoff_path: &Path,
 ) -> Result<SavedQuotaAccountDto, String> {
+    let mut env = QuotaEnv::live(QuotaPaths::app_data());
+    env.paths.accounts = paths.clone();
+    env.paths.backoff = backoff_path.to_path_buf();
+    import_default_in(&env, provider)
+}
+
+pub fn import_default_in(
+    env: &QuotaEnv,
+    provider: OfficialQuotaProvider,
+) -> Result<SavedQuotaAccountDto, String> {
+    let paths = &env.paths.accounts;
+    let backoff_path = &env.paths.backoff;
     match provider {
         OfficialQuotaProvider::Antigravity => {
-            let tokens = crate::official_quota::antigravity::load_local_tokens()?;
+            let tokens = crate::official_quota::antigravity::load_local_tokens_in(env)?;
             let identity =
                 crate::official_quota::identity::identity_from_antigravity_tokens(&tokens)?;
             let secret = capture::antigravity_secret_from_tokens(&tokens)?;
@@ -392,8 +408,8 @@ pub fn import_default(
             )
         }
         OfficialQuotaProvider::Droid => {
-            let plain =
-                crate::official_quota::droid::load_default_auth_plaintext()?.ok_or_else(|| {
+            let plain = crate::official_quota::droid::load_default_auth_plaintext_in(env)?
+                .ok_or_else(|| {
                     "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string()
                 })?;
             let identity = crate::official_quota::identity::identity_from_droid_plaintext(&plain)?;
@@ -408,7 +424,7 @@ pub fn import_default(
             )
         }
         other => {
-            let roots = default_roots(other);
+            let roots = env.default_roots(other);
             if roots.is_empty() {
                 return Err("未找到本机登录态，请先在客户端登录".to_string());
             }
@@ -577,6 +593,13 @@ pub fn delete_account(paths: &QuotaAccountPaths, id: &str) -> Result<QuotaAccoun
 
 /// 只探已经登记过的提供方。一个都没有就直接返回，不去碰默认目录。
 pub fn probe_default_logins(accounts: &[ResolvedQuotaAccount]) -> Vec<LocalLogin> {
+    probe_default_logins_in(&QuotaEnv::live(QuotaPaths::app_data()), accounts)
+}
+
+pub fn probe_default_logins_in(
+    env: &QuotaEnv,
+    accounts: &[ResolvedQuotaAccount],
+) -> Vec<LocalLogin> {
     if accounts.is_empty() {
         return Vec::new();
     }
@@ -588,17 +611,17 @@ pub fn probe_default_logins(accounts: &[ResolvedQuotaAccount]) -> Vec<LocalLogin
         {
             continue;
         }
-        if let Some(login) = probe_provider(provider) {
+        if let Some(login) = probe_provider_in(env, provider) {
             logins.push(login);
         }
     }
     logins
 }
 
-fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
+fn probe_provider_in(env: &QuotaEnv, provider: OfficialQuotaProvider) -> Option<LocalLogin> {
     match provider {
         OfficialQuotaProvider::Antigravity => {
-            let tokens = crate::official_quota::antigravity::load_local_tokens().ok()?;
+            let tokens = crate::official_quota::antigravity::load_local_tokens_in(env).ok()?;
             let identity =
                 crate::official_quota::identity::identity_from_antigravity_tokens(&tokens).ok()?;
             Some(LocalLogin {
@@ -608,7 +631,8 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             })
         }
         OfficialQuotaProvider::Droid => {
-            let plain = crate::official_quota::droid::load_default_auth_plaintext().ok()??;
+            let plain =
+                crate::official_quota::droid::load_default_auth_plaintext_in(env).ok()??;
             let identity =
                 crate::official_quota::identity::identity_from_droid_plaintext(&plain).ok()?;
             Some(LocalLogin {
@@ -618,7 +642,7 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             })
         }
         other => {
-            for root in default_roots(other) {
+            for root in env.default_roots(other) {
                 if let Ok(identity) = read_identity(other, &root) {
                     return Some(LocalLogin {
                         provider,
@@ -629,25 +653,6 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             }
             None
         }
-    }
-}
-
-pub(crate) fn default_roots(provider: OfficialQuotaProvider) -> Vec<PathBuf> {
-    match provider {
-        OfficialQuotaProvider::Claude => vec![official_quota::claude_usage::credentials_path()],
-        OfficialQuotaProvider::Codex => vec![official_quota::codex_usage::auth_path()],
-        OfficialQuotaProvider::Cursor => crate::cursor_credentials::global_storage_dir()
-            .into_iter()
-            .collect(),
-        OfficialQuotaProvider::Grok => vec![official_quota::grok::auth_path()],
-        OfficialQuotaProvider::Droid => vec![official_quota::droid::factory_home()],
-        OfficialQuotaProvider::Antigravity => official_quota::antigravity::APP_DIRS
-            .into_iter()
-            .filter_map(crate::vscode_state::global_storage_dir)
-            .collect(),
-        OfficialQuotaProvider::OpenCode => vec![official_quota::opencode::auth_path()],
-        OfficialQuotaProvider::Copilot => vec![official_quota::copilot::config_home()],
-        OfficialQuotaProvider::Devin => official_quota::devin::storage_dirs(),
     }
 }
 

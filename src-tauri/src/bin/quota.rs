@@ -10,7 +10,7 @@
 //! 库还不存在时输出空结果而不是报错——脚本不该因为「还没用过」而挂掉。
 
 use mabiao_lib::domain::OfficialQuotaDto;
-use mabiao_lib::{official_quota, paths, store};
+use mabiao_lib::{official_quota, paths};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -39,43 +39,11 @@ fn main() {
 }
 
 fn run(refresh: bool) -> Result<String, String> {
-    let db_path = paths::app_data_dir().join(mabiao_lib::backup::DB_NAME);
-    if !db_path.exists() {
-        // 还没跑过应用：给一份形状正确的空结果，脚本照样能解析。
-        return render(&OfficialQuotaDto {
-            rows: Vec::new(),
-            alerts_enabled: false,
-            stale_after_minutes: official_quota::STALE_AFTER_MINUTES,
-            undetected: Vec::new(),
-            hidden_providers: Vec::new(),
-        });
-    }
-    let path = db_path.to_string_lossy().to_string();
-    let inputs = official_quota::accounts::QuotaSnapshotInputs::from_app_data();
-
-    if refresh {
-        // 取数在写之前完成，写完立刻放锁，尽量少打扰正在运行的应用。
-        let results = official_quota::fetch_all_targets_with_accounts(
-            &inputs.custom,
-            &inputs.accounts,
-            &inputs.logins,
-            |_, _| {},
-        );
-        let conn = store::open_db(&path)?;
-        official_quota::apply_fetch_results(&conn, results)?;
-    }
-
-    let conn = store::open_readonly(&path)?;
-    let config =
-        official_quota::load_config(&paths::app_data_dir().join(official_quota::CONFIG_NAME));
-    render(&official_quota::load_dto_with_accounts(
-        &conn,
-        &config,
-        &inputs.custom,
-        &inputs.accounts,
-        &inputs.logins,
-        chrono::Utc::now(),
-    ))
+    let app_data = paths::app_data_dir();
+    let db_path = app_data.join(mabiao_lib::backup::DB_NAME);
+    let env = official_quota::QuotaEnv::live(official_quota::QuotaPaths::in_dir(&app_data));
+    let dto = official_quota::run_cli_in(&db_path, &env, refresh)?;
+    render(&dto)
 }
 
 fn render(dto: &OfficialQuotaDto) -> Result<String, String> {

@@ -5,6 +5,8 @@
 > **2026-09-03 修订（托盘）**：下文「托盘只读缓存、不为菜单栏打 HTTP」已过时。现行 `tray.rs` 在菜单「刷新」、全量摄取后、以及每 5 分钟 `refresh_if_stale` 时会调 `sync_official_quota` → `fetch_all_targets`（受退避冷却约束，与主窗口刷新同级），再读缓存更新标题。破例仍是「受控额度通道」，不是通用摄取。
 >
 > **2026-11-26 修订（额度账号）**：下文「凭证只读」仍适用于零配置取数和客户端文件。另有应用自己保存的额度账号，见 ADR 0029。客户端文件、钥匙串条目和第三方数据库仍只读。
+>
+> **2026-11-28 修订（统一生命周期与配置权威）**：GUI、托盘与 `mabiao-quota` CLI 收口到 `official_quota/env.rs::QuotaEnv`（内嵌 `ScanEnv` 推导默认凭证根，隔离账号按 `profile_dir` 解析）与 `official_quota/lifecycle.rs`：纯读走 `snapshot` / `snapshot_visible`（只读连接内存叠加更新的 Claude statusline 捕获，零写库零告警）；主动刷新走 `refresh_and_notify`（持久化 + 评估一次告警 + GUI 与托盘共同广播 `official-quota-updated`）。`official_quota.json` 经原子命令 `patch_official_quota_config` 作为主窗口与托盘共享的 `hidden_providers` / 告警配置唯一权威。
 
 Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消耗记录不是同一件事：官方 5 小时 / 周窗口还包含 claude.ai、Cowork、grok.com 等没有本地 jsonl 的用量。本机计费窗只是本地时间戳估计，不能画在同一根进度条上。
 
@@ -22,8 +24,8 @@ Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消�
 
 - **自定义提供商**：只打计费/余额接口；密钥不进备份；托盘「最紧一档」按窗口有无 `resets_at` 分流（0013）。
 - **缓存**：「最后一次正确结果」；新鲜度 `official` / `stale`（>10 分钟）/ `unavailable`。
-- **托盘**：`tray.rs::sync_official_quota` 在菜单刷新、全量摄取后、以及每 5 分钟 stale 检查时调用 `fetch_all_targets`（受退避冷却约束），再读缓存更新标题。
-- **CLI 调试**：`cargo run --bin quota`（`mabiao-quota`），见 `docs/probe/official-quota.md`。
+- **托盘**：`tray.rs::sync_official_quota` 在菜单刷新、全量摄取后、以及每 5 分钟 stale 检查时调用 `official_quota::refresh_and_notify`（受退避冷却约束）并广播 `official-quota-updated`，再读缓存更新标题。
+- **CLI 调试**：`cargo run --bin quota`（`mabiao-quota`），默认走只读 `snapshot`（`open_readonly`），加 `--refresh` 走 `refresh_and_notify`，见 `docs/probe/official-quota.md`。
 - **undetected**：本机无凭证且无历史缓存的账号出现在 DTO 的 `undetected[]`，不占首页行。
 
 不进 `UsageRecord` / `Source` / 本机 token KPI；禁止把官方百分比叠进本机 5 小时 / 7 天估计窗。ADR 0012 是第二条受控联网通道（地址由用户提供、解析器仍内置）。
@@ -55,6 +57,6 @@ Claude / Codex / Cursor / Grok 的订阅限额是账号级事实，和本机消�
 - Codex 依赖本机 CLI；进程不在或超时不影响 Claude / Cursor / Grok。
 - Grok 依赖本机 `grok login` 写入的会话凭证；文件缺失、过期或仅有 API key 时该行 `unavailable`，不影响另外三路。Grok 限额接口与消耗记录摄取分开，结构变更时保留上次正确缓存。
 - 告警档位写入 `OfficialQuotaConfig.alert_thresholds`，缺省仍是 80 / 100；旧配置文件缺字段时按默认回落，不必迁移。去重键仍是 `provider + window_kind + resets_at`，`stale` 不弹，与月度预算分开开关。
-- 「重置前仍有余量」提醒：距 `resets_at` 不足 `reset_reminder_hours`（默认 12，`0` 关闭）且已用低于 `reset_reminder_max_used_percent`（默认 50）时，每个重置周期只弹一次。5 小时 / `session*` 窗重置太勤，不发这条。开关显示或开关告警必须先读再整份写回，避免冲掉自定义档位。
+- 「重置前仍有余量」提醒：距 `resets_at` 不足 `reset_reminder_hours`（默认 12，`0` 关闭）且已用低于 `reset_reminder_max_used_percent`（默认 50）时，每个重置周期只弹一次。5 小时 / `session*` 窗重置太勤，不发这条。开关显示或开关告警走后端原子局部更新 `patch_official_quota_config`，避免冲掉隐藏列表或自定义档位。
 - 预计撞线只由连续两次官方快照的百分比（或金额）差计算，文案写成估计；禁止把本机 5 小时燃烧叠进官方进度条。尚未凑齐两拍、或间隔不足一分钟时不显示。
 - 官方额度面板不画连续快照历史。`official_quota` 只留当前快照和上一拍（预计撞线），不另存历史表。

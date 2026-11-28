@@ -14,7 +14,9 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{
+    parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths, QuotaTransport,
+};
 
 const USAGE_URL: &str = "https://opencode.ai/zen/go/v1/usage";
 const AUTH_ENTRY: &str = "opencode-go";
@@ -28,24 +30,31 @@ const WINDOWS: [(&str, &str, &str); 3] = [
 ];
 
 pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    let key = load_api_key(&auth_path())?.ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    fetch_with_access_token(&key)
+    fetch_usage_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_in(env: &QuotaEnv) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let key = load_api_key(&env.opencode_auth_path())?.ok_or_else(|| NOT_SIGNED_IN.to_string())?;
+    fetch_with_access_token_in(env, &key)
 }
 
 /// 用调用方给的 API key 取用量。不读本机文件。
-pub(crate) fn fetch_with_access_token(
-    key: &str,
-) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    fetch_with_access_token_at(key, None)
-}
-
 pub(crate) fn fetch_with_access_token_at(
     key: &str,
     quota_base: Option<&str>,
 ) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
     let url = super::rebase_quota_url(USAGE_URL, quota_base);
-    let raw = request_usage(key, &url)?;
+    let raw = request_usage_via(&super::LiveQuotaTransport, key, &url)?;
     Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
+}
+
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
+    key: &str,
+) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let url = env.rebase_url(USAGE_URL);
+    let raw = request_usage_via(env.transport.as_ref(), key, &url)?;
+    Ok((parse_usage(&raw)?, env.now().to_rfc3339()))
 }
 
 pub fn data_dir() -> PathBuf {
@@ -131,37 +140,34 @@ fn error_detail(body: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn request_usage(api_key: &str, url: &str) -> Result<String, String> {
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Authorization", &format!("Bearer {api_key}"))
-        .set("Accept", "application/json");
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_usage_via(
+    transport: &dyn QuotaTransport,
+    api_key: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("Bearer {api_key}"))
+        .header("Accept", "application/json");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 OpenCode 用量接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 OpenCode 用量响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, response)) => {
-            let detail = response
-                .into_string()
-                .ok()
-                .as_deref()
-                .and_then(error_detail);
-            Err(match detail {
+        401 | 403 => {
+            let body = response.body_string_lossy();
+            Err(match error_detail(&body) {
                 Some(kind) => format!("OpenCode 登录已失效（{kind}），请重新运行 opencode 登录"),
                 None => "OpenCode 登录已失效，请重新运行 opencode 登录".to_string(),
             })
         }
-        Err(ureq::Error::Status(code, response)) => {
-            let detail = response
-                .into_string()
-                .ok()
-                .as_deref()
-                .and_then(error_detail);
-            Err(match detail {
+        code => {
+            let body = response.body_string_lossy();
+            Err(match error_detail(&body) {
                 Some(kind) => format!("拉取 OpenCode 用量失败：HTTP {code}（{kind}）"),
                 None => format!("拉取 OpenCode 用量失败：HTTP {code}"),
             })
         }
-        Err(_) => Err("无法连接 OpenCode 用量接口，请检查网络后重试".to_string()),
     }
 }

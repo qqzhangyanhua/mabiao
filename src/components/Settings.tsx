@@ -70,6 +70,7 @@ export function Settings({
   onQuotaError,
   overviewLayout,
   onOverviewLayoutChange,
+  onHiddenOfficialProvidersChange,
   onThemeModeChange,
   onAutoRefreshChange,
   onCursorAccountAutoRefreshChange,
@@ -104,6 +105,7 @@ export function Settings({
   onQuotaError: (error: unknown) => void;
   overviewLayout: OverviewLayout;
   onOverviewLayoutChange: (layout: OverviewLayout) => void;
+  onHiddenOfficialProvidersChange: (hiddenProviders: string[]) => void;
   onThemeModeChange: (mode: ThemeMode) => void;
   onAutoRefreshChange: (value: string) => void;
   onCursorAccountAutoRefreshChange: (value: boolean) => void;
@@ -206,9 +208,11 @@ export function Settings({
             />
             <OverviewLayoutPanel
               layout={overviewLayout}
+              hiddenOfficialProviders={officialQuota?.hidden_providers ?? []}
               detectedSources={detectedSources}
               presentSources={detectedSources}
               onChange={onOverviewLayoutChange}
+              onHiddenOfficialProvidersChange={onHiddenOfficialProvidersChange}
             />
             <RemoteServerPanel />
             <AutoPushPanel />

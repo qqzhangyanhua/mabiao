@@ -14,7 +14,10 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths,
+    QuotaSnapshot, QuotaTransport,
+};
 
 const USAGE_URL: &str = "https://api.github.com/copilot_internal/user";
 const TIMEOUT: Duration = Duration::from_secs(15);
@@ -28,22 +31,31 @@ const SNAPSHOTS: [(&str, &str, &str); 3] = [
 ];
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
-    let token = load_token().ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    fetch_with_access_token(&token)
+    fetch_usage_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let token = load_token_in(env).ok_or_else(|| NOT_SIGNED_IN.to_string())?;
+    fetch_with_access_token_in(env, &token)
 }
 
 /// 用调用方给的 token 取额度。不读本机配置。
-pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_at(token, None)
-}
-
 pub(crate) fn fetch_with_access_token_at(
     token: &str,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
     let url = super::rebase_quota_url(USAGE_URL, quota_base);
-    let raw = request_usage(token, &url)?;
+    let raw = request_usage_via(&super::LiveQuotaTransport, token, &url)?;
     Ok(QuotaSnapshot::new(parse_usage(&raw)?, Utc::now().to_rfc3339()).with_plan(parse_plan(&raw)))
+}
+
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
+    token: &str,
+) -> Result<QuotaSnapshot, String> {
+    let url = env.rebase_url(USAGE_URL);
+    let raw = request_usage_via(env.transport.as_ref(), token, &url)?;
+    Ok(QuotaSnapshot::new(parse_usage(&raw)?, env.now().to_rfc3339()).with_plan(parse_plan(&raw)))
 }
 
 pub fn parse_plan(raw: &str) -> Option<String> {
@@ -112,10 +124,10 @@ fn is_yaml(path: &Path) -> bool {
     )
 }
 
-fn load_token() -> Option<String> {
-    credential_paths().into_iter().find_map(|path| {
+fn load_token_in(env: &QuotaEnv) -> Option<String> {
+    env.copilot_credential_paths().into_iter().find_map(|path| {
         let raw = std::fs::read_to_string(&path).ok()?;
-        if path.extension().and_then(|ext| ext.to_str()) == Some("yml") {
+        if is_yaml(&path) {
             parse_gh_hosts_token(&raw)
         } else {
             parse_copilot_config_token(&raw)
@@ -271,26 +283,26 @@ fn used_percent(node: &Value) -> Option<f64> {
     }
 }
 
-fn request_usage(token: &str, url: &str) -> Result<String, String> {
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Authorization", &format!("token {token}"))
-        .set("Accept", "application/json")
-        .set("Editor-Version", "vscode/1.96.2")
-        .set("Editor-Plugin-Version", "copilot-chat/0.26.7")
-        .set("User-Agent", "GitHubCopilotChat/0.26.7")
-        .set("X-Github-Api-Version", "2025-04-01");
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_usage_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("token {token}"))
+        .header("Accept", "application/json")
+        .header("Editor-Version", "vscode/1.96.2")
+        .header("Editor-Plugin-Version", "copilot-chat/0.26.7")
+        .header("User-Agent", "GitHubCopilotChat/0.26.7")
+        .header("X-Github-Api-Version", "2025-04-01");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Copilot 额度接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Copilot 额度响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Copilot 登录已失效，请在编辑器里重新登录".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Copilot 额度失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Copilot 额度接口，请检查网络后重试".to_string()),
+        401 | 403 => Err("Copilot 登录已失效，请在编辑器里重新登录".to_string()),
+        code => Err(format!("拉取 Copilot 额度失败：HTTP {code}")),
     }
 }

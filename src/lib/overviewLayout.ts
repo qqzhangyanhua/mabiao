@@ -81,13 +81,17 @@ export type OfficialQuotaProviderId = (typeof OFFICIAL_QUOTA_PROVIDER_IDS)[numbe
 export type OverviewLayout = {
   modules: Record<OverviewModuleId, boolean>;
   quotaSources: Record<string, boolean>;
-  officialProviders: Record<string, boolean>;
 };
 
 export type OverviewLayoutSummary = {
   hiddenModules: OverviewModuleId[];
   hiddenPresentSources: string[];
   hiddenOfficialProviders: string[];
+};
+
+export type LegacyOfficialProvidersMigration = {
+  hasLegacyField: boolean;
+  hiddenProviders: string[];
 };
 
 export function defaultOverviewLayout(): OverviewLayout {
@@ -104,7 +108,6 @@ export function defaultOverviewLayout(): OverviewLayout {
       status: true,
     },
     quotaSources: Object.fromEntries(QUOTA_SOURCE_IDS.map((id) => [id, true])),
-    officialProviders: Object.fromEntries(OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => [id, true])),
   };
 }
 
@@ -114,6 +117,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readFlag(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function defaultBrowserStorage(): Storage | null {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    return null;
+  }
 }
 
 export function parseOverviewLayout(raw: string | null): OverviewLayout {
@@ -128,7 +139,6 @@ export function parseOverviewLayout(raw: string | null): OverviewLayout {
     }
     const modulesRaw = isRecord(parsed.modules) ? parsed.modules : {};
     const sourcesRaw = isRecord(parsed.quotaSources) ? parsed.quotaSources : {};
-    const officialRaw = isRecord(parsed.officialProviders) ? parsed.officialProviders : {};
     const modules = { ...defaults.modules };
     for (const id of OVERVIEW_MODULE_IDS) {
       modules[id] = readFlag(modulesRaw[id], defaults.modules[id]);
@@ -139,15 +149,75 @@ export function parseOverviewLayout(raw: string | null): OverviewLayout {
         quotaSources[source] = readFlag(visible, true);
       }
     }
-    const officialProviders = { ...defaults.officialProviders };
-    for (const [provider, visible] of Object.entries(officialRaw)) {
-      if (provider.length > 0) {
-        officialProviders[provider] = readFlag(visible, true);
-      }
-    }
-    return { modules, quotaSources, officialProviders };
+    return { modules, quotaSources };
   } catch {
     return defaults;
+  }
+}
+
+/**
+ * 从旧版 `mabiao:overview-layout` 提取 `officialProviders` 中关闭的内置账号。
+ * 忽略 `custom:*`；仅用于一次性迁移到 `official_quota.json`。
+ */
+export function extractLegacyHiddenOfficialProviders(
+  raw: string | null,
+): LegacyOfficialProvidersMigration {
+  if (raw == null || raw === "") {
+    return { hasLegacyField: false, hiddenProviders: [] };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || !("officialProviders" in parsed)) {
+      return { hasLegacyField: false, hiddenProviders: [] };
+    }
+    const officialRaw = isRecord(parsed.officialProviders) ? parsed.officialProviders : {};
+    const seen = new Set<string>();
+    const hiddenProviders: string[] = [];
+    for (const id of OFFICIAL_QUOTA_PROVIDER_IDS) {
+      if (officialRaw[id] === false && !seen.has(id)) {
+        seen.add(id);
+        hiddenProviders.push(id);
+      }
+    }
+    for (const [provider, visible] of Object.entries(officialRaw)) {
+      const trimmed = provider.trim();
+      if (
+        visible === false &&
+        trimmed.length > 0 &&
+        !isCustomQuotaProviderId(trimmed) &&
+        !seen.has(trimmed)
+      ) {
+        seen.add(trimmed);
+        hiddenProviders.push(trimmed);
+      }
+    }
+    return { hasLegacyField: true, hiddenProviders };
+  } catch {
+    return { hasLegacyField: false, hiddenProviders: [] };
+  }
+}
+
+/** 移除旧版 browser storage 中残留的 `officialProviders` 字段，保留 modules 与 quotaSources。 */
+export function stripLegacyOfficialProvidersFromStorage(storage?: Storage | null): boolean {
+  const target = storage === undefined ? defaultBrowserStorage() : storage;
+  if (!target) {
+    return false;
+  }
+  try {
+    const raw = target.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
+    if (raw == null || raw === "") {
+      return false;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || !("officialProviders" in parsed)) {
+      return false;
+    }
+    const next: Record<string, unknown> = { ...parsed };
+    delete next.officialProviders;
+    target.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(next));
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -161,7 +231,10 @@ export function readOverviewLayout(): OverviewLayout {
 
 export function writeOverviewLayout(layout: OverviewLayout): void {
   try {
-    localStorage.setItem(OVERVIEW_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    localStorage.setItem(
+      OVERVIEW_LAYOUT_STORAGE_KEY,
+      JSON.stringify({ modules: layout.modules, quotaSources: layout.quotaSources }),
+    );
   } catch {
     /* quota / private mode */
   }
@@ -182,33 +255,62 @@ export function filterQuotaItems<T extends { source: string }>(
   return items.filter((item) => isQuotaSourceVisible(layout, item.source));
 }
 
-export function isOfficialProviderVisible(layout: OverviewLayout, provider: string): boolean {
+/** 清理 hidden_providers：去空白、丢弃 `custom:*`、保序去重。 */
+export function sanitizeHiddenOfficialProviders(
+  hiddenProviders: readonly string[] | undefined,
+): string[] {
+  if (!hiddenProviders || hiddenProviders.length === 0) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of hiddenProviders) {
+    const trimmed = raw.trim();
+    if (!trimmed || isCustomQuotaProviderId(trimmed) || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    out.push(trimmed);
+  }
+  return out;
+}
+
+export function isOfficialProviderVisible(
+  hiddenProviders: readonly string[] | undefined,
+  provider: string,
+): boolean {
   // 自定义提供商的开关管的是「取不取数」，刻意不进「配置显示」。
-  // localStorage 里即便被人写进了 custom: 的 false，首页也不得按这份配置藏它。
+  // 哪怕配置里出现 custom:，主窗口和托盘都不得藏它。
   if (isCustomQuotaProviderId(provider)) {
     return true;
   }
+  if (!hiddenProviders || hiddenProviders.length === 0) {
+    return true;
+  }
   const key = acctProviderSlug(provider) ?? provider;
-  return layout.officialProviders[key] !== false;
+  return !hiddenProviders.includes(key);
 }
 
-export function filterOfficialQuotaRows<
-  T extends { provider: string; base_provider?: string | null },
->(rows: T[], layout: OverviewLayout): T[] {
-  return rows.filter((row) =>
-    isOfficialProviderVisible(layout, officialQuotaAttributionId(row)),
-  );
-}
-
-/** 托盘额度面板按 official_quota.json 的 hidden_providers 过滤，和主窗口配置显示同步。 */
+/** 主窗口与托盘统一按 `official_quota.json` 的 `hidden_providers` 过滤官方额度行。 */
 export function visibleOfficialQuotaRows<
   T extends { provider: string; base_provider?: string | null },
->(rows: T[], hiddenProviders: string[] | undefined): T[] {
+>(rows: T[], hiddenProviders: readonly string[] | undefined): T[] {
   if (!hiddenProviders || hiddenProviders.length === 0) {
     return rows;
   }
-  const hidden = new Set(hiddenProviders);
-  return rows.filter((row) => !hidden.has(officialQuotaAttributionId(row)));
+  return rows.filter((row) =>
+    isOfficialProviderVisible(hiddenProviders, officialQuotaAttributionId(row)),
+  );
+}
+
+export function visibleUndetectedOfficialProviders(
+  undetected: readonly string[],
+  hiddenProviders: readonly string[] | undefined,
+): string[] {
+  if (!hiddenProviders || hiddenProviders.length === 0) {
+    return [...undetected];
+  }
+  return undetected.filter((id) => isOfficialProviderVisible(hiddenProviders, id));
 }
 
 /** `acct:<slug>:<hex>` 中间那段内置 slug。不是这个形状就返回 null。 */
@@ -289,34 +391,29 @@ export function setAllQuotaSourcesVisible(
 }
 
 export function setOfficialProviderVisible(
-  layout: OverviewLayout,
+  hiddenProviders: readonly string[] | undefined,
   provider: string,
   visible: boolean,
-): OverviewLayout {
+): string[] {
+  const current = sanitizeHiddenOfficialProviders(hiddenProviders);
   if (isCustomQuotaProviderId(provider)) {
-    return layout;
+    return current;
   }
-  return {
-    ...layout,
-    officialProviders: { ...layout.officialProviders, [provider]: visible },
-  };
+  const key = (acctProviderSlug(provider) ?? provider).trim();
+  if (!key) {
+    return current;
+  }
+  if (visible) {
+    return current.filter((id) => id !== key);
+  }
+  if (current.includes(key)) {
+    return current;
+  }
+  return [...current, key];
 }
 
-export function setAllOfficialProvidersVisible(
-  layout: OverviewLayout,
-  visible: boolean,
-): OverviewLayout {
-  const officialProviders = { ...layout.officialProviders };
-  for (const id of OFFICIAL_QUOTA_PROVIDER_IDS) {
-    officialProviders[id] = visible;
-  }
-  for (const provider of Object.keys(officialProviders)) {
-    if (isCustomQuotaProviderId(provider)) {
-      continue;
-    }
-    officialProviders[provider] = visible;
-  }
-  return { ...layout, officialProviders };
+export function setAllOfficialProvidersVisible(visible: boolean): string[] {
+  return visible ? [] : [...OFFICIAL_QUOTA_PROVIDER_IDS];
 }
 
 export function officialQuotaProviderLabel(provider: string): string {
@@ -334,8 +431,12 @@ export function visibleQuotaSourceCount(layout: OverviewLayout): number {
   return QUOTA_SOURCE_IDS.filter((id) => isQuotaSourceVisible(layout, id)).length;
 }
 
-export function visibleOfficialProviderCount(layout: OverviewLayout): number {
-  return OFFICIAL_QUOTA_PROVIDER_IDS.filter((id) => isOfficialProviderVisible(layout, id)).length;
+export function visibleOfficialProviderCount(
+  hiddenProviders: readonly string[] | undefined,
+): number {
+  return OFFICIAL_QUOTA_PROVIDER_IDS.filter((id) =>
+    isOfficialProviderVisible(hiddenProviders, id),
+  ).length;
 }
 
 export function applyQuotaSourceSet(
@@ -399,18 +500,20 @@ export function quotaSourceChipIds(presentSources: readonly string[], showAll: b
 export function summarizeOverviewLayout(
   layout: OverviewLayout,
   presentSources: readonly string[] = [],
+  hiddenOfficialProviders: readonly string[] = [],
 ): OverviewLayoutSummary {
   const hiddenModules = OVERVIEW_MODULE_IDS.filter((id) => !isModuleVisible(layout, id));
   const sourcePool = presentSources.length > 0 ? presentSources : QUOTA_SOURCE_IDS;
   const hiddenPresentSources = sourcePool.filter((source) => !isQuotaSourceVisible(layout, source));
-  const officialPool = new Set<string>(OFFICIAL_QUOTA_PROVIDER_IDS);
-  for (const provider of Object.keys(layout.officialProviders)) {
-    if (provider && !isCustomQuotaProviderId(provider)) {
-      officialPool.add(provider);
-    }
-  }
-  const hiddenOfficialProviders = [...officialPool].filter(
-    (id) => !isOfficialProviderVisible(layout, id),
+  const sanitizedHidden = sanitizeHiddenOfficialProviders(hiddenOfficialProviders);
+  const hiddenSet = new Set(sanitizedHidden);
+  const knownHidden = OFFICIAL_QUOTA_PROVIDER_IDS.filter((id) => hiddenSet.has(id));
+  const extraHidden = sanitizedHidden.filter(
+    (id) => !(OFFICIAL_QUOTA_PROVIDER_IDS as readonly string[]).includes(id),
   );
-  return { hiddenModules, hiddenPresentSources, hiddenOfficialProviders };
+  return {
+    hiddenModules,
+    hiddenPresentSources,
+    hiddenOfficialProviders: [...knownHidden, ...extraHidden],
+  };
 }

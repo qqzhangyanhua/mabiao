@@ -16,13 +16,15 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::domain::{OfficialQuotaWindow, Source};
 #[cfg(test)]
 use crate::ingest::PathOverrides;
-use crate::official_quota::{parse_resets_at, sanitize_percent};
+use crate::official_quota::{
+    parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths, QuotaTransport,
+};
 use crate::scan_paths::ScanEnv;
 
 const USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
@@ -38,24 +40,31 @@ const WINDOWS: [(&str, &str, &str); 3] = [
 ];
 
 pub fn fetch_usage() -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    let token = load_access_token(&credentials_path())?;
-    fetch_with_access_token(&token)
+    fetch_usage_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_in(env: &QuotaEnv) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let token = load_access_token_at(&env.claude_credentials_path(), env.now())?;
+    fetch_with_access_token_in(env, &token)
 }
 
 /// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
-pub(crate) fn fetch_with_access_token(
-    token: &str,
-) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    fetch_with_access_token_at(token, None)
-}
-
 pub(crate) fn fetch_with_access_token_at(
     token: &str,
     quota_base: Option<&str>,
 ) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
     let url = super::rebase_quota_url(USAGE_URL, quota_base);
-    let raw = request_usage(token, &url)?;
+    let raw = request_usage_via(&super::LiveQuotaTransport, token, &url)?;
     Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
+}
+
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
+    token: &str,
+) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
+    let url = env.rebase_url(USAGE_URL);
+    let raw = request_usage_via(env.transport.as_ref(), token, &url)?;
+    Ok((parse_usage(&raw)?, env.now().to_rfc3339()))
 }
 
 pub fn credentials_path() -> PathBuf {
@@ -135,6 +144,10 @@ fn scoped_weekly_windows(value: &Value) -> Vec<OfficialQuotaWindow> {
 }
 
 pub fn load_access_token(path: &Path) -> Result<String, String> {
+    load_access_token_at(path, Utc::now())
+}
+
+pub fn load_access_token_at(path: &Path, now: DateTime<Utc>) -> Result<String, String> {
     let raw = std::fs::read_to_string(path)
         .map_err(|_| "未找到 Claude Code 登录态，请先运行 claude 并登录".to_string())?;
     let oauth = serde_json::from_str::<Value>(&raw)
@@ -152,7 +165,7 @@ pub fn load_access_token(path: &Path) -> Result<String, String> {
             );
         }
     }
-    if is_expired(&oauth, Utc::now().timestamp_millis()) {
+    if is_expired(&oauth, now.timestamp_millis()) {
         return Err("Claude 登录态已过期，请打开一次 Claude Code 以刷新".to_string());
     }
     oauth
@@ -172,29 +185,27 @@ pub fn is_expired(oauth: &Value, now_ms: i64) -> bool {
     }
 }
 
-fn request_usage(token: &str, url: &str) -> Result<String, String> {
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("Accept", "application/json")
-        .set("Content-Type", "application/json")
-        .set("anthropic-beta", OAUTH_BETA)
-        .set("User-Agent", USER_AGENT);
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_usage_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Accept", "application/json")
+        .header("Content-Type", "application/json")
+        .header("anthropic-beta", OAUTH_BETA)
+        .header("User-Agent", USER_AGENT);
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Claude 用量接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Claude 用量响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Claude 登录已失效，请打开一次 Claude Code 重新登录".to_string())
-        }
+        401 | 403 => Err("Claude 登录已失效，请打开一次 Claude Code 重新登录".to_string()),
         // Anthropic 对这个端点限流较紧，手动狂刷会更糟，提示里说清楚。
-        Err(ureq::Error::Status(429, _)) => {
-            Err("Claude 用量接口被限流，稍后会自动恢复，别反复手动刷新".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Claude 用量失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Claude 用量接口，请检查网络后重试".to_string()),
+        429 => Err("Claude 用量接口被限流，稍后会自动恢复，别反复手动刷新".to_string()),
+        code => Err(format!("拉取 Claude 用量失败：HTTP {code}")),
     }
 }

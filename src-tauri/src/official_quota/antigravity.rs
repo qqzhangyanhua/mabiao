@@ -24,7 +24,10 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths,
+    QuotaSnapshot, QuotaTransport,
+};
 use crate::vscode_state;
 
 /// 新版客户端目录叫 `Antigravity`，旧 macOS 包叫 `Antigravity IDE`，两边都可能有登录态。
@@ -79,10 +82,20 @@ enum SummaryError {
 }
 
 pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
-    let (raw, token) = fetch_summary()?;
+    fetch_rate_limits_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let (raw, token) = fetch_summary_in(env)?;
     let windows = parse_quota_summary(&raw)?;
-    let plan = parse_code_assist_tier(&raw).or_else(|| fetch_plan(&token));
-    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+    let plan = parse_code_assist_tier(&raw).or_else(|| {
+        if env.quota_base.is_some() {
+            None
+        } else {
+            fetch_plan_via(env.transport.as_ref(), &token)
+        }
+    });
+    Ok(QuotaSnapshot::new(windows, env.now().to_rfc3339()).with_plan(plan))
 }
 
 /// 只用 access token 取摘要。401 直接报登录失效，不走 refresh。
@@ -91,30 +104,54 @@ pub(crate) fn fetch_with_access_token_at(
     token: &str,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
+    fetch_with_access_token_via(&super::LiveQuotaTransport, token, quota_base, Utc::now())
+}
+
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
+    token: &str,
+) -> Result<QuotaSnapshot, String> {
+    fetch_with_access_token_via(
+        env.transport.as_ref(),
+        token,
+        env.quota_base.as_deref(),
+        env.now(),
+    )
+}
+
+fn fetch_with_access_token_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    quota_base: Option<&str>,
+    now: chrono::DateTime<Utc>,
+) -> Result<QuotaSnapshot, String> {
     let token = token.trim();
     if token.is_empty() {
         return Err(NOT_SIGNED_IN.to_string());
     }
-    let raw = request_summary_at(token, quota_base).map_err(|error| match error {
-        SummaryError::Unauthorized => "Antigravity 登录已失效，请重新打开客户端登录".to_string(),
-        SummaryError::Other(message) => message,
-    })?;
+    let raw =
+        request_summary_at_via(transport, token, quota_base).map_err(|error| match error {
+            SummaryError::Unauthorized => {
+                "Antigravity 登录已失效，请重新打开客户端登录".to_string()
+            }
+            SummaryError::Other(message) => message,
+        })?;
     let windows = parse_quota_summary(&raw)?;
     // 桩只回答摘要。套餐档在摘要里就用，没有也不再打生产环境。
     let plan = parse_code_assist_tier(&raw).or_else(|| {
         if quota_base.is_some() {
             None
         } else {
-            fetch_plan(token)
+            fetch_plan_via(transport, token)
         }
     });
-    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(plan))
 }
 
-fn fetch_summary() -> Result<(String, String), String> {
-    let tokens = load_local_tokens()?;
+fn fetch_summary_in(env: &QuotaEnv) -> Result<(String, String), String> {
+    let tokens = load_local_tokens_in(env)?;
     if let Some(token) = tokens.access_token.as_deref() {
-        match request_summary(token) {
+        match request_summary_at_via(env.transport.as_ref(), token, env.quota_base.as_deref()) {
             Ok(raw) => return Ok((raw, token.to_string())),
             Err(SummaryError::Other(error)) => return Err(error),
             Err(SummaryError::Unauthorized) => {}
@@ -123,8 +160,19 @@ fn fetch_summary() -> Result<(String, String), String> {
     let refresh_token = tokens
         .refresh_token
         .ok_or_else(|| NOT_SIGNED_IN.to_string())?;
-    let access_token = refresh_access_token(&refresh_token)?;
-    let raw = request_summary(&access_token).map_err(|error| match error {
+    let clients = env.transport.antigravity_oauth_clients()?;
+    let (access_token, _) = exchange_refresh_token_via(
+        env.transport.as_ref(),
+        &env.rebase_url(TOKEN_URL),
+        &refresh_token,
+        &clients,
+    )?;
+    let raw = request_summary_at_via(
+        env.transport.as_ref(),
+        &access_token,
+        env.quota_base.as_deref(),
+    )
+    .map_err(|error| match error {
         SummaryError::Unauthorized => "Antigravity 登录已失效，请重新打开客户端登录".to_string(),
         SummaryError::Other(message) => message,
     })?;
@@ -132,16 +180,17 @@ fn fetch_summary() -> Result<(String, String), String> {
 }
 
 /// `POST loadCodeAssist` 的 `currentTier.id`。失败不影响额度窗口。
-fn fetch_plan(access_token: &str) -> Option<String> {
-    let raw = request_code_assist(access_token)?;
+fn fetch_plan_via(transport: &dyn QuotaTransport, access_token: &str) -> Option<String> {
+    let raw = request_code_assist_via(transport, access_token)?;
     parse_code_assist_tier(&raw)
 }
 
 /// 诊断用：吐出 `loadCodeAssist` 的原始 JSON，核对套餐档位字段到底叫什么。
 /// 不进生产取数路径，只给 `antigravity_debug_dump_plan_fields` 那个忽略测试用。
 pub fn debug_fetch_code_assist_raw() -> Result<String, String> {
-    let (_, token) = fetch_summary()?;
-    request_code_assist(&token)
+    let env = QuotaEnv::live(QuotaPaths::app_data());
+    let (_, token) = fetch_summary_in(&env)?;
+    request_code_assist_via(env.transport.as_ref(), &token)
         .ok_or_else(|| "loadCodeAssist 没有返回内容，或者鉴权失败".to_string())
 }
 
@@ -260,11 +309,16 @@ fn bucket_label(group_label: &str, bucket: &Value) -> String {
 }
 
 pub(crate) fn load_local_tokens() -> Result<LocalTokens, String> {
-    let dirs = APP_DIRS
-        .into_iter()
-        .filter_map(vscode_state::global_storage_dir)
-        .collect::<Vec<_>>();
-    resolve_local_tokens(read_keychain_tokens(), &dirs)
+    load_local_tokens_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub(crate) fn load_local_tokens_in(env: &QuotaEnv) -> Result<LocalTokens, String> {
+    let keychain = env
+        .transport
+        .antigravity_keychain_blob()
+        .and_then(|raw| parse_keyring_blob(&raw));
+    let dirs = env.antigravity_storage_dirs();
+    resolve_local_tokens(keychain, &dirs)
 }
 
 /// 钥匙串有登录就用它，否则按目录顺序读 `state.vscdb`。`keychain` 由调用方注入，测试不碰真钥匙串。
@@ -286,11 +340,6 @@ pub(crate) fn resolve_local_tokens(
         }
     }
     Err(last_error.unwrap_or_else(|| NOT_SIGNED_IN.to_string()))
-}
-
-/// 钥匙串条目存在但解析失败时不当成没登录——让刷新去报准确的错。
-fn read_keychain_tokens() -> Option<LocalTokens> {
-    parse_keyring_blob(&macos_keychain_password()?)
 }
 
 /// zalando go-keyring：`go-keyring-base64:` + `{"token":{"access_token","refresh_token"}}`。
@@ -329,7 +378,7 @@ fn json_string(value: &Value, key: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-fn macos_keychain_password() -> Option<String> {
+pub(crate) fn macos_keychain_password() -> Option<String> {
     use std::io::Read;
     use std::process::Stdio;
 
@@ -377,7 +426,7 @@ fn macos_keychain_password() -> Option<String> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn macos_keychain_password() -> Option<String> {
+pub(crate) fn macos_keychain_password() -> Option<String> {
     None
 }
 
@@ -603,16 +652,10 @@ fn which_named(name: &str) -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// 本机存的 access token 只活约 1 小时，过期了就用 refresh token 换一个。
-/// 新令牌只留在内存里，不写钥匙串，也不写 `state.vscdb`。
-fn refresh_access_token(refresh_token: &str) -> Result<String, String> {
-    let clients = local_oauth_clients()?;
-    exchange_refresh_token(TOKEN_URL, refresh_token, &clients).map(|(access_token, _)| access_token)
-}
-
 /// 用给定的令牌地址和客户端换 access token。轮换出来的 refresh token 一并返回。
 /// 调用方决定写不写、写到哪里——这条函数本身不落盘。
-pub(crate) fn exchange_refresh_token(
+pub(crate) fn exchange_refresh_token_via(
+    transport: &dyn QuotaTransport,
     token_url: &str,
     refresh_token: &str,
     clients: &[(String, String)],
@@ -624,18 +667,23 @@ pub(crate) fn exchange_refresh_token(
     }
     let mut last = "Antigravity 登录已失效，请重新打开客户端登录".to_string();
     for (client_id, client_secret) in clients {
-        let response = crate::net::agent_for_url(token_url, TIMEOUT)
-            .post(token_url)
-            .send_form(&[
-                ("client_id", client_id.as_str()),
-                ("client_secret", client_secret.as_str()),
-                ("refresh_token", refresh_token),
-                ("grant_type", "refresh_token"),
-            ]);
-        match response {
-            Ok(ok) => {
-                let body = ok
-                    .into_string()
+        let request = HttpRequest::post_form(
+            token_url,
+            vec![
+                ("client_id".into(), client_id.clone()),
+                ("client_secret".into(), client_secret.clone()),
+                ("refresh_token".into(), refresh_token.to_string()),
+                ("grant_type".into(), "refresh_token".into()),
+            ],
+            TIMEOUT,
+        );
+        let response = transport
+            .http(&request)
+            .map_err(|_| "无法连接 Google 令牌接口，请检查网络后重试".to_string())?;
+        match response.status {
+            200..=299 => {
+                let body = response
+                    .body_string()
                     .map_err(|e| format!("读取 Antigravity 令牌响应失败：{e}"))?;
                 if let Some(tokens) = parse_google_tokens(&body) {
                     return Ok(tokens);
@@ -643,18 +691,13 @@ pub(crate) fn exchange_refresh_token(
                 last = "Antigravity 令牌响应里没有 access_token".to_string();
             }
             // 配错客户端会是 400/401，换下一组再试。
-            Err(ureq::Error::Status(400 | 401, response)) => {
-                let _ = response.into_string();
-            }
-            Err(ureq::Error::Status(code, response)) => {
-                let body = response.into_string().unwrap_or_default();
+            400 | 401 => {}
+            code => {
+                let body = response.body_string_lossy();
                 if body.contains("invalid_grant") {
                     continue;
                 }
                 last = format!("刷新 Antigravity 登录失败：HTTP {code}");
-            }
-            Err(_) => {
-                return Err("无法连接 Google 令牌接口，请检查网络后重试".to_string());
             }
         }
     }
@@ -678,21 +721,18 @@ fn parse_google_tokens(body: &str) -> Option<(String, Option<String>)> {
     Some((access_token, refresh_token))
 }
 
-fn request_summary_at(
+fn request_summary_at_via(
+    transport: &dyn QuotaTransport,
     access_token: &str,
     quota_base: Option<&str>,
 ) -> Result<String, SummaryError> {
     if let Some(base) = quota_base.map(str::trim).filter(|value| !value.is_empty()) {
         let url = super::rebase_quota_url(SUMMARY_URLS[0], Some(base));
-        return request_summary_url(access_token, &url);
+        return request_summary_url_via(transport, access_token, &url);
     }
-    request_summary(access_token)
-}
-
-fn request_summary(access_token: &str) -> Result<String, SummaryError> {
     let mut last = SummaryError::Other("无法连接 Antigravity 限额接口，请检查网络后重试".into());
     for url in SUMMARY_URLS {
-        match request_summary_url(access_token, url) {
+        match request_summary_url_via(transport, access_token, url) {
             Ok(raw) => return Ok(raw),
             Err(SummaryError::Unauthorized) => return Err(SummaryError::Unauthorized),
             Err(error) => last = error,
@@ -701,46 +741,43 @@ fn request_summary(access_token: &str) -> Result<String, SummaryError> {
     Err(last)
 }
 
-fn request_summary_url(access_token: &str, url: &str) -> Result<String, SummaryError> {
-    let result = crate::net::agent_for_url(url, TIMEOUT)
-        .post(url)
-        .set("Authorization", &format!("Bearer {access_token}"))
-        .set("User-Agent", USER_AGENT)
-        .set("Content-Type", "application/json")
-        .send_string("{}");
-    match result {
-        Ok(response) => response
-            .into_string()
+fn request_summary_url_via(
+    transport: &dyn QuotaTransport,
+    access_token: &str,
+    url: &str,
+) -> Result<String, SummaryError> {
+    let request = HttpRequest::post_text(url, "{}", TIMEOUT)
+        .header("Authorization", format!("Bearer {access_token}"))
+        .header("User-Agent", USER_AGENT)
+        .header("Content-Type", "application/json");
+    let response = transport.http(&request).map_err(|_| {
+        SummaryError::Other("无法连接 Antigravity 限额接口，请检查网络后重试".into())
+    })?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| SummaryError::Other(format!("读取 Antigravity 限额响应失败：{e}"))),
-        Err(ureq::Error::Status(401 | 403, _)) => Err(SummaryError::Unauthorized),
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(SummaryError::Other(format!(
-                "拉取 Antigravity 限额失败：HTTP {code}"
-            )))
-        }
-        Err(_) => Err(SummaryError::Other(
-            "无法连接 Antigravity 限额接口，请检查网络后重试".into(),
-        )),
+        401 | 403 => Err(SummaryError::Unauthorized),
+        code => Err(SummaryError::Other(format!(
+            "拉取 Antigravity 限额失败：HTTP {code}"
+        ))),
     }
 }
 
-fn request_code_assist(access_token: &str) -> Option<String> {
+fn request_code_assist_via(transport: &dyn QuotaTransport, access_token: &str) -> Option<String> {
     for url in SUMMARY_URLS {
         let url = url.replace("retrieveUserQuotaSummary", "loadCodeAssist");
-        let result = crate::net::agent_with_timeout(TIMEOUT)
-            .post(&url)
-            .set("Authorization", &format!("Bearer {access_token}"))
-            .set("User-Agent", USER_AGENT)
-            .set("Content-Type", "application/json")
-            .set(
+        let request = HttpRequest::post_text(&url, CODE_ASSIST_BODY, TIMEOUT)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .header("User-Agent", USER_AGENT)
+            .header("Content-Type", "application/json")
+            .header(
                 "Client-Metadata",
                 r#"{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}"#,
-            )
-            .send_string(CODE_ASSIST_BODY);
-        match result {
-            Ok(response) => return response.into_string().ok(),
-            Err(ureq::Error::Status(401 | 403, _)) => return None,
+            );
+        match transport.http(&request) {
+            Ok(response) if response.is_success() => return response.body_string().ok(),
+            Ok(response) if matches!(response.status, 401 | 403) => return None,
             _ => {}
         }
     }

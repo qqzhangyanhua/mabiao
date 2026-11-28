@@ -9,33 +9,42 @@
 use std::path::Path;
 
 use crate::domain::OfficialQuotaProvider;
-use crate::official_quota::{
-    antigravity, capture_path, claude_usage, codex_usage, copilot, devin, droid, grok, opencode,
-};
+use crate::official_quota::{antigravity, devin, droid, opencode, QuotaEnv, QuotaPaths};
 
 pub fn has_local_credentials(provider: OfficialQuotaProvider) -> bool {
+    has_local_credentials_in(&QuotaEnv::live(QuotaPaths::app_data()), provider)
+}
+
+pub fn has_local_credentials_in(env: &QuotaEnv, provider: OfficialQuotaProvider) -> bool {
     match provider {
         // 文件在就算有登录痕迹。token 过期、缺 scope 是刷新时报的错，
         // 不能在这里当成「没装 Claude」把整行从列表里拿掉。
         OfficialQuotaProvider::Claude => {
-            claude_artifacts_present(&claude_usage::credentials_path(), &capture_path())
+            claude_artifacts_present(&env.claude_credentials_path(), &env.paths.claude_capture)
         }
         // auth.json 在就算 Codex 在用。纯 API key 没有订阅百分比，刷新会写清
         // 楚原因；这里如果要求 tokens.access_token，列表里就永远看不到这一行。
-        OfficialQuotaProvider::Codex => codex_artifacts_present(&codex_usage::auth_path()),
-        OfficialQuotaProvider::Cursor => crate::cursor_credentials::read_local_credential()
-            .is_some_and(|credential| !credential.is_expired()),
-        OfficialQuotaProvider::Grok => grok::auth_file_exists(),
-        OfficialQuotaProvider::Droid => droid::load_access_token().is_ok(),
-        OfficialQuotaProvider::Antigravity => antigravity::has_local_tokens(),
+        OfficialQuotaProvider::Codex => codex_artifacts_present(&env.codex_auth_path()),
+        OfficialQuotaProvider::Cursor => env
+            .cursor_storage_dir()
+            .and_then(|dir| {
+                crate::cursor_credentials::read_credential_at(&dir)
+                    .ok()
+                    .flatten()
+            })
+            .is_some_and(|credential| !credential.is_expired_at(env.now().timestamp_millis())),
+        OfficialQuotaProvider::Grok => env.grok_auth_path().exists(),
+        OfficialQuotaProvider::Droid => droid::load_access_token_in(env).is_ok(),
+        OfficialQuotaProvider::Antigravity => antigravity::load_local_tokens_in(env).is_ok(),
         OfficialQuotaProvider::OpenCode => {
             // 文件读坏了不算「没有」——让刷新去报错，别把故障当成没登录。
-            opencode::load_api_key(&opencode::auth_path()).map_or(true, |key| key.is_some())
+            opencode::load_api_key(&env.opencode_auth_path()).map_or(true, |key| key.is_some())
         }
-        OfficialQuotaProvider::Copilot => copilot::credential_paths()
+        OfficialQuotaProvider::Copilot => env
+            .copilot_credential_paths()
             .into_iter()
             .any(|path| path.exists()),
-        OfficialQuotaProvider::Devin => devin::has_local_api_key(),
+        OfficialQuotaProvider::Devin => devin::load_api_key_in(env).is_ok(),
     }
 }
 

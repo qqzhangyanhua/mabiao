@@ -175,6 +175,8 @@ export type OfficialQuotaConfig = {
   reset_reminder_max_used_percent: number;
 };
 
+export type OfficialQuotaConfigPatch = Partial<OfficialQuotaConfig>;
+
 export type OfficialQuotaDto = {
   rows: OfficialQuotaRow[];
   alerts_enabled: boolean;

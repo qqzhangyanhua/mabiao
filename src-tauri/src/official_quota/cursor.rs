@@ -6,16 +6,25 @@ use serde_json::Value;
 use crate::cursor_account;
 use crate::cursor_credentials;
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, parse_resets_at, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, parse_resets_at, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths,
+    QuotaSnapshot, QuotaTransport,
+};
 
 const USAGE_SUMMARY_URL: &str = "https://cursor.com/api/usage-summary";
 const TIMEOUT: Duration = Duration::from_secs(15);
 
 pub fn fetch_usage_summary() -> Result<QuotaSnapshot, String> {
-    let credential = cursor_credentials::read_local_credential()
-        .filter(|value| !value.is_expired())
+    fetch_usage_summary_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_summary_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let credential = env
+        .cursor_storage_dir()
+        .and_then(|dir| cursor_credentials::read_credential_at(&dir).ok().flatten())
+        .filter(|value| !value.is_expired_at(env.now().timestamp_millis()))
         .ok_or_else(cursor_account::missing_token_error)?;
-    let mut snapshot = fetch_with_session_token(&credential.session_token)?;
+    let mut snapshot = fetch_with_session_token_in(env, &credential.session_token)?;
     if snapshot.plan.is_none() {
         snapshot.plan = credential
             .membership
@@ -26,19 +35,26 @@ pub fn fetch_usage_summary() -> Result<QuotaSnapshot, String> {
 }
 
 /// 用已经拼好的 session cookie 取用量。不读本机库，也不刷新。
-pub(crate) fn fetch_with_session_token(token: &str) -> Result<QuotaSnapshot, String> {
-    fetch_with_session_token_at(token, None)
-}
-
 pub(crate) fn fetch_with_session_token_at(
     token: &str,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
     let url = super::rebase_quota_url(USAGE_SUMMARY_URL, quota_base);
-    let raw = request_usage_summary(token, &url)?;
+    let raw = request_usage_summary_via(&super::LiveQuotaTransport, token, &url)?;
     let windows = parse_usage_summary(&raw)?;
     let plan = parse_membership_type(&raw);
     Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+}
+
+pub(crate) fn fetch_with_session_token_in(
+    env: &QuotaEnv,
+    token: &str,
+) -> Result<QuotaSnapshot, String> {
+    let url = env.rebase_url(USAGE_SUMMARY_URL);
+    let raw = request_usage_summary_via(env.transport.as_ref(), token, &url)?;
+    let windows = parse_usage_summary(&raw)?;
+    let plan = parse_membership_type(&raw);
+    Ok(QuotaSnapshot::new(windows, env.now().to_rfc3339()).with_plan(plan))
 }
 
 /// `GET /api/usage-summary` 顶层的 `membershipType`，如 `pro` / `ultra`。
@@ -163,20 +179,22 @@ fn percent_from_used_limit(plan: &Value) -> Option<f64> {
     Some((used / limit * 100.0).clamp(0.0, 100.0))
 }
 
-fn request_usage_summary(token: &str, url: &str) -> Result<String, String> {
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Cookie", &format!("WorkosCursorSessionToken={token}"))
-        .set("Origin", "https://cursor.com");
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_usage_summary_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Cookie", format!("WorkosCursorSessionToken={token}"))
+        .header("Origin", "https://cursor.com");
+    let response = transport
+        .http(&request)
+        .map_err(|_| cursor_account::network_failure_error())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Cursor 限额响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => Err(cursor_account::auth_expired_error()),
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Cursor 限额失败：HTTP {code}"))
-        }
-        Err(_) => Err(cursor_account::network_failure_error()),
+        401 | 403 => Err(cursor_account::auth_expired_error()),
+        code => Err(format!("拉取 Cursor 限额失败：HTTP {code}")),
     }
 }

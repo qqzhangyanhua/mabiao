@@ -72,11 +72,13 @@
 
 ## 官方额度
 
-1. 内置账号在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`）。新增一家：加 `official_quota/<provider>.rs`，并接到 `detect.rs` 与 `fetch.rs`。给 `display_name` 和 `brand` 补穷举分支，再重新生成展示身份文件（命令见 Adapter 节第 8 步）。首页额度开关的提供方 id 来自生成文件的 `OFFICIAL_QUOTA_PROVIDER_SLUGS`，文案经 `officialQuotaProviderLabel` 读 `DISPLAY_NAMES`，不要再手写短名表。
-2. 零配置取数只读各客户端已有登录态。额度账号的应用内授权（Codex PKCE、Copilot 设备码）只写应用密钥文件 `quota_account_secrets.json`，不进备份、不进推送；客户端文件、钥匙串和第三方数据库保持只读。见 ADR 0029。自定义提供商密钥是另一份被备份排除的文件。
-3. `tray.rs::sync_official_quota` 在刷新、全量摄取后、每 5 分钟 stale 检查时取数（受退避约束）。最紧一档走 `official_quota::tightest_window`：无 `resets_at` 的自定义充值余额不参与；有重置时间的自定义预算窗参与。
-4. fixture 测响应解析。读 ADR 0008、0012、0013、0029。
-5. `cargo test quota` 绿。
+1. 内置账号在 `domain::OfficialQuotaProvider::ALL`（`src-tauri/src/domain/quota.rs`）。新增一家：加 `official_quota/<provider>.rs`，并接到 `detect.rs` 与 `fetch.rs`（统一通过 `QuotaEnv` 获取 `ScanEnv` 凭证根 / `profile_dir` 与网络传输）。给 `display_name` 和 `brand` 补穷举分支，再重新生成展示身份文件（命令见 Adapter 节第 8 步）。首页额度开关的提供方 id 来自生成文件的 `OFFICIAL_QUOTA_PROVIDER_SLUGS`，文案经 `officialQuotaProviderLabel` 读 `DISPLAY_NAMES`，不要再手写短名表。
+2. 生命周期入口在 `official_quota/lifecycle.rs`：纯只读 `snapshot` / `snapshot_visible`（GUI `get_official_quota` 走读锁、`mabiao-quota` 默认走 `open_readonly`）在内存里叠加更新的本地 Claude statusline 捕获，不写 SQLite、不改告警状态、不弹通知；主动 `refresh_and_notify` / `refresh_target_*`（GUI、托盘 `sync_official_quota`、`mabiao-quota --refresh`）持久化结果与 Claude 捕获、评估一次阈值告警，并由 GUI 与托盘共同广播 `official-quota-updated`。
+3. 零配置取数只读各客户端已有登录态；默认客户端根由 `QuotaEnv` 内嵌的 `ScanEnv` 推导（含用户自定义扫描路径与环境变量），隔离 `profile_dir` 额度账号严格只读各自目录。额度账号的应用内授权（Codex PKCE、Copilot 设备码）只写应用密钥文件 `quota_account_secrets.json`，不进备份、不进推送；客户端文件、钥匙串和第三方数据库保持只读。见 ADR 0029。自定义提供商密钥是另一份被备份排除的文件。
+4. `official_quota.json` 是主窗口与托盘共享的官方额度可见性（`hidden_providers`）与告警配置唯一权威；修改走原子命令 `patch_official_quota_config`（`official_quota::patch_config`），前端不再把 `officialProviders` 写回 `localStorage`。
+5. `tray.rs::sync_official_quota` 在刷新、全量摄取后、每 5 分钟 stale 检查时走 `official_quota::refresh_and_notify`（受退避约束）并广播 `official-quota-updated`。最紧一档走 `official_quota::tightest_window`：无 `resets_at` 的自定义充值余额不参与；有重置时间的自定义预算窗参与。
+6. fixture 与 `QuotaEnv` 集成测试覆盖响应解析、只读纯度、托盘/CLI 同口径及配置原子更新。读 ADR 0008、0012、0013、0029。
+7. `cargo test quota` 绿。
 
 ## 对话记录
 
