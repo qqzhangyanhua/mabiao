@@ -5,6 +5,7 @@ use crate::domain::{
     WorkNotesPreviewDto, WorkNotesProgressDto, WorkNotesRange, WorkNotesSessionParams,
     WorkNotesSessionRef, WorkNotesSessionSummary,
 };
+use crate::ingest;
 use crate::paths;
 use crate::work_notes::{self, ProcessRunner};
 use crate::AppState;
@@ -77,8 +78,10 @@ pub async fn start_work_notes(
     );
     std::thread::spawn(move || {
         let state = app.state::<AppState>();
+        let home = ingest::default_home();
         let result = work_notes::generate(
             &*state,
+            &home,
             &state.effective_prices(),
             &params,
             chrono::Local::now(),
@@ -127,8 +130,10 @@ pub async fn summarize_conversation_session(
     };
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
+        let home = ingest::default_home();
         let result = work_notes::summarize_session(
             &*state,
+            &home,
             &params,
             chrono::Local::now(),
             &ProcessRunner,

@@ -9,15 +9,13 @@ use crate::scan_paths::ScanEnv;
 
 use super::catalog::conversation_source_paths;
 use super::cursor_bridge::{sync_cursor_hash_models, sync_cursor_usage_only_sessions};
-use super::event_index;
-use super::merge::{merge_indexed_files, summarize_for_index, IndexedFile};
-use super::persist::{
-    apply_incremental, persist_session_file_cursors, prepare_incremental, record_catalog_parse,
-    record_full_parse, write_session_file_events, IncrementalPrepare, PendingIncremental,
+use super::event_store::{
+    commit_incremental_append, commit_session, has_live_generation, prepare_incremental,
+    IncrementalPrepare, PendingIncremental, SessionCommit, SessionEventStager,
 };
 use super::session_store::{
-    failed_session_paths, load_cached_fingerprints, load_session_files, mark_session_events_dirty,
-    mark_session_unavailable, tombstone_missing_sessions, update_session_files, upsert_session,
+    failed_session_paths, load_cached_fingerprints, load_session_files, mark_session_unavailable,
+    tombstone_missing_sessions, update_session_files,
 };
 use super::toolbox::FileIndexCursor;
 use super::trusted_path::modified_nanos;
@@ -89,12 +87,10 @@ fn refresh_with_mode(
     let mut blocking_issues = Vec::new();
     // 存摘要而不是 `ParsedConversation`：扫描期间只有当前文件的事件活着，
     // 而不是整个来源的全部事件。
-    let mut grouped: BTreeMap<String, Vec<IndexedFile>> = BTreeMap::new();
+    let mut stager = SessionEventStager::default();
     let mut unchanged_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
-    let mut event_generations: BTreeMap<String, i64> = BTreeMap::new();
     let mut incremental_paths: BTreeMap<String, Vec<PathBuf>> = BTreeMap::new();
     let mut pending_incrementals: Vec<PendingIncremental> = Vec::new();
-    let mut file_cursors: BTreeMap<(String, String), FileIndexCursor> = BTreeMap::new();
     for path in conversation_source_paths(source, roots)? {
         let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
@@ -203,15 +199,8 @@ fn refresh_with_mode(
                 issues.extend(batch.diagnostics);
                 for parsed in batch.conversations {
                     match mode {
-                        RefreshMode::Full => record_full_parse(
-                            conn,
-                            source,
-                            parsed,
-                            &mut event_generations,
-                            &mut grouped,
-                            &mut file_cursors,
-                        )?,
-                        RefreshMode::CatalogOnly => record_catalog_parse(parsed, &mut grouped),
+                        RefreshMode::Full => stager.stage_full_parse(conn, source, parsed)?,
+                        RefreshMode::CatalogOnly => stager.stage_catalog_parse(parsed),
                     }
                 }
             }
@@ -231,7 +220,7 @@ fn refresh_with_mode(
         .iter()
         .map(|(session_id, paths)| (session_id.clone(), paths.iter().cloned().collect()))
         .collect();
-    for (session_id, indexed_files) in &grouped {
+    for (session_id, indexed_files) in &stager.grouped {
         scanned_paths_by_session
             .entry(session_id.clone())
             .or_default()
@@ -266,7 +255,7 @@ fn refresh_with_mode(
         }
     }
     for session_id in &incomplete_session_ids {
-        grouped.remove(session_id);
+        stager.grouped.remove(session_id);
         unchanged_paths.remove(session_id);
     }
 
@@ -274,7 +263,7 @@ fn refresh_with_mode(
         let indexed_paths = load_session_files(conn, source.as_str(), &session_id)?;
         let scanned = paths.iter().cloned().collect::<BTreeSet<_>>();
         let indexed = indexed_paths.into_iter().collect::<BTreeSet<_>>();
-        if grouped.contains_key(&session_id) || scanned != indexed {
+        if stager.grouped.contains_key(&session_id) || scanned != indexed {
             for path in paths {
                 match (adapter.index)(&path) {
                     Ok(batch) => {
@@ -283,24 +272,12 @@ fn refresh_with_mode(
                             if parsed.session.session_id != session_id {
                                 continue;
                             }
-                            if mode == RefreshMode::Full {
-                                if let Some(cursor) = parsed.index_cursor {
-                                    file_cursors.insert(
-                                        (session_id.clone(), parsed.session.source_file.clone()),
-                                        cursor,
-                                    );
+                            match mode {
+                                RefreshMode::Full => {
+                                    stager.stage_full_parse(conn, source, parsed)?
                                 }
-                                write_session_file_events(
-                                    conn,
-                                    source,
-                                    &parsed,
-                                    &mut event_generations,
-                                )?;
+                                RefreshMode::CatalogOnly => stager.stage_catalog_parse(parsed),
                             }
-                            grouped
-                                .entry(session_id.clone())
-                                .or_default()
-                                .push(summarize_for_index(parsed));
                         }
                     }
                     Err(issue) => {
@@ -318,14 +295,14 @@ fn refresh_with_mode(
     let mut refreshed_session_ids = BTreeSet::new();
     for pending in pending_incrementals {
         if blocked_session_ids.contains(&pending.session_id)
-            || grouped.contains_key(&pending.session_id)
+            || stager.grouped.contains_key(&pending.session_id)
             || incomplete_session_ids.contains(&pending.session_id)
         {
             continue;
         }
         let path = pending.path.to_string_lossy().to_string();
         let session_id = pending.session_id.clone();
-        if let Err(message) = apply_incremental(conn, source, pending) {
+        if let Err(message) = commit_incremental_append(conn, source, pending) {
             let issue = ConversationIndexIssue {
                 path,
                 message,
@@ -341,7 +318,7 @@ fn refresh_with_mode(
 
     let seen_session_ids = unchanged_paths
         .keys()
-        .chain(grouped.keys())
+        .chain(stager.grouped.keys())
         .chain(incremental_paths.keys())
         .chain(incomplete_session_ids.iter())
         .cloned()
@@ -354,52 +331,32 @@ fn refresh_with_mode(
     let has_unmapped_failures = blocking_issues
         .iter()
         .any(|issue| !associated_failed_paths.contains(&PathBuf::from(&issue.path)));
+    let grouped = std::mem::take(&mut stager.grouped);
     for (session_id, indexed_files) in grouped {
         if blocked_session_ids.contains(&session_id) {
             continue;
         }
         refreshed_session_ids.insert(session_id.clone());
-        let source_files = indexed_files
-            .iter()
-            .map(|file| PathBuf::from(&file.session.source_file))
-            .collect::<Vec<_>>();
-        let (merged_session, is_top_level, agent_metadata) = merge_indexed_files(indexed_files);
-        let representative_metadata = fs::metadata(&merged_session.source_file)
-            .map_err(|error| format!("读取文件元数据失败：{error}"))?;
-        let representative_revision = (adapter.revision)(Path::new(&merged_session.source_file))?;
-        upsert_session(
-            conn,
-            &merged_session,
-            is_top_level,
-            &agent_metadata,
-            modified_nanos(&representative_metadata),
-            representative_metadata.len() as i64,
-            &representative_revision,
-        )?;
-        update_session_files(
-            conn,
-            source,
-            &session_id,
-            &source_files,
-            blocking_issues.is_empty(),
-        )?;
-        if mode == RefreshMode::CatalogOnly {
-            mark_session_events_dirty(conn, source, &session_id)?;
-        }
-        if let Some(&generation) = event_generations.get(&session_id) {
-            let publish = !has_unmapped_failures
-                || event_index::has_live_generation(conn, source, &session_id)?;
-            if publish {
-                event_index::finalize_session_events(conn, source, &session_id, generation)?;
-                persist_session_file_cursors(
-                    conn,
-                    source,
-                    &session_id,
-                    &source_files,
-                    &file_cursors,
-                )?;
+        let publish_generation = match stager.generation_for(&session_id) {
+            Some(generation)
+                if !has_unmapped_failures || has_live_generation(conn, source, &session_id)? =>
+            {
+                Some(generation)
             }
-        }
+            _ => None,
+        };
+        commit_session(
+            conn,
+            SessionCommit {
+                source,
+                session_id: &session_id,
+                indexed_files,
+                replace_files: blocking_issues.is_empty(),
+                publish_generation,
+                file_cursors: stager.file_cursors(),
+                mark_dirty: mode == RefreshMode::CatalogOnly,
+            },
+        )?;
     }
     let mut persist_skip = blocked_session_ids;
     persist_skip.extend(incomplete_session_ids.iter().cloned());

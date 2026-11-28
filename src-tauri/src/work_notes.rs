@@ -67,7 +67,7 @@ pub fn preview(
     params: &WorkNotesParams,
     now: DateTime<Local>,
 ) -> Result<WorkNotesPreviewDto, String> {
-    let prepared = pipeline::prepare(conn, prices, params, now, true)?;
+    let prepared = pipeline::prepare(conn, None, prices, params, now, true)?;
     let mut profile =
         engines::profile(params.engine_id()).unwrap_or_else(|_| engines::codex_profile());
     if !params.model_id().is_empty() {
@@ -117,9 +117,11 @@ pub fn decorate_sessions(
     identity::decorate(conn, rows)
 }
 
-/// 区间纪要的唯一入口。`now`、runner、`job` 由调用方注入。
+/// 区间纪要的唯一入口。`home`、`now`、runner、`job` 由调用方注入。
+#[allow(clippy::too_many_arguments)]
 pub fn generate(
     conns: &dyn ConnectionSource,
+    home: &Path,
     prices: &PriceTable,
     params: &WorkNotesParams,
     now: DateTime<Local>,
@@ -130,7 +132,7 @@ pub fn generate(
     engines::require(params.engine_id())?;
     let prepared = {
         let conn = conns.read()?;
-        pipeline::prepare(&conn, prices, params, now, false)?
+        pipeline::prepare(&conn, Some(home), prices, params, now, false)?
     };
     let output = pipeline::run(prepared, prices, runner, app_data_dir, params, now, job);
     if output.needs_persist() {
@@ -143,6 +145,7 @@ pub fn generate(
 /// 单条会话摘要。与 `generate` 同一套锁编排，只是不跑 reduce、不写纪要表。
 pub fn summarize_session(
     conns: &dyn ConnectionSource,
+    home: &Path,
     params: &WorkNotesSessionParams,
     now: DateTime<Local>,
     runner: &dyn EngineRunner,
@@ -151,7 +154,7 @@ pub fn summarize_session(
 ) -> Result<Vec<WorkNotesSessionSummary>, String> {
     let prepared = {
         let conn = conns.read()?;
-        session::prepare(&conn, params)?
+        session::prepare(&conn, home, params)?
     };
     let ran = session::run(&prepared, runner, app_data_dir, job);
     match ran.nothing_to_persist() {

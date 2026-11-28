@@ -11,17 +11,16 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params_from_iter, Connection};
 
 use crate::domain::{
-    ConversationContextManifest, ConversationEvent, ConversationEventContentStatus as Content,
-    ConversationQuery, ConversationSessionRow, Source,
+    ConversationContextManifest, ConversationEvent, ConversationQuery, ConversationSessionRow,
+    Source,
 };
 
 use super::catalog::catalog_filter_sql;
-use super::session_store::event_index_ready_sql;
+use super::event_store::{event_index_ready_sql, read_session_events, ReadOptions};
 use super::session_store::row_from_sql;
-use super::toolbox::compare_event_order;
 use super::{
-    context_content, context_manifest, cursor, event_index, event_index_ready, hydrate,
-    load_detail, parse_session_events, prepare_detail, CONVERSATION_SOURCES,
+    context_content, context_manifest, cursor, hydrate, load_detail, prepare_detail,
+    CONVERSATION_SOURCES,
 };
 
 /// 一场会话推送时现场读到的全部内容。注入原文只活在这个值里，不落库。
@@ -91,70 +90,19 @@ pub fn read_session(
         return Err("Cursor transcript 不可读取，只剩用量元数据".to_string());
     }
 
-    let events = if event_index_ready(conn, home, &prepared)? {
-        indexed_events_with_full_text(conn, home, source, &row.session_id)?
-    } else {
-        parsed_events(conn, home, source, &row.session_id)?
-    };
+    let events = strip_details(read_session_events(
+        conn,
+        home,
+        source.as_str(),
+        &row.session_id,
+        ReadOptions::full_strict_references(),
+    )?);
     let context = read_context(conn, home, source, row)?;
     Ok(PushSessionSource {
         session: row.clone(),
         events,
         context,
     })
-}
-
-/// 走事件索引：ADR 0025 外置正文按位置读回并校验 `text_hash`，任何一条读不回或对不上整场跳过。
-/// 不退回整份解析：指纹对不上说明索引与源文件已经不是同一份，这时该先重新摄取，而不是
-/// 悄悄推一份与目录里看到的不一致的正文。
-fn indexed_events_with_full_text(
-    conn: &Connection,
-    home: &Path,
-    source: Source,
-    session_id: &str,
-) -> Result<Vec<ConversationEvent>, String> {
-    let Some(mut events) = event_index::indexed_events(conn, source.as_str(), session_id)? else {
-        return Err(
-            "外置正文读不回，或与索引对不上（源文件在索引之后变了），请先刷新摄取再推送"
-                .to_string(),
-        );
-    };
-    if events
-        .iter()
-        .any(|event| event.content_status == Content::Deferred)
-    {
-        // 索引里大段工具输出只存预览，完整正文要回源文件解析。
-        let full = parse_session_events(conn, home, source.as_str(), session_id, true)?;
-        let texts: BTreeMap<String, Option<String>> = full
-            .into_iter()
-            .map(|event| (event.event_id, event.text))
-            .collect();
-        for event in events
-            .iter_mut()
-            .filter(|event| event.content_status == Content::Deferred)
-        {
-            let Some(text) = texts.get(&event.event_id) else {
-                return Err("大段正文在源文件里找不到了（源文件在索引之后变了）".to_string());
-            };
-            event.text.clone_from(text);
-            event.content_status = Content::Complete;
-        }
-    }
-    Ok(strip_details(events))
-}
-
-fn parsed_events(
-    conn: &Connection,
-    home: &Path,
-    source: Source,
-    session_id: &str,
-) -> Result<Vec<ConversationEvent>, String> {
-    let mut events = parse_session_events(conn, home, source.as_str(), session_id, true)?;
-    events.sort_by(compare_event_order);
-    for (sequence, event) in events.iter_mut().enumerate() {
-        event.sequence = sequence as u32;
-    }
-    Ok(strip_details(events))
 }
 
 fn strip_details(mut events: Vec<ConversationEvent>) -> Vec<ConversationEvent> {

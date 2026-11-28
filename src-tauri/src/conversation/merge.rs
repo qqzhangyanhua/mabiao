@@ -20,6 +20,16 @@ pub(crate) struct IndexedFile {
     pub(crate) session: ConversationSessionRow,
     is_top_level: bool,
     agent_events: Vec<IndexedAgentEvent>,
+    /// 仅存 128 位事件身份指纹（每条 16 字节），用于目录阶段跨文件去重计算精确 `event_count`
+    /// 而不保留任何事件正文。
+    event_identities: Vec<(u64, u64)>,
+}
+
+pub(crate) struct MergedIndexedSession {
+    pub(crate) session: ConversationSessionRow,
+    pub(crate) is_top_level: bool,
+    pub(crate) agent_metadata: IndexedAgentMetadata,
+    pub(crate) event_count: u32,
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -155,18 +165,26 @@ pub(crate) fn extract_agent_metadata(events: &[ConversationEvent]) -> IndexedAge
 }
 
 pub(crate) fn summarize_for_index(parsed: ParsedConversation) -> IndexedFile {
+    let mut agent_events = Vec::new();
+    let mut event_identities = Vec::with_capacity(parsed.events.len());
+    for event in &parsed.events {
+        let identity = event_identity_hash(event);
+        event_identities.push(identity);
+        if let Some(agent_event) = index_agent_event_with_identity(event, identity) {
+            agent_events.push(agent_event);
+        }
+    }
     IndexedFile {
         is_top_level: parsed.is_top_level,
-        agent_events: parsed.events.iter().filter_map(index_agent_event).collect(),
+        agent_events,
+        event_identities,
         session: parsed.session,
     }
 }
 
 /// 与 `merge_parsed_conversations` 的事件合并保持同一套语义：先按文件内出现次数生成去重键，
 /// 跨文件保留首次出现，再按 (时间, 文件名, 文件内序号, event_id) 排序。
-pub(crate) fn merge_indexed_files(
-    mut files: Vec<IndexedFile>,
-) -> (ConversationSessionRow, bool, IndexedAgentMetadata) {
+pub(crate) fn merge_indexed_files(mut files: Vec<IndexedFile>) -> MergedIndexedSession {
     files.sort_by(|left, right| left.session.source_file.cmp(&right.session.source_file));
     let session = merge_session_rows(
         &files
@@ -175,11 +193,25 @@ pub(crate) fn merge_indexed_files(
             .collect::<Vec<_>>(),
     );
     let is_top_level = files.iter().all(|file| file.is_top_level);
+    let event_count = if files.len() == 1 {
+        files[0].event_identities.len() as u32
+    } else {
+        let mut seen_events = BTreeSet::new();
+        for file in &files {
+            let mut occurrences = BTreeMap::<(u64, u64), u32>::new();
+            for &identity in &file.event_identities {
+                let occurrence = occurrences.entry(identity).or_default();
+                seen_events.insert((identity, *occurrence));
+                *occurrence += 1;
+            }
+        }
+        seen_events.len() as u32
+    };
 
     let mut sourced = Vec::new();
     for file in files {
         let source_file = file.session.source_file;
-        let mut occurrences = BTreeMap::<u64, u32>::new();
+        let mut occurrences = BTreeMap::<(u64, u64), u32>::new();
         for event in file.agent_events {
             let occurrence = occurrences.entry(event.identity).or_default();
             let dedupe_key = (event.identity, *occurrence);
@@ -196,8 +228,13 @@ pub(crate) fn merge_indexed_files(
             .then_with(|| left.event_id.cmp(&right.event_id))
     });
 
-    let agent = fold_agent_metadata(sourced.iter().map(|(_, _, event)| event));
-    (session, is_top_level, agent)
+    let agent_metadata = fold_agent_metadata(sourced.iter().map(|(_, _, event)| event));
+    MergedIndexedSession {
+        session,
+        is_top_level,
+        agent_metadata,
+        event_count,
+    }
 }
 
 /// 目录索引真正要写库的只有会话行和父子关系；事件正文另写入 `conversation_events`（ADR 0011）。
@@ -207,9 +244,9 @@ pub(crate) fn merge_indexed_files(
 /// 真正读的那几个字段。整份 `events`/`messages` 随即释放——否则扫描期间整个来源的全部
 /// 事件会同时活着，一次「重建全部」就是几个 GB。
 pub(crate) struct IndexedAgentEvent {
-    /// 只用于去重比较，所以存哈希而不是 `event_identity` 的完整字符串——
+    /// 只用于去重比较，所以存 128 位哈希而不是 `event_identity` 的完整字符串——
     /// 一条 tool_result 的身份串可以有几十 KB，而它是要一直留到合并阶段的。
-    identity: u64,
+    identity: (u64, u64),
     event_id: String,
     source_sequence: u32,
     occurred_at: Option<String>,
@@ -232,6 +269,13 @@ pub(crate) enum IndexedAgentRole {
 /// 事件是否与父子关系有关，完全由 `kind`/`name`/`details` 决定，而这三者都参与
 /// `event_identity`——所以「先过滤再去重」和「先去重再过滤」结果一致。
 pub(crate) fn index_agent_event(event: &ConversationEvent) -> Option<IndexedAgentEvent> {
+    index_agent_event_with_identity(event, event_identity_hash(event))
+}
+
+fn index_agent_event_with_identity(
+    event: &ConversationEvent,
+    identity: (u64, u64),
+) -> Option<IndexedAgentEvent> {
     let role = if event.kind == EventKind::SystemStatus
         && event.name.as_deref() == Some("session_started")
     {
@@ -270,11 +314,7 @@ pub(crate) fn index_agent_event(event: &ConversationEvent) -> Option<IndexedAgen
         }
     };
     Some(IndexedAgentEvent {
-        identity: {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            std::hash::Hash::hash(&event_identity(event), &mut hasher);
-            std::hash::Hasher::finish(&hasher)
-        },
+        identity,
         event_id: event.event_id.clone(),
         source_sequence: event.source_sequence,
         occurred_at: event.occurred_at.clone(),
@@ -356,4 +396,32 @@ pub(crate) fn event_identity(event: &ConversationEvent) -> String {
         attachment.id = index.to_string();
     }
     serde_json::to_string(&normalized).unwrap_or_default()
+}
+
+pub(crate) fn event_identity_hash(event: &ConversationEvent) -> (u64, u64) {
+    let identity = event_identity(event);
+    let bytes = identity.as_bytes();
+    (fnv1a64(bytes), fnv1a64_alt(bytes))
+}
+
+pub(crate) fn format_identity_hash(hash: (u64, u64)) -> String {
+    format!("{:016x}{:016x}", hash.0, hash.1)
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn fnv1a64_alt(bytes: &[u8]) -> u64 {
+    let mut hash = 0x84222325cbf29ce4;
+    for byte in bytes.iter().rev() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }

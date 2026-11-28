@@ -84,7 +84,7 @@
 2. Cursor Agent transcript 走 `conversation/cursor.rs`，`source=cursor_agent`，与 `cursor_sessions`（ADR 0007）分区。
 3. 会话行注水只有 `conversation/hydrate.rs` 一条：源文件清单、消耗记录汇总、Cursor 会话补模型、工作纪要打标。目录页、正文搜索、单条详情共用它，别在某一条路上单独补一项。没有价目表时传 `None` 跳过消耗记录汇总。
 4. 目录刷新有两种：`refresh` 整份写事件（重建缓存、`ingest_all`）；`refresh_catalog` 只写会话行与文件清单，需整份解析的会话置 `event_index_dirty = 1`，不写事件、不动 `event_index_generation`，事件游标不推进、目录已见指纹照常推进（ADR 0027）。所有来源都是「源文件修订号不变就跳过」。`catalog_writes_events = true` 的来源（OpenCode 整库快照）库一变就整份解析全部会话，`refresh_catalog` 对它仍整份写事件、永不置脏，否则补建要为每个会话各读一遍整库；它的归一化输出变了改 `conversation/opencode.rs` 的 `INDEX_REVISION`。两者共用一套实现，别复制。
-5. 就绪只有一条：`adapter_version` 匹配、`event_index_generation` 非空、`event_index_dirty = 0`。详情、推送、补建进度、目录行标志都按它判断，新增判断处别另写一份。正文搜索与工具筛选仍按 `event_index_generation` 连接事件。补建走 `backfill_event_index_step_prioritized`（优先队列，再 `ended_at` 倒序），成功后清标记；备份把标记置 0。
+5. 就绪判断、权威事件读取（整场 / 分页 / 单条 / 计数 / 导出流式）、ADR 0025 外置正文回水与推导 `event_id` 还原、以及全量刷新 / 未变子集重解析 / 增量追加 / 目录待补建刷新 / 后台补建的原子写入全部集中在 `conversation/event_store/`。就绪只有一条：`adapter_version` 匹配、`event_index_generation` 非空、`event_index_dirty = 0`（读事件时另验可信路径与磁盘修订号）。目录表持久化可空 `event_count` 列，供工作纪要预览在不读正文时判定零星会话。正文搜索与工具筛选仍按 `event_index_generation` 连接事件。补建走 `backfill_event_index_step_prioritized`（优先队列，再 `ended_at` 倒序），成功后清标记；备份把标记置 0。
 6. 本机不存对话正文的来源（如 Aider / Warp / Windsurf）在 `CONVERSATION_ADAPTERS` 声明 `has_conversation_body: false`，由展示身份生成器输出 `BODYLESS_CONVERSATION_SOURCES` 驱动桌面端目录空态文案，不在前端手写名单。
 7. `cargo test conversation` 与 `cargo test backup` 绿（含增量、回填、待补建、正文搜索）。
 
@@ -112,7 +112,7 @@
 
 读区间内的对话正文，经本机 CLI 总结成结构化条目。不是报告，不复用 `ReportPeriod`。
 
-1. 入口三个：`work_notes::preview`（只读，收 `&Connection`）、`work_notes::generate`（区间纪要）、`work_notes::summarize_session`（单条会话摘要）。后两个收 `ConnectionSource` 而不是连接——「读连接取输入 → 放开连接调 CLI → 有东西可写才取写连接」这套编排在 `work_notes/pipeline.rs` 与 `session.rs` 里，command 不参与；`now`、runner、job、应用数据目录仍由调用方注入。`ConnectionSource` 的实现不得同时持有读与写 guard。command 只做 `begin`（互斥闸门，错误要同步回前端）→ spawn → 入口 → `finish`。生成是后台任务，进度写进 AppState，前端轮询。四种区间、60/150 规模闸门、成本预估在 Rust 判定，webview 只呈现。闸门按勾选后的会话数算。`WorkNotesParams.sessions` 为空表示区间内全部合格会话；非空则只处理这些，正文也只拉选中的。预览列出可勾选会话，不读正文。
+1. 入口三个：`work_notes::preview`（只读，收 `&Connection`，不收 `home`）、`work_notes::generate`（区间纪要，收 `home: &Path`）、`work_notes::summarize_session`（单条会话摘要，收 `home: &Path`）。后两个收 `ConnectionSource` 而不是连接——「读连接取输入 → 放开连接调 CLI → 有东西可写才取写连接」这套编排在 `work_notes/pipeline.rs` 与 `session.rs` 里，command 不参与；`home`、`now`、runner、job、应用数据目录仍由调用方注入。`ConnectionSource` 的实现不得同时持有读与写 guard。command 只做 `begin`（互斥闸门，错误要同步回前端）→ spawn → 入口 → `finish`。生成是后台任务，进度写进 AppState，前端轮询。四种区间、60/150 规模闸门、成本预估在 Rust 判定，webview 只呈现。闸门按勾选后的会话数算。`WorkNotesParams.sessions` 为空表示区间内全部合格会话；非空则只处理这些，正文也只拉选中的。预览列出可勾选会话，不读正文，按 `conversation_sessions.event_count`（老库 `NULL` 行回落到仅校验 `total_tokens < 1000`）剔除零星会话；`generate` 与 `summarize_session` 经 `conversation/event_store/` 读取权威事件并对解析结果校验 `events.len() < 3`。
 2. runner 边界是「执行一条已经拼好的 `EngineCommand`，回一段 stdout」。argv 拼装（只读、禁审批、不落盘、schema、会落盘引擎的 session id）必须跑在这条缝里。
 3. 本机 CLI 只读、禁工具，工作目录固定在应用数据目录下的专用空目录。不自建模型 HTTP 通路，不存密钥。
 4. 硬数字只复用现有 `query` 函数，不新增聚合。
