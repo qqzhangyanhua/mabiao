@@ -23,6 +23,13 @@ pub const SOURCE_NAME: &str = "litellm";
 /// 随二进制内置的默认快照（归一后的 `PriceSnapshot` JSON）。
 const BUNDLED_JSON: &str = include_str!("../assets/litellm_prices.json");
 
+/// 快照单价的每 token 合理上限（$1,000 / 1M tokens）。
+///
+/// 当前公开对话模型最高约 $600 / 1M（`o1-pro` output = 6e-4）；社区 JSON 偶发把「每百万
+/// 或每千 token 单价」错填进 `*_cost_per_token`（如 0.055、0.135），不挡掉会把费用
+/// 放大十万倍。用户手动配置的单价不受此上限影响。
+pub const MAX_SNAPSHOT_PRICE_PER_TOKEN: f64 = 0.001;
+
 /// 上游中非「按 token 计费的对话类」模型的 mode，跳过以免污染兜底单价。
 const SKIP_MODES: &[&str] = &[
     "embedding",
@@ -34,9 +41,64 @@ const SKIP_MODES: &[&str] = &[
     "rerank",
 ];
 
+fn sane_rate(value: f64) -> bool {
+    value.is_finite() && (0.0..=MAX_SNAPSHOT_PRICE_PER_TOKEN).contains(&value)
+}
+
+fn is_sane_snapshot_entry(entry: &PriceEntry) -> bool {
+    // 至少要有一个非零单价，否则一律当作「未定价」，避免用 $0 兜底把未知费用伪装成已核算。
+    if entry.input <= 0.0 && entry.output <= 0.0 {
+        return false;
+    }
+    [
+        entry.input,
+        entry.output,
+        entry.cache_read,
+        entry.cache_creation,
+        entry.cache_creation_1h,
+        entry.input_above_200k,
+        entry.output_above_200k,
+        entry.cache_read_above_200k,
+        entry.cache_creation_above_200k,
+        entry.cache_creation_1h_above_200k,
+    ]
+    .into_iter()
+    .all(sane_rate)
+}
+
+/// 清洗已落盘或内置的快照：过滤量级异常条目，并按小写模型名去重（优先保留本身全小写的官方规范键）。
+///
+/// 老版本刷新后留在用户磁盘上的 `litellm_prices.json` 可能带有大小写重复键与量级错填条目，
+/// 读盘时统一过一遍清洗，升级后无需手动重刷即可恢复正常。
+pub fn sanitize_snapshot(mut snapshot: PriceSnapshot) -> PriceSnapshot {
+    let mut chosen: HashMap<String, (bool, PriceEntry)> = HashMap::new();
+    for mut entry in snapshot.entries {
+        if entry.model.is_empty() || !is_sane_snapshot_entry(&entry) {
+            continue;
+        }
+        let key = entry.model.to_ascii_lowercase();
+        let exact_lower = entry.model == key;
+        entry.model = key.clone();
+        entry.provider = None;
+        entry.origin = PriceOrigin::Snapshot;
+        match chosen.get(&key) {
+            Some((true, _)) if !exact_lower => {}
+            _ => {
+                chosen.insert(key, (exact_lower, entry));
+            }
+        }
+    }
+    let mut entries: Vec<PriceEntry> = chosen.into_values().map(|(_, entry)| entry).collect();
+    entries.sort_by(|a, b| a.model.cmp(&b.model));
+    snapshot.entries = entries;
+    snapshot
+}
+
 /// 解析内置快照；解析失败时返回空快照（不至于让应用启动失败）。
 pub fn bundled_snapshot() -> PriceSnapshot {
-    serde_json::from_str(BUNDLED_JSON).unwrap_or_default()
+    serde_json::from_str::<PriceSnapshot>(BUNDLED_JSON)
+        .map(sanitize_snapshot)
+        .unwrap_or_default()
 }
 
 /// 载入生效的快照：优先用户联网刷新后的本地缓存，否则回落到内置快照。
@@ -44,8 +106,9 @@ pub fn bundled_snapshot() -> PriceSnapshot {
 pub fn load_snapshot(cache_path: &Path) -> (PriceSnapshot, bool) {
     if let Ok(text) = std::fs::read_to_string(cache_path) {
         if let Ok(snapshot) = serde_json::from_str::<PriceSnapshot>(&text) {
-            if !snapshot.entries.is_empty() {
-                return (snapshot, false);
+            let cleaned = sanitize_snapshot(snapshot);
+            if !cleaned.entries.is_empty() {
+                return (cleaned, false);
             }
         }
     }
@@ -67,9 +130,10 @@ pub fn parse_litellm_raw(raw: &str, as_of: &str) -> Result<PriceSnapshot, String
     let map: serde_json::Map<String, Value> =
         serde_json::from_str(raw).map_err(|e| format!("LiteLLM 价目 JSON 解析失败：{e}"))?;
 
-    // 同一模型可能在多个 provider 前缀下出现（如 anthropic/、bedrock/、vertex_ai/），
-    // 归一后 provider 为空只保留一条：优先「裸键」（无 `/` 前缀，通常是官方直连的规范名）。
-    let mut chosen: HashMap<String, (bool, PriceEntry)> = HashMap::new();
+    // 同一模型可能在多个 provider 前缀或大小写形态下出现（如 anthropic/、together_ai/.../DeepSeek-R1），
+    // 归一后 provider 为空且按 ASCII 小写去重只保留一条：
+    // 优先级：裸键（无 `/` 前缀）> 本身全小写的官方规范键 > 其余前缀键。
+    let mut chosen: HashMap<String, ((bool, bool), PriceEntry)> = HashMap::new();
     for (key, value) in map {
         if key == "sample_spec" {
             continue;
@@ -85,17 +149,15 @@ pub fn parse_litellm_raw(raw: &str, as_of: &str) -> Result<PriceSnapshot, String
         }
         let input = num(obj, "input_cost_per_token");
         let output = num(obj, "output_cost_per_token");
-        // 至少要有一个非零单价，否则一律当作「未定价」，避免用 $0 兜底把未知费用伪装成已核算。
-        if input.unwrap_or(0.0) <= 0.0 && output.unwrap_or(0.0) <= 0.0 {
-            continue;
-        }
         let bare = !key.contains('/');
-        let model = key.rsplit('/').next().unwrap_or(key.as_str()).to_string();
-        if model.is_empty() {
+        let raw_model = key.rsplit('/').next().unwrap_or(key.as_str());
+        if raw_model.is_empty() {
             continue;
         }
+        let canonical = raw_model.to_ascii_lowercase();
+        let exact_lower = raw_model == canonical;
         let entry = PriceEntry {
-            model: model.clone(),
+            model: canonical.clone(),
             provider: None,
             input: input.unwrap_or(0.0),
             output: output.unwrap_or(0.0),
@@ -118,11 +180,14 @@ pub fn parse_litellm_raw(raw: &str, as_of: &str) -> Result<PriceSnapshot, String
             .unwrap_or(0.0),
             origin: PriceOrigin::Snapshot,
         };
-        match chosen.get(&model) {
-            // 已有裸键条目、当前是带前缀的：保留已有。
-            Some((true, _)) if !bare => {}
+        if !is_sane_snapshot_entry(&entry) {
+            continue;
+        }
+        let rank = (bare, exact_lower);
+        match chosen.get(&canonical) {
+            Some((existing_rank, _)) if *existing_rank > rank => {}
             _ => {
-                chosen.insert(model, (bare, entry));
+                chosen.insert(canonical, (rank, entry));
             }
         }
     }
@@ -136,10 +201,14 @@ pub fn parse_litellm_raw(raw: &str, as_of: &str) -> Result<PriceSnapshot, String
     })
 }
 
-/// 合并出「生效单价表」：用户单价始终优先，快照只补齐用户完全没有配置过的模型。
+/// 合并出「生效单价表」：用户单价始终优先，快照只补齐用户完全没有配置过的模型（不分 ASCII 大小写）。
 /// 只要用户为某模型配置了任意单价（精确或按模型），该模型就完全交给用户，不再引入快照兜底。
 pub fn merge(user: &PriceTable, snapshot: &PriceSnapshot) -> PriceTable {
-    let priced: HashSet<&str> = user.prices.iter().map(|p| p.model.as_str()).collect();
+    let mut seen_models: HashSet<String> = user
+        .prices
+        .iter()
+        .map(|p| p.model.to_ascii_lowercase())
+        .collect();
     let mut prices: Vec<PriceEntry> = user
         .prices
         .iter()
@@ -150,11 +219,13 @@ pub fn merge(user: &PriceTable, snapshot: &PriceSnapshot) -> PriceTable {
         })
         .collect();
     for entry in &snapshot.entries {
-        if !priced.contains(entry.model.as_str()) {
-            let mut fallback = entry.clone();
-            fallback.origin = PriceOrigin::Snapshot;
-            prices.push(fallback);
+        let key = entry.model.to_ascii_lowercase();
+        if !seen_models.insert(key) {
+            continue;
         }
+        let mut fallback = entry.clone();
+        fallback.origin = PriceOrigin::Snapshot;
+        prices.push(fallback);
     }
     PriceTable { prices }
 }

@@ -12,10 +12,11 @@ use push_protocol::{
 use serde_json::{json, Value};
 use sqlx::PgPool;
 
-/// 内置快照里 provider 为空的条目：input 3e-6、output 7e-6、缓存为 0。
+/// 内置快照里 provider 为空的规范条目（`deepseek-r1`）：input 5.5e-7、output 2.19e-6、缓存为 0。
+/// 测试刻意用混合大小写写入，验证服务端查找与团队价目排除均不分 ASCII 大小写。
 const SNAPSHOT_MODEL: &str = "DeepSeek-R1";
-/// 快照里只有这一种大小写写法的模型。桌面端 merge 按大小写敏感排除快照：
-/// 像 `DeepSeek-R1` / `deepseek-r1` 两种写法并存的，团队只配一种，另一种仍会兜底。
+/// 1000 × 5.5e-7 + 500 × 2.19e-6
+const SNAPSHOT_MODEL_COST: f64 = 0.001645;
 const ISOLATED_SNAPSHOT_MODEL: &str = "CodeLlama-34b-Instruct-hf";
 
 fn device(id: &str) -> DeviceInfo {
@@ -201,8 +202,7 @@ async fn builtin_snapshot_prices_models_the_team_never_priced(pool: PgPool) {
 
     let records = all_records(&app, &alice).await;
 
-    // 1000 × 3e-6 + 500 × 7e-6
-    close(&records[0]["unified_cost"], 0.0065);
+    close(&records[0]["unified_cost"], SNAPSHOT_MODEL_COST);
     assert_eq!(records[0]["unified_cost_source"], "snapshot");
     assert_eq!(records[0]["unified_pricing_source"], "fallback");
 }
@@ -343,7 +343,7 @@ async fn deleting_a_team_price_falls_back_to_the_snapshot(pool: PgPool) {
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["recomputed"], 1);
     let record = &all_records(&app, &alice).await[0];
-    close(&record["unified_cost"], 0.0065);
+    close(&record["unified_cost"], SNAPSHOT_MODEL_COST);
     assert_eq!(record["unified_cost_source"], "snapshot");
 }
 
@@ -393,7 +393,10 @@ async fn explicit_recompute_repairs_records_without_a_unified_cost(pool: PgPool)
 
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["recomputed"], 1);
-    close(&all_records(&app, &alice).await[0]["unified_cost"], 0.0065);
+    close(
+        &all_records(&app, &alice).await[0]["unified_cost"],
+        SNAPSHOT_MODEL_COST,
+    );
 }
 
 #[sqlx::test]

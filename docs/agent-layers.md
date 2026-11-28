@@ -211,7 +211,7 @@
 接口：`GET /api/v1/admin/pricing`、`PUT /api/v1/admin/pricing/prices`、`DELETE /api/v1/admin/pricing/prices/{id}`、`POST /api/v1/admin/pricing/recompute`、`GET /api/v1/usage`。
 
 1. 计价规则只在 `crates/pricing/`，服务端不另写：逐条一律走 `price_usage_cached`，不开签名模糊匹配（那是 Cursor 账号事件专用）。优先级：来源自带 `native_cost` > 团队价目精确匹配 > 按 model 兜底（团队价目或内置快照）> 未定价。改优先级先改那个 crate。
-2. 生效价表 = 团队价目 + 内置 LiteLLM 快照，拼法 `effective_table` 与桌面端 `litellm::merge` 同一规则（团队配了某模型的任意单价，该模型就不再引入快照兜底；按大小写敏感的 model 名排除，是有意与桌面端一致的）。快照文件与桌面端共用 `src-tauri/assets/litellm_prices.json`（`include_str!`），所以 Docker 上下文要带它，不要在 `server/` 另放一份。
+2. 生效价表 = 团队价目 + 内置 LiteLLM 快照，拼法 `effective_table` 与桌面端 `litellm::merge` 同一规则（团队配了某模型的任意单价，该模型就不再引入快照兜底；按 ASCII 小写 model 名排除，与桌面端一致）。快照文件与桌面端共用 `src-tauri/assets/litellm_prices.json`（`include_str!`），所以 Docker 上下文要带它，不要在 `server/` 另放一份。
 3. 统一费用存在 `usage_records.unified_cost` / `unified_pricing_source` / `unified_cost_source` 三列，**不覆盖**客户端的 `cost_snapshot` / `pricing_source`；查询接口两组并列返回。三列全空表示「没算过」。
 4. 什么时候算：推送消耗记录入库时算；管理员改 / 删团队价目时，在同一事务里重算同名模型（不分大小写）已入库的记录；`POST …/recompute` 全量重算（升级后内置快照变了时用）；`serve` 启动时补算「没算过」的旧数据。
 5. 推送消耗记录取咨询锁的共享锁，改价目与重算取排他锁（`lock_shared` / `lock_exclusive`）：重算期间进来的推送要等它提交，不会带着旧价目的结果落库后无人再算。新增写 `usage_records` 的路径要先取共享锁、用 `load_table` 读价表。

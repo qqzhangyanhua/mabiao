@@ -2,9 +2,93 @@
 //! 确定性归一（去掉厂商前缀与末尾日期，版本 token `4-5` → `4.5`），可选签名模糊匹配
 //! （仅 Cursor 账号用量）。
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::{PriceEntry, PriceOrigin, PriceTable};
+
+/// 按小写模型名索引的价目表，供批量预解多个模型（如 SQL `install_prices`）复用，
+/// 语义与 [`find_price`] 逐条一致，避免在 SQL 层复制归一或匹配规则。
+pub struct PriceIndex<'a> {
+    by_model: HashMap<String, Vec<&'a PriceEntry>>,
+}
+
+impl<'a> PriceIndex<'a> {
+    pub fn new(prices: &'a PriceTable) -> Self {
+        let mut by_model: HashMap<String, Vec<&'a PriceEntry>> =
+            HashMap::with_capacity(prices.prices.len());
+        for entry in &prices.prices {
+            by_model
+                .entry(entry.model.to_ascii_lowercase())
+                .or_default()
+                .push(entry);
+        }
+        Self { by_model }
+    }
+
+    /// 预解某个模型对应的兜底条目（`provider = None`）以及所有可能命中的 `(provider_lower, entry)`。
+    ///
+    /// 对任意 `(model, provider)`：
+    /// - 若 `lower(provider)` 在返回的 exact 列表里，取对应条目；
+    /// - 否则取兜底条目。
+    ///
+    /// 结果与 [`find_price`] 逐条等价。
+    pub fn resolve_model_rows(
+        &self,
+        model: &str,
+    ) -> (Option<&'a PriceEntry>, Vec<(String, &'a PriceEntry)>) {
+        let keys: Vec<String> = model_lookup_keys(model)
+            .into_iter()
+            .map(|key| key.to_ascii_lowercase())
+            .collect();
+        let fallback = self.find_with_keys(&keys, None);
+
+        let mut providers = BTreeSet::new();
+        for key in &keys {
+            if let Some(entries) = self.by_model.get(key) {
+                for entry in entries {
+                    if let Some(provider) = entry.provider.as_deref() {
+                        providers.insert(provider.to_ascii_lowercase());
+                    }
+                }
+            }
+        }
+
+        let mut exact = Vec::with_capacity(providers.len());
+        for provider in providers {
+            if let Some(entry) = self.find_with_keys(&keys, Some(provider.as_str())) {
+                exact.push((provider, entry));
+            }
+        }
+        (fallback, exact)
+    }
+
+    fn find_with_keys(&self, keys: &[String], provider: Option<&str>) -> Option<&'a PriceEntry> {
+        for key in keys {
+            if let Some(entry) = self.lookup_key(key, provider) {
+                return Some(entry);
+            }
+        }
+        None
+    }
+
+    fn lookup_key(&self, key_lower: &str, provider: Option<&str>) -> Option<&'a PriceEntry> {
+        let entries = self.by_model.get(key_lower)?;
+        if let Some(provider) = provider {
+            if let Some(found) = entries.iter().copied().find(|entry| {
+                entry
+                    .provider
+                    .as_deref()
+                    .is_some_and(|prov| provider_matches(prov, provider))
+            }) {
+                return Some(found);
+            }
+        }
+        entries
+            .iter()
+            .copied()
+            .find(|entry| entry.provider.is_none())
+    }
+}
 
 /// 批量计价时的价目查找缓存。
 ///
@@ -57,36 +141,36 @@ pub fn resolve_entry<'p>(
     })
 }
 
+/// 一次 [`find_price`] 按优先级尝试的确定性模型查找键：原名、去厂商前后缀、去末尾日期、版本收点分。
+pub fn model_lookup_keys(model: &str) -> Vec<String> {
+    let mut keys = Vec::with_capacity(4);
+    keys.push(model.to_string());
+    let stripped = strip_vendor_affixes(model);
+    if stripped != model {
+        keys.push(stripped.clone());
+    }
+    let canonical = strip_trailing_date_suffix(&stripped);
+    if canonical != model && canonical != stripped {
+        keys.push(canonical.clone());
+    }
+    let versioned = normalize_version_hyphens(&canonical);
+    if versioned != model && versioned != stripped && versioned != canonical {
+        keys.push(versioned);
+    }
+    keys
+}
+
 pub fn find_price<'a>(
     model: &str,
     provider: &str,
     prices: &'a PriceTable,
 ) -> Option<&'a PriceEntry> {
-    let stripped = strip_vendor_affixes(model);
-    let canonical = strip_trailing_date_suffix(&stripped);
-    let versioned = normalize_version_hyphens(&canonical);
-    lookup_price(model, provider, prices)
-        .or_else(|| {
-            if stripped != model {
-                lookup_price(&stripped, provider, prices)
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            if canonical != model && canonical != stripped {
-                lookup_price(&canonical, provider, prices)
-            } else {
-                None
-            }
-        })
-        .or_else(|| {
-            if versioned != model && versioned != stripped && versioned != canonical {
-                lookup_price(&versioned, provider, prices)
-            } else {
-                None
-            }
-        })
+    for key in model_lookup_keys(model) {
+        if let Some(entry) = lookup_price(&key, provider, prices) {
+            return Some(entry);
+        }
+    }
+    None
 }
 
 fn lookup_price<'a>(model: &str, provider: &str, prices: &'a PriceTable) -> Option<&'a PriceEntry> {

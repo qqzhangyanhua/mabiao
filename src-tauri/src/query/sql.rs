@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
+use pricing::PriceIndex;
 use rusqlite::{params, params_from_iter, types::Value, Connection};
 
-use crate::domain::{Filter, PriceTable};
+use crate::domain::{Filter, PriceEntry, PriceTable};
 use crate::rollup_source::dimension_clauses;
 
 /// `COALESCE(pe.col, pf.col)`：精确条目优先，否则兜底。
@@ -170,12 +171,16 @@ pub(crate) const PRICE_JOINS: &str = "
     LEFT JOIN price_rows pe ON pe.model = r.model AND pe.provider = lower(r.provider)
     LEFT JOIN price_rows pf ON pf.model = r.model AND pf.provider IS NULL";
 
-/// 把价目表装进临时表 `price_rows`，供 `PRICE_JOINS` 取价。
+/// 把价目表按库内实际出现过的模型预解后装进临时表 `price_rows`，供 `PRICE_JOINS` 取价。
 ///
-/// 每次查询重建一遍看着浪费，实测却只要 1.7ms——SQLite 在单个事务里插 1400 行就是这么快。
-/// 曾经按指纹跳过重建，收益不到首屏的 1%，不值当缓存失效那份复杂度，已经撤掉。
-/// 真正的开销在 `PRICE_JOINS` 逐行取价那边，那个换不掉：先按 (model, provider) 聚合再算价
-/// 数学上等价，但 GROUP BY 比 JOIN 更贵，实测反而慢。
+/// 两个关键不变量：
+/// 1. 每模型经 [`pricing::PriceIndex::resolve_model_rows`] 预解，与内存路径 [`pricing::find_price`]
+///    共用同一套确定性归一（去厂商前缀、去末尾日期、版本收点分）与精确/兜底优先级；
+/// 2. 两条部分唯一索引把 `(model, provider)`（非空）与 `(model)`（`provider IS NULL`）各钉死为
+///    至多一行，从表结构上杜绝 `LEFT JOIN` 笛卡尔翻倍（哪怕用户价表里填了大小写重复项）。
+///
+/// 库内去重模型数经 `idx_usage_model` 跳跃索引扫描通常只有几十个，比原先把 1400+ 条快照整张灌入
+/// 临时表更快，且免掉了在 SQL 里逐行做字符串归一的开销。
 pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(), String> {
     conn.execute_batch(
         "DROP TABLE IF EXISTS price_rows;
@@ -194,12 +199,20 @@ pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(
              cache_creation_1h_above_200k REAL NOT NULL DEFAULT 0,
              origin TEXT NOT NULL DEFAULT 'user'
          );
-         CREATE INDEX price_rows_model_provider ON price_rows(model, provider);",
+         CREATE UNIQUE INDEX price_rows_exact
+             ON price_rows(model, provider) WHERE provider IS NOT NULL;
+         CREATE UNIQUE INDEX price_rows_fallback
+             ON price_rows(model) WHERE provider IS NULL;",
     )
     .map_err(|e| e.to_string())?;
     if prices.prices.is_empty() {
         return Ok(());
     }
+    let models = distinct_values(conn, "model", true)?;
+    if models.is_empty() {
+        return Ok(());
+    }
+    let index = PriceIndex::new(prices);
     let mut stmt = conn
         .prepare(
             "INSERT INTO price_rows (
@@ -209,26 +222,34 @@ pub(crate) fn install_prices(conn: &Connection, prices: &PriceTable) -> Result<(
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )
         .map_err(|e| e.to_string())?;
-    for entry in &prices.prices {
-        stmt.execute(params![
-            entry.model.to_ascii_lowercase(),
-            entry
-                .provider
-                .as_ref()
-                .map(|value| value.to_ascii_lowercase()),
-            entry.input,
-            entry.output,
-            entry.cache_read,
-            entry.cache_creation,
-            entry.cache_creation_1h,
-            entry.input_above_200k,
-            entry.output_above_200k,
-            entry.cache_read_above_200k,
-            entry.cache_creation_above_200k,
-            entry.cache_creation_1h_above_200k,
-            entry.origin.as_str(),
-        ])
-        .map_err(|e| e.to_string())?;
+    let mut insert =
+        |model: &str, provider: Option<&str>, entry: &PriceEntry| -> Result<(), String> {
+            stmt.execute(params![
+                model,
+                provider,
+                entry.input,
+                entry.output,
+                entry.cache_read,
+                entry.cache_creation,
+                entry.cache_creation_1h,
+                entry.input_above_200k,
+                entry.output_above_200k,
+                entry.cache_read_above_200k,
+                entry.cache_creation_above_200k,
+                entry.cache_creation_1h_above_200k,
+                entry.origin.as_str(),
+            ])
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+        };
+    for model in &models {
+        let (fallback, exact) = index.resolve_model_rows(model);
+        if let Some(entry) = fallback {
+            insert(model, None, entry)?;
+        }
+        for (provider, entry) in exact {
+            insert(model, Some(provider.as_str()), entry)?;
+        }
     }
     Ok(())
 }

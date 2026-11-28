@@ -306,9 +306,203 @@ fn bundled_litellm_snapshot_is_valid_and_covers_common_models() {
     for expected in ["gpt-4o", "claude-3-5-sonnet-20241022", "gemini-2.5-pro"] {
         assert!(models.contains(expected), "内置快照缺少常见模型 {expected}");
     }
-    // 所有条目都应有非零单价（生成阶段已过滤零价）。
-    assert!(bundled
+    // 所有条目都应有非零单价且不超合理上限，且不存在大小写重复模型键。
+    let mut seen_lower = std::collections::HashSet::new();
+    for entry in &bundled.entries {
+        assert!(
+            entry.input > 0.0 || entry.output > 0.0,
+            "零价条目应已过滤：{}",
+            entry.model
+        );
+        assert_eq!(
+            entry.model,
+            entry.model.to_ascii_lowercase(),
+            "快照模型键应规范为 ASCII 小写：{}",
+            entry.model
+        );
+        assert!(
+            seen_lower.insert(entry.model.clone()),
+            "快照存在重复模型键：{}",
+            entry.model
+        );
+        for rate in [
+            entry.input,
+            entry.output,
+            entry.cache_read,
+            entry.cache_creation,
+            entry.cache_creation_1h,
+            entry.input_above_200k,
+            entry.output_above_200k,
+            entry.cache_read_above_200k,
+            entry.cache_creation_above_200k,
+            entry.cache_creation_1h_above_200k,
+        ] {
+            assert!(
+                rate.is_finite()
+                    && (0.0..=crate::litellm::MAX_SNAPSHOT_PRICE_PER_TOKEN).contains(&rate),
+                "模型 {} 存在异常单价 {}",
+                entry.model,
+                rate
+            );
+        }
+    }
+    let glm45 = bundled
         .entries
         .iter()
-        .all(|e| e.input > 0.0 || e.output > 0.0));
+        .find(|e| e.model == "glm-4.5")
+        .expect("bundled snapshot should keep sane glm-4.5");
+    assert!((glm45.input - 6e-7).abs() < 1e-12);
+    let r1 = bundled
+        .entries
+        .iter()
+        .find(|e| e.model == "deepseek-r1")
+        .expect("bundled snapshot should keep canonical deepseek-r1");
+    assert!((r1.input - 5.5e-7).abs() < 1e-12);
+}
+
+#[test]
+fn litellm_parse_and_load_reject_corrupt_prices_and_dedup_case_insensitively() {
+    let raw = r#"{
+        "together_ai/zai/GLM-4.5": {
+            "mode": "chat",
+            "input_cost_per_token": 0.055,
+            "output_cost_per_token": 0.2
+        },
+        "zai/glm-4.5": {
+            "mode": "chat",
+            "input_cost_per_token": 6e-7,
+            "output_cost_per_token": 2.2e-6
+        },
+        "together_ai/deepseek-ai/DeepSeek-R1": {
+            "mode": "chat",
+            "input_cost_per_token": 3e-6,
+            "output_cost_per_token": 7e-6
+        },
+        "deepseek/deepseek-r1": {
+            "mode": "chat",
+            "input_cost_per_token": 5.5e-7,
+            "output_cost_per_token": 2.19e-6
+        },
+        "o1-pro": {
+            "mode": "chat",
+            "input_cost_per_token": 0.00015,
+            "output_cost_per_token": 0.0006
+        },
+        "corrupt-only-model": {
+            "mode": "chat",
+            "input_cost_per_token": 0.135,
+            "output_cost_per_token": 0.54
+        }
+    }"#;
+    let parsed = crate::litellm::parse_litellm_raw(raw, "2026-11-28").unwrap();
+    assert_eq!(parsed.entries.len(), 3);
+    let by_model: std::collections::HashMap<&str, &PriceEntry> = parsed
+        .entries
+        .iter()
+        .map(|e| (e.model.as_str(), e))
+        .collect();
+    assert!(!by_model.contains_key("corrupt-only-model"));
+    assert_eq!(by_model["glm-4.5"].input, 6e-7);
+    assert_eq!(by_model["deepseek-r1"].input, 5.5e-7);
+    assert_eq!(by_model["o1-pro"].output, 0.0006);
+
+    // 已经落盘的旧格式脏缓存，load_snapshot 读盘时也必须自动清洗。
+    let dir = tempfile::tempdir().unwrap();
+    let cache_path = dir.path().join("litellm_prices.json");
+    let dirty = crate::domain::PriceSnapshot {
+        as_of: "2026-08-17".into(),
+        source: "litellm".into(),
+        entries: vec![
+            PriceEntry {
+                model: "GLM-4.5".into(),
+                input: 0.055,
+                output: 0.2,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "glm-4.5".into(),
+                input: 6e-7,
+                output: 2.2e-6,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "Kimi-K2.5".into(),
+                input: 9e-7,
+                output: 3e-6,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "kimi-k2.5".into(),
+                input: 6e-7,
+                output: 3e-6,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+        ],
+    };
+    crate::litellm::save_snapshot(&cache_path, &dirty).unwrap();
+    let (loaded, bundled) = crate::litellm::load_snapshot(&cache_path);
+    assert!(!bundled);
+    assert_eq!(loaded.entries.len(), 2);
+    assert_eq!(loaded.entries[0].model, "glm-4.5");
+    assert_eq!(loaded.entries[0].input, 6e-7);
+    assert_eq!(loaded.entries[1].model, "kimi-k2.5");
+    assert_eq!(loaded.entries[1].input, 6e-7);
+}
+
+#[test]
+fn litellm_merge_excludes_user_models_case_insensitively() {
+    let snapshot = crate::domain::PriceSnapshot {
+        as_of: "2026-11-28".into(),
+        source: "litellm".into(),
+        entries: vec![
+            PriceEntry {
+                model: "GLM-4.5".into(),
+                input: 9e-7,
+                output: 9e-7,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "glm-4.5".into(),
+                input: 6e-7,
+                output: 2.2e-6,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "other-model".into(),
+                input: 1e-6,
+                output: 2e-6,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+        ],
+    };
+    let user = PriceTable {
+        prices: vec![PriceEntry {
+            model: "Glm-4.5".into(),
+            provider: Some("custom".into()),
+            input: 1e-6,
+            output: 2e-6,
+            origin: PriceOrigin::User,
+            ..Default::default()
+        }],
+    };
+    let merged = crate::litellm::merge(&user, &snapshot);
+    let glm_rows: Vec<&PriceEntry> = merged
+        .prices
+        .iter()
+        .filter(|e| e.model.eq_ignore_ascii_case("glm-4.5"))
+        .collect();
+    assert_eq!(
+        glm_rows.len(),
+        1,
+        "用户配置过的模型不分大小写均不得再漏进快照"
+    );
+    assert_eq!(glm_rows[0].origin, PriceOrigin::User);
+    assert_eq!(merged.prices.len(), 2);
 }

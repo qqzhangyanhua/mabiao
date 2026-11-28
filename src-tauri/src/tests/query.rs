@@ -1976,3 +1976,184 @@ fn overview_bundle_reflects_updated_prices_and_cleared_cursor_cache_on_same_conn
         .iter()
         .all(|w| w.source != "cursor"));
 }
+
+#[test]
+fn sql_overview_does_not_multiply_rows_on_duplicate_or_case_colliding_prices() {
+    let mut priced = rec(
+        "2026-08-15T10:00:00Z",
+        Source::Claude,
+        "glm-4.5",
+        "",
+        "/proj/a",
+        "s1",
+        0,
+    );
+    priced.input_tokens = 1_000_000;
+    priced.output_tokens = 1_000_000;
+    priced.total_tokens = 2_000_000;
+
+    let mut native = rec(
+        "2026-08-15T11:00:00Z",
+        Source::Claude,
+        "glm-4.5",
+        "anthropic",
+        "/proj/a",
+        "s2",
+        0,
+    );
+    native.input_tokens = 500_000;
+    native.total_tokens = 500_000;
+    native.native_cost = Some(1.25);
+
+    let records = vec![priced, native];
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+    store::backfill_rollup(&conn).unwrap();
+
+    // 刻意构造大小写冲突 + 同键重复价目（模拟旧脏快照或用户重复录入）。
+    let duplicate_prices = PriceTable {
+        prices: vec![
+            PriceEntry {
+                model: "glm-4.5".into(),
+                provider: None,
+                input: 6e-7,
+                output: 2.2e-6,
+                origin: PriceOrigin::User,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "GLM-4.5".into(),
+                provider: None,
+                input: 0.055,
+                output: 0.2,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "glm-4.5".into(),
+                provider: Some("anthropic".into()),
+                input: 1e-6,
+                output: 1e-6,
+                origin: PriceOrigin::User,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "GLM-4.5".into(),
+                provider: Some("Anthropic".into()),
+                input: 9e-6,
+                output: 9e-6,
+                origin: PriceOrigin::User,
+                ..Default::default()
+            },
+        ],
+    };
+
+    let sql = query::overview(&conn, &Filter::default(), &duplicate_prices).unwrap();
+    let mem = aggregate::overview(&records, &Filter::default(), &duplicate_prices);
+    assert_eq!(sql.total_tokens, 2_500_000);
+    assert_eq!(sql.total_tokens, mem.total_tokens);
+    // 1M * 6e-7 + 1M * 2.2e-6 + 1.25 native = 4.05
+    assert_opt_f64_eq(sql.cost, Some(4.05));
+    assert_opt_f64_eq(sql.cost, mem.cost);
+    assert_overview_cost_split_eq(&sql, &mem, "duplicate prices");
+
+    // 内置快照下同样不得翻倍或命中天价脏单价。
+    let effective =
+        crate::litellm::merge(&PriceTable::default(), &crate::litellm::bundled_snapshot());
+    let bundled_sql = query::overview(&conn, &Filter::default(), &effective).unwrap();
+    let bundled_mem = aggregate::overview(&records, &Filter::default(), &effective);
+    assert_eq!(bundled_sql.total_tokens, 2_500_000);
+    assert_opt_f64_eq(bundled_sql.cost, Some(4.05));
+    assert_opt_f64_eq(bundled_sql.cost, bundled_mem.cost);
+    assert_overview_cost_split_eq(&bundled_sql, &bundled_mem, "bundled snapshot glm-4.5");
+}
+
+#[test]
+fn sql_queries_match_memory_for_prefixed_dated_and_hyphen_version_models() {
+    let mut prefixed = rec(
+        "2026-08-15T10:00:00Z",
+        Source::Opencode,
+        "anthropic/claude-sonnet-4-6",
+        "",
+        "/proj/a",
+        "s1",
+        0,
+    );
+    prefixed.input_tokens = 1_000_000;
+    prefixed.total_tokens = 1_000_000;
+
+    let mut dated = rec(
+        "2026-08-15T11:00:00Z",
+        Source::Claude,
+        "openrouter/anthropic/claude-sonnet-4-6-20250929",
+        "openrouter",
+        "/proj/a",
+        "s2",
+        0,
+    );
+    dated.input_tokens = 1_000_000;
+    dated.total_tokens = 1_000_000;
+
+    let mut hyphen_ver = rec(
+        "2026-08-15T12:00:00Z",
+        Source::Warp,
+        "claude-4-5-sonnet",
+        "warp",
+        "/proj/a",
+        "s3",
+        0,
+    );
+    hyphen_ver.input_tokens = 1_000_000;
+    hyphen_ver.total_tokens = 1_000_000;
+
+    let records = vec![prefixed, dated, hyphen_ver];
+    let prices = PriceTable {
+        prices: vec![
+            PriceEntry {
+                model: "claude-sonnet-4-6".into(),
+                provider: Some("openrouter".into()),
+                input: 5.0 / 1_000_000.0,
+                origin: PriceOrigin::User,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "claude-sonnet-4-6".into(),
+                provider: None,
+                input: 3.0 / 1_000_000.0,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+            PriceEntry {
+                model: "claude-4.5-sonnet".into(),
+                provider: None,
+                input: 4.0 / 1_000_000.0,
+                origin: PriceOrigin::Snapshot,
+                ..Default::default()
+            },
+        ],
+    };
+
+    let conn = store::open_memory().unwrap();
+    store::insert_records(&conn, &records).unwrap();
+
+    for ready in [false, true] {
+        if ready {
+            store::backfill_rollup(&conn).unwrap();
+        }
+        let sql_ov = query::overview(&conn, &Filter::default(), &prices).unwrap();
+        let mem_ov = aggregate::overview(&records, &Filter::default(), &prices);
+        assert!(
+            !sql_ov.unpriced,
+            "ready={ready} 所有归一命中模型都不应标未定价"
+        );
+        // 3.0 (snapshot) + 5.0 (user openrouter exact) + 4.0 (snapshot hyphen->dot) = 12.0
+        assert_opt_f64_eq(sql_ov.cost, Some(12.0));
+        assert_opt_f64_eq(sql_ov.cost, mem_ov.cost);
+        assert_overview_cost_split_eq(&sql_ov, &mem_ov, &format!("normalized ready={ready}"));
+
+        let sql_ud = query::unpriced_diagnosis(&conn, &prices).unwrap();
+        let mem_ud = aggregate::unpriced_diagnosis(&records, &prices);
+        assert!(sql_ud.is_empty(), "ready={ready} 不应再出现误报未定价");
+        assert_eq!(sql_ud, mem_ud);
+    }
+}
