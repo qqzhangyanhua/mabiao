@@ -7,12 +7,10 @@ use super::attachments::{
     attachment_data_url, attachment_thumbnail_data_url, ensure_attachment_path_allowed,
     read_source_line, read_source_payload,
 };
+use super::event_store::{read_event_by_id, read_indexed_event_if_ready, ReadOptions};
 use super::session_store::{ensure_matching_session, load_trusted_session_files};
 use super::toolbox::{attachment_candidates, AttachmentCandidate};
-use super::{
-    event_index, event_index_ready, parse_conversation_file, parse_conversation_files,
-    prepare_detail,
-};
+use super::{parse_conversation_file, parse_conversation_files};
 use crate::domain::{
     ConversationAttachmentContentDto, ConversationAttachmentKind as AttachmentKind,
     ConversationEvent, ConversationEventContentDto,
@@ -110,17 +108,15 @@ pub fn load_event_content(
     session_id: &str,
     event_id: &str,
 ) -> Result<ConversationEventContentDto, String> {
-    if let Some(content) = try_load_event_content(conn, home, source, session_id, event_id)? {
-        return Ok(content);
-    }
-    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
-    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
-    ensure_matching_session(&parsed, &session)?;
-    let event = parsed
-        .events
-        .into_iter()
-        .find(|event| event.event_id == event_id)
-        .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
+    let event = read_event_by_id(
+        conn,
+        home,
+        source,
+        session_id,
+        event_id,
+        ReadOptions::full_with_fallback(),
+    )?
+    .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
     Ok(ConversationEventContentDto {
         event_id: event.event_id,
         text: event.text,
@@ -207,43 +203,6 @@ fn resolve_attachment(
     Ok(candidate)
 }
 
-fn try_load_event_content(
-    conn: &Connection,
-    home: &Path,
-    source: &str,
-    session_id: &str,
-    event_id: &str,
-) -> Result<Option<ConversationEventContentDto>, String> {
-    let prepared = prepare_detail(conn, source, session_id)?;
-    if !source_maps_line_to_events(prepared.source) || !event_index_ready(conn, home, &prepared)? {
-        return Ok(None);
-    }
-    let Some(indexed) = event_index::indexed_event(conn, source, session_id, event_id)? else {
-        return Ok(None);
-    };
-    let rebuilt = match rebuild_events_from_line(
-        prepared.source,
-        Path::new(&indexed.source_file),
-        session_id,
-        indexed.source_sequence,
-        true,
-    ) {
-        Ok(events) => events,
-        Err(_) => return Ok(None),
-    };
-    let Some(event) = rebuilt.into_iter().find(|event| event.event_id == event_id) else {
-        return Ok(None);
-    };
-    if !line_event_matches_index(&event, &indexed) {
-        return Ok(None);
-    }
-    Ok(Some(ConversationEventContentDto {
-        event_id: event.event_id,
-        text: event.text,
-        details: event.details,
-    }))
-}
-
 fn try_resolve_attachment(
     conn: &Connection,
     home: &Path,
@@ -254,11 +213,9 @@ fn try_resolve_attachment(
     let Some((event_id, attachment_index)) = split_attachment_id(attachment_id) else {
         return Ok(None);
     };
-    let prepared = prepare_detail(conn, source, session_id)?;
-    if !source_maps_line_to_events(prepared.source) || !event_index_ready(conn, home, &prepared)? {
-        return Ok(None);
-    }
-    let Some(indexed) = event_index::indexed_event(conn, source, session_id, event_id)? else {
+    let Some((prepared, indexed)) =
+        read_indexed_event_if_ready(conn, home, source, session_id, event_id)?
+    else {
         return Ok(None);
     };
     let Some(attachment) = indexed.attachments.get(attachment_index).cloned() else {
@@ -350,7 +307,10 @@ fn read_jsonl_record(path: &Path, source_sequence: u32) -> Result<String, String
     Ok(raw)
 }
 
-fn line_event_matches_index(rebuilt: &ConversationEvent, indexed: &ConversationEvent) -> bool {
+pub(super) fn line_event_matches_index(
+    rebuilt: &ConversationEvent,
+    indexed: &ConversationEvent,
+) -> bool {
     rebuilt.event_id == indexed.event_id
         && rebuilt.kind == indexed.kind
         && rebuilt.actor == indexed.actor

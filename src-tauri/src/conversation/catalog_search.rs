@@ -7,9 +7,11 @@ use crate::domain::{
     PriceTable, Source,
 };
 
-use super::event_storage::{referenced_text, restore_event_id, ReferencedLine, TextRef};
+use super::event_store::{
+    event_index_ready_sql, referenced_text, restore_event_id, ReferencedLine, TextRef,
+};
 use super::hydrate;
-use super::session_store::{event_index_ready_sql, row_from_sql};
+use super::session_store::row_from_sql;
 use super::{DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE};
 
 const TITLE_LIKE_FIELDS: usize = 7;

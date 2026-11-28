@@ -176,6 +176,8 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             event_index_generation INTEGER,
             -- 目录已更新、事件仍是旧一代：未就绪，等补建重写（ADR 0011）。
             event_index_dirty INTEGER NOT NULL DEFAULT 0,
+            -- 会话去重后的事件总数，供工作纪要预览不读正文判定零星会话。老库未刷新行为 NULL。
+            event_count INTEGER,
             PRIMARY KEY(source, session_id)
         );
         CREATE INDEX IF NOT EXISTS idx_conversation_sessions_ended
@@ -304,6 +306,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         "event_index_dirty",
         "INTEGER NOT NULL DEFAULT 0",
     )?;
+    ensure_column(conn, "conversation_sessions", "event_count", "INTEGER")?;
     ensure_column(
         conn,
         "conversation_session_files",

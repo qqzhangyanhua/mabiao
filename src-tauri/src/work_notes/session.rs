@@ -44,6 +44,7 @@ impl SessionSummaryRun {
 
 pub(super) fn prepare(
     conn: &Connection,
+    home: &Path,
     params: &WorkNotesSessionParams,
 ) -> Result<PreparedSessionSummary, String> {
     let (source, session_id) = (params.source.as_str(), params.session_id.as_str());
@@ -53,8 +54,8 @@ pub(super) fn prepare(
     if session.generated_by_work_notes {
         return Err("码表生成的会话不写摘要".to_string());
     }
-    let events = conversation::indexed_events(conn, source, session_id)?;
-    if events.is_empty() {
+    let events = conversation::load_session_events(conn, home, source, session_id)?;
+    if events.len() < 3 {
         return Err("没有可总结的正文".to_string());
     }
     let fingerprint = cache::session_fingerprint(conn, source, session_id)?;

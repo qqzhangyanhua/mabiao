@@ -33,10 +33,7 @@ mod cursor_inject;
 mod discover;
 mod droid;
 mod dsh;
-mod event_index;
-mod event_page;
-mod event_storage;
-mod event_tables;
+mod event_store;
 mod export;
 mod gemini;
 mod goose;
@@ -52,7 +49,6 @@ mod merge;
 mod omp;
 mod openclaw;
 mod opencode;
-mod persist;
 mod pi;
 mod push_source;
 mod qoder;
@@ -79,8 +75,7 @@ pub use backfill::{
     event_index_progress, session_needs_event_backfill,
 };
 pub use catalog::{
-    catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
-    usage_records_page,
+    catalog_tool_names, sessions_page, sessions_page_with_prices, usage_records_page,
 };
 pub use context_content::load_context_item_content;
 #[cfg(test)]
@@ -91,21 +86,20 @@ pub(crate) use discover::{
     discover_jsonl, discover_opencode, index_claude, index_gemini, index_omp, index_pi,
     regular_source_revision, single_detail,
 };
-pub(crate) use event_index::indexed_event_count;
-pub use event_storage::adopt_text_references;
+#[cfg(test)]
+pub(crate) use event_store::event_index_ready;
+pub use event_store::{adopt_text_references, indexed_events};
+pub(crate) use event_store::{catalog_event_count, load_session_events};
 pub use line_direct::{
     load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
     rebuild_events_from_line,
 };
 pub use push_source::{list_sessions as list_push_sessions, read_session as read_push_session};
 pub use push_source::{PushContext, PushSessionSource};
-#[cfg(test)]
-pub(crate) use read::read_consistent_snapshot;
 pub use read::{detail_state, load_detail, load_parsed_detail};
-pub(crate) use read::{
-    event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
-    prepare_detail_read,
-};
+pub(crate) use read::{finish_prepared_detail, prepare_detail, prepare_detail_read};
+#[cfg(test)]
+pub(crate) use read::{load_prepared_parsed, read_consistent_snapshot};
 pub(crate) use scan_roots::catalog_roots;
 pub use session_store::load_session;
 
@@ -582,7 +576,7 @@ pub fn load_events(
     anchor: crate::domain::ConversationEventAnchor,
     limit: u32,
 ) -> Result<crate::domain::ConversationEventPage, String> {
-    event_page::load_events(conn, home, source, session_id, anchor, limit)
+    event_store::load_events(conn, home, source, session_id, anchor, limit)
 }
 
 pub(crate) fn prepare_events_read(
@@ -592,17 +586,17 @@ pub(crate) fn prepare_events_read(
     session_id: &str,
     anchor: &crate::domain::ConversationEventAnchor,
     limit: u32,
-) -> Result<event_page::PreparedEventsRead, String> {
-    event_page::prepare_events_read(conn, home, source, session_id, anchor, limit)
+) -> Result<event_store::PreparedEventsRead, String> {
+    event_store::prepare_events_read(conn, home, source, session_id, anchor, limit)
 }
 
 pub(crate) fn finish_prepared_events(
     home: &Path,
-    read: event_page::PreparedEventsRead,
+    read: event_store::PreparedEventsRead,
     anchor: &crate::domain::ConversationEventAnchor,
     limit: u32,
 ) -> Result<crate::domain::ConversationEventPage, String> {
-    event_page::finish_prepared_events(home, read, anchor, limit)
+    event_store::finish_prepared_events(home, read, anchor, limit)
 }
 
 pub(crate) use incremental::{

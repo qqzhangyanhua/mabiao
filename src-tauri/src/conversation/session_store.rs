@@ -12,7 +12,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use crate::domain::{ConversationMatchField, ConversationSessionRow, Source, UsageRecord};
 
 use super::conversation_adapter;
-use super::event_index;
+use super::event_store;
 use super::merge::IndexedAgentMetadata;
 use super::scan_roots::conversation_source_roots;
 use super::toolbox::ParsedConversation;
@@ -21,50 +21,7 @@ use super::CachedConversationFingerprint;
 use super::ConversationIndexIssue;
 use super::{CONVERSATION_ADAPTER_VERSION, CONVERSATION_SOURCES};
 
-/// 事件索引「就绪」的唯一定义：详情、推送、补建进度、目录行标志都用它。
-/// 待补建会话仍留着旧一代事件，正文搜索与工具筛选照常按 `event_index_generation` 连它。
-pub(super) fn event_index_ready_sql(alias: &str) -> String {
-    format!(
-        "CASE WHEN {alias}.adapter_version = {CONVERSATION_ADAPTER_VERSION} \
-         AND {alias}.event_index_generation IS NOT NULL \
-         AND {alias}.event_index_dirty = 0 THEN 1 ELSE 0 END"
-    )
-}
-
-/// 会话不存在时为 `false`。
-pub(super) fn session_events_ready(
-    conn: &Connection,
-    source: &str,
-    session_id: &str,
-) -> Result<bool, String> {
-    let ready_sql = event_index_ready_sql("sessions");
-    let ready = conn
-        .query_row(
-            &format!(
-                "SELECT {ready_sql} FROM conversation_sessions AS sessions \
-                 WHERE sessions.source = ?1 AND sessions.session_id = ?2"
-            ),
-            params![source, session_id],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    Ok(ready == Some(1))
-}
-
-pub(super) fn mark_session_events_dirty(
-    conn: &Connection,
-    source: Source,
-    session_id: &str,
-) -> Result<(), String> {
-    conn.execute(
-        "UPDATE conversation_sessions SET event_index_dirty = 1 WHERE source = ?1 AND session_id = ?2",
-        params![source.as_str(), session_id],
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(())
-}
-
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn upsert_session(
     conn: &Connection,
     session: &ConversationSessionRow,
@@ -73,6 +30,7 @@ pub(crate) fn upsert_session(
     source_file_mtime_ns: i64,
     source_file_size: i64,
     source_revision: &str,
+    event_count: Option<u32>,
 ) -> Result<(), String> {
     let capabilities = serde_json::to_string(&session.capabilities).map_err(|e| e.to_string())?;
     let agent_metadata = serde_json::to_string(agent_metadata).map_err(|e| e.to_string())?;
@@ -82,8 +40,8 @@ pub(crate) fn upsert_session(
             source, session_id, title, project, model, started_at, ended_at,
             source_file, capabilities_json, support_status, file_available,
             source_file_mtime_ns, source_file_size, adapter_version, source_revision,
-            is_top_level, agent_metadata_json
-        ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17)
+            is_top_level, agent_metadata_json, event_count
+        ) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18)
         ON CONFLICT(source, session_id) DO UPDATE SET
             title = excluded.title,
             project = excluded.project,
@@ -99,7 +57,8 @@ pub(crate) fn upsert_session(
             adapter_version = excluded.adapter_version,
             source_revision = excluded.source_revision,
             is_top_level = excluded.is_top_level,
-            agent_metadata_json = excluded.agent_metadata_json
+            agent_metadata_json = excluded.agent_metadata_json,
+            event_count = excluded.event_count
         "#,
         params![
             session.source,
@@ -119,6 +78,7 @@ pub(crate) fn upsert_session(
             source_revision,
             is_top_level,
             agent_metadata,
+            event_count.map(i64::from),
         ],
     )
     .map_err(|e| e.to_string())?;
@@ -377,7 +337,7 @@ pub(crate) fn tombstone_missing_sessions(
             continue;
         }
         mark_session_unavailable(conn, source, &session_id)?;
-        event_index::clear_session_events(conn, source, &session_id)?;
+        event_store::clear_session_events(conn, source, &session_id)?;
     }
     Ok(())
 }

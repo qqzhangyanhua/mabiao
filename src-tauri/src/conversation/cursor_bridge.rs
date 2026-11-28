@@ -96,6 +96,7 @@ pub(crate) fn sync_cursor_usage_only_sessions(conn: &Connection) -> Result<(), S
             0,
             0,
             "usage-only",
+            Some(0),
         )?;
     }
     let mut synthetic = conn
