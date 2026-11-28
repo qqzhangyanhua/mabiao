@@ -4,13 +4,14 @@
 //!（`Failed to serialize billing response`）。官方网页和竞品走
 //! `GetGrokCreditsConfig`。无公开 .proto，按 live capture 扫字段。
 
-use std::io::Read;
 use std::time::Duration;
 
 use chrono::{TimeZone, Utc};
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::sanitize_percent;
+use crate::official_quota::{
+    sanitize_percent, HttpRequest, HttpResponse, QuotaEnv, QuotaTransport,
+};
 
 const BILLING_GRPC_URL: &str = "https://grok.com/grok_api_v2.GrokBuildBilling/GetGrokCreditsConfig";
 const TIMEOUT: Duration = Duration::from_secs(12);
@@ -25,13 +26,15 @@ pub fn should_fallback_to_grpc(error: &str) -> bool {
         || error.contains("HTTP 504")
 }
 
-pub fn fetch_credits(
+pub fn fetch_credits_in(
+    env: &QuotaEnv,
     token: &str,
     user_id: Option<&str>,
     client_version: &str,
 ) -> Result<Vec<OfficialQuotaWindow>, String> {
-    let bytes = request_credits(token, user_id, client_version)?;
-    parse_credits_grpc(&bytes, Utc::now().timestamp())
+    let url = env.rebase_url(BILLING_GRPC_URL);
+    let bytes = request_credits_via(env.transport.as_ref(), &url, token, user_id, client_version)?;
+    parse_credits_grpc(&bytes, env.now().timestamp())
 }
 
 pub fn parse_credits_grpc(bytes: &[u8], now_secs: i64) -> Result<Vec<OfficialQuotaWindow>, String> {
@@ -59,44 +62,40 @@ pub fn parse_credits_grpc(bytes: &[u8], now_secs: i64) -> Result<Vec<OfficialQuo
     }])
 }
 
-fn request_credits(
+fn request_credits_via(
+    transport: &dyn QuotaTransport,
+    url: &str,
     token: &str,
     user_id: Option<&str>,
     client_version: &str,
 ) -> Result<Vec<u8>, String> {
-    let mut request = crate::net::agent_with_timeout(TIMEOUT)
-        .post(BILLING_GRPC_URL)
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("X-XAI-Token-Auth", TOKEN_AUTH)
-        .set("Accept", "application/grpc-web+proto")
-        .set("Content-Type", "application/grpc-web+proto")
-        .set("x-grpc-web", "1")
-        .set("Origin", "https://grok.com")
-        .set("Referer", "https://grok.com/?_s=usage")
-        .set("User-Agent", TOKEN_AUTH)
-        .set("x-grok-client-version", client_version)
-        .set("x-grok-client-mode", "interactive");
+    let mut request = HttpRequest::post_bytes(url, EMPTY_GRPC_WEB_FRAME.to_vec(), TIMEOUT)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-XAI-Token-Auth", TOKEN_AUTH)
+        .header("Accept", "application/grpc-web+proto")
+        .header("Content-Type", "application/grpc-web+proto")
+        .header("x-grpc-web", "1")
+        .header("Origin", "https://grok.com")
+        .header("Referer", "https://grok.com/?_s=usage")
+        .header("User-Agent", TOKEN_AUTH)
+        .header("x-grok-client-version", client_version)
+        .header("x-grok-client-mode", "interactive");
     if let Some(user_id) = user_id.filter(|id| !id.is_empty()) {
-        request = request.set("x-userid", user_id);
+        request = request.header("x-userid", user_id);
     }
-    match request.send_bytes(&EMPTY_GRPC_WEB_FRAME) {
-        Ok(response) => read_grpc_response(response),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Grok 登录已过期，请重新运行 grok login".to_string())
-        }
-        Err(ureq::Error::Status(_, response)) => read_grpc_response(response),
-        Err(_) => Err("无法连接 Grok 限额接口，请检查网络后重试".to_string()),
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Grok 限额接口，请检查网络后重试".to_string())?;
+    if matches!(response.status, 401 | 403) {
+        return Err("Grok 登录已过期，请重新运行 grok login".to_string());
     }
+    read_grpc_response(response)
 }
 
-fn read_grpc_response(response: ureq::Response) -> Result<Vec<u8>, String> {
+fn read_grpc_response(response: HttpResponse) -> Result<Vec<u8>, String> {
     let header_status = response.header("grpc-status").map(ToOwned::to_owned);
     let header_message = response.header("grpc-message").map(ToOwned::to_owned);
-    let mut bytes = Vec::new();
-    response
-        .into_reader()
-        .read_to_end(&mut bytes)
-        .map_err(|e| format!("读取 Grok 限额响应失败：{e}"))?;
+    let bytes = response.body;
     let trailers = trailer_fields(&bytes);
     let status = header_status
         .as_deref()

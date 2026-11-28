@@ -53,6 +53,7 @@ fn replies(maps: &[&str], reduce: &[&str]) -> ScriptedRunner {
 
 struct Harness {
     conn: TestConnection,
+    home: tempfile::TempDir,
     app_dir: tempfile::TempDir,
     runner: ScriptedRunner,
     prices: PriceTable,
@@ -63,6 +64,7 @@ impl Harness {
     fn new(runner: ScriptedRunner) -> Self {
         Self {
             conn: TestConnection::new(store::open_memory().unwrap()),
+            home: tempfile::tempdir().unwrap(),
             app_dir: tempfile::tempdir().unwrap(),
             runner,
             prices: PriceTable::default(),
@@ -118,6 +120,7 @@ impl Harness {
     ) -> Result<WorkNotesDto, String> {
         work_notes::generate(
             &self.conn,
+            self.home.path(),
             &self.prices,
             &params,
             at,
@@ -178,6 +181,7 @@ impl Harness {
     ) -> Result<Vec<crate::domain::WorkNotesSessionSummary>, String> {
         work_notes::summarize_session(
             &self.conn,
+            self.home.path(),
             &WorkNotesSessionParams {
                 source: source.to_string(),
                 session_id: session_id.to_string(),
@@ -198,15 +202,28 @@ impl Harness {
     fn insert_named(&self, source: &str, usage: Source, seed: SeedSession) {
         let started_at = local_time_iso(seed.started, seed.hour, 0, 0);
         let ended_at = local_time_iso(seed.started, seed.hour + 1, 0, 0);
-        let source_file = format!("/tmp/{source}-{}.jsonl", seed.session_id);
+        let source_path = self.write_seed_source_file(source, &seed, &started_at);
+        let source_file = source_path.to_string_lossy().to_string();
+        let metadata = std::fs::metadata(&source_path).unwrap();
+        let revision = if source == "grok" {
+            let summary = source_path.with_file_name("summary.json");
+            format!(
+                "{}:{}",
+                conversation::regular_source_revision(&source_path).unwrap(),
+                ingest::content_fingerprint(&summary)
+            )
+        } else {
+            conversation::regular_source_revision(&source_path).unwrap()
+        };
         let conn = self.conn.get();
         conn.execute(
             r#"
                 INSERT INTO conversation_sessions(
                     source, session_id, title, project, model, started_at, ended_at,
                     source_file, capabilities_json, support_status, file_available,
-                    is_top_level, event_index_generation
-                ) VALUES(?1, ?2, ?3, ?4, '', ?5, ?6, ?7, '[]', 'ok', 1, 1, 1)
+                    source_file_size, adapter_version, source_revision,
+                    is_top_level, event_index_generation, event_index_dirty, event_count
+                ) VALUES(?1, ?2, ?3, ?4, '', ?5, ?6, ?7, '[]', 'ok', 1, ?8, ?9, ?10, 1, 1, 0, ?11)
                 "#,
             params![
                 source,
@@ -215,7 +232,27 @@ impl Harness {
                 seed.project,
                 started_at,
                 ended_at,
-                source_file
+                source_file,
+                metadata.len() as i64,
+                conversation::CONVERSATION_ADAPTER_VERSION,
+                revision,
+                seed.events.len() as i64,
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            r#"
+                INSERT INTO conversation_session_files(
+                    source, session_id, source_file, source_file_size, adapter_version, source_revision
+                ) VALUES(?1, ?2, ?3, ?4, ?5, ?6)
+                "#,
+            params![
+                source,
+                seed.session_id,
+                source_file,
+                metadata.len() as i64,
+                conversation::CONVERSATION_ADAPTER_VERSION,
+                revision,
             ],
         )
         .unwrap();
@@ -278,6 +315,78 @@ impl Harness {
             )
             .unwrap();
         }
+    }
+
+    fn write_seed_source_file(
+        &self,
+        source: &str,
+        seed: &SeedSession,
+        started_at: &str,
+    ) -> PathBuf {
+        let path = match source {
+            "grok" => self.home.path().join(format!(
+                ".grok/sessions/proj/{}/updates.jsonl",
+                seed.session_id
+            )),
+            "cursor_agent" => self.home.path().join(format!(
+                ".cursor/projects/Users-me-real-project/agent-transcripts/{0}/{0}.jsonl",
+                seed.session_id
+            )),
+            _ => self.home.path().join(format!(
+                ".codex/sessions/2026/08/rollout-{}.jsonl",
+                seed.session_id
+            )),
+        };
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let body = if source == "codex" {
+            let mut lines = vec![serde_json::json!({
+                "type": "session_meta",
+                "timestamp": started_at,
+                "payload": {"id": seed.session_id, "cwd": seed.project, "model_provider": "openai"}
+            })
+            .to_string()];
+            for event in seed.events {
+                if event.kind == "message" {
+                    let role = event.actor.unwrap_or("user");
+                    let content_type = if role == "user" {
+                        "input_text"
+                    } else {
+                        "output_text"
+                    };
+                    lines.push(
+                        serde_json::json!({
+                            "type": "response_item",
+                            "timestamp": started_at,
+                            "payload": {
+                                "type": "message",
+                                "role": role,
+                                "content": [{"type": content_type, "text": event.text.as_deref().unwrap_or("")}]
+                            }
+                        })
+                        .to_string(),
+                    );
+                } else if event.kind == "tool_call" {
+                    lines.push(
+                        serde_json::json!({
+                            "type": "response_item",
+                            "timestamp": started_at,
+                            "payload": {
+                                "type": "function_call",
+                                "name": event.name.unwrap_or("Tool"),
+                                "arguments": "{}",
+                                "call_id": "call-seed"
+                            }
+                        })
+                        .to_string(),
+                    );
+                }
+            }
+            format!("{}\n", lines.join("\n"))
+        } else {
+            String::new()
+        };
+        std::fs::write(&path, body).unwrap();
+        path
     }
 }
 
@@ -2320,4 +2429,278 @@ fn history_entry_returns_full_dto_and_delete_removes_it() {
 
     assert!(work_notes::history_entry(&h.conn.get(), id).is_err());
     assert!(work_notes::delete_history_entry(&h.conn.get(), id).is_err());
+}
+
+fn write_real_codex_session(
+    home: &Path,
+    session_id: &str,
+    project: &str,
+    messages: &[(&str, &str)],
+) -> PathBuf {
+    let started_at = local_time_iso(day(2026, 8, 18), 10, 0, 0);
+    let mut lines = vec![serde_json::json!({
+        "type": "session_meta",
+        "timestamp": started_at,
+        "payload": {"id": session_id, "cwd": project, "model_provider": "openai"}
+    })
+    .to_string()];
+    for (index, (role, text)) in messages.iter().enumerate() {
+        let ts = local_time_iso(day(2026, 8, 18), 10, (index as u32) + 1, 0);
+        let content_type = if *role == "user" {
+            "input_text"
+        } else {
+            "output_text"
+        };
+        lines.push(
+            serde_json::json!({
+                "type": "response_item",
+                "timestamp": ts,
+                "payload": {
+                    "type": "message",
+                    "role": role,
+                    "content": [{"type": content_type, "text": text}]
+                }
+            })
+            .to_string(),
+        );
+    }
+    let path = home.join(format!(
+        ".codex/sessions/2026/08/rollout-{session_id}.jsonl"
+    ));
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, format!("{}\n", lines.join("\n"))).unwrap();
+    path
+}
+
+fn seed_usage_tokens(h: &Harness, session_id: &str, project: &str, tokens: i64) {
+    let started_at = local_time_iso(day(2026, 8, 18), 10, 0, 0);
+    store::insert_records(
+        &h.conn.get(),
+        &[rec(
+            &started_at,
+            Source::Codex,
+            "gpt-5.1-codex",
+            "official",
+            project,
+            session_id,
+            tokens,
+        )],
+    )
+    .unwrap();
+}
+
+#[test]
+fn deferred_catalog_high_token_session_is_previewed_and_summarized_via_fallback() {
+    let h = Harness::new(replies(
+        &[&map_json("实时回退总结"), &map_json("单条回退总结")],
+        &[&reduce_json()],
+    ));
+    write_real_codex_session(
+        h.home.path(),
+        "deferred-ok",
+        "/proj/deferred",
+        &[
+            ("user", "DEFERRED_FALLBACK_PROMPT"),
+            ("assistant", "先看事件存储"),
+            ("user", "再补工作纪要"),
+            ("assistant", "DEFERRED_FALLBACK_REPLY"),
+        ],
+    );
+    seed_usage_tokens(&h, "deferred-ok", "/proj/deferred", 3200);
+    let roots = ingest::source_scan_dirs(h.home.path(), Source::Codex);
+    {
+        let conn = h.conn.get();
+        let issues = conversation::refresh_catalog(&conn, Source::Codex, &roots).unwrap();
+        assert!(issues.is_empty(), "{issues:?}");
+        let generation: Option<i64> = conn
+            .query_row(
+                "SELECT event_index_generation FROM conversation_sessions WHERE session_id = 'deferred-ok'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(generation, None, "目录阶段尚未补建事件索引");
+    }
+
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 1, "未补建高 token 会话应进入预览");
+    assert_eq!(preview.skipped_sparse, 0);
+    assert_eq!(preview.sessions.len(), 1);
+    assert_eq!(preview.sessions[0].session_id, "deferred-ok");
+
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(dto.skipped_sparse, 0);
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("DEFERRED_FALLBACK_PROMPT"), "{stdin}");
+    assert!(stdin.contains("DEFERRED_FALLBACK_REPLY"), "{stdin}");
+
+    let summaries = h.summarize("codex", "deferred-ok", "codex").unwrap();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].summary, "单条回退总结");
+}
+
+#[test]
+fn deferred_catalog_sparse_session_is_skipped_in_preview_and_rejected_in_summarize() {
+    let h = Harness::new(replies(&[], &[]));
+    write_real_codex_session(
+        h.home.path(),
+        "deferred-sparse",
+        "/proj/sparse",
+        &[("user", "一句提问")],
+    );
+    seed_usage_tokens(&h, "deferred-sparse", "/proj/sparse", 3200);
+    let roots = ingest::source_scan_dirs(h.home.path(), Source::Codex);
+    conversation::refresh_catalog(&h.conn.get(), Source::Codex, &roots).unwrap();
+
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(preview.session_count, 0);
+    assert_eq!(preview.skipped_sparse, 1);
+
+    let dto = h.build();
+    assert!(!dto.has_data);
+    assert_eq!(dto.skipped_sparse, 1);
+    assert!(h.runner.recorded().is_empty());
+
+    let error = h
+        .summarize("codex", "deferred-sparse", "codex")
+        .unwrap_err();
+    assert_eq!(error, "没有可总结的正文");
+}
+
+#[test]
+fn dirty_updated_session_reads_fresh_source_events_instead_of_stale_index() {
+    let h = Harness::new(replies(
+        &[&map_json("新鲜内容总结"), &map_json("单条新鲜总结")],
+        &[&reduce_json()],
+    ));
+    let path = write_real_codex_session(
+        h.home.path(),
+        "dirty-1",
+        "/proj/dirty",
+        &[
+            ("user", "OLD_GEN1_PROMPT_TEXT_PADDING"),
+            ("assistant", "OLD_GEN1_STEP_PADDING"),
+            ("user", "继续检查"),
+            ("assistant", "OLD_GEN1_FINAL_PADDING"),
+        ],
+    );
+    seed_usage_tokens(&h, "dirty-1", "/proj/dirty", 3200);
+    conversation::refresh_codex(&h.conn.get(), h.home.path()).unwrap();
+
+    // 改写并缩短文件（非追加），随后只跑目录阶段使其 event_index_dirty = 1，旧一代事件留在库里。
+    let rewritten = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("OLD_GEN1_PROMPT_TEXT_PADDING", "FRESH_GEN2_PROMPT")
+        .replace("OLD_GEN1_STEP_PADDING", "FRESH_GEN2_STEP")
+        .replace("OLD_GEN1_FINAL_PADDING", "FRESH_GEN2_FINAL");
+    std::fs::write(&path, rewritten).unwrap();
+    let roots = ingest::source_scan_dirs(h.home.path(), Source::Codex);
+    {
+        let conn = h.conn.get();
+        conversation::refresh_catalog(&conn, Source::Codex, &roots).unwrap();
+        let dirty: i64 = conn
+            .query_row(
+                "SELECT event_index_dirty FROM conversation_sessions WHERE session_id = 'dirty-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(dirty, 1, "改写后目录阶段应标 event_index_dirty = 1");
+    }
+
+    let dto = h.build();
+    assert!(dto.has_data);
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("FRESH_GEN2_PROMPT"), "{stdin}");
+    assert!(stdin.contains("FRESH_GEN2_FINAL"), "{stdin}");
+    assert!(
+        !stdin.contains("OLD_GEN1"),
+        "待补建会话不得读取旧一代索引正文：{stdin}"
+    );
+
+    let summaries = h.summarize("codex", "dirty-1", "claude").unwrap();
+    assert_eq!(summaries.len(), 2);
+    let last_map = h
+        .runner
+        .recorded()
+        .into_iter()
+        .rev()
+        .find(is_map_command)
+        .expect("single session map");
+    assert!(last_map.stdin.contains("FRESH_GEN2_PROMPT"));
+    assert!(!last_map.stdin.contains("OLD_GEN1"));
+}
+
+#[test]
+fn pre_migration_null_event_count_uses_token_fallback_in_preview_and_enforces_event_len() {
+    let h = Harness::new(replies(&[&map_json("达标老库会话")], &[&reduce_json()]));
+    write_real_codex_session(
+        h.home.path(),
+        "pre-sparse-events",
+        "/proj/a",
+        &[("user", "只有一条消息")],
+    );
+    seed_usage_tokens(&h, "pre-sparse-events", "/proj/a", 2500);
+
+    write_real_codex_session(
+        h.home.path(),
+        "pre-low-tokens",
+        "/proj/b",
+        &[
+            ("user", "消息一"),
+            ("assistant", "回复一"),
+            ("user", "消息二"),
+            ("assistant", "回复二"),
+        ],
+    );
+    seed_usage_tokens(&h, "pre-low-tokens", "/proj/b", 500);
+
+    write_real_codex_session(
+        h.home.path(),
+        "pre-eligible",
+        "/proj/c",
+        &[
+            ("user", "PRE_ELIGIBLE_PROMPT"),
+            ("assistant", "回复一"),
+            ("user", "消息二"),
+            ("assistant", "PRE_ELIGIBLE_REPLY"),
+        ],
+    );
+    seed_usage_tokens(&h, "pre-eligible", "/proj/c", 2500);
+
+    {
+        let conn = h.conn.get();
+        conversation::refresh_codex(&conn, h.home.path()).unwrap();
+        // 模拟老库升级后未刷新状态：event_count IS NULL。
+        conn.execute("UPDATE conversation_sessions SET event_count = NULL", [])
+            .unwrap();
+    }
+
+    let preview = h.preview(WorkNotesRange::this_week()).unwrap();
+    assert_eq!(
+        preview.session_count, 2,
+        "event_count IS NULL 时预览不读正文，只按 total_tokens >= 1000 保留"
+    );
+    assert_eq!(preview.skipped_sparse, 1, "低 token 会话仍被预览跳过");
+
+    let dto = h.build();
+    assert!(dto.has_data);
+    assert_eq!(
+        h.map_count(),
+        1,
+        "生成阶段应过滤掉解析后事件数 < 3 的老库会话"
+    );
+    assert_eq!(
+        dto.skipped_sparse, 2,
+        "低 token 与事件数 < 3 两类零星会话都应计入 skipped_sparse"
+    );
+    let stdin = map_stdin(&h);
+    assert!(stdin.contains("PRE_ELIGIBLE_PROMPT"), "{stdin}");
+    assert!(!stdin.contains("只有一条消息"), "{stdin}");
+
+    let error = h
+        .summarize("codex", "pre-sparse-events", "codex")
+        .unwrap_err();
+    assert_eq!(error, "没有可总结的正文");
 }

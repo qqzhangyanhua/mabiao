@@ -31,6 +31,7 @@ pub mod report;
 pub mod rollup_source;
 pub mod rollup_split;
 pub mod scan_paths;
+pub(crate) mod source_sqlite;
 pub(crate) mod staged;
 pub mod store;
 pub mod tray;
@@ -124,13 +125,9 @@ pub struct AppState {
     pub snapshot_path: PathBuf,
     pub budget_path: PathBuf,
     pub budget_notify_path: PathBuf,
-    pub official_quota_path: PathBuf,
-    pub official_quota_notify_path: PathBuf,
-    /// 自定义提供商的配置与密钥。配置可以进备份，密钥不进——备份目录是设计成
-    /// 给人整个拷走的。
-    pub custom_quota_paths: official_quota::custom::store::CustomQuotaPaths,
-    /// 额度账号的配置与密钥。密钥文件从创建起就是 0600，不进备份。
-    pub quota_account_paths: official_quota::accounts::QuotaAccountPaths,
+    /// 官方额度全部应用数据文件路径（配置、告警去重、退避、Claude statusline 捕获、
+    /// 自定义提供商配置/密钥、额度账号配置/密钥；密钥文件 0600 且不进备份）。
+    pub quota_paths: official_quota::QuotaPaths,
     pub conn: Mutex<Connection>,
     pub read_pool: ReadPool,
     pub snapshot: Mutex<PriceSnapshot>,
@@ -164,15 +161,6 @@ impl AppState {
         self.lock_write()
     }
 
-    /// 写锁此刻被占（多半是摄取）就返回 `None`，给那些可以晚一轮再做的顺手写入用。
-    pub(crate) fn try_lock_write(&self) -> Option<MutexGuard<'_, Connection>> {
-        match self.conn.try_lock() {
-            Ok(conn) => Some(conn),
-            Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
-            Err(std::sync::TryLockError::WouldBlock) => None,
-        }
-    }
-
     pub(crate) fn lock_read(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.read_pool.get()
     }
@@ -196,9 +184,9 @@ impl AppState {
     }
 }
 
-/// 工作纪要的连接来源：读走连接池，写走那把写锁。两者是不同的锁，因而 `work_notes` 能在
-/// spawn 引擎前放开读连接而不堵住写路径（ADR 0021）。
-impl work_notes::ConnectionSource for AppState {
+/// 共享连接来源：读走连接池，写走那把写锁。两者是不同的锁，因而工作纪要、推送与官方额度
+/// 能在阻塞 IO / 外部调用前放开读连接而不堵住写路径（ADR 0021 / ADR 0026）。
+impl store::ConnectionSource for AppState {
     fn read(&self) -> Result<MutexGuard<'_, Connection>, String> {
         self.lock_read()
     }
@@ -365,10 +353,7 @@ pub fn run() {
             let snapshot_path = dir.join("litellm_prices.json");
             let budget_path = dir.join("budget.json");
             let budget_notify_path = dir.join("budget_notify_state.json");
-            let official_quota_path = dir.join(official_quota::CONFIG_NAME);
-            let official_quota_notify_path = dir.join(official_quota::NOTIFY_NAME);
-            let custom_quota_paths = official_quota::custom::store::CustomQuotaPaths::in_dir(&dir);
-            let quota_account_paths = official_quota::accounts::QuotaAccountPaths::in_dir(&dir);
+            let quota_paths = official_quota::QuotaPaths::in_dir(&dir);
             let db_path_str = db_path.to_string_lossy().to_string();
             let conn = store::open_db(&db_path_str).map_err(std::io::Error::other)?;
             // open_db 必须先跑：它建表建索引，只读连接开在空库上会查不到表。
@@ -381,10 +366,7 @@ pub fn run() {
                 snapshot_path,
                 budget_path,
                 budget_notify_path,
-                official_quota_path,
-                official_quota_notify_path,
-                custom_quota_paths,
-                quota_account_paths,
+                quota_paths,
                 conn: Mutex::new(conn),
                 read_pool,
                 snapshot: Mutex::new(snapshot),
@@ -413,6 +395,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ping,
             commands::ingest,
+            commands::get_overview_bundle,
             commands::get_overview,
             commands::get_report,
             commands::preview_work_notes,
@@ -452,6 +435,7 @@ pub fn run() {
             commands::apply_official_quota_hook,
             commands::get_official_quota_config,
             commands::save_official_quota_config,
+            commands::patch_official_quota_config,
             commands::list_custom_quota_providers,
             commands::save_custom_quota_provider,
             commands::delete_custom_quota_provider,

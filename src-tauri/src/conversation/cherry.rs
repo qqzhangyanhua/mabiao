@@ -8,12 +8,20 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, normalize_tool_call_details, optional_text, push_projected_message,
+    semantic_event, tool_result_event, update_time_bounds, ConversationFinishPrep,
+    ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::cherry::millis_to_rfc3339;
-use crate::adapters::goose::table_columns;
-use crate::domain::Source;
-use crate::ingest;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
+};
+use crate::source_sqlite::{
+    open_wal_readonly, sql_int, sql_text, table_columns, wal_source_revision,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::cherry::discover(roots)
@@ -37,7 +45,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Cherry Studio")
+    wal_source_revision(path, "Cherry Studio")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -68,7 +76,7 @@ fn project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Cherry Studio 数据库失败：{error}")))?;
     let topics = table_columns(&db, "topic").map_err(|message| fatal(path, message))?;
     if !topics.contains("id") {
@@ -111,10 +119,10 @@ fn read_topics(
          FROM topic
          WHERE (?1 IS NULL OR id = ?1) {deleted}
          ORDER BY id",
-        id = text_column(columns, "id"),
-        name = text_column(columns, "name"),
-        last_activity = int_column(columns, "last_activity_at"),
-        created_at = int_column(columns, "created_at"),
+        id = sql_text(columns, "id"),
+        name = sql_text(columns, "name"),
+        last_activity = sql_int(columns, "last_activity_at"),
+        created_at = sql_int(columns, "created_at"),
         deleted = deleted,
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
@@ -148,9 +156,9 @@ fn read_messages(
          FROM message
          WHERE topic_id = ?1 {deleted}
          ORDER BY created_at, id",
-        data = text_column(columns, "data"),
-        searchable = text_column(columns, "searchable_text"),
-        created_at = int_column(columns, "created_at"),
+        data = sql_text(columns, "data"),
+        searchable = sql_text(columns, "searchable_text"),
+        created_at = sql_int(columns, "created_at"),
         deleted = deleted,
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
@@ -329,21 +337,5 @@ fn project_content(
             messages,
             events,
         );
-    }
-}
-
-fn text_column(columns: &std::collections::BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
-}
-
-fn int_column(columns: &std::collections::BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, 0)")
-    } else {
-        "0".to_string()
     }
 }

@@ -1339,3 +1339,78 @@ fn cursor_session_promoted_parent_replaces_legacy_subagent_row() {
     );
     assert!(!row.source_file.contains("subagents"));
 }
+
+#[test]
+fn cursor_session_ingest_and_stale_check_cover_wsl_homes_via_scan_env() {
+    let dir = tempfile::tempdir().unwrap();
+    let win_home = dir.path().join("win-home");
+    let wsl_home = dir.path().join("wsl-home");
+    std::fs::create_dir_all(&win_home).unwrap();
+    // Primary home has NO .cursor/projects; transcript lives solely in WSL home.
+    seed_cursor_transcript(
+        &wsl_home,
+        "home-dev-repo",
+        "sess-wsl-1",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+
+    let env = crate::scan_paths::ScanEnv::new(&win_home).with_wsl_homes([wsl_home.clone()]);
+    let conn = store::open_memory().unwrap();
+
+    let cache = ingest::load_scan_cache(&conn).unwrap();
+    assert!(
+        ingest::scan_is_stale_with_env(&cache, &env).unwrap(),
+        "unseen WSL cursor transcript must mark scan stale"
+    );
+
+    let mut report = crate::domain::IngestReport::default();
+    crate::cursor_session::ingest_with_env(&conn, &env, &mut report);
+    assert_eq!(report.files_failed, 0, "issues={:?}", report.issues);
+    let sessions = store::load_cursor_sessions(&conn).unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].session_id, "sess-wsl-1");
+    assert!(sessions[0].source_file.contains("wsl-home"));
+
+    let cache = ingest::load_scan_cache(&conn).unwrap();
+    assert!(
+        !ingest::scan_is_stale_with_env(&cache, &env).unwrap(),
+        "freshly ingested WSL cursor transcript must not be stale"
+    );
+
+    // Add duplicate session_id in primary empty-window and a real project transcript in primary:
+    // duplicate prefers real project path, while primary-only session is also discovered.
+    seed_cursor_transcript(
+        &win_home,
+        "empty-window",
+        "sess-wsl-1",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+    seed_cursor_transcript(
+        &win_home,
+        "Users-win-app",
+        "sess-win-2",
+        &fixture("cursor-session-transcript.jsonl"),
+    );
+
+    let cache = ingest::load_scan_cache(&conn).unwrap();
+    assert!(
+        ingest::scan_is_stale_with_env(&cache, &env).unwrap(),
+        "adding transcripts across primary + WSL homes must mark scan stale"
+    );
+
+    let mut second = crate::domain::IngestReport::default();
+    crate::cursor_session::ingest_with_env(&conn, &env, &mut second);
+    assert_eq!(second.files_failed, 0, "issues={:?}", second.issues);
+    let sessions = store::load_cursor_sessions(&conn).unwrap();
+    assert_eq!(sessions.len(), 2);
+    let shared = sessions
+        .iter()
+        .find(|row| row.session_id == "sess-wsl-1")
+        .expect("sess-wsl-1");
+    assert!(
+        shared.source_file.contains("home-dev-repo"),
+        "real project path must beat empty-window across homes: {}",
+        shared.source_file
+    );
+    assert!(sessions.iter().any(|row| row.session_id == "sess-win-2"));
+}

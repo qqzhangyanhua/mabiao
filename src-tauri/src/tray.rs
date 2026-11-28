@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::{DateTime, Local, SecondsFormat, Utc};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewWindowBuilder};
 
 use crate::domain::{Filter, OfficialQuotaDto, OverviewDto};
 use crate::{ingest, official_quota, query, staged, tray_popup, AppState};
@@ -210,35 +210,27 @@ fn refresh_usage_and_await_deferred_catalog(app: &AppHandle) -> Result<(), Strin
 }
 
 /// 联网拉一遍各家官方额度（受退避冷却约束，不会比主窗口的刷新更激进），
-/// 再落库刷新托盘标题/悬浮面板。取数放在锁外，避免持锁期间打网络。
+/// 落库、评估一次阈值告警并向打开的主窗口广播 `official-quota-updated`。
+/// 取数与通知都在数据库锁外完成。
 fn sync_official_quota(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
-    let logins = official_quota::accounts::probe_default_logins(&accounts);
-    let results =
-        official_quota::fetch_all_targets_with_accounts(&custom, &accounts, &logins, |_, _| {});
-    let conn = state.lock_write()?;
-    let _ = official_quota::sync_claude_capture(&conn);
-    official_quota::apply_fetch_results(&conn, results)?;
-    let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
-    let logins = official_quota::accounts::probe_default_logins(&accounts);
-    let dto = official_quota::load_dto_with_accounts(
-        &conn,
-        &config,
-        &custom,
-        &accounts,
-        &logins,
-        chrono::Utc::now(),
-    );
-    official_quota::notify::check_and_notify_with_config(
-        app,
-        &dto,
-        &config,
-        &state.official_quota_notify_path,
+    let env = official_quota::QuotaEnv::live(state.quota_paths.clone());
+    let on_alert = |_alert: &official_quota::notify::QuotaAlert, title: &str, body: &str| {
+        official_quota::notify::send_notification(app, title, body);
+    };
+    let on_updated = |dto: &OfficialQuotaDto| {
+        let _ = app.emit(official_quota::EVENT_UPDATED, dto);
+    };
+    official_quota::refresh_and_notify(
+        &*state,
+        &env,
+        official_quota::RefreshOptions {
+            notify: Some(&on_alert),
+            on_updated: Some(&on_updated),
+            stream_progress: false,
+        },
     )
+    .map(|_| ())
 }
 
 fn query_today(app: &AppHandle) -> Result<OverviewDto, String> {
@@ -264,21 +256,9 @@ fn apply_labels(app: &AppHandle, overview: &OverviewDto) -> Result<(), String> {
 /// 设置页/主窗口的官方额度请求都不走这里，所以隐藏账号仍能在那边看到状态。
 pub fn load_quota_dto(app: &AppHandle) -> Result<OfficialQuotaDto, String> {
     let state = app.state::<AppState>();
+    let env = official_quota::QuotaEnv::live(state.quota_paths.clone());
     let conn = state.lock_read()?;
-    let config = official_quota::load_config(&state.official_quota_path);
-    let custom = official_quota::custom::store::load_providers(&state.custom_quota_paths);
-    let accounts = official_quota::accounts::load_resolved(&state.quota_account_paths);
-    let logins = official_quota::accounts::probe_default_logins(&accounts);
-    let mut dto = official_quota::load_dto_with_accounts(
-        &conn,
-        &config,
-        &custom,
-        &accounts,
-        &logins,
-        chrono::Utc::now(),
-    );
-    dto.rows = official_quota::visible_rows(dto.rows, &dto.hidden_providers);
-    Ok(dto)
+    Ok(official_quota::snapshot_visible(&conn, &env))
 }
 
 fn apply_labels_now(app: &AppHandle, overview: &OverviewDto, quota: Option<&OfficialQuotaDto>) {

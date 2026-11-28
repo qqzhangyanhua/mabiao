@@ -5,11 +5,20 @@ use std::time::UNIX_EPOCH;
 use chrono::{FixedOffset, NaiveDateTime, TimeZone};
 use serde_json::{json, Value};
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, first_text, normalize_tool_call_details,
+    normalize_tool_result_details, optional_text, parse_jsonl_conversation_values,
+    push_projected_message, semantic_event, tool_result_event, unadapted_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
 use super::{discover_extension, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::cursor_session::{
     group_transcripts, is_subagent_transcript, project_from_transcript_path,
     session_dir_from_transcript,
+};
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
 };
 
 #[cfg(test)]

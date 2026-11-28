@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 
 use crate::error::AppError;
-use crate::usage_query::Filter;
+use crate::scope::{self, Scope, ScopeInput};
 
 /// 防止无界区间拖垮查询。网页预设最长约一月，400 天足够。
 pub const MAX_DAYS: i64 = 400;
@@ -28,6 +28,17 @@ pub struct WorkTimelineQuery {
     pub from: Option<String>,
     pub to: Option<String>,
     pub tz_offset_minutes: Option<i32>,
+}
+
+impl WorkTimelineQuery {
+    pub fn scope_input(&self) -> ScopeInput<'_> {
+        ScopeInput {
+            account_id: self.account_id,
+            project_id: self.project_id,
+            from: self.from.as_deref(),
+            to: self.to.as_deref(),
+        }
+    }
 }
 
 /// 一根裁到当天的横条。`id` 是远端会话主键，点进去看详情。
@@ -105,7 +116,7 @@ type UsageKey = (i64, i64, String, String, String);
 
 pub async fn build(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     source: Option<&str>,
     tz_offset_minutes: i32,
 ) -> Result<WorkTimelineResponse, AppError> {
@@ -134,45 +145,41 @@ pub async fn build(
 
 async fn list_overlapping(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     source: Option<&str>,
 ) -> Result<Vec<SessionSpanRow>, AppError> {
     // 重叠：结束 ≥ from 且 开始 < to。缺客户端时间时退回推送时间，免得会话从时间线上消失。
-    Ok(sqlx::query_as(
+    let sql = format!(
         "SELECT s.id, s.account_id, a.account, s.device_pk, s.source, s.session_id, s.title,
                 s.project_path, s.project_id, p.name AS project_name, s.model,
-                COALESCE(s.started_at, s.ended_at, s.pushed_at) AS span_start,
-                COALESCE(s.ended_at, s.started_at, s.pushed_at) AS span_end
+                {start_time} AS span_start,
+                {end_time} AS span_end
          FROM sessions s
          JOIN remote_accounts a ON a.id = s.account_id
          LEFT JOIN projects p ON p.id = s.project_id
-         WHERE ($1::bigint IS NULL OR s.account_id = $1)
-           AND ($2::timestamptz IS NULL
-                OR COALESCE(s.ended_at, s.started_at, s.pushed_at) >= $2)
-           AND ($3::timestamptz IS NULL
-                OR COALESCE(s.started_at, s.ended_at, s.pushed_at) < $3)
-           AND ($4::bigint IS NULL OR s.project_id = $4)
+         WHERE {overlap_where}
            AND ($5::text IS NULL OR s.source = $5)
          ORDER BY span_start ASC, s.id ASC
          LIMIT $6",
-    )
-    .bind(filter.account_id)
-    .bind(filter.from)
-    .bind(filter.to)
-    .bind(filter.project_id)
-    .bind(source)
-    .bind(MAX_SESSIONS)
-    .fetch_all(pool)
-    .await?)
+        start_time = scope::SESSION_START_TIME,
+        end_time = scope::SESSION_TIME,
+        overlap_where = scope::SESSION_OVERLAP_WHERE,
+    );
+    Ok(filter
+        .bind_query_as(&sql)
+        .bind(source)
+        .bind(MAX_SESSIONS)
+        .fetch_all(pool)
+        .await?)
 }
 
 async fn usage_by_day(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     source: Option<&str>,
     tz_offset_minutes: i32,
 ) -> Result<Vec<DayUsageRow>, AppError> {
-    Ok(sqlx::query_as(
+    let sql = format!(
         "SELECT u.account_id, u.device_pk, u.source, u.session_id,
                 to_char((u.occurred_at AT TIME ZONE 'UTC') + $5::int * interval '1 minute',
                         'YYYY-MM-DD') AS day,
@@ -180,21 +187,17 @@ async fn usage_by_day(
                 COALESCE(sum(u.cost_snapshot), 0)::float8 AS cost_snapshot,
                 COALESCE(sum(u.unified_cost), 0)::float8 AS unified_cost
          FROM usage_records u
-         WHERE ($1::bigint IS NULL OR u.account_id = $1)
-           AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-           AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
-           AND ($4::bigint IS NULL OR u.project_id = $4)
+         WHERE {usage_where}
            AND ($6::text IS NULL OR u.source = $6)
          GROUP BY u.account_id, u.device_pk, u.source, u.session_id, 5",
-    )
-    .bind(filter.account_id)
-    .bind(filter.from)
-    .bind(filter.to)
-    .bind(filter.project_id)
-    .bind(tz_offset_minutes)
-    .bind(source)
-    .fetch_all(pool)
-    .await?)
+        usage_where = scope::USAGE_WHERE,
+    );
+    Ok(filter
+        .bind_query_as(&sql)
+        .bind(tz_offset_minutes)
+        .bind(source)
+        .fetch_all(pool)
+        .await?)
 }
 
 fn assemble(

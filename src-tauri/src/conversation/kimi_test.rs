@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use super::{index, EventKind};
+use super::index;
+use crate::domain::ConversationEventKind as EventKind;
 
 fn seed(temp: &Path, status: &str, include_update: bool) -> PathBuf {
     let root = temp.join("kimi");

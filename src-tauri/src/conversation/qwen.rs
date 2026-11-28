@@ -5,9 +5,15 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, first_text, parse_jsonl_conversation_values,
+    push_projected_message, tag_source_events, unadapted_event, update_time_bounds,
+    CapabilityDegradationPrep, ConversationFinishPrep, NativeEventIdPrep, ParsedConversation,
+    CAPABILITY_USAGE,
+};
 use super::{discover_extension, ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::project::project_from_source_file;
+use crate::domain::Source;
 
 #[cfg(test)]
 #[path = "qwen_test.rs"]

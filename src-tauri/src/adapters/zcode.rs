@@ -4,12 +4,7 @@ use serde_json::Value;
 
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// ZCode 桌面端：`$ZCODE_HOME`，否则 `~/.zcode`，再读 `cli/db/db.sqlite`。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "ZCODE_HOME", ".zcode", "cli/db/db.sqlite")
-}
+use crate::source_sqlite;
 
 /// 扫描目录解析出来的就是数据库文件本身；发现退化成「这个文件存在吗」。
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
@@ -17,12 +12,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
-    ingest::metadata_fingerprint(&wal)
+    source_sqlite::wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let source_db = ingest::open_readonly(path)?;
+    let source_db = source_sqlite::open_wal_readonly(path)?;
     let mut stmt = source_db
         .prepare("SELECT session_id, data FROM message")
         .map_err(|e| e.to_string())?;

@@ -10,8 +10,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
 use super::{
-    accounts, antigravity, backoff, capture_path, claude, claude_usage, codex, codex_usage,
-    copilot, cursor, custom, detect, devin, droid, grok, opencode,
+    accounts, antigravity, backoff, claude, claude_usage, codex, codex_usage, copilot, cursor,
+    custom, detect, devin, droid, grok, opencode, QuotaEnv, QuotaPaths,
 };
 use crate::domain::{OfficialQuotaProvider, OfficialQuotaWindow};
 use crate::store;
@@ -148,12 +148,28 @@ pub fn resolve_target_with_accounts(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Result<FetchTarget, String> {
-    let accounts = accounts::with_live_profiles(accounts);
+    resolve_target_with_accounts_in(
+        &QuotaEnv::live(QuotaPaths::app_data()),
+        id,
+        custom,
+        accounts,
+        logins,
+    )
+}
+
+pub fn resolve_target_with_accounts_in(
+    env: &QuotaEnv,
+    id: &str,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+) -> Result<FetchTarget, String> {
+    let accounts = accounts::with_live_profiles_at(accounts, env.now());
     if let Some(found) = accounts.iter().find(|account| account.config.id == id) {
         if !found.config.enabled {
             return Err(format!("「{}」已停用，先在设置页打开它", found.config.name));
         }
-        let target = accounts::prepare_manual_target(found, logins)?;
+        let target = accounts::prepare_manual_target_in(env, found, logins)?;
         return Ok(FetchTarget::Account(Box::new(target)));
     }
     resolve_target(id, custom)
@@ -173,30 +189,28 @@ pub fn custom_targets_for_fetch(custom: &[custom::ResolvedProvider]) -> Vec<Fetc
 
 /// 先打 ChatGPT 的用量接口（不依赖 CLI 装没装），读不到再拉起 `codex app-server`。
 /// 两条都失败时报接口那条：多数人应该走的是它。
-fn fetch_codex() -> ProviderFetch {
-    match codex_usage::fetch_usage() {
+fn fetch_codex_in(env: &QuotaEnv) -> ProviderFetch {
+    match codex_usage::fetch_usage_in(env) {
         Ok(result) => Ok(result),
-        Err(error) => {
-            codex::fetch_rate_limits()
-                .map(QuotaSnapshot::from)
-                .map_err(|app_server_error| {
-                    if app_server_error.contains("未找到 Codex CLI") {
-                        error
-                    } else {
-                        app_server_error
-                    }
-                })
-        }
+        Err(error) => codex::fetch_rate_limits_in(env)
+            .map(QuotaSnapshot::from)
+            .map_err(|app_server_error| {
+                if app_server_error.contains("未找到 Codex CLI") {
+                    error
+                } else {
+                    app_server_error
+                }
+            }),
     }
 }
 
 /// 先问官方用量接口（零配置），读不到再回落到 statusline 捕获文件——后者是老路径，
 /// 装了 hook 的用户和走第三方代理的用户都还得靠它。两条都没有才报错，
 /// 错误信息取自动接口那条，因为那是多数人应该走的路。
-fn fetch_claude() -> ProviderFetch {
-    match claude_usage::fetch_usage() {
+fn fetch_claude_in(env: &QuotaEnv) -> ProviderFetch {
+    match claude_usage::fetch_usage_in(env) {
         Ok(result) => Ok(result.into()),
-        Err(error) => claude::refresh_from_capture(&capture_path())
+        Err(error) => claude::refresh_from_capture(&env.paths.claude_capture)
             .map(QuotaSnapshot::from)
             .map_err(|capture_error| {
                 if capture_error.contains("尚未捕获") {
@@ -215,24 +229,32 @@ fn snapshot(result: Result<(Vec<OfficialQuotaWindow>, String), String>) -> Provi
 }
 
 pub fn fetch_provider(provider: OfficialQuotaProvider) -> ProviderFetch {
+    fetch_provider_in(&QuotaEnv::live(QuotaPaths::app_data()), provider)
+}
+
+pub fn fetch_provider_in(env: &QuotaEnv, provider: OfficialQuotaProvider) -> ProviderFetch {
     match provider {
-        OfficialQuotaProvider::Claude => fetch_claude(),
-        OfficialQuotaProvider::Codex => fetch_codex(),
-        OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary(),
-        OfficialQuotaProvider::Grok => grok::fetch_rate_limits(),
-        OfficialQuotaProvider::Droid => droid::fetch_rate_limits(),
-        OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits(),
-        OfficialQuotaProvider::OpenCode => snapshot(opencode::fetch_usage()),
-        OfficialQuotaProvider::Copilot => copilot::fetch_usage(),
-        OfficialQuotaProvider::Devin => devin::fetch_usage(),
+        OfficialQuotaProvider::Claude => fetch_claude_in(env),
+        OfficialQuotaProvider::Codex => fetch_codex_in(env),
+        OfficialQuotaProvider::Cursor => cursor::fetch_usage_summary_in(env),
+        OfficialQuotaProvider::Grok => grok::fetch_rate_limits_in(env),
+        OfficialQuotaProvider::Droid => droid::fetch_rate_limits_in(env),
+        OfficialQuotaProvider::Antigravity => antigravity::fetch_rate_limits_in(env),
+        OfficialQuotaProvider::OpenCode => snapshot(opencode::fetch_usage_in(env)),
+        OfficialQuotaProvider::Copilot => copilot::fetch_usage_in(env),
+        OfficialQuotaProvider::Devin => devin::fetch_usage_in(env),
     }
 }
 
 pub fn fetch_target(target: &FetchTarget) -> ProviderFetch {
+    fetch_target_in(&QuotaEnv::live(QuotaPaths::app_data()), target)
+}
+
+pub fn fetch_target_in(env: &QuotaEnv, target: &FetchTarget) -> ProviderFetch {
     match target {
-        FetchTarget::Builtin(provider) => fetch_provider(*provider),
-        FetchTarget::Custom(provider) => custom::fetch(provider),
-        FetchTarget::Account(account) => accounts::fetch_managed_account(account, None),
+        FetchTarget::Builtin(provider) => fetch_provider_in(env, *provider),
+        FetchTarget::Custom(provider) => custom::fetch_in(env, provider),
+        FetchTarget::Account(account) => accounts::fetch_managed_account_in(env, account),
     }
 }
 
@@ -243,12 +265,26 @@ pub fn targets_for_fetch(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Vec<FetchTarget> {
-    let accounts = accounts::with_live_profiles(accounts);
+    targets_for_fetch_in(
+        &QuotaEnv::live(QuotaPaths::app_data()),
+        custom,
+        accounts,
+        logins,
+    )
+}
+
+pub fn targets_for_fetch_in(
+    env: &QuotaEnv,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+) -> Vec<FetchTarget> {
+    let accounts = accounts::with_live_profiles_at(accounts, env.now());
     let mut targets = Vec::new();
     for provider in OfficialQuotaProvider::ALL {
         match accounts::plan::plan_provider(provider, &accounts, logins) {
             accounts::plan::ProviderPlan::Unchanged => {
-                if detect::has_local_credentials(provider) {
+                if detect::has_local_credentials_in(env, provider) {
                     targets.push(FetchTarget::Builtin(provider));
                 }
             }
@@ -260,7 +296,8 @@ pub fn targets_for_fetch(
                     targets.push(FetchTarget::Builtin(provider));
                 }
                 for placement in placements {
-                    if let Some(target) = accounts::prepare_auto_target(&placement, logins) {
+                    if let Some(target) = accounts::prepare_auto_target_in(env, &placement, logins)
+                    {
                         targets.push(FetchTarget::Account(Box::new(target)));
                     }
                 }
@@ -288,12 +325,35 @@ pub fn fetch_all_targets_with_accounts<F>(
 where
     F: Fn(&FetchTarget, &ProviderFetch) + Sync,
 {
-    let now = Utc::now();
-    let path = backoff::state_path();
-    let mut state = backoff::load_state(&path);
-    let targets = exclude_cooling(targets_for_fetch(custom, accounts, logins), &state, now);
+    fetch_all_targets_in(
+        &QuotaEnv::live(QuotaPaths::app_data()),
+        custom,
+        accounts,
+        logins,
+        on_result,
+    )
+}
+
+pub fn fetch_all_targets_in<F>(
+    env: &QuotaEnv,
+    custom: &[custom::ResolvedProvider],
+    accounts: &[accounts::ResolvedQuotaAccount],
+    logins: &[accounts::LocalLogin],
+    on_result: F,
+) -> Vec<(FetchTarget, ProviderFetch)>
+where
+    F: Fn(&FetchTarget, &ProviderFetch) + Sync,
+{
+    let now = env.now();
+    let path = &env.paths.backoff;
+    let mut state = backoff::load_state(path);
+    let targets = exclude_cooling(
+        targets_for_fetch_in(env, custom, accounts, logins),
+        &state,
+        now,
+    );
     let results = fetch_in_parallel(targets, |target| {
-        let result = fetch_target(target);
+        let result = fetch_target_in(env, target);
         on_result(target, &result);
         result
     });
@@ -303,7 +363,7 @@ where
             .iter()
             .map(|(target, result)| (target.quota_id(), result)),
         now,
-        &path,
+        path,
     );
     results
 }
@@ -375,11 +435,26 @@ pub(crate) fn exclude_cooling<T: QuotaTarget>(
 /// 单个目标的手动刷新。限流期间也拦——「多点几次」正是让限流恢复更慢的原因，
 /// 但要明确告诉用户还要等多久，而不是让按钮看起来没反应。
 pub fn fetch_target_throttled(target: &FetchTarget) -> ThrottledFetch {
-    fetch_target_throttled_at(target, &backoff::state_path(), Utc::now())
+    fetch_target_throttled_in(&QuotaEnv::live(QuotaPaths::app_data()), target)
+}
+
+pub fn fetch_target_throttled_in(env: &QuotaEnv, target: &FetchTarget) -> ThrottledFetch {
+    let now = env.now();
+    let path = &env.paths.backoff;
+    let mut state = backoff::load_state(path);
+    if let Some(message) =
+        backoff::cooldown_message(&state, target.quota_id(), target.quota_display_name(), now)
+    {
+        return ThrottledFetch::Cooldown(message);
+    }
+    let result = fetch_target_in(env, target);
+    record_backoff(&mut state, [(target.quota_id(), &result)], now, path);
+    ThrottledFetch::Attempted(result)
 }
 
 /// 与 `fetch_target_throttled` 相同，状态文件路径和「现在」由调用方注入。
 /// 单测用 tempfile，避免去读真实用户目录。
+#[cfg(test)]
 pub(crate) fn fetch_target_throttled_at(
     target: &FetchTarget,
     path: &Path,
@@ -399,11 +474,15 @@ pub(crate) fn fetch_target_throttled_at(
 /// 悬浮面板上的「强制刷新」用：跳过冷却检查，即便还在冷却期也真打一次网络。
 /// 结果照样喂给 [`record_backoff`]——连续失败依然会拉长下次自动重试的等待。
 pub fn fetch_target_forced(target: &FetchTarget) -> ProviderFetch {
-    let now = Utc::now();
-    let path = backoff::state_path();
-    let mut state = backoff::load_state(&path);
-    let result = fetch_target(target);
-    record_backoff(&mut state, [(target.quota_id(), &result)], now, &path);
+    fetch_target_forced_in(&QuotaEnv::live(QuotaPaths::app_data()), target)
+}
+
+pub fn fetch_target_forced_in(env: &QuotaEnv, target: &FetchTarget) -> ProviderFetch {
+    let now = env.now();
+    let path = &env.paths.backoff;
+    let mut state = backoff::load_state(path);
+    let result = fetch_target_in(env, target);
+    record_backoff(&mut state, [(target.quota_id(), &result)], now, path);
     result
 }
 

@@ -308,6 +308,137 @@ fn preview_lists_unreadable_sessions_as_skipped_and_counts_the_rest() {
     assert!(preview.notice.contains("管理员"));
 }
 
+#[test]
+fn ready_session_with_text_ref_hash_mismatch_skips_whole_session_per_adr_0026() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let (conn, _) = seed_semantic(home);
+    let prepared = crate::conversation::prepare_detail(&conn, "codex", "semantic-1").unwrap();
+    assert!(
+        crate::conversation::event_index_ready(&conn, home, &prepared).unwrap(),
+        "源文件未变，索引应处于就绪态"
+    );
+    let changed = conn
+        .execute(
+            "UPDATE conversation_events SET text_hash = text_hash + 1
+             WHERE source = 'codex' AND session_id = 'semantic-1' AND text_hash IS NOT NULL",
+            [],
+        )
+        .unwrap();
+    assert!(changed > 0, "semantic-1 应有外置正文行");
+
+    let error = crate::conversation::read_push_session(&conn, home, &only_row(&conn, "semantic-1"))
+        .err()
+        .expect("已就绪会话外置正文指纹失配时必须整场跳过，不得悄悄回退整份解析");
+    assert!(error.contains("外置正文"), "{error}");
+
+    let h = Harness::new(home, conn);
+    let preview = push::preview(&h.env(), &range(None, None)).unwrap();
+    assert_eq!(preview.sessions, 0);
+    assert_eq!(preview.skipped.len(), 1);
+    assert_eq!(preview.skipped[0].session_id, "semantic-1");
+    assert!(preview.skipped[0].reason.contains("外置正文"));
+}
+
+#[test]
+fn unready_deferred_and_dirty_sessions_fall_back_to_full_parse_per_adr_0027() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let big_output = format!("{}FULL-DEFERRED-TAIL", "A".repeat(5_000));
+    let path = home.join(".codex/sessions/2026/09/rollout-unready-1.jsonl");
+    let lines = [
+        serde_json::json!({
+            "type": "session_meta",
+            "timestamp": "2026-09-02T10:00:00Z",
+            "payload": {"id": "unready-1", "cwd": "/w/unready", "model_provider": "openai"}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-09-02T10:00:01Z",
+            "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": "GEN1_PROMPT_PADDING"}]}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-09-02T10:00:02Z",
+            "payload": {"type": "function_call", "name": "Bash", "arguments": "{}", "call_id": "call-big"}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-09-02T10:00:03Z",
+            "payload": {"type": "function_call_output", "call_id": "call-big", "output": big_output}
+        }),
+        serde_json::json!({
+            "type": "response_item",
+            "timestamp": "2026-09-02T10:00:04Z",
+            "payload": {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "GEN1_REPLY_PADDING"}]}
+        }),
+    ];
+    let body = lines
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    write_text(&path, &format!("{body}\n"));
+
+    // 1. 目录阶段未补建（event_index_generation IS NULL）：走整份解析回退并展开 >4KB 延迟正文。
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Codex);
+    crate::conversation::refresh_catalog(&conn, Source::Codex, &roots).unwrap();
+    let row = only_row(&conn, "unready-1");
+    assert!(!row.event_index_ready);
+    let source = crate::conversation::read_push_session(&conn, home, &row)
+        .expect("未补建会话推送应走整份解析回退");
+    assert!(source.events.iter().all(|event| event.details.is_null()));
+    assert!(
+        source.events.iter().any(|event| event
+            .text
+            .as_deref()
+            .is_some_and(|t| t.contains("FULL-DEFERRED-TAIL"))),
+        "回退路径必须展开 >4KB 大段工具输出"
+    );
+    assert!(source
+        .events
+        .iter()
+        .all(|event| event.content_status == ConversationEventContentStatus::Complete));
+
+    // 2. 先全量建 gen-1，再改写文件并跑目录阶段（event_index_dirty = 1）：必须读到新文件而非旧一代。
+    crate::conversation::refresh_codex(&conn, home).unwrap();
+    let rewritten = std::fs::read_to_string(&path)
+        .unwrap()
+        .replace("GEN1_PROMPT_PADDING", "GEN2_PROMPT")
+        .replace("GEN1_REPLY_PADDING", "GEN2_REPLY");
+    std::fs::write(&path, rewritten).unwrap();
+    crate::conversation::refresh_catalog(&conn, Source::Codex, &roots).unwrap();
+    let dirty_row = only_row(&conn, "unready-1");
+    assert!(!dirty_row.event_index_ready);
+    let dirty_source = crate::conversation::read_push_session(&conn, home, &dirty_row)
+        .expect("待补建脏会话推送应走整份解析回退");
+    let texts: Vec<_> = dirty_source
+        .events
+        .iter()
+        .filter_map(|event| event.text.as_deref())
+        .collect();
+    assert!(texts.contains(&"GEN2_PROMPT"), "{texts:?}");
+    assert!(texts.contains(&"GEN2_REPLY"), "{texts:?}");
+    assert!(!texts.contains(&"GEN1_PROMPT_PADDING"), "{texts:?}");
+    assert!(dirty_source
+        .events
+        .iter()
+        .all(|event| event.details.is_null()));
+
+    // 3. 未就绪会话的源文件消失：应整场跳过并给明确原因。
+    std::fs::remove_file(&path).unwrap();
+    let error = crate::conversation::read_push_session(&conn, home, &dirty_row)
+        .err()
+        .expect("未就绪会话源文件不可读时应跳过");
+    assert!(!error.is_empty());
+    let h = Harness::new(home, conn);
+    let preview = push::preview(&h.env(), &range(None, None)).unwrap();
+    assert_eq!(preview.sessions, 0);
+    assert_eq!(preview.skipped.len(), 1);
+    assert_eq!(preview.skipped[0].session_id, "unready-1");
+}
+
 // ---- 打码 ----
 
 fn assert_redacted(input: &str, secret: &str) {

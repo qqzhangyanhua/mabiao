@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use push_protocol::{ContextManifestPayload, EventPayload, SessionPayload};
+use serde::{Deserialize, Serialize};
 use sqlx::types::Json;
 use sqlx::{FromRow, PgConnection, PgPool, Row};
 
 use crate::error::AppError;
-use crate::usage_query::Filter;
+use crate::scope::{self, Scope};
 
 /// 客户端时间都是 RFC 3339 字符串；解析不了就当没有，不因此拒收整场会话。
 pub fn parse_timestamp(value: &str) -> Option<DateTime<Utc>> {
@@ -69,7 +70,7 @@ pub async fn upsert(
 }
 
 /// 列表里的一场会话：只有目录元数据，不带事件正文与上下文清单。
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct SessionListRow {
     pub id: i64,
     pub account_id: i64,
@@ -78,6 +79,7 @@ pub struct SessionListRow {
     pub source: String,
     pub session_id: String,
     pub title: String,
+    #[serde(rename = "project")]
     pub project_path: String,
     pub project_id: Option<i64>,
     pub project_name: Option<String>,
@@ -89,22 +91,15 @@ pub struct SessionListRow {
     pub pushed_at: DateTime<Utc>,
 }
 
-/// 会话时间取结束时间；客户端时间解析不了时退回开始、再退回推送时间，免得会话从列表里消失。
-const SESSION_TIME: &str = "COALESCE(s.ended_at, s.started_at, s.pushed_at)";
-
-const SESSION_FILTER: &str = "($1::bigint IS NULL OR s.account_id = $1)
-           AND ($2::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) >= $2)
-           AND ($3::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) < $3)
-           AND ($4::bigint IS NULL OR s.project_id = $4)
-           AND ($5::boolean IS NULL OR s.generated_by_work_notes = $5)";
-
 /// 会话列表的过滤条件：消耗记录那套范围，加上「码表生成」标记。
 #[derive(Debug, Clone)]
 pub struct SessionFilter {
-    pub scope: Filter,
+    pub scope: Scope,
     /// `Some(true)` 只看码表生成的，`Some(false)` 排除它们，`None` 不过滤。
     pub generated_by_work_notes: Option<bool>,
 }
+
+const WORK_NOTES_FILTER: &str = "($5::boolean IS NULL OR s.generated_by_work_notes = $5)";
 
 /// 按时间从新到旧。`from` 含、`to` 不含，与消耗记录查询一致。
 pub async fn list(
@@ -121,15 +116,16 @@ pub async fn list(
          JOIN remote_accounts a ON a.id = s.account_id
          JOIN devices d ON d.id = s.device_pk
          LEFT JOIN projects p ON p.id = s.project_id
-         WHERE {SESSION_FILTER}
-         ORDER BY {SESSION_TIME} DESC, s.id DESC
-         LIMIT $6 OFFSET $7"
+         WHERE {session_where}
+           AND {WORK_NOTES_FILTER}
+         ORDER BY {session_time} DESC, s.id DESC
+         LIMIT $6 OFFSET $7",
+        session_where = scope::SESSION_WHERE,
+        session_time = scope::SESSION_TIME,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.scope.account_id)
-        .bind(filter.scope.from)
-        .bind(filter.scope.to)
-        .bind(filter.scope.project_id)
+    Ok(filter
+        .scope
+        .bind_query_as(&sql)
         .bind(filter.generated_by_work_notes)
         .bind(limit)
         .bind(offset)
@@ -141,13 +137,13 @@ pub async fn list(
 pub async fn count(pool: &PgPool, filter: &SessionFilter) -> Result<i64, AppError> {
     let sql = format!(
         "SELECT count(*) FROM sessions s
-         WHERE {SESSION_FILTER}"
+         WHERE {session_where}
+           AND {WORK_NOTES_FILTER}",
+        session_where = scope::SESSION_WHERE,
     );
-    Ok(sqlx::query_scalar(&sql)
-        .bind(filter.scope.account_id)
-        .bind(filter.scope.from)
-        .bind(filter.scope.to)
-        .bind(filter.scope.project_id)
+    Ok(filter
+        .scope
+        .bind_query_scalar(&sql)
         .bind(filter.generated_by_work_notes)
         .fetch_one(pool)
         .await?)

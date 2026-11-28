@@ -8,7 +8,9 @@ use serde_json::Value;
 
 use super::AccountSecret;
 use crate::domain::OfficialQuotaProvider;
-use crate::official_quota::{antigravity, codex_usage, grok};
+use crate::official_quota::{
+    antigravity, codex_usage, grok, HttpRequest, QuotaEnv, QuotaTransport,
+};
 
 const TIMEOUT: Duration = Duration::from_secs(12);
 
@@ -28,7 +30,17 @@ pub(crate) enum RefreshFail {
     Other(String),
 }
 
-pub(crate) fn refresh_separated(request: &RefreshRequest<'_>) -> Result<Refreshed, RefreshFail> {
+pub(crate) fn refresh_separated_in(
+    env: &QuotaEnv,
+    request: &RefreshRequest<'_>,
+) -> Result<Refreshed, RefreshFail> {
+    refresh_separated_via(env.transport.as_ref(), request)
+}
+
+fn refresh_separated_via(
+    transport: &dyn QuotaTransport,
+    request: &RefreshRequest<'_>,
+) -> Result<Refreshed, RefreshFail> {
     let refresh_token = request
         .secret
         .refresh_token
@@ -37,16 +49,22 @@ pub(crate) fn refresh_separated(request: &RefreshRequest<'_>) -> Result<Refreshe
         .filter(|token| !token.is_empty())
         .ok_or_else(|| RefreshFail::Other("没有可续期的 refresh token".to_string()))?;
     match request.provider {
-        OfficialQuotaProvider::Codex => refresh_codex(refresh_token, request.secret),
-        OfficialQuotaProvider::Grok => refresh_grok(refresh_token, request.secret),
-        OfficialQuotaProvider::Antigravity => refresh_antigravity(refresh_token, request.secret),
+        OfficialQuotaProvider::Codex => refresh_codex(transport, refresh_token, request.secret),
+        OfficialQuotaProvider::Grok => refresh_grok(transport, refresh_token, request.secret),
+        OfficialQuotaProvider::Antigravity => {
+            refresh_antigravity(transport, refresh_token, request.secret)
+        }
         _ => Err(RefreshFail::Other(
             "这个提供方的隔离额度账号不能在这里续期".to_string(),
         )),
     }
 }
 
-fn refresh_codex(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshed, RefreshFail> {
+fn refresh_codex(
+    transport: &dyn QuotaTransport,
+    refresh_token: &str,
+    secret: &AccountSecret,
+) -> Result<Refreshed, RefreshFail> {
     let url = codex_token_url(secret.refresh_issuer.as_deref());
     let client_id = secret
         .refresh_client_id
@@ -55,6 +73,7 @@ fn refresh_codex(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshe
         .filter(|value| !value.is_empty())
         .unwrap_or(codex_usage::OAUTH_CLIENT_ID);
     let body = post_form(
+        transport,
         &url,
         &[
             ("grant_type", "refresh_token"),
@@ -66,7 +85,11 @@ fn refresh_codex(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshe
     parse_token_body(&body)
 }
 
-fn refresh_grok(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshed, RefreshFail> {
+fn refresh_grok(
+    transport: &dyn QuotaTransport,
+    refresh_token: &str,
+    secret: &AccountSecret,
+) -> Result<Refreshed, RefreshFail> {
     let issuer = required(
         secret.refresh_issuer.as_deref(),
         "Grok 刷新缺少登录服务地址",
@@ -75,11 +98,14 @@ fn refresh_grok(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshed
         secret.refresh_client_id.as_deref(),
         "Grok 刷新缺少客户端标识",
     )?;
-    grok::refresh_tokens(&grok::RefreshCredentials {
-        refresh_token: refresh_token.to_string(),
-        oidc_issuer: issuer,
-        client_id,
-    })
+    grok::refresh_tokens_via(
+        transport,
+        &grok::RefreshCredentials {
+            refresh_token: refresh_token.to_string(),
+            oidc_issuer: issuer,
+            client_id,
+        },
+    )
     .map(|tokens| Refreshed {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
@@ -88,6 +114,7 @@ fn refresh_grok(refresh_token: &str, secret: &AccountSecret) -> Result<Refreshed
 }
 
 fn refresh_antigravity(
+    transport: &dyn QuotaTransport,
     refresh_token: &str,
     secret: &AccountSecret,
 ) -> Result<Refreshed, RefreshFail> {
@@ -101,7 +128,8 @@ fn refresh_antigravity(
             "刷新 Antigravity 登录缺少客户端信息",
         )?;
         let url = antigravity_token_url(&issuer);
-        return antigravity::exchange_refresh_token(
+        return antigravity::exchange_refresh_token_via(
+            transport,
             &url,
             refresh_token,
             &[(client_id, client_secret)],
@@ -112,13 +140,20 @@ fn refresh_antigravity(
         })
         .map_err(classify_provider_error);
     }
-    let clients = antigravity::local_oauth_clients().map_err(RefreshFail::Other)?;
-    antigravity::exchange_refresh_token(antigravity::TOKEN_URL, refresh_token, &clients)
-        .map(|(access_token, refresh_token)| Refreshed {
-            access_token,
-            refresh_token,
-        })
-        .map_err(classify_provider_error)
+    let clients = transport
+        .antigravity_oauth_clients()
+        .map_err(RefreshFail::Other)?;
+    antigravity::exchange_refresh_token_via(
+        transport,
+        antigravity::TOKEN_URL,
+        refresh_token,
+        &clients,
+    )
+    .map(|(access_token, refresh_token)| Refreshed {
+        access_token,
+        refresh_token,
+    })
+    .map_err(classify_provider_error)
 }
 
 fn codex_token_url(issuer: Option<&str>) -> String {
@@ -140,25 +175,37 @@ fn antigravity_token_url(issuer: &str) -> String {
     }
 }
 
-fn post_form(url: &str, fields: &[(&str, &str)], offline: &str) -> Result<String, RefreshFail> {
-    match crate::net::agent_for_url(url, TIMEOUT)
-        .post(url)
-        .set("Accept", "application/json")
-        .send_form(fields)
-    {
-        Ok(response) => response
-            .into_string()
+fn post_form(
+    transport: &dyn QuotaTransport,
+    url: &str,
+    fields: &[(&str, &str)],
+    offline: &str,
+) -> Result<String, RefreshFail> {
+    let request = HttpRequest::post_form(
+        url,
+        fields
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect(),
+        TIMEOUT,
+    )
+    .header("Accept", "application/json");
+    let response = transport
+        .http(&request)
+        .map_err(|_| RefreshFail::Other(offline.to_string()))?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|error| RefreshFail::Other(format!("读取刷新响应失败：{error}"))),
-        Err(ureq::Error::Status(400 | 401 | 403, _)) => Err(RefreshFail::Rejected),
-        Err(ureq::Error::Status(code, response)) => {
-            let body = response.into_string().unwrap_or_default();
+        400 | 401 | 403 => Err(RefreshFail::Rejected),
+        code => {
+            let body = response.body_string_lossy();
             if body.contains("invalid_grant") {
                 Err(RefreshFail::Rejected)
             } else {
                 Err(RefreshFail::Other(format!("刷新登录失败：HTTP {code}")))
             }
         }
-        Err(_) => Err(RefreshFail::Other(offline.to_string())),
     }
 }
 

@@ -113,7 +113,7 @@ fn codex_adapter_splits_cache_write_out_of_input_after_delta() {
 fn codex_scan_dirs_include_archived_sessions() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path();
-    let dirs = codex::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Codex);
     assert_eq!(
         dirs,
         vec![
@@ -129,10 +129,10 @@ fn codex_scan_dirs_include_archived_sessions() {
     let found = codex::discover(&dirs).unwrap();
     assert_eq!(found, vec![file]);
 
-    let overrides =
-        ingest::PathOverrides::from([("CODEX_HOME", vec![PathBuf::from("/custom/codex")])]);
+    let env = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("CODEX_HOME", vec![PathBuf::from("/custom/codex")]);
     assert_eq!(
-        codex::scan_dirs(&overrides, home),
+        env.usage_scan_dirs(Source::Codex),
         vec![
             PathBuf::from("/custom/codex/sessions"),
             PathBuf::from("/custom/codex/archived_sessions"),
@@ -206,7 +206,7 @@ fn claude_adapter_uses_structured_agent_id_for_child_usage() {
 fn claude_scan_dirs_keeps_code_roots_when_desktop_is_absent() {
     let home = std::path::Path::new("/home/example");
     assert_eq!(
-        claude::scan_dirs(&ingest::PathOverrides::new(), home),
+        crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Claude),
         vec![
             home.join(".claude/projects"),
             home.join(".config/claude/projects"),
@@ -232,7 +232,7 @@ fn claude_scan_dirs_appends_existing_desktop_cowork_projects() {
     )
     .unwrap();
 
-    let dirs = claude::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Claude);
     assert!(dirs.contains(&home.join(".claude/projects")));
     assert!(dirs.contains(&home.join(".config/claude/projects")));
     assert!(dirs.contains(&projects));
@@ -251,8 +251,9 @@ fn claude_config_dir_replaces_code_roots_but_keeps_desktop() {
     );
     std::fs::create_dir_all(&desktop).unwrap();
     let custom = home.join("custom-claude");
-    let overrides = ingest::PathOverrides::from([("CLAUDE_CONFIG_DIR", vec![custom.clone()])]);
-    let dirs = claude::scan_dirs(&overrides, home);
+    let dirs = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("CLAUDE_CONFIG_DIR", vec![custom.clone()])
+        .usage_scan_dirs(Source::Claude);
     assert_eq!(dirs[0], custom.join("projects"));
     assert!(dirs.contains(&desktop));
     assert!(!dirs.iter().any(|dir| dir == &home.join(".claude/projects")));
@@ -269,7 +270,7 @@ fn claude_scan_dirs_discovers_msix_package_cowork() {
         "AppData/Local/Packages/Claude_publisher/LocalCache/Roaming/Claude/local-agent-mode-sessions/acct/org/local_msix/.claude/projects",
     );
     std::fs::create_dir_all(&projects).unwrap();
-    let dirs = claude::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Claude);
     assert!(dirs.contains(&projects), "{dirs:?}");
 }
 
@@ -769,7 +770,7 @@ fn opencode_scan_dirs_discovers_suffixed_db_files() {
     std::fs::write(data.join("opencode-work.db"), b"work").unwrap();
     std::fs::write(data.join("opencode-work.db-wal"), b"wal").unwrap();
     std::fs::write(data.join("notes.db"), b"unrelated").unwrap();
-    let dirs = crate::adapters::opencode::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Opencode);
     let names: Vec<_> = dirs
         .iter()
         .filter_map(|path| path.file_name()?.to_str())
@@ -866,12 +867,13 @@ fn kimi_adapter_keeps_last_status_update_per_turn() {
 fn kimi_scan_dirs_default_to_both_homes_and_env_replaces_them() {
     let home = std::path::Path::new("/home/example");
     assert_eq!(
-        kimi::scan_dirs(&ingest::PathOverrides::new(), home),
+        crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Kimi),
         vec![home.join(".kimi"), home.join(".kimi-code")]
     );
     let custom = PathBuf::from("/custom/kimi");
-    let overrides = ingest::PathOverrides::from([("KIMI_DATA_DIR", vec![custom.clone()])]);
-    assert_eq!(kimi::scan_dirs(&overrides, home), vec![custom]);
+    let env = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("KIMI_DATA_DIR", vec![custom.clone()]);
+    assert_eq!(env.usage_scan_dirs(Source::Kimi), vec![custom]);
 }
 
 #[test]
@@ -1259,7 +1261,7 @@ fn qwen_scan_dirs_discovers_chat_jsonl_under_projects() {
     std::fs::write(home.join(".qwen/tmp/hash/logs.json"), b"[]").unwrap();
     std::fs::write(chats.join("session-1.jsonl"), b"{}\n").unwrap();
     std::fs::write(home.join(".qwen/notes.jsonl"), b"{}\n").unwrap();
-    let dirs = qwen::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Qwen);
     assert_eq!(dirs, vec![home.join(".qwen")]);
     let found = qwen::discover(&dirs).unwrap();
     let names: Vec<_> = found
@@ -1735,6 +1737,48 @@ fn workbuddy_adapter_reads_legacy_usage_fields_and_meta_cwd() {
     assert_eq!(records[0].cache_creation_tokens, 50);
     assert_eq!(records[0].total_tokens, 520);
     assert_eq!(records[0].project, "/work/wb-meta");
+}
+
+#[test]
+fn codebuddy_adapter_skips_incomplete_and_skip_run_and_reads_reasoning_and_message_usage() {
+    let content = [
+        r#"{"timestamp":1790503200000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"messageId":"m-skip","skipRun":true,"model":"glm-5.1","usage":{"inputTokens":500,"outputTokens":50}}}"#,
+        r#"{"timestamp":1790503201000,"type":"message","role":"assistant","status":"in_progress","sessionId":"s-cb","cwd":"/work/cb","providerData":{"messageId":"m-wip","model":"glm-5.1","usage":{"inputTokens":400,"outputTokens":40}}}"#,
+        r#"{"timestamp":1790503202000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"traceId":"t1"},"message":{"model":"claude-sonnet-4","usage":{"prompt_tokens":1000,"completion_tokens":100,"cache_read_input_tokens":200,"reasoningTokens":30}}}"#,
+        r#"{"timestamp":1790503203000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"traceId":"t1"},"message":{"model":"claude-sonnet-4","usage":{"prompt_tokens":1500,"completion_tokens":120,"cache_read_input_tokens":300,"reasoningTokens":45}}}"#,
+    ]
+    .join("\n");
+    let records = codebuddy::parse_codebuddy_jsonl(
+        &fixture_lines(&content),
+        "/home/dev/.codebuddy/projects/-work-cb/s-cb.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::CodeBuddy);
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].input_tokens, 1200);
+    assert_eq!(records[0].output_tokens, 120);
+    assert_eq!(records[0].cache_read_tokens, 300);
+    assert_eq!(records[0].reasoning_tokens, 45);
+}
+
+#[test]
+fn workbuddy_adapter_keeps_workbuddy_profile_semantics() {
+    let content = [
+        r#"{"timestamp":1790503200000,"type":"message","role":"assistant","status":"in_progress","sessionId":"s-wb","cwd":"/work/wb","providerData":{"messageId":"m1","skipRun":true,"requestModelId":"hy3","usage":{"inputTokens":600,"outputTokens":40,"inputTokensDetails":{"cached_tokens":100}}}}"#,
+        r#"{"timestamp":1790503201000,"type":"message","role":"assistant","status":"completed","sessionId":"s-wb","cwd":"/work/wb","providerData":{"messageId":"m1","requestModelId":"hy3","usage":{"inputTokens":800,"outputTokens":60,"inputTokensDetails":{"cached_tokens":200}}}}"#,
+    ]
+    .join("\n");
+    let records = workbuddy::parse_workbuddy_jsonl(
+        &fixture_lines(&content),
+        "/home/dev/.workbuddy/projects/-work-wb/s-wb.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::WorkBuddy);
+    assert_eq!(records[0].model, "hy3");
+    assert_eq!(records[0].input_tokens, 600);
+    assert_eq!(records[0].output_tokens, 60);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].reasoning_tokens, 0);
 }
 
 #[test]
@@ -2736,7 +2780,7 @@ fn agy_adapter_readonly_parse_follows_uncheckpointed_wal() {
     assert!(records.iter().any(|row| row.input_tokens == 5));
 
     let immutable = rusqlite::Connection::open_with_flags(
-        ingest::sqlite_file_uri(&db, "immutable=1"),
+        crate::source_sqlite::sqlite_file_uri(&db, "immutable=1"),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     )
     .unwrap();
@@ -3581,7 +3625,7 @@ fn hermes_discovers_named_profiles_and_resolves_profile_home() {
         }],
     );
 
-    let dirs = hermes::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Hermes);
     assert!(dirs.contains(&home.join(".hermes")));
     assert!(dirs.contains(&home.join(".hermes/profiles/work")));
 
@@ -3592,9 +3636,9 @@ fn hermes_discovers_named_profiles_and_resolves_profile_home() {
         .any(|path| path == &home.join(".hermes/state.db")));
     assert!(found.iter().any(|path| path == &profile));
 
-    let overrides =
-        ingest::PathOverrides::from([("HERMES_HOME", vec![home.join(".hermes/profiles/work")])]);
-    let resolved = hermes::scan_dirs(&overrides, home);
+    let resolved = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("HERMES_HOME", vec![home.join(".hermes/profiles/work")])
+        .usage_scan_dirs(Source::Hermes);
     assert!(resolved.contains(&home.join(".hermes")));
     assert!(resolved.contains(&home.join(".hermes/profiles/work")));
 
@@ -3886,7 +3930,7 @@ fn roo_adapter_skips_api_req_without_timestamp() {
 #[test]
 fn roo_scan_dirs_cover_vscode_family_and_env_override() {
     let home = std::path::Path::new("/home/example");
-    let dirs = roo::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Roo);
     assert!(dirs
         .contains(&home.join(".config/Code/User/globalStorage/rooveterinaryinc.roo-cline/tasks")));
     assert!(dirs.contains(&home.join(
@@ -3895,10 +3939,10 @@ fn roo_scan_dirs_cover_vscode_family_and_env_override() {
     assert!(dirs.contains(
         &home.join(".vscode-server/data/User/globalStorage/rooveterinaryinc.roo-cline/tasks")
     ));
-    let overrides =
-        ingest::PathOverrides::from([("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")])]);
+    let env = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("ROO_TASKS_DIR", vec![PathBuf::from("/custom/roo-tasks")]);
     assert_eq!(
-        roo::scan_dirs(&overrides, home),
+        env.usage_scan_dirs(Source::Roo),
         vec![PathBuf::from("/custom/roo-tasks")]
     );
 }
@@ -3962,7 +4006,7 @@ fn kilo_adapter_subtracts_cache_skips_usage_missing_and_pairs_models() {
 #[test]
 fn kilo_scan_dirs_cover_vscode_family_and_env_override() {
     let home = std::path::Path::new("/home/example");
-    let dirs = kilo::scan_dirs(&ingest::PathOverrides::new(), home);
+    let dirs = crate::scan_paths::ScanEnv::new(home).usage_scan_dirs(Source::Kilo);
     assert!(dirs.contains(&home.join(".config/Code/User/globalStorage/kilocode.kilo-code/tasks")));
     assert!(dirs
         .contains(&home.join(
@@ -3970,12 +4014,10 @@ fn kilo_scan_dirs_cover_vscode_family_and_env_override() {
         )));
     assert!(dirs
         .contains(&home.join(".vscode-server/data/User/globalStorage/kilocode.kilo-code/tasks")));
-    let overrides = ingest::PathOverrides::from([(
-        "KILO_TASKS_DIR",
-        vec![PathBuf::from("/custom/kilo-tasks")],
-    )]);
+    let env = crate::scan_paths::ScanEnv::new(home)
+        .with_env_override("KILO_TASKS_DIR", vec![PathBuf::from("/custom/kilo-tasks")]);
     assert_eq!(
-        kilo::scan_dirs(&overrides, home),
+        env.usage_scan_dirs(Source::Kilo),
         vec![PathBuf::from("/custom/kilo-tasks")]
     );
 }

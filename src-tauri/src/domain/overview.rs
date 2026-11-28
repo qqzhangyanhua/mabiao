@@ -1,5 +1,10 @@
 use serde::{Deserialize, Serialize};
 
+use super::{
+    BillingWindowsDto, BudgetStatusDto, CursorAccountUsageDto, FilterOptions, NamedAmount,
+    SeriesPoint, SessionRow,
+};
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Filter {
     pub from: Option<String>,
@@ -42,4 +47,31 @@ pub struct OverviewDto {
     pub unpriced: bool,
     pub cost_breakdown: OverviewCostBreakdown,
     pub cost_sources: OverviewCostSources,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct OverviewBundleRequest {
+    pub filter: Filter,
+    pub previous_filter: Option<Filter>,
+    pub heatmap_filter: Filter,
+    pub grain: String,
+    #[serde(default)]
+    pub top_sessions_limit: Option<usize>,
+    #[serde(default)]
+    pub include_options: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OverviewBundleDto {
+    pub options: Option<FilterOptions>,
+    pub overview: OverviewDto,
+    pub previous: Option<OverviewDto>,
+    pub trend: Vec<SeriesPoint>,
+    pub heatmap: Vec<SeriesPoint>,
+    pub models: Vec<NamedAmount>,
+    pub projects: Vec<NamedAmount>,
+    pub sessions: Vec<SessionRow>,
+    pub billing_windows: BillingWindowsDto,
+    pub cursor_account_usage: CursorAccountUsageDto,
+    pub budget_status: BudgetStatusDto,
 }

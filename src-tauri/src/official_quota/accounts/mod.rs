@@ -10,6 +10,7 @@ mod copilot_device;
 mod fetch_row;
 pub(crate) mod plan;
 mod refresh;
+mod storage;
 
 pub use codex_pkce::{
     open_codex_authorize, poll_codex_pkce_login, start_codex_pkce_login,
@@ -23,15 +24,25 @@ pub use copilot_device::{
 
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::backoff;
 use super::custom;
 use crate::domain::OfficialQuotaProvider;
-use crate::official_quota::{self, read_identity, QuotaIdentity};
+use crate::official_quota::{read_identity, read_identity_at, QuotaEnv, QuotaIdentity, QuotaPaths};
 
-pub use fetch_row::{fetch_account_row, fetch_managed_account, AccountTarget};
-pub(crate) use fetch_row::{prepare_auto_target, prepare_manual_target};
+#[cfg(test)]
+pub(crate) use fetch_row::prepare_manual_target;
+pub use fetch_row::{
+    fetch_account_row, fetch_managed_account, fetch_managed_account_in, AccountTarget,
+};
+pub(crate) use fetch_row::{prepare_auto_target_in, prepare_manual_target_in};
+pub(crate) use storage::store_refreshed_tokens;
+use storage::{
+    forget_secret, load_config, load_secrets, new_account_id, random_bits, save_config,
+    save_secrets, write_atomic,
+};
 
 pub const CONFIG_NAME: &str = "quota_accounts.json";
 pub const SECRET_NAME: &str = "quota_account_secrets.json";
@@ -294,8 +305,18 @@ pub fn import_local_login(
     root: &Path,
     backoff_path: &Path,
 ) -> Result<SavedQuotaAccountDto, String> {
-    let identity = read_identity(provider, root)?;
-    let secret = capture::capture_secret(provider, root)?;
+    import_local_login_at(paths, provider, root, backoff_path, Utc::now())
+}
+
+pub fn import_local_login_at(
+    paths: &QuotaAccountPaths,
+    provider: OfficialQuotaProvider,
+    root: &Path,
+    backoff_path: &Path,
+    now: DateTime<Utc>,
+) -> Result<SavedQuotaAccountDto, String> {
+    let identity = read_identity_at(provider, root, now)?;
+    let secret = capture::capture_secret_at(provider, root, now)?;
     upsert_account(
         paths,
         provider,
@@ -376,9 +397,21 @@ pub fn import_default(
     provider: OfficialQuotaProvider,
     backoff_path: &Path,
 ) -> Result<SavedQuotaAccountDto, String> {
+    let mut env = QuotaEnv::live(QuotaPaths::app_data());
+    env.paths.accounts = paths.clone();
+    env.paths.backoff = backoff_path.to_path_buf();
+    import_default_in(&env, provider)
+}
+
+pub fn import_default_in(
+    env: &QuotaEnv,
+    provider: OfficialQuotaProvider,
+) -> Result<SavedQuotaAccountDto, String> {
+    let paths = &env.paths.accounts;
+    let backoff_path = &env.paths.backoff;
     match provider {
         OfficialQuotaProvider::Antigravity => {
-            let tokens = crate::official_quota::antigravity::load_local_tokens()?;
+            let tokens = crate::official_quota::antigravity::load_local_tokens_in(env)?;
             let identity =
                 crate::official_quota::identity::identity_from_antigravity_tokens(&tokens)?;
             let secret = capture::antigravity_secret_from_tokens(&tokens)?;
@@ -392,8 +425,8 @@ pub fn import_default(
             )
         }
         OfficialQuotaProvider::Droid => {
-            let plain =
-                crate::official_quota::droid::load_default_auth_plaintext()?.ok_or_else(|| {
+            let plain = crate::official_quota::droid::load_default_auth_plaintext_in(env)?
+                .ok_or_else(|| {
                     "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string()
                 })?;
             let identity = crate::official_quota::identity::identity_from_droid_plaintext(&plain)?;
@@ -408,13 +441,13 @@ pub fn import_default(
             )
         }
         other => {
-            let roots = default_roots(other);
+            let roots = env.default_roots(other);
             if roots.is_empty() {
                 return Err("未找到本机登录态，请先在客户端登录".to_string());
             }
             let mut last = "未找到本机登录态，请先在客户端登录".to_string();
             for root in roots {
-                match import_local_login(paths, other, &root, backoff_path) {
+                match import_local_login_at(paths, other, &root, backoff_path, env.now()) {
                     Ok(saved) => return Ok(saved),
                     Err(error) => last = error,
                 }
@@ -577,6 +610,13 @@ pub fn delete_account(paths: &QuotaAccountPaths, id: &str) -> Result<QuotaAccoun
 
 /// 只探已经登记过的提供方。一个都没有就直接返回，不去碰默认目录。
 pub fn probe_default_logins(accounts: &[ResolvedQuotaAccount]) -> Vec<LocalLogin> {
+    probe_default_logins_in(&QuotaEnv::live(QuotaPaths::app_data()), accounts)
+}
+
+pub fn probe_default_logins_in(
+    env: &QuotaEnv,
+    accounts: &[ResolvedQuotaAccount],
+) -> Vec<LocalLogin> {
     if accounts.is_empty() {
         return Vec::new();
     }
@@ -588,17 +628,17 @@ pub fn probe_default_logins(accounts: &[ResolvedQuotaAccount]) -> Vec<LocalLogin
         {
             continue;
         }
-        if let Some(login) = probe_provider(provider) {
+        if let Some(login) = probe_provider_in(env, provider) {
             logins.push(login);
         }
     }
     logins
 }
 
-fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
+fn probe_provider_in(env: &QuotaEnv, provider: OfficialQuotaProvider) -> Option<LocalLogin> {
     match provider {
         OfficialQuotaProvider::Antigravity => {
-            let tokens = crate::official_quota::antigravity::load_local_tokens().ok()?;
+            let tokens = crate::official_quota::antigravity::load_local_tokens_in(env).ok()?;
             let identity =
                 crate::official_quota::identity::identity_from_antigravity_tokens(&tokens).ok()?;
             Some(LocalLogin {
@@ -608,7 +648,8 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             })
         }
         OfficialQuotaProvider::Droid => {
-            let plain = crate::official_quota::droid::load_default_auth_plaintext().ok()??;
+            let plain =
+                crate::official_quota::droid::load_default_auth_plaintext_in(env).ok()??;
             let identity =
                 crate::official_quota::identity::identity_from_droid_plaintext(&plain).ok()?;
             Some(LocalLogin {
@@ -618,8 +659,8 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             })
         }
         other => {
-            for root in default_roots(other) {
-                if let Ok(identity) = read_identity(other, &root) {
+            for root in env.default_roots(other) {
+                if let Ok(identity) = read_identity_at(other, &root, env.now()) {
                     return Some(LocalLogin {
                         provider,
                         fingerprint: identity.fingerprint,
@@ -629,25 +670,6 @@ fn probe_provider(provider: OfficialQuotaProvider) -> Option<LocalLogin> {
             }
             None
         }
-    }
-}
-
-pub(crate) fn default_roots(provider: OfficialQuotaProvider) -> Vec<PathBuf> {
-    match provider {
-        OfficialQuotaProvider::Claude => vec![official_quota::claude_usage::credentials_path()],
-        OfficialQuotaProvider::Codex => vec![official_quota::codex_usage::auth_path()],
-        OfficialQuotaProvider::Cursor => crate::cursor_credentials::global_storage_dir()
-            .into_iter()
-            .collect(),
-        OfficialQuotaProvider::Grok => vec![official_quota::grok::auth_path()],
-        OfficialQuotaProvider::Droid => vec![official_quota::droid::factory_home()],
-        OfficialQuotaProvider::Antigravity => official_quota::antigravity::APP_DIRS
-            .into_iter()
-            .filter_map(crate::vscode_state::global_storage_dir)
-            .collect(),
-        OfficialQuotaProvider::OpenCode => vec![official_quota::opencode::auth_path()],
-        OfficialQuotaProvider::Copilot => vec![official_quota::copilot::config_home()],
-        OfficialQuotaProvider::Devin => official_quota::devin::storage_dirs(),
     }
 }
 
@@ -664,11 +686,17 @@ fn to_dto(config: &QuotaAccountConfig) -> QuotaAccountDto {
 }
 
 /// 探测和刷新前，隔离目录的身份以目录里当前读到的为准。读不到就留着保存时的指纹。
-pub(crate) fn with_live_profiles(accounts: &[ResolvedQuotaAccount]) -> Vec<ResolvedQuotaAccount> {
-    accounts.iter().map(live_profile).collect()
+pub(crate) fn with_live_profiles_at(
+    accounts: &[ResolvedQuotaAccount],
+    now: DateTime<Utc>,
+) -> Vec<ResolvedQuotaAccount> {
+    accounts
+        .iter()
+        .map(|account| live_profile(account, now))
+        .collect()
 }
 
-fn live_profile(account: &ResolvedQuotaAccount) -> ResolvedQuotaAccount {
+fn live_profile(account: &ResolvedQuotaAccount, now: DateTime<Utc>) -> ResolvedQuotaAccount {
     let mut account = account.clone();
     if account.config.source != QuotaAccountSource::ProfileDir {
         return account;
@@ -685,155 +713,9 @@ fn live_profile(account: &ResolvedQuotaAccount) -> ResolvedQuotaAccount {
     let Some(provider) = OfficialQuotaProvider::parse(&account.config.provider) else {
         return account;
     };
-    if let Ok(identity) = read_identity(provider, Path::new(dir)) {
+    if let Ok(identity) = read_identity_at(provider, Path::new(dir), now) {
         account.config.fingerprint = identity.fingerprint;
         account.config.hint = identity.label;
     }
     account
-}
-
-/// 续期成功后只改码表自己的凭证文件。同一把锁包住读改写，避免并发刷新互相覆盖。
-pub(crate) fn store_refreshed_tokens(
-    path: &Path,
-    id: &str,
-    access_token: &str,
-    refresh_token: Option<&str>,
-) -> Result<(), String> {
-    let access_token = access_token.trim();
-    if access_token.is_empty() {
-        return Err("刷新响应里没有 access_token".to_string());
-    }
-    let rotated = refresh_token
-        .map(str::trim)
-        .filter(|token| !token.is_empty())
-        .map(str::to_string);
-    with_secret_file(path, |file| {
-        let entry = file.secrets.entry(id.to_string()).or_default();
-        entry.access_token = access_token.to_string();
-        // 旧的过期时刻描述的是上一张 access token。留着会让下一轮误判成还要续期。
-        entry.access_expires_at = None;
-        if let Some(refresh_token) = rotated {
-            entry.refresh_token = Some(refresh_token);
-        }
-        Ok(())
-    })
-}
-
-fn forget_secret(path: &Path, id: &str) -> Result<(), String> {
-    let _guard = secret_file_lock()
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    if !path.exists() {
-        return Ok(());
-    }
-    let mut secrets = load_secrets(path);
-    if secrets.secrets.remove(id).is_none() {
-        return Ok(());
-    }
-    save_secrets(path, &secrets)
-}
-
-fn with_secret_file(
-    path: &Path,
-    update: impl FnOnce(&mut SecretFile) -> Result<(), String>,
-) -> Result<(), String> {
-    let _guard = secret_file_lock()
-        .lock()
-        .unwrap_or_else(|error| error.into_inner());
-    let mut secrets = load_secrets(path);
-    update(&mut secrets)?;
-    if secrets.secrets.is_empty() && !path.exists() {
-        return Ok(());
-    }
-    save_secrets(path, &secrets)
-}
-
-fn secret_file_lock() -> &'static std::sync::Mutex<()> {
-    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    &LOCK
-}
-
-fn load_config(path: &Path) -> QuotaAccountFile {
-    load_json(path)
-}
-
-fn load_secrets(path: &Path) -> SecretFile {
-    load_json(path)
-}
-
-fn load_json<T: Default + serde::de::DeserializeOwned>(path: &Path) -> T {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
-}
-
-fn save_config(path: &Path, config: &QuotaAccountFile) -> Result<(), String> {
-    write_json(path, config, false)
-}
-
-fn save_secrets(path: &Path, secrets: &SecretFile) -> Result<(), String> {
-    write_json(path, secrets, true)
-}
-
-fn write_json<T: Serialize>(path: &Path, value: &T, private: bool) -> Result<(), String> {
-    let bytes = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
-    write_atomic(path, bytes.as_bytes(), private)
-}
-
-/// 同目录临时文件再 `rename`。`private` 时临时文件创建就是 0600。
-fn write_atomic(path: &Path, bytes: &[u8], private: bool) -> Result<(), String> {
-    let parent = path.parent().unwrap_or_else(|| Path::new("."));
-    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let file_name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let temp = parent.join(format!(".{file_name}.tmp"));
-    let _ = std::fs::remove_file(&temp);
-
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    if private {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    #[cfg(not(unix))]
-    let _ = private;
-
-    let written = options.open(&temp).and_then(|mut file| {
-        use std::io::Write;
-        file.write_all(bytes)?;
-        file.sync_all()
-    });
-    if let Err(error) = written {
-        let _ = std::fs::remove_file(&temp);
-        return Err(format!("写入 {file_name} 失败：{error}"));
-    }
-    std::fs::rename(&temp, path).map_err(|error| {
-        let _ = std::fs::remove_file(&temp);
-        format!("写入 {file_name} 失败：{error}")
-    })
-}
-
-fn new_account_id(slug: &str, taken: &[String]) -> String {
-    for _ in 0..64 {
-        let candidate = format!("acct:{slug}:{:016x}", random_bits());
-        if !taken.iter().any(|id| id == &candidate) {
-            return candidate;
-        }
-    }
-    format!("acct:{slug}:{:016x}", random_bits())
-}
-
-fn random_bits() -> u64 {
-    use std::hash::{BuildHasher, Hasher};
-    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
-    hasher.write_u64(
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |elapsed| elapsed.as_nanos() as u64),
-    );
-    hasher.finish()
 }

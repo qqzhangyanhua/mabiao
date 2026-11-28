@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
 use push_protocol::DeviceInfo;
+use serde::{Deserialize, Serialize};
 use sqlx::{PgExecutor, PgPool};
 
 use crate::error::AppError;
 
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct DeviceRow {
     pub device_id: String,
     pub device_name: String,

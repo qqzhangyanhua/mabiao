@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::adapters::project::decode_dashed_dir;
 use crate::adapters::{
@@ -6,11 +6,6 @@ use crate::adapters::{
     text_field, LineFactory,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(overrides, home, "PI_AGENT_DIR", ".pi/agent/sessions", "")
-}
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
     parse_streaming_jsonl(path, parse_pi_jsonl)

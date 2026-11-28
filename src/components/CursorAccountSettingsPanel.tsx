@@ -30,10 +30,12 @@ export function CursorAccountSettingsPanel({
   autoRefresh,
   autoRefreshError = null,
   onAutoRefreshChange,
+  onClearCache,
 }: {
   autoRefresh: boolean;
   autoRefreshError?: string | null;
   onAutoRefreshChange: (value: boolean) => void;
+  onClearCache?: () => Promise<void>;
 }) {
   const [status, setStatus] = useState<CursorCredentialStatus | null>(null);
   const [busy, setBusy] = useState<"idle" | "clearing">("idle");
@@ -63,7 +65,11 @@ export function CursorAccountSettingsPanel({
     setMessage(null);
     setError(null);
     try {
-      await invoke("clear_cursor_account_usage");
+      if (onClearCache) {
+        await onClearCache();
+      } else {
+        await invoke("clear_cursor_account_usage");
+      }
       setMessage("已清空 Cursor 账号用量缓存，本机消耗记录未改动；下次刷新将重新拉全量");
     } catch (err: unknown) {
       setError(humanStatus(err));

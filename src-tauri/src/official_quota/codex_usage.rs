@@ -12,11 +12,13 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use chrono::Utc;
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths, QuotaSnapshot,
+    QuotaTransport,
+};
 
 const USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 /// Codex CLI 的公开 OAuth 客户端标识。不是密钥。已分离凭证续期必须带上它，
@@ -33,23 +35,24 @@ const PERCENT_HEADERS: [(&str, &str); 2] = [
 ];
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
-    let auth = load_auth(&auth_path())?;
-    fetch_with_access_token(&auth)
+    fetch_usage_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let auth = load_auth(&env.codex_auth_path())?;
+    fetch_with_access_token_in(env, &auth)
 }
 
 /// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
-pub(crate) fn fetch_with_access_token(auth: &CodexAuth) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_at(auth, None)
-}
-
-pub(crate) fn fetch_with_access_token_at(
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
     auth: &CodexAuth,
-    quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(USAGE_URL, quota_base);
-    let (raw, header_percents) = request_usage(auth, &url)?;
-    let windows = parse_usage(&raw, &header_percents, Utc::now().timestamp())?;
-    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(parse_plan_type(&raw)))
+    let url = env.rebase_url(USAGE_URL);
+    let (raw, header_percents) = request_usage_via(env.transport.as_ref(), auth, &url)?;
+    let now = env.now();
+    let windows = parse_usage(&raw, &header_percents, now.timestamp())?;
+    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(parse_plan_type(&raw)))
 }
 
 pub fn parse_plan_type(raw: &str) -> Option<String> {
@@ -61,12 +64,13 @@ pub fn parse_plan_type(raw: &str) -> Option<String> {
 }
 
 pub fn auth_path() -> PathBuf {
-    std::env::var("CODEX_HOME")
-        .ok()
-        .map(PathBuf::from)
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| crate::ingest::default_home().join(".codex"))
-        .join("auth.json")
+    auth_path_in(&crate::scan_paths::ScanEnv::capture_for_home(
+        &crate::ingest::default_home(),
+    ))
+}
+
+pub(crate) fn auth_path_in(env: &crate::scan_paths::ScanEnv) -> PathBuf {
+    env.client_credential_path(crate::domain::Source::Codex, "auth.json")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -175,17 +179,23 @@ fn resets_at(node: &Value, now_secs: i64) -> Option<String> {
     chrono::DateTime::from_timestamp(epoch, 0).map(|value| value.to_rfc3339())
 }
 
-fn request_usage(auth: &CodexAuth, url: &str) -> Result<(String, Vec<(String, f64)>), String> {
-    let mut request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Authorization", &format!("Bearer {}", auth.access_token))
-        .set("Accept", "application/json")
-        .set("User-Agent", "ai-usage-stats");
+fn request_usage_via(
+    transport: &dyn QuotaTransport,
+    auth: &CodexAuth,
+    url: &str,
+) -> Result<(String, Vec<(String, f64)>), String> {
+    let mut request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("Bearer {}", auth.access_token))
+        .header("Accept", "application/json")
+        .header("User-Agent", "ai-usage-stats");
     if let Some(account_id) = auth.account_id.as_deref() {
-        request = request.set("ChatGPT-Account-Id", account_id);
+        request = request.header("ChatGPT-Account-Id", account_id);
     }
-    match request.call() {
-        Ok(response) => {
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Codex 用量接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => {
             let percents = PERCENT_HEADERS
                 .iter()
                 .filter_map(|(slot, header)| {
@@ -194,17 +204,11 @@ fn request_usage(auth: &CodexAuth, url: &str) -> Result<(String, Vec<(String, f6
                 })
                 .collect();
             let body = response
-                .into_string()
+                .body_string()
                 .map_err(|e| format!("读取 Codex 用量响应失败：{e}"))?;
             Ok((body, percents))
         }
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Codex 登录已失效，请重新运行 codex 登录".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Codex 用量失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Codex 用量接口，请检查网络后重试".to_string()),
+        401 | 403 => Err("Codex 登录已失效，请重新运行 codex 登录".to_string()),
+        code => Err(format!("拉取 Codex 用量失败：HTTP {code}")),
     }
 }

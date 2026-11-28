@@ -14,7 +14,6 @@
 //!    留着的话解出来的 access_token 大概率已经过期。
 //! 3. 旧版 `auth.json`，明文 JSON，兜底。
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use aes_gcm::aead::consts::{U12, U16};
@@ -26,7 +25,10 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths, QuotaSnapshot,
+    QuotaTransport,
+};
 
 const LIMITS_URL: &str = "https://api.factory.ai/api/billing/limits";
 /// 网页版账号设置用的接口，本来给 web-app session 用，但真机验证过 CLI 本地凭证
@@ -40,36 +42,47 @@ const POOLS: [(&str, &str, &str); 2] = [("standard", "", "标准"), ("core", "co
 const BUCKETS: [(&str, &str); 3] = [("fiveHour", "5 小时"), ("weekly", "周"), ("monthly", "月")];
 
 pub fn fetch_rate_limits() -> Result<QuotaSnapshot, String> {
-    let token = load_access_token()?;
-    fetch_with_access_token(&token)
+    fetch_rate_limits_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let token = load_access_token_in(env)?;
+    fetch_with_access_token_in(env, &token)
 }
 
 /// 用调用方给的 access token 取限额。不读钥匙串，也不刷新。
-pub(crate) fn fetch_with_access_token(token: &str) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_at(token, None)
-}
-
-pub(crate) fn fetch_with_access_token_at(
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
     token: &str,
-    quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(LIMITS_URL, quota_base);
-    let raw = request_limits(token, &url)?;
-    let windows = parse_limits(&raw, Utc::now())?;
+    let url = env.rebase_url(LIMITS_URL);
+    let raw = request_limits_via(env.transport.as_ref(), token, &url)?;
+    let now = env.now();
+    let windows = parse_limits(&raw, now)?;
     // 套餐接口失败不影响窗口。隔离目录的桩只接限额，不接套餐。
-    let plan = if quota_base.is_some() {
+    let plan = if env.quota_base.is_some() {
         None
     } else {
-        fetch_subscription_plan(token)
+        fetch_subscription_plan_via(
+            env.transport.as_ref(),
+            token,
+            &env.rebase_url(SUBSCRIPTION_SCHEDULE_URL),
+            now,
+        )
     };
-    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
+    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(plan))
 }
 
 /// 套餐名是加分项，取不到（接口拒绝、JWT 没有 org id 等）不影响额度窗口。
-fn fetch_subscription_plan(token: &str) -> Option<String> {
+fn fetch_subscription_plan_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    url: &str,
+    now: DateTime<Utc>,
+) -> Option<String> {
     let org_id = parse_jwt_external_org_id(token)?;
-    let raw = request_subscription_schedule(token, &org_id).ok()?;
-    parse_subscription_plan(&raw, Utc::now())
+    let raw = request_subscription_schedule_via(transport, token, &org_id, url).ok()?;
+    parse_subscription_plan(&raw, now)
 }
 
 /// WorkOS JWT 的 `external_org_id` 声明，就是网页版请求头 `x-factory-org-id` 用的值。
@@ -85,24 +98,25 @@ pub fn parse_jwt_external_org_id(token: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-fn request_subscription_schedule(token: &str, org_id: &str) -> Result<String, String> {
-    let request = crate::net::agent_with_timeout(TIMEOUT)
-        .get(SUBSCRIPTION_SCHEDULE_URL)
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("Accept", "application/json")
-        .set("x-factory-org-id", org_id);
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_subscription_schedule_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    org_id: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Accept", "application/json")
+        .header("x-factory-org-id", org_id);
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Droid 套餐接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Droid 套餐响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Droid 套餐接口鉴权失败，CLI 本地凭证可能没有这个权限".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Droid 套餐失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Droid 套餐接口，请检查网络后重试".to_string()),
+        401 | 403 => Err("Droid 套餐接口鉴权失败，CLI 本地凭证可能没有这个权限".to_string()),
+        code => Err(format!("拉取 Droid 套餐失败：HTTP {code}")),
     }
 }
 
@@ -223,24 +237,21 @@ fn is_active(resets_at: Option<&DateTime<Utc>>, now: DateTime<Utc>) -> bool {
     resets_at.is_none_or(|value| *value > now)
 }
 
-pub(crate) fn factory_home() -> PathBuf {
-    std::env::var("FACTORY_HOME_OVERRIDE")
-        .ok()
-        .map(PathBuf::from)
-        .filter(|path| !path.as_os_str().is_empty())
-        .unwrap_or_else(|| crate::ingest::default_home().join(".factory"))
+pub fn load_access_token() -> Result<String, String> {
+    load_access_token_in(&QuotaEnv::live(QuotaPaths::app_data()))
 }
 
-pub fn load_access_token() -> Result<String, String> {
-    let plain = load_default_auth_plaintext()?
+pub fn load_access_token_in(env: &QuotaEnv) -> Result<String, String> {
+    let plain = load_default_auth_plaintext_in(env)?
         .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())?;
     access_token_from(&plain)
         .ok_or_else(|| "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string())
 }
 
 /// 零配置和「导入当前本机登录」共用：先钥匙串解密的 loginkeychain，再 keyfile，再 `auth.json`。
-pub(crate) fn load_default_auth_plaintext() -> Result<Option<String>, String> {
-    load_auth_plaintext_with(&factory_home(), macos_login_key().as_deref())
+pub(crate) fn load_default_auth_plaintext_in(env: &QuotaEnv) -> Result<Option<String>, String> {
+    let key = env.transport.droid_keychain_key();
+    load_auth_plaintext_with(&env.droid_home, key.as_deref())
 }
 
 /// `keychain_key` 为 `None` 时跳过 loginkeychain。测试传入密钥，不调用 `/usr/bin/security`。
@@ -283,13 +294,13 @@ const KEYCHAIN_ACCOUNT: &str = "auth-encryption-key-security-cli";
 /// 静默落回 keyfile-v2，不让这一步的失败盖过后面可能有效的凭证。
 /// droid 非生产构建会给 account 加 `-dev` 后缀，正常安装用不到，保底也试一下。
 #[cfg(target_os = "macos")]
-fn macos_login_key() -> Option<String> {
+pub(crate) fn macos_login_key() -> Option<String> {
     macos_keychain_password(KEYCHAIN_ACCOUNT)
         .or_else(|| macos_keychain_password(&format!("{KEYCHAIN_ACCOUNT}-dev")))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn macos_login_key() -> Option<String> {
+pub(crate) fn macos_login_key() -> Option<String> {
     None
 }
 
@@ -450,22 +461,22 @@ fn decrypt_gcm(key: &[u8], iv: &[u8], sealed: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
-fn request_limits(token: &str, url: &str) -> Result<String, String> {
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .get(url)
-        .set("Authorization", &format!("Bearer {token}"))
-        .set("Accept", "application/json");
-    match request.call() {
-        Ok(response) => response
-            .into_string()
+fn request_limits_via(
+    transport: &dyn QuotaTransport,
+    token: &str,
+    url: &str,
+) -> Result<String, String> {
+    let request = HttpRequest::get(url, TIMEOUT)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Accept", "application/json");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Droid 限额接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Droid 限额响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Droid 登录已过期，请重新运行 droid 登录".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Droid 限额失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Droid 限额接口，请检查网络后重试".to_string()),
+        401 | 403 => Err("Droid 登录已过期，请重新运行 droid 登录".to_string()),
+        code => Err(format!("拉取 Droid 限额失败：HTTP {code}")),
     }
 }

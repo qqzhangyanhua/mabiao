@@ -455,3 +455,143 @@ fn claude_backfilled_events_match_the_fallback_parse_across_split_files() {
     );
     assert_claude_backfill_matches_fallback(home, "claude-split-1");
 }
+
+#[test]
+fn schema_migration_adds_nullable_event_count_without_bumping_adapter_version() {
+    assert_eq!(crate::conversation::CONVERSATION_ADAPTER_VERSION, 20);
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("legacy.sqlite");
+    {
+        let legacy = rusqlite::Connection::open(&db_path).unwrap();
+        legacy
+            .execute_batch(
+                r#"
+                CREATE TABLE conversation_sessions (
+                    source TEXT NOT NULL,
+                    session_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    project TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    ended_at TEXT NOT NULL,
+                    source_file TEXT NOT NULL,
+                    capabilities_json TEXT NOT NULL DEFAULT '[]',
+                    support_status TEXT NOT NULL DEFAULT 'experimental',
+                    file_available INTEGER NOT NULL DEFAULT 1,
+                    source_file_mtime_ms INTEGER NOT NULL DEFAULT 0,
+                    source_file_mtime_ns INTEGER NOT NULL DEFAULT 0,
+                    source_file_size INTEGER NOT NULL DEFAULT 0,
+                    adapter_version INTEGER NOT NULL DEFAULT 0,
+                    source_revision TEXT NOT NULL DEFAULT '',
+                    is_top_level INTEGER NOT NULL DEFAULT 1,
+                    agent_metadata_json TEXT NOT NULL DEFAULT '{}',
+                    event_index_generation INTEGER,
+                    event_index_dirty INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(source, session_id)
+                );
+                INSERT INTO conversation_sessions(
+                    source, session_id, title, project, model, started_at, ended_at,
+                    source_file, adapter_version, event_index_generation
+                ) VALUES(
+                    'codex', 'legacy-1', '老库会话', '/proj/legacy', 'gpt-5',
+                    '2026-08-20T00:00:00Z', '2026-08-20T00:01:00Z',
+                    '/tmp/legacy.jsonl', 20, 1
+                );
+                "#,
+            )
+            .unwrap();
+    }
+
+    let upgraded = store::open_db(db_path.to_str().unwrap()).unwrap();
+    assert_eq!(
+        crate::conversation::catalog_event_count(&upgraded, "codex", "legacy-1").unwrap(),
+        None,
+        "老库升级后未刷新会话的 event_count 应为 NULL"
+    );
+}
+
+#[test]
+fn catalog_event_count_tracks_deferred_full_incremental_and_backfill_writes() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let path = seed_codex(home, "conv-1");
+
+    let full_conn = store::open_memory().unwrap();
+    refresh_full(&full_conn, home);
+    let expected = events(&full_conn, home, "conv-1").len() as u32;
+    assert!(expected >= 3);
+    assert_eq!(
+        crate::conversation::catalog_event_count(&full_conn, "codex", "conv-1").unwrap(),
+        Some(expected),
+        "全量刷新应写入 event_count"
+    );
+
+    let deferred_conn = store::open_memory().unwrap();
+    refresh_catalog(&deferred_conn, home);
+    assert!(needs_backfill(&deferred_conn, "conv-1"));
+    assert_eq!(
+        crate::conversation::catalog_event_count(&deferred_conn, "codex", "conv-1").unwrap(),
+        Some(expected),
+        "目录阶段（未补建）应立即持久化精确的 event_count"
+    );
+
+    crate::conversation::backfill_event_index(&deferred_conn, home).unwrap();
+    assert!(!needs_backfill(&deferred_conn, "conv-1"));
+    assert_eq!(
+        crate::conversation::catalog_event_count(&deferred_conn, "codex", "conv-1").unwrap(),
+        Some(expected),
+        "补建后 event_count 保持一致"
+    );
+
+    append_follow_up(&path);
+    refresh_catalog(&deferred_conn, home);
+    assert!(!needs_backfill(&deferred_conn, "conv-1"));
+    assert_eq!(
+        crate::conversation::catalog_event_count(&deferred_conn, "codex", "conv-1").unwrap(),
+        Some(expected + 1),
+        "后缀增量追加应同步递增 event_count"
+    );
+
+    rewrite_not_append(&path, "改完了。", "2026-08-20T00:02:30Z");
+    refresh_catalog(&deferred_conn, home);
+    assert!(needs_backfill(&deferred_conn, "conv-1"));
+    let rewritten_expected = events(&deferred_conn, home, "conv-1").len() as u32;
+    assert_eq!(
+        crate::conversation::catalog_event_count(&deferred_conn, "codex", "conv-1").unwrap(),
+        Some(rewritten_expected),
+        "待补建重刷目录时应更新为新文件的 event_count"
+    );
+}
+
+#[test]
+fn deferred_catalog_event_count_matches_deduplicated_multi_file_session() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    write_home_fixture(
+        home,
+        ".claude/projects/-workspace-split/claude-split-a.jsonl",
+        "claude-split-session-a.jsonl",
+    );
+    write_home_fixture(
+        home,
+        ".claude/projects/-workspace-split/claude-split-b.jsonl",
+        "claude-split-session-b.jsonl",
+    );
+
+    let conn = store::open_memory().unwrap();
+    let roots = ingest::source_scan_dirs(home, Source::Claude);
+    let issues = crate::conversation::refresh_catalog(&conn, Source::Claude, &roots).unwrap();
+    assert!(issues.is_empty(), "{issues:?}");
+
+    let expected = claude_events(&conn, home, "claude-split-1").len() as u32;
+    assert_eq!(
+        crate::conversation::catalog_event_count(&conn, "claude", "claude-split-1").unwrap(),
+        Some(expected),
+        "多文件会话在目录阶段应写入去重后的精确 event_count"
+    );
+    crate::conversation::backfill_event_index(&conn, home).unwrap();
+    assert_eq!(
+        crate::conversation::catalog_event_count(&conn, "claude", "claude-split-1").unwrap(),
+        Some(expected)
+    );
+}

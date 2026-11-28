@@ -26,7 +26,7 @@ use crate::domain::{ConversationQuery, ConversationSessionRow, PriceTable};
 use crate::remote_server::client::{self, RemoteError};
 use crate::remote_server::store::{self, RemoteServerPaths};
 use crate::remote_server::{self, PushCredentials};
-use crate::work_notes::ConnectionSource;
+use crate::store::ConnectionSource;
 use history::PushHistoryEntry;
 
 /// 预览里给成员的知情告知（ADR 0026「脱敏」「推送流程」）。

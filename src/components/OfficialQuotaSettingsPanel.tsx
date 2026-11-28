@@ -72,7 +72,7 @@ export function OfficialQuotaSettingsPanel({
   async function toggleAlerts() {
     setBusy("alerts");
     try {
-      // 整份覆盖写入：先读当前配置再改 alerts_enabled，避免冲掉自定义档位。
+      // 原子化局部更新 alerts_enabled，不冲掉隐藏账号列表或自定义档位。
       const next = await persistOfficialQuotaConfig({ alerts_enabled: !alertsEnabled });
       setConfig(next);
       onQuota(await invoke<OfficialQuotaDto>("get_official_quota"));

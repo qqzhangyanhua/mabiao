@@ -4,9 +4,17 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, first_text, normalize_tool_call_details,
+    normalize_tool_result_details, optional_text, parse_jsonl_conversation_values,
+    push_projected_message, semantic_event, text_field, tool_result_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
+use super::responses_wire::event_msg_semantic_event;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
-use crate::domain::Source;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::openclaw::discover(roots)

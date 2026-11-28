@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { OfficialQuotaConfig } from "../types";
+import type { OfficialQuotaConfig, OfficialQuotaConfigPatch } from "../types";
 
 export const DEFAULT_OFFICIAL_QUOTA_CONFIG: OfficialQuotaConfig = {
   alerts_enabled: true,
@@ -38,10 +38,7 @@ export function formatAlertThresholdsInput(values: number[]): string {
 }
 
 export async function persistOfficialQuotaConfig(
-  patch: Partial<OfficialQuotaConfig>,
+  patch: OfficialQuotaConfigPatch,
 ): Promise<OfficialQuotaConfig> {
-  const current = await invoke<OfficialQuotaConfig>("get_official_quota_config");
-  const next = mergeOfficialQuotaConfig(current, patch);
-  await invoke("save_official_quota_config", { config: next });
-  return next;
+  return invoke<OfficialQuotaConfig>("patch_official_quota_config", { patch });
 }

@@ -4,12 +4,20 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, normalize_tool_result_details, optional_text,
+    parse_jsonl_conversation_values, push_projected_message, semantic_event, tag_source_events,
+    tool_result_event, unadapted_event, update_time_bounds, CapabilityDegradationPrep,
+    ConversationFinishPrep, NativeEventIdPrep, ParsedConversation,
+};
 use super::{
     diagnostic_detail, diagnostic_index, discover_jsonl, regular_source_revision,
     ConversationIndexBatch, ConversationIndexIssue,
 };
 use crate::adapters::project::decode_url_dir;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
 use crate::ingest;
 
 #[cfg(test)]

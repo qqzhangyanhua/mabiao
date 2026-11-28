@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::{detail, index, EventKind};
+use super::{detail, index};
+use crate::domain::ConversationEventKind as EventKind;
 
 #[test]
 fn adapter_projects_cursor_records_with_stable_ids_and_structural_unknowns() {

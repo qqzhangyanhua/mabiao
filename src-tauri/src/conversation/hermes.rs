@@ -10,10 +10,18 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, normalize_tool_call_details, optional_text, push_projected_message,
+    semantic_event, tool_result_event, update_time_bounds, ConversationFinishPrep,
+    ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::hermes::unix_seconds_to_rfc3339;
-use crate::ingest;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    Source,
+};
+use crate::source_sqlite::{self, open_wal_readonly, sql_nullable, sql_text, wal_source_revision};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::hermes::discover(roots)
@@ -37,7 +45,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Hermes")
+    wal_source_revision(path, "Hermes")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -74,13 +82,15 @@ fn project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Hermes 数据库失败：{error}")))?;
-    let sessions = table_columns(&db, "sessions").map_err(|message| fatal(path, message))?;
+    let sessions =
+        required_table_columns(&db, "sessions").map_err(|message| fatal(path, message))?;
     if !sessions.contains("id") {
         return Err(fatal(path, "Hermes sessions 表缺少 id".to_string()));
     }
-    let messages = table_columns(&db, "messages").map_err(|message| fatal(path, message))?;
+    let messages =
+        required_table_columns(&db, "messages").map_err(|message| fatal(path, message))?;
     for required in ["session_id", "role"] {
         if !messages.contains(required) {
             return Err(fatal(path, format!("Hermes messages 表缺少 {required}")));
@@ -105,22 +115,22 @@ fn read_sessions(
 ) -> Result<Vec<SessionRow>, String> {
     let ended = if columns.contains("ended_at") && columns.contains("last_activity_at") {
         "COALESCE(ended_at, last_activity_at)".to_string()
+    } else if columns.contains("ended_at") {
+        "ended_at".to_string()
     } else {
-        optional(columns, "ended_at")
-            .or_else(|| optional(columns, "last_activity_at"))
-            .unwrap_or_else(|| "NULL".to_string())
+        sql_nullable(columns, "last_activity_at")
     };
     let sql = format!(
         "SELECT id, {title}, {model}, {cwd}, {git_root}, {parent}, {started}, {ended}
          FROM sessions
          WHERE (?1 IS NULL OR id = ?1)
          ORDER BY id",
-        title = text_column(columns, "title"),
-        model = text_column(columns, "model"),
-        cwd = text_column(columns, "cwd"),
-        git_root = text_column(columns, "git_repo_root"),
-        parent = text_column(columns, "parent_session_id"),
-        started = optional(columns, "started_at").unwrap_or_else(|| "NULL".to_string()),
+        title = sql_text(columns, "title"),
+        model = sql_text(columns, "model"),
+        cwd = sql_text(columns, "cwd"),
+        git_root = sql_text(columns, "git_repo_root"),
+        parent = sql_text(columns, "parent_session_id"),
+        started = sql_nullable(columns, "started_at"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -162,7 +172,7 @@ fn read_messages(
     } else {
         ""
     };
-    let timestamp = optional(columns, "timestamp").unwrap_or_else(|| "NULL".to_string());
+    let timestamp = sql_nullable(columns, "timestamp");
     let order = if columns.contains("timestamp") {
         "timestamp, rowid"
     } else {
@@ -171,10 +181,10 @@ fn read_messages(
     let sql = format!(
         "SELECT role, {content}, {tool_call_id}, {tool_calls}, {tool_name}, {timestamp}, {reasoning}
          FROM messages WHERE session_id = ?1 {active} ORDER BY {order}",
-        content = text_column(columns, "content"),
-        tool_call_id = text_column(columns, "tool_call_id"),
-        tool_calls = text_column(columns, "tool_calls"),
-        tool_name = text_column(columns, "tool_name"),
+        content = sql_text(columns, "content"),
+        tool_call_id = sql_text(columns, "tool_call_id"),
+        tool_calls = sql_text(columns, "tool_calls"),
+        tool_name = sql_text(columns, "tool_name"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -316,29 +326,10 @@ fn push_tool_calls(index: usize, row: &MessageRow, events: &mut Vec<Conversation
     }
 }
 
-fn table_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut statement = db
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
+fn required_table_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
+    let rows = source_sqlite::table_columns(db, table)?;
     if rows.is_empty() {
         return Err(format!("Hermes 数据库缺少 {table} 表"));
     }
     Ok(rows)
-}
-
-fn text_column(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
-}
-
-fn optional(columns: &BTreeSet<String>, name: &str) -> Option<String> {
-    columns.contains(name).then(|| name.to_string())
 }

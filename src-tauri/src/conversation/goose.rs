@@ -9,14 +9,20 @@ use std::path::{Path, PathBuf};
 use rusqlite::{params, Connection};
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, normalize_tool_call_details, optional_text,
+    push_projected_message, semantic_event, tool_result_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::goose::{
-    is_catalog_session, parse_model_name, parse_sql_timestamp, table_columns,
-    unix_seconds_to_rfc3339,
+    is_catalog_session, parse_model_name, parse_sql_timestamp, unix_seconds_to_rfc3339,
 };
-use crate::domain::Source;
-use crate::ingest;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
+};
+use crate::source_sqlite::{open_wal_readonly, sql_text, table_columns, wal_source_revision};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::goose::discover(roots)
@@ -40,7 +46,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Goose")
+    wal_source_revision(path, "Goose")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -73,7 +79,7 @@ fn project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Goose 数据库失败：{error}")))?;
     let sessions = table_columns(&db, "sessions").map_err(|message| fatal(path, message))?;
     if !sessions.contains("id") {
@@ -109,13 +115,13 @@ fn read_sessions(
          FROM sessions
          WHERE (?1 IS NULL OR id = ?1)
          ORDER BY id",
-        id = text_column(columns, "id"),
-        name = text_column(columns, "name"),
-        working_dir = text_column(columns, "working_dir"),
-        created_at = text_column(columns, "created_at"),
-        updated_at = text_column(columns, "updated_at"),
-        model_config = text_column(columns, "model_config_json"),
-        session_type = text_column(columns, "session_type"),
+        id = sql_text(columns, "id"),
+        name = sql_text(columns, "name"),
+        working_dir = sql_text(columns, "working_dir"),
+        created_at = sql_text(columns, "created_at"),
+        updated_at = sql_text(columns, "updated_at"),
+        model_config = sql_text(columns, "model_config_json"),
+        session_type = sql_text(columns, "session_type"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -148,11 +154,7 @@ fn read_messages(
     columns: &BTreeSet<String>,
     session_id: &str,
 ) -> Result<Vec<MessageRow>, String> {
-    let content = if columns.contains("content_json") {
-        "COALESCE(content_json, '')"
-    } else {
-        "''"
-    };
+    let content = sql_text(columns, "content_json");
     let timestamp = if columns.contains("created_timestamp") {
         "COALESCE(created_timestamp, 0)"
     } else {
@@ -334,13 +336,5 @@ fn parse_blocks(content_json: &str) -> Vec<Value> {
         Ok(Value::Array(items)) => items,
         Ok(value @ Value::Object(_)) => vec![value],
         _ => Vec::new(),
-    }
-}
-
-fn text_column(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
     }
 }

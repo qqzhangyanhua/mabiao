@@ -1,10 +1,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::error::AppError;
 
 /// 一个成员的推送覆盖情况，让管理员一眼看出缺口。
-#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct MemberCoverage {
     pub account_id: i64,
     pub account: String,

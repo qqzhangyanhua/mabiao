@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
@@ -27,11 +28,19 @@ pub fn read_identity(
     provider: OfficialQuotaProvider,
     root: &Path,
 ) -> Result<QuotaIdentity, String> {
+    read_identity_at(provider, root, Utc::now())
+}
+
+pub fn read_identity_at(
+    provider: OfficialQuotaProvider,
+    root: &Path,
+    now: DateTime<Utc>,
+) -> Result<QuotaIdentity, String> {
     match provider {
         OfficialQuotaProvider::Claude => claude(root),
         OfficialQuotaProvider::Codex => codex(root),
         OfficialQuotaProvider::Cursor => cursor(root),
-        OfficialQuotaProvider::Grok => grok_identity(root),
+        OfficialQuotaProvider::Grok => grok_identity(root, now),
         OfficialQuotaProvider::Droid => droid_identity(root),
         OfficialQuotaProvider::Antigravity => antigravity_identity(root),
         OfficialQuotaProvider::OpenCode => opencode_identity(root),
@@ -87,9 +96,9 @@ fn cursor(root: &Path) -> Result<QuotaIdentity, String> {
     ))
 }
 
-fn grok_identity(root: &Path) -> Result<QuotaIdentity, String> {
+fn grok_identity(root: &Path, now: DateTime<Utc>) -> Result<QuotaIdentity, String> {
     // 身份只认文件里已经写着的 user_id。缺了就摘要 token，不去打 `/v1/user`。
-    let session = grok::load_session_at(root, chrono::Utc::now())?;
+    let session = grok::load_session_at(root, now)?;
     if let Some(user_id) = nonempty(session.user_id.as_deref()) {
         return Ok(stable_identity(user_id, Some(user_id), &session.token));
     }

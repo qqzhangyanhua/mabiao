@@ -5,15 +5,18 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::session_store::{ensure_matching_session, load_trusted_session_files};
-use super::toolbox::ParsedConversation;
-use super::{
-    event_index, event_index_ready, line_direct, parse_conversation_files, prepare_detail, qwen,
-    raw_export_extension, MAX_PAGE_SIZE,
-};
+use super::event_store::{stream_events_for_export, ExportRecord};
+#[cfg(test)]
+use super::normalize::ParsedConversation;
+#[cfg(test)]
+use super::parse_conversation_files;
+#[cfg(test)]
+use super::session_store::ensure_matching_session;
+use super::session_store::load_trusted_session_files;
+use super::{qwen, raw_export_extension};
 use crate::domain::{
-    ConversationAttachmentStatus as AttachmentStatus, ConversationEvent, ConversationEventAnchor,
-    ConversationExportDto, ConversationExportFormat, ConversationSessionRow, Source,
+    ConversationAttachmentStatus as AttachmentStatus, ConversationEvent, ConversationExportDto,
+    ConversationExportFormat, ConversationSessionRow, Source,
 };
 use crate::user_files;
 
@@ -153,51 +156,13 @@ fn stream_markdown(
     paths: &[PathBuf],
     writer: &mut dyn Write,
 ) -> Result<(), String> {
-    let prepared = prepare_detail(conn, source.as_str(), &session.session_id)?;
-    if event_index_ready(conn, home, &prepared)? && line_direct::source_maps_line_to_events(source)
-    {
-        stream_indexed_markdown(conn, source, session, writer)
-    } else {
-        write_parsed_markdown(source, session, paths, writer)
-    }
+    stream_events_for_export(conn, home, source, session, paths, |record| match record {
+        ExportRecord::Header(header_session) => write_markdown_header(writer, header_session),
+        ExportRecord::Event(event) => write_markdown_event(writer, event),
+    })
 }
 
-fn stream_indexed_markdown(
-    conn: &Connection,
-    source: Source,
-    session: &ConversationSessionRow,
-    writer: &mut dyn Write,
-) -> Result<(), String> {
-    write_markdown_header(writer, session)?;
-    let mut anchor = ConversationEventAnchor::First;
-    loop {
-        let page = event_index::indexed_events_page(
-            conn,
-            source.as_str(),
-            &session.session_id,
-            &anchor,
-            MAX_PAGE_SIZE,
-        )?
-        .ok_or_else(|| "原始文件在导出期间发生变化，请重试".to_string())?;
-        if page.events.is_empty() {
-            break;
-        }
-        for event in &page.events {
-            write_markdown_event(writer, &hydrate_export_event(source, session, event)?)?;
-        }
-        if !page.has_more_after {
-            break;
-        }
-        let Some(last) = page.events.last() else {
-            break;
-        };
-        anchor = ConversationEventAnchor::After {
-            sequence: last.sequence,
-        };
-    }
-    Ok(())
-}
-
+#[cfg(test)]
 fn write_parsed_markdown(
     source: Source,
     session: &ConversationSessionRow,
@@ -212,6 +177,7 @@ fn write_parsed_markdown(
     Ok(())
 }
 
+#[cfg(test)]
 fn parsed_conversation(
     source: Source,
     session: &ConversationSessionRow,
@@ -220,26 +186,6 @@ fn parsed_conversation(
     let parsed = parse_conversation_files(source, paths, &session.session_id, true)?;
     ensure_matching_session(&parsed, session)?;
     Ok(parsed)
-}
-
-fn hydrate_export_event(
-    source: Source,
-    session: &ConversationSessionRow,
-    indexed: &ConversationEvent,
-) -> Result<ConversationEvent, String> {
-    let rebuilt = line_direct::rebuild_events_from_line(
-        source,
-        Path::new(&indexed.source_file),
-        &session.session_id,
-        indexed.source_sequence,
-        true,
-    )?;
-    let mut event = rebuilt
-        .into_iter()
-        .find(|event| event.event_id == indexed.event_id)
-        .ok_or_else(|| "原始文件中未找到该事件".to_string())?;
-    event.sequence = indexed.sequence;
-    Ok(event)
 }
 
 fn stream_raw_json(

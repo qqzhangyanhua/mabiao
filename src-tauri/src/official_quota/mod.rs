@@ -11,12 +11,14 @@ pub mod custom;
 pub mod detect;
 pub mod devin;
 pub mod droid;
+pub mod env;
 pub(crate) mod exhaust;
 pub mod fetch;
 pub mod grok;
 pub(crate) mod grok_grpc;
 pub mod hook;
 pub mod identity;
+pub mod lifecycle;
 pub mod notify;
 pub mod opencode;
 
@@ -28,21 +30,31 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::{
-    OfficialQuotaConfig, OfficialQuotaDto, OfficialQuotaFreshness, OfficialQuotaProvider,
-    OfficialQuotaRow, OfficialQuotaWindow,
+    OfficialQuotaConfig, OfficialQuotaConfigPatch, OfficialQuotaDto, OfficialQuotaFreshness,
+    OfficialQuotaProvider, OfficialQuotaRow, OfficialQuotaWindow,
 };
 use crate::store;
 
 // 取数调度住在 `fetch` 里，但调用方一直是按 `official_quota::…` 引用的，
 // 这里原样转出去，免得为一次拆文件把各处调用点全改一遍。
-pub use fetch::{
-    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_all_targets_with,
-    fetch_all_targets_with_accounts, fetch_in_parallel, fetch_provider, fetch_target,
-    fetch_target_forced, fetch_target_throttled, parse_provider, resolve_target,
-    resolve_target_with_accounts, targets_for_fetch, FetchTarget, ProviderFetch, QuotaSnapshot,
-    QuotaTarget, ThrottledFetch,
+pub use env::{
+    HttpBody, HttpMethod, HttpRequest, HttpResponse, IsolatedHttpTransport, LiveQuotaTransport,
+    QuotaEnv, QuotaPaths, QuotaTransport,
 };
-pub use identity::{read_identity, QuotaIdentity};
+pub use fetch::{
+    apply_fetch_results, custom_targets_for_fetch, fetch_all_targets, fetch_all_targets_in,
+    fetch_all_targets_with, fetch_all_targets_with_accounts, fetch_in_parallel, fetch_provider,
+    fetch_provider_in, fetch_target, fetch_target_forced, fetch_target_forced_in, fetch_target_in,
+    fetch_target_throttled, fetch_target_throttled_in, parse_provider, resolve_target,
+    resolve_target_with_accounts, resolve_target_with_accounts_in, targets_for_fetch,
+    targets_for_fetch_in, FetchTarget, ProviderFetch, QuotaSnapshot, QuotaTarget, ThrottledFetch,
+};
+pub use identity::{read_identity, read_identity_at, QuotaIdentity};
+pub use lifecycle::{
+    load_dto_in, refresh_and_notify, refresh_saved_account, refresh_target_forced,
+    refresh_target_throttled, run_cli_in, snapshot, snapshot_visible, sync_claude_capture_at,
+    NotifySink, RefreshOptions, UpdatedSink, EVENT_UPDATED,
+};
 
 pub const STALE_AFTER_MINUTES: i64 = 10;
 pub const CONFIG_NAME: &str = "official_quota.json";
@@ -66,6 +78,11 @@ pub fn capture_path() -> PathBuf {
     crate::paths::app_data_dir().join(CAPTURE_NAME)
 }
 
+fn config_lock() -> &'static std::sync::Mutex<()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    &LOCK
+}
+
 pub fn load_config(path: &Path) -> OfficialQuotaConfig {
     fs::read_to_string(path)
         .ok()
@@ -74,10 +91,61 @@ pub fn load_config(path: &Path) -> OfficialQuotaConfig {
 }
 
 pub fn save_config(path: &Path, config: &OfficialQuotaConfig) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let _guard = config_lock()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    write_sanitized_config(path, config)?;
+    Ok(())
+}
+
+/// 原子化局部更新 `official_quota.json`：同一把互斥锁内完成读-合并-清洗-临时文件 rename，
+/// 避免主窗口切换显示与设置页改告警档位并发互相覆盖。
+pub fn patch_config(
+    path: &Path,
+    patch: &OfficialQuotaConfigPatch,
+) -> Result<OfficialQuotaConfig, String> {
+    let _guard = config_lock()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut next = load_config(path);
+    if let Some(alerts_enabled) = patch.alerts_enabled {
+        next.alerts_enabled = alerts_enabled;
     }
+    if let Some(hidden_providers) = &patch.hidden_providers {
+        next.hidden_providers = sanitize_hidden_providers(hidden_providers);
+    }
+    if let Some(alert_thresholds) = &patch.alert_thresholds {
+        next.alert_thresholds = alert_thresholds.clone();
+    }
+    if let Some(reset_reminder_hours) = patch.reset_reminder_hours {
+        next.reset_reminder_hours = reset_reminder_hours;
+    }
+    if let Some(reset_reminder_max_used_percent) = patch.reset_reminder_max_used_percent {
+        next.reset_reminder_max_used_percent = reset_reminder_max_used_percent;
+    }
+    write_sanitized_config(path, &next)
+}
+
+fn sanitize_hidden_providers(raw: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for item in raw {
+        let trimmed = item.trim();
+        if trimmed.is_empty() || custom::is_custom_id(trimmed) {
+            continue;
+        }
+        if !out.iter().any(|existing: &String| existing == trimmed) {
+            out.push(trimmed.to_string());
+        }
+    }
+    out
+}
+
+fn write_sanitized_config(
+    path: &Path,
+    config: &OfficialQuotaConfig,
+) -> Result<OfficialQuotaConfig, String> {
     let mut sanitized = config.clone();
+    sanitized.hidden_providers = sanitize_hidden_providers(&config.hidden_providers);
     sanitized.alert_thresholds =
         crate::domain::normalize_alert_thresholds(&config.alert_thresholds);
     if sanitized.reset_reminder_hours > 168 {
@@ -86,11 +154,24 @@ pub fn save_config(path: &Path, config: &OfficialQuotaConfig) -> Result<(), Stri
     if sanitized.reset_reminder_max_used_percent > 100 {
         sanitized.reset_reminder_max_used_percent = 100;
     }
-    fs::write(
-        path,
-        serde_json::to_string_pretty(&sanitized).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())
+    let bytes = serde_json::to_string_pretty(&sanitized).map_err(|e| e.to_string())?;
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| CONFIG_NAME.to_string());
+    let temp = parent.join(format!(".{file_name}.tmp"));
+    let _ = fs::remove_file(&temp);
+    fs::write(&temp, bytes.as_bytes()).map_err(|e| {
+        let _ = fs::remove_file(&temp);
+        e.to_string()
+    })?;
+    fs::rename(&temp, path).map_err(|e| {
+        let _ = fs::remove_file(&temp);
+        e.to_string()
+    })?;
+    Ok(sanitized)
 }
 
 pub fn freshness(captured_at: &str, now: DateTime<Utc>) -> OfficialQuotaFreshness {
@@ -131,69 +212,18 @@ pub fn load_dto_with_accounts(
     logins: &[accounts::LocalLogin],
     now: DateTime<Utc>,
 ) -> OfficialQuotaDto {
-    let accounts = accounts::with_live_profiles(accounts);
-    let mut rows = Vec::new();
-    for provider in OfficialQuotaProvider::ALL {
-        match accounts::plan::plan_provider(provider, &accounts, logins) {
-            accounts::plan::ProviderPlan::Unchanged => {
-                // 本机没凭证、也没历史缓存的 provider 不占一行。
-                let row = load_row(conn, provider, now);
-                if !row.windows.is_empty()
-                    || row.captured_at.is_some()
-                    || detect::has_local_credentials(provider)
-                {
-                    rows.push(row);
-                }
-            }
-            accounts::plan::ProviderPlan::Managed {
-                show_builtin,
-                placements,
-            } => {
-                if show_builtin {
-                    let mut row = load_row(conn, provider, now);
-                    row.is_active_local = true;
-                    row.application = quota_row_title(provider.display_name(), None, true);
-                    rows.push(row);
-                }
-                for placement in placements {
-                    rows.push(load_account_row(
-                        conn,
-                        placement.account,
-                        placement.active_local,
-                        now,
-                    ));
-                }
-            }
-        }
-    }
-    let undetected = OfficialQuotaProvider::ALL
-        .into_iter()
-        .filter(|provider| {
-            let slug = provider.as_str();
-            let present = rows
-                .iter()
-                .any(|row| row.provider == slug || row.base_provider.as_deref() == Some(slug));
-            let registered = accounts
-                .iter()
-                .any(|account| account.config.provider == slug);
-            !present && !registered
-        })
-        .map(|provider| provider.as_str().to_string())
-        .collect();
-    // 自定义行不套「没凭证就不占位」：用户自己登记的，停用的才不占行。
-    rows.extend(
-        custom
-            .iter()
-            .filter(|provider| provider.config.enabled)
-            .map(|provider| load_custom_row(conn, provider, now)),
-    );
-    OfficialQuotaDto {
-        rows,
-        alerts_enabled: config.alerts_enabled,
-        stale_after_minutes: STALE_AFTER_MINUTES,
-        undetected,
-        hidden_providers: config.hidden_providers.clone(),
-    }
+    lifecycle::assemble_dto(
+        conn,
+        lifecycle::DtoAssemblyInputs {
+            config,
+            custom,
+            accounts,
+            logins,
+        },
+        now,
+        None,
+        detect::has_local_credentials,
+    )
 }
 
 /// 按 `hidden_providers` 挑出用户还想看的行，托盘额度面板用它瘦身。
@@ -278,15 +308,7 @@ pub fn quota_row_title(
     title
 }
 
-fn load_row(
-    conn: &Connection,
-    provider: OfficialQuotaProvider,
-    now: DateTime<Utc>,
-) -> OfficialQuotaRow {
-    load_row_by_id(conn, provider.as_str(), provider.display_name(), now)
-}
-
-fn load_account_row(
+pub(crate) fn load_account_row(
     conn: &Connection,
     account: &accounts::ResolvedQuotaAccount,
     active_local: bool,
@@ -320,7 +342,7 @@ fn attach_account_missing_secret(row: &mut OfficialQuotaRow, missing: bool) {
 }
 
 /// 自定义行：标识跟着配置走、名称只是展示。改名不改标识，因此缓存照旧命中。
-fn load_custom_row(
+pub(crate) fn load_custom_row(
     conn: &Connection,
     provider: &custom::ResolvedProvider,
     now: DateTime<Utc>,
@@ -350,44 +372,51 @@ fn load_row_by_id(
     now: DateTime<Utc>,
 ) -> OfficialQuotaRow {
     match store::load_official_quota_row(conn, id) {
-        Ok(Some(stored)) => {
-            let freshness = if stored.windows.is_empty() && stored.captured_at.is_empty() {
-                OfficialQuotaFreshness::Unavailable
-            } else {
-                freshness(&stored.captured_at, now)
-            };
-            let mut windows = stored.windows;
-            exhaust::attach(
-                &mut windows,
-                &stored.captured_at,
-                &stored.prev_windows,
-                stored.prev_captured_at.as_deref(),
-                now,
-            );
-            OfficialQuotaRow {
-                provider: id.to_string(),
-                application: display_name.to_string(),
-                windows,
-                freshness,
-                captured_at: if stored.captured_at.is_empty() {
-                    None
-                } else {
-                    Some(stored.captured_at)
-                },
-                error: stored.error,
-                todo: None,
-                plan: stored.plan,
-                base_provider: None,
-                account_label: None,
-                is_active_local: false,
-            }
-        }
+        Ok(Some(stored)) => row_from_stored(id, display_name, stored, now),
         Ok(None) => empty_row(id, display_name, None),
         Err(error) => empty_row(id, display_name, Some(error)),
     }
 }
 
-fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuotaRow {
+pub(crate) fn row_from_stored(
+    id: &str,
+    display_name: &str,
+    stored: store::StoredOfficialQuota,
+    now: DateTime<Utc>,
+) -> OfficialQuotaRow {
+    let freshness = if stored.windows.is_empty() && stored.captured_at.is_empty() {
+        OfficialQuotaFreshness::Unavailable
+    } else {
+        freshness(&stored.captured_at, now)
+    };
+    let mut windows = stored.windows;
+    exhaust::attach(
+        &mut windows,
+        &stored.captured_at,
+        &stored.prev_windows,
+        stored.prev_captured_at.as_deref(),
+        now,
+    );
+    OfficialQuotaRow {
+        provider: id.to_string(),
+        application: display_name.to_string(),
+        windows,
+        freshness,
+        captured_at: if stored.captured_at.is_empty() {
+            None
+        } else {
+            Some(stored.captured_at)
+        },
+        error: stored.error,
+        todo: None,
+        plan: stored.plan,
+        base_provider: None,
+        account_label: None,
+        is_active_local: false,
+    }
+}
+
+pub(crate) fn empty_row(id: &str, display_name: &str, error: Option<String>) -> OfficialQuotaRow {
     OfficialQuotaRow {
         provider: id.to_string(),
         application: display_name.to_string(),
@@ -422,27 +451,7 @@ pub fn apply_failure(
 
 /// 捕获文件比缓存新时写入 sqlite，返回是否发生了更新。
 pub fn sync_claude_capture(conn: &Connection) -> Result<bool, String> {
-    let path = capture_path();
-    if !path.exists() {
-        return Ok(false);
-    }
-    let cached = store::load_official_quota_row(conn, OfficialQuotaProvider::Claude.as_str())?;
-    let file_stamp = claude::file_captured_at(&path)?;
-    if let Some(cached) = &cached {
-        if !cached.captured_at.is_empty() && cached.captured_at == file_stamp {
-            return Ok(false);
-        }
-    }
-    match claude::refresh_from_capture(&path) {
-        Ok((windows, captured_at)) => {
-            apply_success(conn, OfficialQuotaProvider::Claude, windows, &captured_at)?;
-            Ok(true)
-        }
-        Err(error) => {
-            apply_failure(conn, OfficialQuotaProvider::Claude, &error)?;
-            Ok(false)
-        }
-    }
+    lifecycle::sync_claude_capture_at(conn, &capture_path())
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

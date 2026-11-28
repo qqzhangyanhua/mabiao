@@ -12,15 +12,17 @@
 use std::path::Path;
 use std::time::Duration;
 
-use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaWindow;
-use crate::official_quota::{display_plan_label, sanitize_percent, QuotaSnapshot};
+use crate::official_quota::{
+    display_plan_label, sanitize_percent, HttpRequest, QuotaEnv, QuotaPaths, QuotaSnapshot,
+    QuotaTransport,
+};
 use crate::vscode_state;
 
 /// 装了哪个客户端就从哪个目录读，两个都可能存在。
-const APP_DIRS: [&str; 2] = ["Windsurf", "Devin"];
+pub(crate) const APP_DIRS: [&str; 2] = ["Windsurf", "Devin"];
 const AUTH_STATUS_KEY: &str = "windsurfAuthStatus";
 const API_SERVER: &str = "https://server.codeium.com";
 const SERVICE_PATH: &str = "exa.seat_management_pb.SeatManagementService/GetUserStatus";
@@ -30,32 +32,25 @@ const TIMEOUT: Duration = Duration::from_secs(15);
 const NOT_SIGNED_IN: &str = "尚未登录 Devin / Windsurf，请先打开客户端并登录";
 
 pub fn fetch_usage() -> Result<QuotaSnapshot, String> {
-    let api_key = load_api_key()?;
-    fetch_with_access_token(&api_key)
+    fetch_usage_in(&QuotaEnv::live(QuotaPaths::app_data()))
+}
+
+pub fn fetch_usage_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
+    let api_key = load_api_key_in(env)?;
+    fetch_with_access_token_in(env, &api_key)
 }
 
 /// 用调用方给的 apiKey 取额度。不读本机库。
-pub(crate) fn fetch_with_access_token(api_key: &str) -> Result<QuotaSnapshot, String> {
-    fetch_with_access_token_at(api_key, None)
-}
-
-pub(crate) fn fetch_with_access_token_at(
+pub(crate) fn fetch_with_access_token_in(
+    env: &QuotaEnv,
     api_key: &str,
-    quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(&format!("{API_SERVER}/{SERVICE_PATH}"), quota_base);
-    let raw = request_user_status(api_key, &url)?;
+    let url = env.rebase_url(&format!("{API_SERVER}/{SERVICE_PATH}"));
+    let raw = request_user_status_via(env.transport.as_ref(), api_key, &url)?;
     Ok(
-        QuotaSnapshot::new(parse_user_status(&raw)?, Utc::now().to_rfc3339())
+        QuotaSnapshot::new(parse_user_status(&raw)?, env.now().to_rfc3339())
             .with_plan(parse_plan(&raw)),
     )
-}
-
-pub(crate) fn storage_dirs() -> Vec<std::path::PathBuf> {
-    APP_DIRS
-        .into_iter()
-        .filter_map(crate::vscode_state::global_storage_dir)
-        .collect()
 }
 
 pub fn parse_plan(raw: &str) -> Option<String> {
@@ -66,11 +61,8 @@ pub fn parse_plan(raw: &str) -> Option<String> {
         .and_then(display_plan_label)
 }
 
-fn load_api_key() -> Result<String, String> {
-    for app in APP_DIRS {
-        let Some(dir) = vscode_state::global_storage_dir(app) else {
-            continue;
-        };
+pub(crate) fn load_api_key_in(env: &QuotaEnv) -> Result<String, String> {
+    for dir in env.devin_storage_dirs() {
         if let Some(key) = read_api_key_at(&dir)? {
             return Ok(key);
         }
@@ -80,7 +72,7 @@ fn load_api_key() -> Result<String, String> {
 
 /// 探针：Windsurf / Devin 任一客户端里有没有 apiKey。
 pub fn has_local_api_key() -> bool {
-    load_api_key().is_ok()
+    load_api_key_in(&QuotaEnv::live(QuotaPaths::app_data())).is_ok()
 }
 
 pub fn read_api_key_at(global_storage: &Path) -> Result<Option<String>, String> {
@@ -160,7 +152,11 @@ fn resets_at(plan: &Value, field: &str) -> Option<String> {
     chrono::DateTime::from_timestamp(seconds, 0).map(|value| value.to_rfc3339())
 }
 
-fn request_user_status(api_key: &str, url: &str) -> Result<String, String> {
+fn request_user_status_via(
+    transport: &dyn QuotaTransport,
+    api_key: &str,
+    url: &str,
+) -> Result<String, String> {
     let body = json!({
         "metadata": {
             "apiKey": api_key,
@@ -171,21 +167,17 @@ fn request_user_status(api_key: &str, url: &str) -> Result<String, String> {
             "locale": "en"
         }
     });
-    let request = crate::net::agent_for_url(url, TIMEOUT)
-        .post(url)
-        .set("Content-Type", "application/json")
-        .set("Connect-Protocol-Version", "1");
-    match request.send_string(&body.to_string()) {
-        Ok(response) => response
-            .into_string()
+    let request = HttpRequest::post_text(url, body.to_string(), TIMEOUT)
+        .header("Content-Type", "application/json")
+        .header("Connect-Protocol-Version", "1");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "无法连接 Devin 额度接口，请检查网络后重试".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|e| format!("读取 Devin 额度响应失败：{e}")),
-        Err(ureq::Error::Status(401 | 403, _)) => {
-            Err("Devin / Windsurf 登录已失效，请重新打开客户端登录".to_string())
-        }
-        Err(ureq::Error::Status(code, response)) => {
-            let _ = response.into_string();
-            Err(format!("拉取 Devin 额度失败：HTTP {code}"))
-        }
-        Err(_) => Err("无法连接 Devin 额度接口，请检查网络后重试".to_string()),
+        401 | 403 => Err("Devin / Windsurf 登录已失效，请重新打开客户端登录".to_string()),
+        code => Err(format!("拉取 Devin 额度失败：HTTP {code}")),
     }
 }

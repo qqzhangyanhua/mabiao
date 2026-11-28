@@ -132,7 +132,9 @@ pub fn sign(
     (authorization, x_date, content_sha)
 }
 
-pub fn fetch(
+pub(super) fn fetch_via(
+    transport: &dyn super::super::QuotaTransport,
+    now: DateTime<Utc>,
     base_url: &str,
     access_key_id: Option<&str>,
     secret: Option<&str>,
@@ -146,46 +148,55 @@ pub fn fetch(
         .filter(|value| !value.is_empty())
         .ok_or_else(|| super::MISSING_SECRET.to_string())?;
     let plan = plan_of(base_url)?;
-    let body = signed_post(access_key_id, secret, &plan.region, plan.action)?;
+    let body = signed_post_via(
+        transport,
+        now,
+        access_key_id,
+        secret,
+        &plan.region,
+        plan.action,
+    )?;
     let windows = parse(&[body.as_str()])?;
-    Ok(super::super::QuotaSnapshot::new(
-        windows,
-        Utc::now().to_rfc3339(),
-    ))
+    Ok(super::super::QuotaSnapshot::new(windows, now.to_rfc3339()))
 }
 
-fn signed_post(
+fn signed_post_via(
+    transport: &dyn super::super::QuotaTransport,
+    now: DateTime<Utc>,
     access_key_id: &str,
     secret: &str,
     region: &str,
     action: &str,
 ) -> Result<String, String> {
     let (authorization, x_date, content_sha) =
-        sign(access_key_id, secret, region, action, BODY, Utc::now());
+        sign(access_key_id, secret, region, action, BODY, now);
     let url = open_api_url(action);
-    let request = crate::net::agent_with_timeout(std::time::Duration::from_secs(15))
-        .post(&url)
-        .set("Content-Type", CONTENT_TYPE)
-        .set("X-Date", &x_date)
-        .set("X-Content-Sha256", &content_sha)
-        .set("Authorization", &authorization)
-        .set("Accept", "application/json");
-    match request.send_bytes(BODY) {
-        Ok(response) => response
-            .into_string()
+    let request = super::super::HttpRequest::post_bytes(
+        url,
+        BODY.to_vec(),
+        std::time::Duration::from_secs(15),
+    )
+    .header("Content-Type", CONTENT_TYPE)
+    .header("X-Date", x_date)
+    .header("X-Content-Sha256", content_sha)
+    .header("Authorization", authorization)
+    .header("Accept", "application/json");
+    let response = transport
+        .http(&request)
+        .map_err(|_| "网络不通，连不上这个地址，请检查网络或代理设置".to_string())?;
+    match response.status {
+        200..=299 => response
+            .body_string()
             .map_err(|_| "读取响应失败，接口返回的内容不是文本".to_string()),
-        Err(ureq::Error::Status(401 | 403, _)) => Err(
+        401 | 403 => Err(
             "AccessKey 无效或没有方舟查询权限，请在设置页更新 AccessKey ID 与 Secret Access Key"
                 .to_string(),
         ),
-        Err(ureq::Error::Status(404, _)) => {
-            Err("地址不对：接口不存在，请检查 base URL 与预设类型是否匹配".to_string())
-        }
-        Err(ureq::Error::Status(429, _)) => Err("对方限流了，稍后会自动重试".to_string()),
-        Err(ureq::Error::Status(code, _)) => Err(format!(
+        404 => Err("地址不对：接口不存在，请检查 base URL 与预设类型是否匹配".to_string()),
+        429 => Err("对方限流了，稍后会自动重试".to_string()),
+        code => Err(format!(
             "接口返回异常（HTTP {code}），请确认 base URL 与预设类型是否匹配"
         )),
-        Err(_) => Err("网络不通，连不上这个地址，请检查网络或代理设置".to_string()),
     }
 }
 

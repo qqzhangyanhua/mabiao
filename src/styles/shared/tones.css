@@ -34,29 +34,6 @@
   background: var(--tone-qwen-bg);
   color: var(--tone-qwen-fg);
 }
-.tone-factory,
-.tone-dsh,
-.tone-cursor,
-.tone-copilot,
-.tone-hermes,
-.tone-qoder,
-.tone-cline,
-.tone-workbuddy,
-.tone-zcode,
-.tone-alma,
-.tone-codebuddy,
-.tone-trae,
-.tone-goose,
-.tone-roo,
-.tone-kilo,
-.tone-amp,
-.tone-zed,
-.tone-cherry,
-.tone-openclaw,
-.tone-crush,
-.tone-aider,
-.tone-warp,
-.tone-windsurf,
 .tone-other {
   background: var(--tone-other-bg);
   color: var(--tone-other-fg);

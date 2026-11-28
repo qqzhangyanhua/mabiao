@@ -5,27 +5,6 @@ use serde_json::Value;
 
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::PathOverrides;
-
-/// Amp 把每个线程写成一份 JSON：`threads/<id>.json`。
-///
-/// `$AMP_DATA_DIR` 覆盖 Amp 数据根并拼 `threads/`（与 ccusage 一致）。
-/// 未覆盖时扫 XDG `~/.local/share/amp/threads`，以及 macOS / Windows 的
-/// Application Support / AppData 同名目录。Amp CLI 在各平台默认都写
-/// `~/.local/share/amp`（不跟 OS 惯例分叉）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides
-        .get("AMP_DATA_DIR")
-        .cloned()
-        .map(|roots| roots.into_iter().map(|root| root.join("threads")).collect())
-        .unwrap_or_else(|| {
-            vec![
-                home.join(".local/share/amp/threads"),
-                home.join("Library/Application Support/amp/threads"),
-                home.join("AppData/Roaming/amp/threads"),
-            ]
-        })
-}
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::discover_suffix(roots, ".json")

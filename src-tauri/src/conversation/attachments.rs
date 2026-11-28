@@ -1,20 +1,88 @@
-//! 取源码行与附件读取、编码、路径许可。
+//! 对话附件的统一发现、内嵌 base64 体积估算、路径解析、安全校验与字节/缩略图读取。
 //!
-//! 缩略图尺寸与附件目录约束都在这里；不碰 sqlite、合并语义或路径白名单。
+//! 源码行流式读取 `read_source_line` 同步保留在此供按行直取与测试复用。
 
 use std::fs;
 use std::io::{BufRead, BufReader, Cursor};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use base64::prelude::*;
+use rusqlite::Connection;
 use serde_json::Value;
 
-use crate::domain::{ConversationAttachmentStatus as AttachmentStatus, Source};
+use crate::domain::{
+    ConversationAttachment, ConversationAttachmentContentDto,
+    ConversationAttachmentKind as AttachmentKind, ConversationAttachmentStatus as AttachmentStatus,
+    ConversationEvent, Source,
+};
 
-use super::toolbox::AttachmentCandidate;
+use super::event_store::read_indexed_event_if_ready;
+use super::normalize::{first_text, optional_text};
+use super::session_store::{ensure_matching_session, load_trusted_session_files};
+use super::{parse_conversation_file, parse_conversation_files};
 
-pub(crate) const THUMBNAIL_MAX_WIDTH: u32 = 320;
-pub(crate) const THUMBNAIL_MAX_HEIGHT: u32 = 240;
+const THUMBNAIL_MAX_WIDTH: u32 = 320;
+const THUMBNAIL_MAX_HEIGHT: u32 = 240;
+
+struct AttachmentCandidate {
+    attachment: ConversationAttachment,
+    source: String,
+    resolved_path: Option<PathBuf>,
+}
+
+pub fn load_attachment(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<ConversationAttachmentContentDto, String> {
+    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
+    let data_url = attachment_data_url(&candidate)?;
+    Ok(ConversationAttachmentContentDto {
+        attachment: candidate.attachment,
+        data_url,
+    })
+}
+
+pub fn load_attachment_thumbnail(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<ConversationAttachmentContentDto, String> {
+    let candidate = resolve_attachment(conn, home, source, session_id, attachment_id)?;
+    let data_url = attachment_thumbnail_data_url(&candidate)?;
+    Ok(ConversationAttachmentContentDto {
+        attachment: candidate.attachment,
+        data_url,
+    })
+}
+
+pub(crate) fn populate_attachments(events: &mut [ConversationEvent], project: &str) {
+    for event in events {
+        event.attachments = attachment_candidates(event.sequence, &event.details, project)
+            .into_iter()
+            .map(|candidate| candidate.attachment)
+            .collect();
+    }
+}
+
+pub(crate) fn payload_has_local_media(value: &Value) -> bool {
+    match value {
+        Value::Array(items) => items.iter().any(payload_has_local_media),
+        Value::Object(_) => {
+            if attachment_candidate(value, "").is_some() {
+                return true;
+            }
+            ["content", "attachments", "parts"]
+                .iter()
+                .any(|key| value.get(*key).is_some_and(payload_has_local_media))
+        }
+        _ => false,
+    }
+}
 
 /// 按行号流式读取源文件的一行。行号从 0 计；只保留当前行，不把整份文件读进内存。
 pub(crate) fn read_source_line(path: &Path, line_index: u32) -> Result<String, String> {
@@ -41,11 +109,309 @@ pub(crate) fn read_source_line(path: &Path, line_index: u32) -> Result<String, S
     }
 }
 
-pub(super) fn read_source_payload(
-    source: Source,
-    path: &Path,
+fn resolve_attachment(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<AttachmentCandidate, String> {
+    if let Some(candidate) = try_resolve_attachment(conn, home, source, session_id, attachment_id)?
+    {
+        return Ok(candidate);
+    }
+    let (source, session, paths) = load_trusted_session_files(conn, home, source, session_id)?;
+    let parsed = parse_conversation_files(source, &paths, session_id, true)?;
+    ensure_matching_session(&parsed, &session)?;
+    let event = parsed
+        .events
+        .iter()
+        .find(|event| {
+            event
+                .attachments
+                .iter()
+                .any(|attachment| attachment.id == attachment_id)
+        })
+        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    let attachment_index = event
+        .attachments
+        .iter()
+        .position(|attachment| attachment.id == attachment_id)
+        .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    let attachment = event.attachments[attachment_index].clone();
+    if attachment.kind != AttachmentKind::Image {
+        return Err("该附件不是可预览的图片".to_string());
+    }
+    let source_path = PathBuf::from(&event.source_file);
+    let source_fragment = parse_conversation_file(source, &source_path, session_id, true)?;
+    let payload = read_source_payload(source, &source_path, event.source_sequence)?;
+    let mut candidate = attachment_candidates(
+        event.source_sequence,
+        &payload,
+        &source_fragment.session.project,
+    )
+    .into_iter()
+    .nth(attachment_index)
+    .ok_or_else(|| "原始文件中未找到该附件".to_string())?;
+    candidate.attachment = attachment;
+    ensure_attachment_path_allowed(&candidate, &source_fragment.session.project)?;
+    Ok(candidate)
+}
+
+fn try_resolve_attachment(
+    conn: &Connection,
+    home: &Path,
+    source: &str,
+    session_id: &str,
+    attachment_id: &str,
+) -> Result<Option<AttachmentCandidate>, String> {
+    let Some((event_id, attachment_index)) = split_attachment_id(attachment_id) else {
+        return Ok(None);
+    };
+    let Some((prepared, indexed)) =
+        read_indexed_event_if_ready(conn, home, source, session_id, event_id)?
+    else {
+        return Ok(None);
+    };
+    let Some(attachment) = indexed.attachments.get(attachment_index).cloned() else {
+        return Ok(None);
+    };
+    if attachment.kind != AttachmentKind::Image {
+        return Err("该附件不是可预览的图片".to_string());
+    }
+    let source_path = PathBuf::from(&indexed.source_file);
+    let Ok(payload) = read_source_payload(prepared.source, &source_path, indexed.source_sequence)
+    else {
+        return Ok(None);
+    };
+    let Some(mut candidate) =
+        attachment_candidates(indexed.source_sequence, &payload, &prepared.session.project)
+            .into_iter()
+            .nth(attachment_index)
+    else {
+        return Ok(None);
+    };
+    candidate.attachment = attachment;
+    ensure_attachment_path_allowed(&candidate, &prepared.session.project)?;
+    Ok(Some(candidate))
+}
+
+fn split_attachment_id(attachment_id: &str) -> Option<(&str, usize)> {
+    let (event_id, index) = attachment_id.rsplit_once(':')?;
+    Some((event_id, index.parse().ok()?))
+}
+
+fn attachment_candidates(
     sequence: u32,
-) -> Result<Value, String> {
+    payload: &Value,
+    project: &str,
+) -> Vec<AttachmentCandidate> {
+    let mut values = Vec::new();
+    for key in ["content", "attachments", "parts"] {
+        match payload.get(key) {
+            Some(Value::Array(items)) => values.extend(items),
+            Some(value @ Value::Object(_)) => values.push(value),
+            _ => {}
+        }
+    }
+    values
+        .into_iter()
+        .filter_map(|value| attachment_candidate(value, project))
+        .enumerate()
+        .map(|(index, mut candidate)| {
+            candidate.attachment.id = format!("{sequence}:{index}");
+            candidate
+        })
+        .collect()
+}
+
+fn attachment_candidate(value: &Value, project: &str) -> Option<AttachmentCandidate> {
+    let object = value.as_object()?;
+    if let Some(inline) = object
+        .get("inlineData")
+        .or_else(|| object.get("inline_data"))
+    {
+        return embedded_inline_candidate(value, inline);
+    }
+    let raw_type = object.get("type").and_then(Value::as_str).unwrap_or("");
+    let kind = if raw_type.contains("image")
+        || object
+            .get("mimeType")
+            .and_then(Value::as_str)
+            .is_some_and(|mime| mime.starts_with("image/"))
+        || object
+            .get("mime_type")
+            .and_then(Value::as_str)
+            .is_some_and(|mime| mime.starts_with("image/"))
+    {
+        AttachmentKind::Image
+    } else if raw_type.contains("file") || raw_type.contains("attachment") {
+        AttachmentKind::File
+    } else {
+        return None;
+    };
+    let source = ["file_path", "path", "url", "image_url", "uri"]
+        .iter()
+        .find_map(|key| object.get(*key).and_then(attachment_source_value))?;
+    finish_attachment_candidate(value, kind, source, project)
+}
+
+fn embedded_inline_candidate(value: &Value, inline: &Value) -> Option<AttachmentCandidate> {
+    let mime = first_text(inline, &["mimeType", "mime_type", "mime"]);
+    let mime = if mime.is_empty() {
+        first_text(value, &["mimeType", "mime_type", "mime"])
+    } else {
+        mime
+    };
+    let mut data = first_text(inline, &["data"]);
+    if data.is_empty() {
+        data = inline
+            .as_str()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("")
+            .to_string();
+    }
+    if data.is_empty() {
+        return None;
+    }
+    if data.starts_with("http://") || data.starts_with("https://") {
+        return finish_attachment_candidate(value, AttachmentKind::Image, data, "");
+    }
+    let media_type = if mime.starts_with("image/") {
+        mime
+    } else if mime.is_empty() {
+        "image/png".to_string()
+    } else {
+        mime
+    };
+    let kind = if media_type.starts_with("image/") {
+        AttachmentKind::Image
+    } else {
+        AttachmentKind::File
+    };
+    let source = if data.starts_with("data:") {
+        data
+    } else {
+        format!("data:{media_type};base64,{data}")
+    };
+    let mut candidate = finish_attachment_candidate(value, kind, source, "")?;
+    candidate.attachment.media_type = media_type;
+    candidate.attachment.size_bytes = embedded_size_bytes(&candidate.source);
+    Some(candidate)
+}
+
+fn finish_attachment_candidate(
+    value: &Value,
+    kind: AttachmentKind,
+    source: String,
+    project: &str,
+) -> Option<AttachmentCandidate> {
+    let embedded = source.starts_with("data:");
+    let remote = source.starts_with("http://") || source.starts_with("https://");
+    let resolved_path = if embedded || remote {
+        None
+    } else {
+        let path = PathBuf::from(&source);
+        Some(if path.is_absolute() || project.is_empty() {
+            path
+        } else {
+            PathBuf::from(project).join(path)
+        })
+    };
+    let metadata = resolved_path
+        .as_ref()
+        .and_then(|path| fs::metadata(path).ok());
+    let status = if embedded {
+        AttachmentStatus::Embedded
+    } else if remote {
+        AttachmentStatus::Unsupported
+    } else if metadata.is_some() {
+        AttachmentStatus::Available
+    } else {
+        AttachmentStatus::Missing
+    };
+    let original_path = if embedded {
+        "内嵌图片数据".to_string()
+    } else {
+        source.clone()
+    };
+    let name = first_text(value, &["name", "file_name", "filename"]);
+    let name = if name.is_empty() {
+        Path::new(&original_path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(if kind == AttachmentKind::Image {
+                "image"
+            } else {
+                "attachment"
+            })
+            .to_string()
+    } else {
+        name
+    };
+    let media_type = optional_text(value, &["mime_type", "media_type", "mimeType", "mime"])
+        .unwrap_or_else(|| infer_media_type(&name, kind));
+    Some(AttachmentCandidate {
+        attachment: ConversationAttachment {
+            id: String::new(),
+            kind,
+            name,
+            original_path,
+            media_type,
+            size_bytes: metadata.map(|metadata| metadata.len()).or_else(|| {
+                if embedded {
+                    embedded_size_bytes(&source)
+                } else {
+                    None
+                }
+            }),
+            status,
+        },
+        source,
+        resolved_path,
+    })
+}
+
+fn embedded_size_bytes(source: &str) -> Option<u64> {
+    let encoded = source.split_once(',')?.1;
+    let padding = encoded
+        .bytes()
+        .rev()
+        .take_while(|byte| *byte == b'=')
+        .count();
+    Some(((encoded.len() * 3 / 4).saturating_sub(padding)) as u64)
+}
+
+fn attachment_source_value(value: &Value) -> Option<String> {
+    value
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| value.get("url").and_then(Value::as_str).map(str::to_string))
+}
+
+fn infer_media_type(name: &str, kind: AttachmentKind) -> String {
+    let extension = Path::new(name)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match extension.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
+        "json" => "application/json",
+        "md" => "text/markdown",
+        "txt" => "text/plain",
+        _ if kind == AttachmentKind::Image => "image/*",
+        _ => "application/octet-stream",
+    }
+    .to_string()
+}
+
+fn read_source_payload(source: Source, path: &Path, sequence: u32) -> Result<Value, String> {
     if source == Source::Gemini {
         let root = if path
             .extension()
@@ -72,7 +438,7 @@ pub(super) fn read_source_payload(
     Ok(value.get("payload").cloned().unwrap_or(value))
 }
 
-pub(super) fn ensure_attachment_path_allowed(
+fn ensure_attachment_path_allowed(
     candidate: &AttachmentCandidate,
     project: &str,
 ) -> Result<(), String> {
@@ -98,7 +464,7 @@ pub(super) fn ensure_attachment_path_allowed(
     }
 }
 
-pub(crate) fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
+fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
     if candidate.attachment.status == AttachmentStatus::Embedded {
         if candidate.source.starts_with("data:image/") {
             return Ok(candidate.source.clone());
@@ -113,9 +479,7 @@ pub(crate) fn attachment_data_url(candidate: &AttachmentCandidate) -> Result<Str
     ))
 }
 
-pub(crate) fn attachment_thumbnail_data_url(
-    candidate: &AttachmentCandidate,
-) -> Result<String, String> {
+fn attachment_thumbnail_data_url(candidate: &AttachmentCandidate) -> Result<String, String> {
     let bytes = attachment_bytes(candidate)?;
     let image =
         image::load_from_memory(&bytes).map_err(|error| format!("图片格式无效：{error}"))?;
@@ -133,7 +497,7 @@ pub(crate) fn attachment_thumbnail_data_url(
     ))
 }
 
-pub(crate) fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> {
+fn attachment_bytes(candidate: &AttachmentCandidate) -> Result<Vec<u8>, String> {
     match candidate.attachment.status {
         AttachmentStatus::Embedded => {
             let (metadata, encoded) = candidate

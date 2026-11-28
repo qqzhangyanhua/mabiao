@@ -10,13 +10,20 @@ use rusqlite::{params, Connection};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::toolbox::*;
-use super::{ConversationIndexBatch, ConversationIndexIssue};
-use crate::adapters::crush::{
-    is_root_session, project_for_db, table_columns, unix_seconds_to_rfc3339,
+use super::normalize::{
+    finish_source_conversation, normalize_tool_call_details, optional_text, push_projected_message,
+    semantic_event, tool_result_event, update_time_bounds, ConversationFinishPrep,
+    ParsedConversation,
 };
-use crate::domain::Source;
-use crate::ingest;
+use super::{ConversationIndexBatch, ConversationIndexIssue};
+use crate::adapters::crush::{is_root_session, project_for_db, unix_seconds_to_rfc3339};
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
+};
+use crate::source_sqlite::{
+    open_wal_readonly, sql_coalesce, sql_int, sql_text, table_columns, wal_source_revision,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::crush::discover(roots)
@@ -40,7 +47,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Crush")
+    wal_source_revision(path, "Crush")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -72,7 +79,7 @@ fn project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Crush 数据库失败：{error}")))?;
     let sessions = table_columns(&db, "sessions").map_err(|message| fatal(path, message))?;
     if !sessions.contains("id") {
@@ -118,11 +125,11 @@ fn read_sessions(
          FROM sessions
          WHERE (?1 IS NULL OR id = ?1)
          ORDER BY id",
-        id = text_column(columns, "id"),
-        title = text_column(columns, "title"),
-        parent = text_column(columns, "parent_session_id"),
-        created_at = int_column(columns, "created_at"),
-        updated_at = int_column(columns, "updated_at"),
+        id = sql_text(columns, "id"),
+        title = sql_text(columns, "title"),
+        parent = sql_text(columns, "parent_session_id"),
+        created_at = sql_int(columns, "created_at"),
+        updated_at = sql_int(columns, "updated_at"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -146,13 +153,9 @@ fn read_messages(
     columns: &BTreeSet<String>,
     session_id: &str,
 ) -> Result<Vec<MessageRow>, String> {
-    let parts = if columns.contains("parts") {
-        "COALESCE(parts, '[]')"
-    } else {
-        "'[]'"
-    };
-    let model = text_column(columns, "model");
-    let timestamp = int_column(columns, "created_at");
+    let parts = sql_coalesce(columns, "", "parts", "'[]'");
+    let model = sql_text(columns, "model");
+    let timestamp = sql_int(columns, "created_at");
     let order = if columns.contains("created_at") {
         "created_at, id"
     } else {
@@ -359,21 +362,5 @@ fn parse_parts(parts_json: &str) -> Vec<Value> {
         Ok(Value::Array(items)) => items,
         Ok(value @ Value::Object(_)) => vec![value],
         _ => Vec::new(),
-    }
-}
-
-fn text_column(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, '')")
-    } else {
-        "''".to_string()
-    }
-}
-
-fn int_column(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({name}, 0)")
-    } else {
-        "0".to_string()
     }
 }

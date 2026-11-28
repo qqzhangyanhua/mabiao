@@ -3,23 +3,25 @@
 
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use super::AccountSecret;
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
-    antigravity, claude_usage, codex_usage, copilot, devin, droid, grok, opencode,
+    antigravity, claude_usage, codex_usage, copilot, devin, droid, grok, opencode, QuotaEnv,
 };
 
-pub fn capture_secret(
+pub fn capture_secret_at(
     provider: OfficialQuotaProvider,
     root: &Path,
+    now: DateTime<Utc>,
 ) -> Result<AccountSecret, String> {
     match provider {
-        OfficialQuotaProvider::Claude => claude(root),
+        OfficialQuotaProvider::Claude => claude(root, now),
         OfficialQuotaProvider::Codex => codex(root),
         OfficialQuotaProvider::Cursor => cursor(root),
-        OfficialQuotaProvider::Grok => grok_secret(root),
+        OfficialQuotaProvider::Grok => grok_secret(root, now),
         OfficialQuotaProvider::Droid => droid_secret(root),
         OfficialQuotaProvider::Antigravity => antigravity_secret(root),
         OfficialQuotaProvider::OpenCode => opencode_secret(root),
@@ -28,9 +30,9 @@ pub fn capture_secret(
     }
 }
 
-fn claude(root: &Path) -> Result<AccountSecret, String> {
+fn claude(root: &Path, now: DateTime<Utc>) -> Result<AccountSecret, String> {
     let path = file_or_join(root, ".credentials.json");
-    let access_token = claude_usage::load_access_token(&path)?;
+    let access_token = claude_usage::load_access_token_at(&path, now)?;
     let refresh_token = std::fs::read_to_string(&path)
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
@@ -80,8 +82,8 @@ fn cursor(root: &Path) -> Result<AccountSecret, String> {
     })
 }
 
-fn grok_secret(root: &Path) -> Result<AccountSecret, String> {
-    let session = grok::load_session_at(root, chrono::Utc::now())?;
+fn grok_secret(root: &Path, now: DateTime<Utc>) -> Result<AccountSecret, String> {
+    let session = grok::load_session_at(root, now)?;
     let refresh = session.refresh;
     Ok(AccountSecret {
         access_token: session.token,
@@ -145,22 +147,25 @@ pub(crate) fn antigravity_secret_from_tokens(
     })
 }
 
-/// 没传目录时和零配置取数读同一份登录。显式目录仍走 `capture_secret`，不进这里。
-pub(crate) fn capture_default(provider: OfficialQuotaProvider) -> Result<AccountSecret, String> {
+/// 没传目录时和零配置取数读同一份登录。显式目录仍走 `capture_secret_at`，不进这里。
+pub(crate) fn capture_default_in(
+    env: &QuotaEnv,
+    provider: OfficialQuotaProvider,
+) -> Result<AccountSecret, String> {
     match provider {
         OfficialQuotaProvider::Antigravity => {
-            antigravity_secret_from_tokens(&antigravity::load_local_tokens()?)
+            antigravity_secret_from_tokens(&antigravity::load_local_tokens_in(env)?)
         }
         OfficialQuotaProvider::Droid => {
-            let plain = droid::load_default_auth_plaintext()?.ok_or_else(|| {
+            let plain = droid::load_default_auth_plaintext_in(env)?.ok_or_else(|| {
                 "尚未登录 Droid，请先运行 droid 并登录 app.factory.ai".to_string()
             })?;
             droid_secret_from_plaintext(&plain)
         }
         other => {
             let mut last = "未找到本机登录态，请先在客户端登录".to_string();
-            for root in super::default_roots(other) {
-                match capture_secret(other, &root) {
+            for root in env.default_roots(other) {
+                match capture_secret_at(other, &root, env.now()) {
                     Ok(secret) => return Ok(secret),
                     Err(error) => last = error,
                 }

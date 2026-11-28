@@ -8,9 +8,11 @@ use crate::test_support::conversation_boundary::{
 #[test]
 fn inspect_accepts_compliant_sample() {
     let source = "\
-use super::toolbox::{ParsedConversation, FileIndexCursor};
-use super::event_index;
-use super::persist;
+use base64::prelude::*;
+use super::normalize::{ParsedConversation, FileIndexCursor};
+use super::super::normalize::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES};
+use super::event_store;
+use super::{persist, read};
 ";
     let violations = inspect_conversation_boundary([("read.rs", source)]);
     assert!(violations.is_empty(), "合规样本不应报违规：{violations:?}");
@@ -41,16 +43,44 @@ fn load() {}
 }
 
 #[test]
-fn inspect_allows_sibling_globs_and_line_comments() {
+fn inspect_rejects_sibling_and_nested_super_wildcards() {
     let source = "\
 use super::toolbox::*;
+pub(crate) use super::normalize::*;
+use super::super::toolbox::*;
+use super::normalize::{ParsedConversation, *};
+use super::normalize::{
+    ParsedConversation,
+    *,
+};
+pub(in crate::conversation) use super::*;
+";
+    let violations = inspect_conversation_boundary([("codex.rs", source)]);
+    let lines: Vec<usize> = violations.iter().map(|v| v.line).collect();
+    assert_eq!(lines, vec![1, 2, 3, 4, 7, 9], "{violations:?}");
+    assert!(
+        violations
+            .iter()
+            .all(|v| v.rule == ConversationBoundaryRule::NoSuperWildcard),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn inspect_allows_external_preludes_and_comments() {
+    let source = "\
+use base64::prelude::*;
 // use super::*;
+// use super::toolbox::*;
+/// use super::normalize::*;
+use super::normalize::{ /* note */ ParsedConversation };
 use super::{persist, read};
+const MIME: &str = \"image/*\";
 ";
     let violations = inspect_conversation_boundary([("codex.rs", source)]);
     assert!(
         violations.is_empty(),
-        "兄弟模块 glob 与注释不应报规则一：{violations:?}"
+        "外部 prelude、注释与显式导入不应报规则一：{violations:?}"
     );
 }
 

@@ -2,45 +2,24 @@ import { BRAND_BY_SLUG, type BrandId } from "../generated/displayIdentity";
 
 export type SourceIconId = BrandId | "unknown";
 
-/** 品牌到配色 class。少一个品牌时 tsc 失败。Antigravity（agy）沿用 Gemini 的配色。 */
-const BRAND_TONE = {
+/** 拥有独立配色的品牌；未列入的品牌统一回落到中性 `tone-other`。Antigravity（agy）沿用 Gemini 配色。 */
+const CUSTOM_BRAND_TONES: Partial<Record<BrandId, string>> = {
   claude: "tone-claude",
   codex: "tone-codex",
   grok: "tone-grok",
   gemini: "tone-gemini",
   kimi: "tone-kimi",
   qwen: "tone-qwen",
-  copilot: "tone-copilot",
   opencode: "tone-open",
-  factory: "tone-factory",
   pi: "tone-pi",
   omp: "tone-omp",
-  dsh: "tone-dsh",
-  cursor: "tone-cursor",
-  hermes: "tone-hermes",
   agy: "tone-gemini",
-  qoder: "tone-qoder",
-  cline: "tone-cline",
-  workbuddy: "tone-workbuddy",
-  zcode: "tone-zcode",
-  alma: "tone-alma",
-  codebuddy: "tone-codebuddy",
-  trae: "tone-trae",
-  goose: "tone-goose",
-  roo: "tone-roo",
-  kilo: "tone-kilo",
-  amp: "tone-amp",
-  zed: "tone-zed",
-  cherry: "tone-cherry",
-  openclaw: "tone-openclaw",
-  crush: "tone-crush",
-  aider: "tone-aider",
-  warp: "tone-warp",
-  windsurf: "tone-windsurf",
-} as const satisfies Record<BrandId, string>;
+};
+
+const FALLBACK_BRAND_TONE = "tone-other";
 
 export function brandToneClass(brand: BrandId): string {
-  return BRAND_TONE[brand];
+  return CUSTOM_BRAND_TONES[brand] ?? FALLBACK_BRAND_TONE;
 }
 
 function isIdentitySlug(source: string): source is keyof typeof BRAND_BY_SLUG {

@@ -1,12 +1,22 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    finish_source_conversation, first_text, normalize_tool_call_details,
+    normalize_tool_result_details, optional_text, push_projected_message, semantic_event,
+    tool_result_event, update_time_bounds, ConversationFinishPrep, ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
-use crate::ingest;
+use crate::domain::{
+    ConversationEventActor as EventActor, ConversationEventKind as EventKind, Source,
+};
+use crate::source_sqlite::{
+    open_wal_readonly, row_opt_string, sql_fallback, table_columns, table_names,
+    wal_source_revision,
+};
 
 struct SessionRow {
     id: String,
@@ -58,7 +68,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::regular_source_revision(path)
+    wal_source_revision(path, "ZCode")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -75,7 +85,7 @@ fn read_and_project(
     session_filter: Option<&str>,
     include_deferred_content: bool,
 ) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let source_db = ingest::open_readonly(path)
+    let source_db = open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 ZCode 数据库失败：{error}")))?;
     source_db
         .busy_timeout(std::time::Duration::from_millis(250))
@@ -129,27 +139,15 @@ fn read_and_project(
     })
 }
 
-fn table_names(db: &Connection) -> Result<BTreeSet<String>, String> {
-    let mut statement = db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(0))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows)
-}
-
 fn read_sessions(db: &Connection) -> Result<Vec<SessionRow>, String> {
-    let columns = pragma_columns(db, "session")?;
+    let columns = table_columns(db, "session")?;
     let sql = format!(
         "SELECT id, {}, {}, {}, {}, {} FROM session ORDER BY id",
-        optional_column(&columns, "title", "''"),
-        optional_column(&columns, "directory", "''"),
-        optional_column(&columns, "parent_id", "''"),
-        optional_column(&columns, "time_created", "NULL"),
-        optional_column(&columns, "time_updated", "NULL"),
+        sql_fallback(&columns, "title", "''"),
+        sql_fallback(&columns, "directory", "''"),
+        sql_fallback(&columns, "parent_id", "''"),
+        sql_fallback(&columns, "time_created", "NULL"),
+        sql_fallback(&columns, "time_updated", "NULL"),
     );
     let title_source = columns.contains("title_source");
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
@@ -157,9 +155,9 @@ fn read_sessions(db: &Connection) -> Result<Vec<SessionRow>, String> {
         .query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
-                row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                row_opt_string(row, 1)?,
+                row_opt_string(row, 2)?,
+                row_opt_string(row, 3)?,
                 row.get::<_, Option<i64>>(4)?,
                 row.get::<_, Option<i64>>(5)?,
             ))
@@ -213,7 +211,7 @@ fn read_sessions(db: &Connection) -> Result<Vec<SessionRow>, String> {
 }
 
 fn read_messages(db: &Connection) -> Result<Vec<MessageRow>, String> {
-    let columns = pragma_columns(db, "message")?;
+    let columns = table_columns(db, "message")?;
     if !["id", "session_id", "data"]
         .iter()
         .all(|column| columns.contains(*column))
@@ -222,7 +220,7 @@ fn read_messages(db: &Connection) -> Result<Vec<MessageRow>, String> {
     }
     let sql = format!(
         "SELECT id, session_id, {}, data FROM message ORDER BY id",
-        optional_column(&columns, "time_created", "NULL"),
+        sql_fallback(&columns, "time_created", "NULL"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -249,7 +247,7 @@ fn read_messages(db: &Connection) -> Result<Vec<MessageRow>, String> {
 }
 
 fn read_parts(db: &Connection) -> Result<Vec<PartRow>, String> {
-    let columns = pragma_columns(db, "part")?;
+    let columns = table_columns(db, "part")?;
     if !["id", "message_id", "data"]
         .iter()
         .all(|column| columns.contains(*column))
@@ -258,8 +256,8 @@ fn read_parts(db: &Connection) -> Result<Vec<PartRow>, String> {
     }
     let sql = format!(
         "SELECT id, message_id, {}, {}, data FROM part ORDER BY id",
-        optional_column(&columns, "session_id", "''"),
-        optional_column(&columns, "time_created", "NULL"),
+        sql_fallback(&columns, "session_id", "''"),
+        sql_fallback(&columns, "time_created", "NULL"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -267,7 +265,7 @@ fn read_parts(db: &Connection) -> Result<Vec<PartRow>, String> {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                row_opt_string(row, 2)?,
                 row.get::<_, Option<i64>>(3)?,
                 row.get::<_, String>(4)?,
             ))
@@ -427,26 +425,6 @@ fn project_session(
         is_top_level,
         ConversationFinishPrep::NONE,
     )
-}
-
-fn pragma_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    let mut statement = db
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows)
-}
-
-fn optional_column(columns: &BTreeSet<String>, column: &str, fallback: &str) -> String {
-    if columns.contains(column) {
-        column.to_string()
-    } else {
-        fallback.to_string()
-    }
 }
 
 fn millis_timestamp(value: Option<i64>) -> String {

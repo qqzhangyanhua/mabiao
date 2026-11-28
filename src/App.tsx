@@ -1,5 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { Suspense, useEffect } from "react";
+import { Suspense } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import { Sidebar } from "./components/Sidebar";
@@ -9,10 +8,8 @@ import { useOfficialQuotaUpdates } from "./hooks/useOfficialQuotaUpdates";
 import { useOverviewLayout } from "./hooks/useOverviewLayout";
 import { useTheme } from "./hooks/useTheme";
 import { useUsageData } from "./hooks/useUsageData";
-import { parseWorktimeDay } from "./hooks/viewCache";
 import { clearDimensionFilters, withModelFilter, withProviderFilter } from "./lib/filterChips";
-import { persistOfficialQuotaConfig } from "./lib/officialQuotaConfig";
-import { isOfficialProviderVisible, OFFICIAL_QUOTA_PROVIDER_IDS } from "./lib/overviewLayout";
+import { parseWorktimeDay } from "./lib/viewHash";
 import {
   LazyApplicationAnalytics,
   LazyBreakdown,
@@ -36,36 +33,6 @@ export default function App() {
   const { view } = data;
   const detectedSources = data.diagnostics.filter((row) => row.detected).map((row) => row.source);
   useOfficialQuotaUpdates(data.setOfficialQuota);
-
-  // 托盘额度面板没有自己的显示配置，复用这份「配置显示」——一处关掉两边同步隐藏。
-  // 托盘运行在 Rust 进程里，够不到 localStorage，所以每次这份配置变化都顺手
-  // 写一份到 official_quota.json，托盘下次打开/刷新面板时直接读那份文件。
-  useEffect(() => {
-    const quota = data.officialQuota;
-    if (!quota) {
-      return;
-    }
-    const hidden = OFFICIAL_QUOTA_PROVIDER_IDS.filter(
-      (id) => !isOfficialProviderVisible(overviewLayout, id),
-    );
-    const current = quota.hidden_providers ?? [];
-    const unchanged =
-      hidden.length === current.length && hidden.every((id) => current.includes(id));
-    if (unchanged) {
-      return;
-    }
-    void persistOfficialQuotaConfig({
-      alerts_enabled: quota.alerts_enabled,
-      hidden_providers: hidden,
-    })
-      .then(() => {
-        data.setOfficialQuota((prev) => (prev ? { ...prev, hidden_providers: hidden } : prev));
-      })
-      .catch(() => {
-        // 同步失败不影响主窗口本地显示，下次配置变化或重启应用时还会再推一次。
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只需在官方额度可见性或已加载快照变化时同步，modules/quotaSources 与此无关
-  }, [overviewLayout.officialProviders, data.officialQuota]);
 
   useKeyboardShortcuts({
     onNavigate: data.navigate,
@@ -148,6 +115,9 @@ export default function App() {
                     onSessionClick={(session) => data.openConversations(session)}
                     layout={overviewLayout}
                     onLayoutChange={setOverviewLayout}
+                    onHiddenOfficialProvidersChange={(hidden) => {
+                      void data.setHiddenOfficialProviders(hidden);
+                    }}
                     detectedSources={detectedSources}
                     onOfficialQuota={data.setOfficialQuota}
                     onQuotaError={data.reportError}
@@ -160,7 +130,7 @@ export default function App() {
                     points={data.trend}
                     theme={theme}
                     filter={data.filter}
-                    revision={String(data.sessionsRevision)}
+                    revision={`${data.sessionsRevision}-${data.pricingRevision}`}
                     onRangeSelect={data.drillRange}
                     onRangeBack={data.canGoBack ? data.popRange : undefined}
                     onOpenConversation={(session) => data.openConversations(session)}
@@ -189,7 +159,7 @@ export default function App() {
                     projectNames={view === "project"}
                     showCallDetails={view === "provider"}
                     filter={view === "provider" || view === "project" ? data.filter : undefined}
-                    revision={String(data.sessionsRevision)}
+                    revision={`${data.sessionsRevision}-${data.pricingRevision}`}
                     theme={theme}
                     onProviderClick={
                       view === "provider"
@@ -230,7 +200,7 @@ export default function App() {
                 {view === "conversations" ? (
                   <LazyConversations
                     filter={data.filter}
-                    revision={data.sessionsRevision}
+                    revision={data.sessionsRevision + data.pricingRevision}
                     focus={data.conversationFocus}
                     onFocusConsumed={data.clearConversationFocus}
                     onOpenRemoteServerSettings={data.openRemoteServerSettings}
@@ -257,18 +227,22 @@ export default function App() {
                     observedModels={data.options.models}
                     budgetStatus={data.budgetStatus}
                     savingBudget={data.savingBudget}
+                    restoreRevision={data.restoreRevision}
+                    pricingRevision={data.pricingRevision}
                     onChange={data.setPrices}
                     onRebuild={data.runRebuild}
                     onPurgeArchived={data.runPurgeArchived}
-                    onSave={async () => {
-                      try {
-                        await invoke("save_price_table", { prices: data.prices });
-                        data.setStatus("单价已保存");
-                      } catch (error) {
-                        data.reportError(error);
-                      }
+                    onSave={() => data.savePrices().catch(() => undefined)}
+                    onScanPathsSaved={() => {
+                      void data.runIngest("刷新");
                     }}
-                    onSnapshotRefreshed={() => data.runIngest("刷新")}
+                    onPriceSnapshotChanged={() => {
+                      void data.invalidatePricing().catch(data.reportError);
+                    }}
+                    onBackupRestored={() => {
+                      void data.reloadAfterRestore().catch(() => undefined);
+                    }}
+                    onClearCursorAccountUsage={data.clearCursorAccountUsage}
                     onSaveBudget={(monthlyUsd: number | null) =>
                       data.saveBudget({ monthly_usd: monthlyUsd }).catch(() => undefined)
                     }
@@ -277,6 +251,9 @@ export default function App() {
                     onQuotaError={data.reportError}
                     overviewLayout={overviewLayout}
                     onOverviewLayoutChange={setOverviewLayout}
+                    onHiddenOfficialProvidersChange={(hidden) => {
+                      void data.setHiddenOfficialProviders(hidden);
+                    }}
                     themeMode={themeMode}
                     autoRefresh={data.autoRefresh}
                     cursorAccountAutoRefresh={data.cursorAccountAutoRefresh}

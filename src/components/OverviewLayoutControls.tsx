@@ -24,12 +24,16 @@ import { Button } from "./ui/Button";
 
 export function OverviewLayoutControls({
   layout,
+  hiddenOfficialProviders,
   onChange,
+  onHiddenOfficialProvidersChange,
   detectedSources = [],
   presentSources = [],
 }: {
   layout: OverviewLayout;
+  hiddenOfficialProviders: readonly string[];
   onChange: (layout: OverviewLayout) => void;
+  onHiddenOfficialProvidersChange: (hiddenProviders: string[]) => void;
   detectedSources?: string[];
   presentSources?: string[];
 }) {
@@ -78,33 +82,36 @@ export function OverviewLayoutControls({
             <Button
               variant="text"
               className="overview-layout-action"
-              onClick={() => onChange(setAllOfficialProvidersVisible(layout, true))}
+              onClick={() => onHiddenOfficialProvidersChange(setAllOfficialProvidersVisible(true))}
             >
               全部显示
             </Button>
             <Button
               variant="text"
               className="overview-layout-action"
-              onClick={() => onChange(setAllOfficialProvidersVisible(layout, false))}
+              onClick={() => onHiddenOfficialProvidersChange(setAllOfficialProvidersVisible(false))}
             >
               全部隐藏
             </Button>
           </>
         }
       >
-        {OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => (
-          <ToggleChip
-            key={id}
-            icon={<SourceIcon source={id} size={14} />}
-            label={officialQuotaProviderLabel(id)}
-            pressed={isOfficialProviderVisible(layout, id)}
-            onToggle={() =>
-              onChange(
-                setOfficialProviderVisible(layout, id, !isOfficialProviderVisible(layout, id)),
-              )
-            }
-          />
-        ))}
+        {OFFICIAL_QUOTA_PROVIDER_IDS.map((id) => {
+          const visible = isOfficialProviderVisible(hiddenOfficialProviders, id);
+          return (
+            <ToggleChip
+              key={id}
+              icon={<SourceIcon source={id} size={14} />}
+              label={officialQuotaProviderLabel(id)}
+              pressed={visible}
+              onToggle={() =>
+                onHiddenOfficialProvidersChange(
+                  setOfficialProviderVisible(hiddenOfficialProviders, id, !visible),
+                )
+              }
+            />
+          );
+        })}
       </ToggleGroup>
       <ToggleGroup
         title="额度模块中的来源"

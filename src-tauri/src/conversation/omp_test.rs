@@ -1,4 +1,5 @@
-use super::{parse, EventActor, EventKind};
+use super::parse;
+use crate::domain::{ConversationEventActor as EventActor, ConversationEventKind as EventKind};
 
 #[test]
 fn adapter_maps_omp_lifecycle_and_skips_duplicate_tool_starts() {

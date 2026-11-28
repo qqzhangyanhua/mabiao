@@ -13,6 +13,7 @@ mod alma;
 mod amp;
 pub(crate) mod attachments;
 mod backfill;
+mod buddy_jsonl;
 mod catalog;
 mod catalog_search;
 mod cherry;
@@ -33,11 +34,9 @@ mod cursor_inject;
 mod discover;
 mod droid;
 mod dsh;
-mod event_index;
-mod event_page;
-mod event_storage;
-mod event_tables;
+mod event_store;
 mod export;
+mod extension_tasks;
 mod gemini;
 mod goose;
 mod grok;
@@ -49,20 +48,20 @@ mod kilo;
 mod kimi;
 mod line_direct;
 mod merge;
+mod normalize;
 mod omp;
 mod openclaw;
 mod opencode;
-mod persist;
 mod pi;
 mod push_source;
 mod qoder;
 mod qwen;
 mod read;
 mod refresh;
+mod responses_wire;
 mod roo;
 mod scan_roots;
 mod session_store;
-mod toolbox;
 mod trae;
 pub(crate) mod trusted_path;
 mod warp;
@@ -72,15 +71,15 @@ mod zcode;
 mod zed;
 
 use merge::merge_parsed_conversations;
-use toolbox::{FileIndexCursor, ParsedConversation};
+use normalize::{FileIndexCursor, ParsedConversation};
 
+pub use attachments::{load_attachment, load_attachment_thumbnail};
 pub use backfill::{
     backfill_event_index, backfill_event_index_step, backfill_event_index_step_prioritized,
     event_index_progress, session_needs_event_backfill,
 };
 pub use catalog::{
-    catalog_tool_names, indexed_events, sessions_page, sessions_page_with_prices,
-    usage_records_page,
+    catalog_tool_names, sessions_page, sessions_page_with_prices, usage_records_page,
 };
 pub use context_content::load_context_item_content;
 #[cfg(test)]
@@ -91,22 +90,20 @@ pub(crate) use discover::{
     discover_jsonl, discover_opencode, index_claude, index_gemini, index_omp, index_pi,
     regular_source_revision, single_detail,
 };
-pub(crate) use event_index::indexed_event_count;
-pub use event_storage::adopt_text_references;
-pub use line_direct::{
-    load_attachment, load_attachment_thumbnail, load_event_content, parse_session_events,
-    rebuild_events_from_line,
-};
+#[cfg(test)]
+pub(crate) use event_store::event_index_ready;
+pub use event_store::{adopt_text_references, indexed_events};
+pub(crate) use event_store::{catalog_event_count, load_session_events};
+pub use line_direct::{load_event_content, parse_session_events, rebuild_events_from_line};
 pub use push_source::{list_sessions as list_push_sessions, read_session as read_push_session};
 pub use push_source::{PushContext, PushSessionSource};
-#[cfg(test)]
-pub(crate) use read::read_consistent_snapshot;
 pub use read::{detail_state, load_detail, load_parsed_detail};
-pub(crate) use read::{
-    event_index_ready, finish_prepared_detail, load_prepared_parsed, prepare_detail,
-    prepare_detail_read,
-};
+pub(crate) use read::{finish_prepared_detail, prepare_detail, prepare_detail_read};
+#[cfg(test)]
+pub(crate) use read::{load_prepared_parsed, read_consistent_snapshot};
+#[cfg(test)]
 pub(crate) use scan_roots::catalog_roots;
+pub(crate) use scan_roots::catalog_roots_with_env;
 pub use session_store::load_session;
 
 pub use export::build_export;
@@ -173,6 +170,9 @@ pub(crate) struct ConversationAdapter {
     /// 详情又只能整份读的来源（OpenCode 整库快照）：标待补建的话，补建要为每个会话
     /// 各读一遍整库。
     catalog_writes_events: bool,
+    /// 该来源本机是否存储会话正文；为 false 时目录按设计为空（驱动前端生成元数据）。
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) has_conversation_body: bool,
 }
 
 pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
@@ -185,6 +185,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Claude,
@@ -195,6 +196,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::CursorAgent,
@@ -205,6 +207,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Dsh,
@@ -215,6 +218,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: dsh::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Factory,
@@ -225,6 +229,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Kimi,
@@ -235,6 +240,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: kimi::source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Grok,
@@ -245,6 +251,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: grok::source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Pi,
@@ -255,6 +262,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Omp,
@@ -265,6 +273,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: omp::source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Gemini,
@@ -275,6 +284,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Opencode,
@@ -285,6 +295,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: opencode::source_revision,
         raw_extension: None,
         catalog_writes_events: true,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Qwen,
@@ -295,6 +306,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Copilot,
@@ -305,6 +317,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Qoder,
@@ -315,6 +328,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::QoderCn,
@@ -325,6 +339,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Cline,
@@ -335,6 +350,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::WorkBuddy,
@@ -345,6 +361,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Zcode,
@@ -355,6 +372,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: zcode::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Alma,
@@ -365,6 +383,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: alma::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::CodeBuddy,
@@ -375,6 +394,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::CodeBuddyIde,
@@ -385,6 +405,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: codebuddy_ide::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Trae,
@@ -395,6 +416,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Goose,
@@ -405,6 +427,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: goose::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Amp,
@@ -415,6 +438,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Zed,
@@ -425,6 +449,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: zed::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Warp,
@@ -435,6 +460,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: warp::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: false,
     },
     ConversationAdapter {
         source: Source::Crush,
@@ -445,6 +471,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: crush::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Cherry,
@@ -455,6 +482,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: cherry::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::OpenClaw,
@@ -465,6 +493,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: openclaw::source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Aider,
@@ -475,6 +504,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: aider::source_revision,
         raw_extension: Some("jsonl"),
         catalog_writes_events: false,
+        has_conversation_body: false,
     },
     ConversationAdapter {
         source: Source::Windsurf,
@@ -485,6 +515,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: windsurf::source_revision,
         raw_extension: Some("ndjson"),
         catalog_writes_events: false,
+        has_conversation_body: false,
     },
     ConversationAdapter {
         source: Source::Hermes,
@@ -495,6 +526,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: hermes::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Agy,
@@ -505,6 +537,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: agy::source_revision,
         raw_extension: None,
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Roo,
@@ -515,6 +548,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
     ConversationAdapter {
         source: Source::Kilo,
@@ -525,6 +559,7 @@ pub(crate) const CONVERSATION_ADAPTERS: &[ConversationAdapter] = &[
         revision: regular_source_revision,
         raw_extension: Some("json"),
         catalog_writes_events: false,
+        has_conversation_body: true,
     },
 ];
 
@@ -582,7 +617,7 @@ pub fn load_events(
     anchor: crate::domain::ConversationEventAnchor,
     limit: u32,
 ) -> Result<crate::domain::ConversationEventPage, String> {
-    event_page::load_events(conn, home, source, session_id, anchor, limit)
+    event_store::load_events(conn, home, source, session_id, anchor, limit)
 }
 
 pub(crate) fn prepare_events_read(
@@ -592,17 +627,17 @@ pub(crate) fn prepare_events_read(
     session_id: &str,
     anchor: &crate::domain::ConversationEventAnchor,
     limit: u32,
-) -> Result<event_page::PreparedEventsRead, String> {
-    event_page::prepare_events_read(conn, home, source, session_id, anchor, limit)
+) -> Result<event_store::PreparedEventsRead, String> {
+    event_store::prepare_events_read(conn, home, source, session_id, anchor, limit)
 }
 
 pub(crate) fn finish_prepared_events(
     home: &Path,
-    read: event_page::PreparedEventsRead,
+    read: event_store::PreparedEventsRead,
     anchor: &crate::domain::ConversationEventAnchor,
     limit: u32,
 ) -> Result<crate::domain::ConversationEventPage, String> {
-    event_page::finish_prepared_events(home, read, anchor, limit)
+    event_store::finish_prepared_events(home, read, anchor, limit)
 }
 
 pub(crate) use incremental::{

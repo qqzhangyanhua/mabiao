@@ -8,17 +8,7 @@ use crate::adapters::{
     discover_suffix, finish, has_billable_tokens, i64_field, parse_jsonl_value_lines, text_field,
 };
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    ingest::resolve_dirs(
-        overrides,
-        home,
-        "FACTORY_SESSIONS_DIR",
-        ".factory/sessions",
-        "",
-    )
-}
+use crate::ingest;
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     discover_suffix(roots, ".settings.json")

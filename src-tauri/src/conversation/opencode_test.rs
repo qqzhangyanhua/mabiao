@@ -1,6 +1,7 @@
 use rusqlite::params;
 
-use super::{index, EventKind};
+use super::index;
+use crate::domain::ConversationEventKind as EventKind;
 
 #[test]
 fn adapter_preserves_recognized_content_and_reports_body_free_degradation() {

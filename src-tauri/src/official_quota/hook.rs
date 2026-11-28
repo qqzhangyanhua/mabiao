@@ -1,25 +1,26 @@
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaHookDto;
+use crate::official_quota::QuotaEnv;
+use crate::scan_paths::ScanEnv;
 
 pub fn default_settings_path() -> PathBuf {
-    if let Ok(dir) = env::var("CLAUDE_CONFIG_DIR") {
-        let first = dir
-            .split(',')
-            .next()
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        if let Some(root) = first {
-            return PathBuf::from(root).join("settings.json");
-        }
-    }
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".claude/settings.json")
+    default_settings_path_in(&ScanEnv::capture_for_home(&crate::ingest::default_home()))
+}
+
+pub(crate) fn default_settings_path_in(env: &ScanEnv) -> PathBuf {
+    env.claude_hook_settings_path()
+}
+
+pub fn preview_in(env: &QuotaEnv, command: &str) -> OfficialQuotaHookDto {
+    preview(&env.claude_hook_settings_path(), command)
+}
+
+pub fn apply_in(env: &QuotaEnv, command: &str) -> Result<OfficialQuotaHookDto, String> {
+    apply(&env.claude_hook_settings_path(), command)
 }
 
 pub fn hook_command() -> String {

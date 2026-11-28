@@ -2,29 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest::{self, PathOverrides};
-
-/// Warp 把 Agent 会话用量写进本机 `warp.sqlite` 的 `agent_conversations.conversation_data`。
-///
-/// 默认扫：
-/// - Linux：`~/.local/state/warp-terminal`
-/// - macOS Stable / Preview：Group Container `2BBY89MBSN.dev.warp` 下的 Application Support
-/// - Windows：`%LOCALAPPDATA%/warp/Warp/data`
-///
-/// `WARP_HOME` 整体替换，指向含 `warp.sqlite` 的目录（也可以是该文件本身）。
-pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
-    overrides.get("WARP_HOME").cloned().unwrap_or_else(|| {
-        vec![
-            home.join(".local/state/warp-terminal"),
-            home.join("Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Stable"),
-            home.join("Library/Group Containers/2BBY89MBSN.dev.warp/Library/Application Support/dev.warp.Warp-Preview"),
-            home.join("AppData/Local/warp/Warp/data"),
-        ]
-    })
-}
+use crate::source_sqlite::{open_wal_readonly, sql_text, table_columns, wal_fingerprint};
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     let mut paths = Vec::new();
@@ -44,11 +24,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let columns = table_columns(&db, "agent_conversations")?;
     if !columns.contains("conversation_id") || !columns.contains("conversation_data") {
         return Ok(Vec::new());

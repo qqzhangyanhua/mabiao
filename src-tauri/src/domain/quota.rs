@@ -203,6 +203,21 @@ pub struct OfficialQuotaConfig {
     pub reset_reminder_max_used_percent: u32,
 }
 
+/// 官方额度配置的局部更新。`None` 表示保留配置文件里当前的值。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OfficialQuotaConfigPatch {
+    #[serde(default)]
+    pub alerts_enabled: Option<bool>,
+    #[serde(default)]
+    pub hidden_providers: Option<Vec<String>>,
+    #[serde(default)]
+    pub alert_thresholds: Option<Vec<u32>>,
+    #[serde(default)]
+    pub reset_reminder_hours: Option<u32>,
+    #[serde(default)]
+    pub reset_reminder_max_used_percent: Option<u32>,
+}
+
 fn default_alerts_enabled() -> bool {
     true
 }

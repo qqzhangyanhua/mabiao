@@ -7,13 +7,20 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::toolbox::*;
+use super::normalize::{
+    content_text, finish_source_conversation, normalize_tool_call_details, optional_text,
+    push_projected_message, semantic_event, tool_result_event, update_time_bounds,
+    ConversationFinishPrep, ParsedConversation,
+};
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::goose::parse_sql_timestamp;
 use crate::adapters::zed::{
     load_thread, load_threads, model_from_thread, project_from_thread, LoadedThread,
 };
-use crate::domain::Source;
+use crate::domain::{
+    ConversationEvent, ConversationEventActor as EventActor, ConversationEventKind as EventKind,
+    ConversationMessage, Source,
+};
 
 pub(super) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     crate::adapters::zed::discover(roots)
@@ -37,7 +44,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Zed")
+    crate::source_sqlite::wal_source_revision(path, "Zed")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {

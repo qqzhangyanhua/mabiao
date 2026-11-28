@@ -2,7 +2,8 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use super::{aggregate_chunks, index, parse, EventActor, EventKind};
+use super::{aggregate_chunks, index, parse};
+use crate::domain::{ConversationEventActor as EventActor, ConversationEventKind as EventKind};
 
 fn seed(temp: &Path, include_update: bool) -> PathBuf {
     let root = temp.join("grok/sessions/project/grok-native-id");

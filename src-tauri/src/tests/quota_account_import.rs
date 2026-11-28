@@ -690,21 +690,9 @@ impl Stub {
                     break;
                 }
                 let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                let mut buf = Vec::new();
-                let mut tmp = [0u8; 1024];
-                loop {
-                    match stream.read(&mut tmp) {
-                        Ok(0) => break,
-                        Ok(n) => {
-                            buf.extend_from_slice(&tmp[..n]);
-                            if buf.windows(4).any(|window| window == b"\r\n\r\n") {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
-                    }
-                }
-                let text = String::from_utf8_lossy(&buf);
+                let Some(text) = read_http(&mut stream) else {
+                    continue;
+                };
                 let mut lines = text.lines();
                 if let Some(start) = lines.next() {
                     let mut parts = start.split_whitespace();
@@ -731,6 +719,8 @@ impl Stub {
                     body.len()
                 );
                 let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+                let _ = stream.shutdown(std::net::Shutdown::Write);
             }
         });
         Self {
@@ -740,6 +730,44 @@ impl Stub {
             thread: Some(thread),
         }
     }
+}
+
+fn read_http(stream: &mut TcpStream) -> Option<String> {
+    let mut raw = Vec::new();
+    let mut chunk = [0u8; 2048];
+    let (head, mut body) = loop {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 && raw.is_empty() {
+            return None;
+        }
+        raw.extend_from_slice(&chunk[..read]);
+        if let Some(at) = raw.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&raw[..at]).into_owned();
+            break (head, raw[at + 4..].to_vec());
+        }
+        if read == 0 {
+            return None;
+        }
+    };
+    let length = head
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length:")
+                .and_then(|value| value.trim().parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+    while body.len() < length {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 {
+            break;
+        }
+        body.extend_from_slice(&chunk[..read]);
+    }
+    let mut text = head;
+    text.push_str("\r\n\r\n");
+    text.push_str(&String::from_utf8_lossy(&body));
+    Some(text)
 }
 
 impl Drop for Stub {
