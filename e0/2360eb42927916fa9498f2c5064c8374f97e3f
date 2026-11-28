@@ -1,0 +1,78 @@
+docs/agent-layers.md
+  h_4132837b09b7e7 87,114
+src-tauri/src/commands/work_notes.rs
+  h_4132837b09b7e7 8,81,84,133,136
+src-tauri/src/conversation/backfill.rs
+  h_4132837b09b7e7 6-7,14-15,17-18,169-182,185-200
+src-tauri/src/conversation/catalog.rs
+  h_4132837b09b7e7 6,11,13-14
+src-tauri/src/conversation/catalog_search.rs
+  h_4132837b09b7e7 10-12,14
+src-tauri/src/conversation/context_first_use.rs
+  h_4132837b09b7e7 20-21,76
+src-tauri/src/conversation/context_manifest.rs
+  h_4132837b09b7e7 32,469
+src-tauri/src/conversation/cursor_bridge.rs
+  h_4132837b09b7e7 99
+src-tauri/src/conversation/event_store/incremental.rs
+  h_4132837b09b7e7 1-2,9,11-20,22,27-30,32-35,38,57,60,66-68,73-75,77-78,82-112,115,166-259,297,300-375
+src-tauri/src/conversation/event_store/mod.rs
+  h_4132837b09b7e7 1-42
+src-tauri/src/conversation/event_store/query.rs
+  h_4132837b09b7e7 1,9-11,22-25,28,33-35,65,67-72,76-77,81-83,85-97,101,108-109,211-216,219,221-223,229-241
+src-tauri/src/conversation/event_store/read.rs
+  h_4132837b09b7e7 1-5,7-8,10,12-14,17-81,87-249,275-276,304-459,467,528-594
+src-tauri/src/conversation/event_store/readiness.rs
+  h_4132837b09b7e7 1-165
+src-tauri/src/conversation/event_store/storage.rs
+  h_4132837b09b7e7 17-19,30-32,49-53,179-180,231-236,240-243
+src-tauri/src/conversation/event_store/tables.rs
+  h_4132837b09b7e7 5
+src-tauri/src/conversation/event_store/write.rs
+  h_4132837b09b7e7 1-448
+src-tauri/src/conversation/export.rs
+  h_4132837b09b7e7 8-14,16,18-19,159-162,165,180
+src-tauri/src/conversation/line_direct.rs
+  h_4132837b09b7e7 10,13,111-119,216-218,310-313
+src-tauri/src/conversation/merge.rs
+  h_4132837b09b7e7 23-32,168-176,179-180,187,196-209,214,231-237,247,249,272-278,317,400-427
+src-tauri/src/conversation/mod.rs
+  h_4132837b09b7e7 36,78,89-92,100-102,579,589-590,595,599
+src-tauri/src/conversation/push_source.rs
+  h_4132837b09b7e7 14-15,19,22-23,93-99
+src-tauri/src/conversation/read.rs
+  h_4132837b09b7e7 10,20,23,31-32,56-57,316-318
+src-tauri/src/conversation/refresh.rs
+  h_4132837b09b7e7 12-14,17-18,90,202-203,223,258,266,275-277,279,298,305,321,334,340-348,350-358
+src-tauri/src/conversation/session_store.rs
+  h_4132837b09b7e7 15,24,33,43-44,60-61,81,340
+src-tauri/src/store/schema.rs
+  h_4132837b09b7e7 179-180,309
+src-tauri/src/tests/conversation_catalog_deferred.rs
+  h_4132837b09b7e7 458-597
+src-tauri/src/tests/conversation_text_reference.rs
+  h_4132837b09b7e7 172-343
+src-tauri/src/tests/push.rs
+  h_4132837b09b7e7 311-441
+src-tauri/src/tests/work_notes.rs
+  h_4132837b09b7e7 56,67,123,184,205-217,224-226,235-255,319-390,2433-2706
+src-tauri/src/work_notes.rs
+  h_4132837b09b7e7 70,120-121,124,135,148,157
+src-tauri/src/work_notes/input.rs
+  h_4132837b09b7e7 31-39
+src-tauri/src/work_notes/pipeline.rs
+  h_4132837b09b7e7 49,62,83-98,484-490
+src-tauri/src/work_notes/session.rs
+  h_4132837b09b7e7 47,57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "development:1.6.23",
+  "base_commit_sha": "e02360eb42927916fa9498f2c5064c8374f97e3f",
+  "prompts": {},
+  "humans": {
+    "h_4132837b09b7e7": {
+      "author": "张艳华 <939593210@qq.com>"
+    }
+  }
+}
