@@ -14,7 +14,7 @@ pub mod records;
 pub mod rollup;
 mod schema;
 
-pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum};
+pub use connect::{open_db, open_memory, open_readonly, shrink_memory, vacuum, ConnectionSource};
 pub(crate) use conversation_fts::{
     compact_conversation_fts, conversation_fts_is_contentless, conversation_fts_needs_migration,
     conversation_fts_needs_optimize, database_vacuum_is_due, insert_conversation_fts,

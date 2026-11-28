@@ -41,9 +41,9 @@ impl RoutingStub {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
                         let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                        let mut buf = [0u8; 4096];
-                        let n = stream.read(&mut buf).unwrap_or(0);
-                        let raw = String::from_utf8_lossy(&buf[..n]).into_owned();
+                        let Some(raw) = read_http(&mut stream) else {
+                            continue;
+                        };
                         let path = raw
                             .lines()
                             .next()
@@ -77,6 +77,8 @@ impl RoutingStub {
                             body
                         );
                         let _ = stream.write_all(response.as_bytes());
+                        let _ = stream.flush();
+                        let _ = stream.shutdown(std::net::Shutdown::Write);
                     }
                     Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
                         std::thread::sleep(Duration::from_millis(5));
@@ -102,6 +104,44 @@ impl Drop for RoutingStub {
             let _ = handle.join();
         }
     }
+}
+
+fn read_http(stream: &mut std::net::TcpStream) -> Option<String> {
+    let mut raw = Vec::new();
+    let mut chunk = [0u8; 2048];
+    let (head, mut body) = loop {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 && raw.is_empty() {
+            return None;
+        }
+        raw.extend_from_slice(&chunk[..read]);
+        if let Some(at) = raw.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&raw[..at]).into_owned();
+            break (head, raw[at + 4..].to_vec());
+        }
+        if read == 0 {
+            return None;
+        }
+    };
+    let length = head
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .strip_prefix("content-length:")
+                .and_then(|value| value.trim().parse::<usize>().ok())
+        })
+        .unwrap_or(0);
+    while body.len() < length {
+        let read = stream.read(&mut chunk).unwrap_or(0);
+        if read == 0 {
+            break;
+        }
+        body.extend_from_slice(&chunk[..read]);
+    }
+    let mut text = head;
+    text.push_str("\r\n\r\n");
+    text.push_str(&String::from_utf8_lossy(&body));
+    Some(text)
 }
 
 fn write_file(path: &Path, body: &str) {

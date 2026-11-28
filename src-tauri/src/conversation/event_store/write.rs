@@ -20,7 +20,7 @@ use super::super::merge::{
     IndexedFile,
 };
 use super::super::normalize::{compare_optional_timestamps, FileIndexCursor, ParsedConversation};
-use super::super::session_store::{update_session_files, upsert_session};
+use super::super::session_store::{update_session_files, upsert_session, SessionFileMetadata};
 use super::super::trusted_path::modified_nanos;
 use super::incremental::persist_session_file_cursors;
 use super::readiness::{mark_session_events_dirty, session_generation};
@@ -126,10 +126,12 @@ pub(in crate::conversation) fn commit_session(
             &merged.session,
             merged.is_top_level,
             &merged.agent_metadata,
-            modified_nanos(&representative_metadata),
-            representative_metadata.len() as i64,
-            &representative_revision,
-            Some(merged.event_count),
+            SessionFileMetadata {
+                mtime_ns: modified_nanos(&representative_metadata),
+                size: representative_metadata.len() as i64,
+                source_revision: &representative_revision,
+                event_count: Some(merged.event_count),
+            },
         )?;
         update_session_files(tx, source, session_id, &source_files, replace_files)?;
         if mark_dirty {

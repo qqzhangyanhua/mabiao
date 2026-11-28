@@ -26,21 +26,6 @@ pub fn should_fallback_to_grpc(error: &str) -> bool {
         || error.contains("HTTP 504")
 }
 
-pub fn fetch_credits(
-    token: &str,
-    user_id: Option<&str>,
-    client_version: &str,
-) -> Result<Vec<OfficialQuotaWindow>, String> {
-    let bytes = request_credits_via(
-        &super::LiveQuotaTransport,
-        BILLING_GRPC_URL,
-        token,
-        user_id,
-        client_version,
-    )?;
-    parse_credits_grpc(&bytes, Utc::now().timestamp())
-}
-
 pub fn fetch_credits_in(
     env: &QuotaEnv,
     token: &str,

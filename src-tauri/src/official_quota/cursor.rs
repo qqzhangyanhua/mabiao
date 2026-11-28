@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use chrono::Utc;
 use serde_json::Value;
 
 use crate::cursor_account;
@@ -35,17 +34,6 @@ pub fn fetch_usage_summary_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
 }
 
 /// 用已经拼好的 session cookie 取用量。不读本机库，也不刷新。
-pub(crate) fn fetch_with_session_token_at(
-    token: &str,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(USAGE_SUMMARY_URL, quota_base);
-    let raw = request_usage_summary_via(&super::LiveQuotaTransport, token, &url)?;
-    let windows = parse_usage_summary(&raw)?;
-    let plan = parse_membership_type(&raw);
-    Ok(QuotaSnapshot::new(windows, Utc::now().to_rfc3339()).with_plan(plan))
-}
-
 pub(crate) fn fetch_with_session_token_in(
     env: &QuotaEnv,
     token: &str,

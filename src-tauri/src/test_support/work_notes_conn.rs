@@ -9,7 +9,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use rusqlite::Connection;
 
-use crate::work_notes::ConnectionSource;
+use crate::store::ConnectionSource;
 
 const HELD: &str = "测试连接已被占用：读与写 guard 不得同时持有";
 

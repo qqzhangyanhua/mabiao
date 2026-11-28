@@ -1,12 +1,7 @@
 import { heatmapFilter } from "../../lib/calendar";
 import { customRangeFilter, humanStatus, previousFilter, rangeFromPreset } from "../../lib/format";
 import { ingestFailureStatus, usageStageStatus } from "../../lib/ingestStatus";
-import {
-  extractLegacyHiddenOfficialProviders,
-  OVERVIEW_LAYOUT_STORAGE_KEY,
-  sanitizeHiddenOfficialProviders,
-  stripLegacyOfficialProvidersFromStorage,
-} from "../../lib/overviewLayout";
+import { sanitizeHiddenOfficialProviders } from "../../lib/overviewLayout";
 import {
   popRangeHistory,
   pushRangeHistory,
@@ -14,7 +9,6 @@ import {
   sameRange,
   type RangeSnapshot,
 } from "../../lib/rangeHistory";
-import { views } from "../../lib/viewHash";
 import type {
   ApplicationAnalyticsDto,
   BillingWindowsDto,
@@ -39,225 +33,42 @@ import type {
   View,
 } from "../../types";
 import { emptyFilter } from "./constants";
+import { LegacyQuotaVisibilityMigrator } from "./legacyQuotaVisibility";
 import type { UsageBackend } from "./usageBackend";
+import {
+  createFreshnessEntry,
+  CURSOR_OVERLAY_VIEW_SET,
+  DEFAULT_RANGE_PRESET,
+  emptyViewScope,
+  evictCursorOverlayViews,
+  filtersEqual,
+  initialViewScopes,
+  isEntryFresh,
+  LOCAL_ONLY_VIEWS,
+  scopesEqual,
+  stampHydratedViews,
+  syncSharedFilters,
+  VIEW_DEPENDENCIES,
+  viewsInvalidatedBy,
+  viewsWarmedBy,
+  type FreshnessRevisions,
+  type ViewFreshnessMap,
+  type ViewScope,
+} from "./viewFreshness";
 
-export type ViewScope = {
-  filter: Filter;
-  preset: string;
+export {
+  emptyViewScope,
+  filtersEqual,
+  initialViewScopes,
+  scopesEqual,
+  syncSharedFilters,
+  viewsInvalidatedBy,
+  viewsWarmedBy,
+  type FreshnessRevisions,
+  type ViewScope,
 };
 
-export type FreshnessRevisions = {
-  data: number;
-  pricing: number;
-  cursor: number;
-};
-
-type ViewDependency = {
-  grain: boolean;
-  pricing: boolean;
-  cursor: boolean;
-};
-
-type ViewFreshnessEntry = {
-  scope: ViewScope;
-  grain: Grain;
-  revisions: FreshnessRevisions;
-};
-
-const DEFAULT_RANGE_PRESET = "7";
 const OVERVIEW_TOP_SESSIONS_LIMIT = 8;
-
-const LOCAL_ONLY_VIEWS: ReadonlySet<View> = new Set([
-  "conversations",
-  "work-notes",
-  "cursor",
-  "cursor-sessions",
-  "worktime",
-  "instructions",
-  "settings",
-]);
-
-const CURSOR_OVERLAY_VIEWS: readonly View[] = ["overview", "trend", "application", "project"];
-const CURSOR_OVERLAY_VIEW_SET: ReadonlySet<View> = new Set(CURSOR_OVERLAY_VIEWS);
-
-const VIEW_DEPENDENCIES: Record<View, ViewDependency> = {
-  overview: { grain: true, pricing: true, cursor: true },
-  trend: { grain: true, pricing: true, cursor: true },
-  application: { grain: true, pricing: false, cursor: true },
-  model: { grain: false, pricing: true, cursor: false },
-  provider: { grain: false, pricing: true, cursor: false },
-  project: { grain: false, pricing: true, cursor: true },
-  conversations: { grain: false, pricing: false, cursor: false },
-  "work-notes": { grain: false, pricing: false, cursor: false },
-  cursor: { grain: false, pricing: true, cursor: true },
-  "cursor-sessions": { grain: false, pricing: false, cursor: false },
-  worktime: { grain: false, pricing: false, cursor: false },
-  instructions: { grain: false, pricing: false, cursor: false },
-  settings: { grain: false, pricing: true, cursor: false },
-};
-
-function sameItems(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-  const other = new Set(right);
-  return left.every((item) => other.has(item));
-}
-
-export function filtersEqual(left: Filter, right: Filter): boolean {
-  return (
-    left.from === right.from &&
-    left.to === right.to &&
-    sameItems(left.sources, right.sources) &&
-    sameItems(left.models, right.models) &&
-    sameItems(left.projects, right.projects) &&
-    sameItems(left.providers, right.providers)
-  );
-}
-
-export function scopesEqual(left: ViewScope, right: ViewScope): boolean {
-  return left.preset === right.preset && filtersEqual(left.filter, right.filter);
-}
-
-export function emptyViewScope(preset = DEFAULT_RANGE_PRESET): ViewScope {
-  return {
-    filter: {
-      ...emptyFilter,
-      ...rangeFromPreset(preset),
-      sources: [],
-      models: [],
-      projects: [],
-      providers: [],
-    },
-    preset,
-  };
-}
-
-export function initialViewScopes(preset = DEFAULT_RANGE_PRESET): Record<View, ViewScope> {
-  const seed = emptyViewScope(preset);
-  const scopes = {} as Record<View, ViewScope>;
-  for (const view of views) {
-    scopes[view] = {
-      preset: seed.preset,
-      filter: {
-        ...seed.filter,
-        sources: [],
-        models: [],
-        projects: [],
-        providers: [],
-      },
-    };
-  }
-  return scopes;
-}
-
-/** Topbar 筛选跨页共用。用量来源不覆盖对话记录来源：Cursor Agent 往往没有消耗记录。 */
-export function syncSharedFilters(
-  scopes: Record<View, ViewScope>,
-  filter: Filter,
-  preset: string,
-  origin: View,
-): Record<View, ViewScope> {
-  let changed = false;
-  const next = { ...scopes };
-  for (const view of views) {
-    const scope = next[view];
-    const nextSources =
-      view === "conversations"
-        ? origin === "conversations"
-          ? filter.sources
-          : scope.filter.sources
-        : origin === "conversations"
-          ? scope.filter.sources
-          : filter.sources;
-    const nextScope: ViewScope = {
-      preset,
-      filter: { ...filter, sources: nextSources },
-    };
-    if (scopesEqual(scope, nextScope)) {
-      continue;
-    }
-    changed = true;
-    next[view] = nextScope;
-  }
-  return changed ? next : scopes;
-}
-
-/** 拉概览时已经带上了趋势、模型、项目，切到这些页不应再打一轮查询。 */
-export function viewsWarmedBy(view: View): View[] {
-  if (view === "overview") {
-    return ["overview", "trend", "model", "project"];
-  }
-  return [view];
-}
-
-/** 本次查询会覆盖这些视图正在展示的共享数据集。 */
-export function viewsInvalidatedBy(view: View): View[] {
-  switch (view) {
-    case "overview":
-      return ["trend", "model", "project"];
-    case "trend":
-    case "model":
-    case "project":
-      return ["overview"];
-    default:
-      return [];
-  }
-}
-
-function isEntryFresh(
-  entry: ViewFreshnessEntry | undefined,
-  view: View,
-  scope: ViewScope,
-  grain: Grain,
-  revisions: FreshnessRevisions,
-): boolean {
-  if (!entry) {
-    return false;
-  }
-  if (entry.revisions.data !== revisions.data) {
-    return false;
-  }
-  if (!scopesEqual(entry.scope, scope)) {
-    return false;
-  }
-  const deps = VIEW_DEPENDENCIES[view];
-  if (deps.grain && entry.grain !== grain) {
-    return false;
-  }
-  if (deps.pricing && entry.revisions.pricing !== revisions.pricing) {
-    return false;
-  }
-  if (deps.cursor && entry.revisions.cursor !== revisions.cursor) {
-    return false;
-  }
-  return true;
-}
-
-function isEntryFreshIgnoringGrain(
-  entry: ViewFreshnessEntry | undefined,
-  view: View,
-  scope: ViewScope,
-  revisions: FreshnessRevisions,
-): boolean {
-  if (!entry) {
-    return false;
-  }
-  if (entry.revisions.data !== revisions.data) {
-    return false;
-  }
-  if (!scopesEqual(entry.scope, scope)) {
-    return false;
-  }
-  const deps = VIEW_DEPENDENCIES[view];
-  if (deps.pricing && entry.revisions.pricing !== revisions.pricing) {
-    return false;
-  }
-  if (deps.cursor && entry.revisions.cursor !== revisions.cursor) {
-    return false;
-  }
-  return true;
-}
 
 type StateUpdater<T> = T | ((prev: T) => T);
 
@@ -359,7 +170,7 @@ function deriveSnapshot(
 
 export class UsageViewController {
   private readonly backend: UsageBackend;
-  private readonly storage: Storage | null;
+  private readonly legacyQuotaVisibility: LegacyQuotaVisibilityMigrator;
   private readonly onClearSessionDetailCache: () => void;
   private onBeginUsageStage: () => void;
   private onPublishUsageStatus: (text: string) => void;
@@ -368,15 +179,13 @@ export class UsageViewController {
   private viewScopes: Record<View, ViewScope>;
   private rangeHistory: RangeSnapshot[] = [];
   private hydratedViews = new Set<View>();
-  private freshness: Partial<Record<View, ViewFreshnessEntry>> = {};
+  private freshness: ViewFreshnessMap = {};
   private revisions: FreshnessRevisions = { data: 0, pricing: 0, cursor: 0 };
   private optionsEpoch = -1;
   private requestGeneration = 0;
   private wideRefreshGeneration: number | null = null;
   private cursorRefreshInflight: Promise<void> | null = null;
   private ingestOperationInFlight = false;
-  private legacyQuotaVisibilityChecked = false;
-  private legacyMigrationInFlight: Promise<string[] | null> | null = null;
   private quotaVisibilityGeneration = 0;
 
   private state: InternalState;
@@ -384,7 +193,8 @@ export class UsageViewController {
 
   constructor(options: UsageControllerOptions) {
     this.backend = options.backend;
-    this.storage = options.storage === undefined ? defaultControllerStorage() : options.storage;
+    const storage = options.storage === undefined ? defaultControllerStorage() : options.storage;
+    this.legacyQuotaVisibility = new LegacyQuotaVisibilityMigrator(storage);
     this.onClearSessionDetailCache = options.onClearSessionDetailCache ?? (() => undefined);
     this.onBeginUsageStage = options.onBeginUsageStage ?? (() => undefined);
     this.onPublishUsageStatus =
@@ -523,55 +333,10 @@ export class UsageViewController {
     }
   };
 
-  private async reconcileLegacyOfficialProviders(
-    quota: OfficialQuotaDto,
-  ): Promise<OfficialQuotaDto> {
-    if (this.legacyQuotaVisibilityChecked) {
-      return quota;
-    }
-    const raw = this.readLegacyLayoutRaw();
-    const legacy = extractLegacyHiddenOfficialProviders(raw);
-    if (!legacy.hasLegacyField) {
-      this.legacyQuotaVisibilityChecked = true;
-      return quota;
-    }
-    if ((quota.hidden_providers?.length ?? 0) > 0 || legacy.hiddenProviders.length === 0) {
-      stripLegacyOfficialProvidersFromStorage(this.storage);
-      this.legacyQuotaVisibilityChecked = true;
-      return quota;
-    }
-    if (!this.legacyMigrationInFlight) {
-      this.legacyMigrationInFlight = this.backend
-        .patchOfficialQuotaConfig({ hidden_providers: legacy.hiddenProviders })
-        .then((saved) => {
-          stripLegacyOfficialProvidersFromStorage(this.storage);
-          this.legacyQuotaVisibilityChecked = true;
-          return saved.hidden_providers;
-        })
-        .catch(() => null)
-        .finally(() => {
-          this.legacyMigrationInFlight = null;
-        });
-    }
-    const migrated = await this.legacyMigrationInFlight;
-    if (migrated === null) {
-      return quota;
-    }
-    return {
-      ...quota,
-      hidden_providers: migrated,
-    };
-  }
-
-  private readLegacyLayoutRaw(): string | null {
-    if (!this.storage) {
-      return null;
-    }
-    try {
-      return this.storage.getItem(OVERVIEW_LAYOUT_STORAGE_KEY);
-    } catch {
-      return null;
-    }
+  private reconcileLegacyOfficialProviders(quota: OfficialQuotaDto): Promise<OfficialQuotaDto> {
+    return this.legacyQuotaVisibility.reconcile(quota, (patch) =>
+      this.backend.patchOfficialQuotaConfig(patch),
+    );
   }
 
   setConversationIssues = (issues: IngestIssue[]): void => {
@@ -785,11 +550,13 @@ export class UsageViewController {
     }
 
     const capturedRevisions: FreshnessRevisions = { ...this.revisions };
-    const overviewStampedBefore = isEntryFreshIgnoringGrain(
+    const overviewStampedBefore = isEntryFresh(
       this.freshness.overview,
       "overview",
       usedScope,
+      grain,
       capturedRevisions,
+      { ignoreGrain: true },
     );
     const generation = ++this.requestGeneration;
     const commit = (update: Partial<InternalState>) => {
@@ -825,20 +592,7 @@ export class UsageViewController {
           if (overviewStampedBefore) {
             this.freshness = {
               ...this.freshness,
-              overview: {
-                scope: {
-                  preset: usedScope.preset,
-                  filter: {
-                    ...usedScope.filter,
-                    sources: [...usedScope.filter.sources],
-                    models: [...usedScope.filter.models],
-                    projects: [...usedScope.filter.projects],
-                    providers: [...usedScope.filter.providers],
-                  },
-                },
-                grain,
-                revisions: { ...capturedRevisions },
-              },
+              overview: createFreshnessEntry(usedScope, grain, capturedRevisions),
             };
           }
         }
@@ -927,8 +681,7 @@ export class UsageViewController {
    */
   reloadAfterRestore = async (): Promise<void> => {
     // 备份恢复时以恢复后的 official_quota.json 为唯一权威，清理残留旧字段，禁止旧 localStorage 反盖。
-    this.legacyQuotaVisibilityChecked = true;
-    stripLegacyOfficialProvidersFromStorage(this.storage);
+    this.legacyQuotaVisibility.markRestored();
     this.onClearSessionDetailCache();
     this.revisions = {
       data: this.revisions.data + 1,
@@ -1017,36 +770,17 @@ export class UsageViewController {
     grain: Grain,
     capturedRevisions: FreshnessRevisions,
   ): void {
-    const nextFreshness = { ...this.freshness };
-    const nextHydrated = new Set(this.hydratedViews);
-    nextHydrated.add(target);
-    for (const warmed of viewsWarmedBy(target)) {
-      const scope = warmed === target ? used : this.viewScopes[warmed];
-      if (scopesEqual(scope, used)) {
-        nextFreshness[warmed] = {
-          scope: {
-            preset: scope.preset,
-            filter: {
-              ...scope.filter,
-              sources: [...scope.filter.sources],
-              models: [...scope.filter.models],
-              projects: [...scope.filter.projects],
-              providers: [...scope.filter.providers],
-            },
-          },
-          grain,
-          revisions: { ...capturedRevisions },
-        };
-        nextHydrated.add(warmed);
-      }
-    }
-    for (const invalidated of viewsInvalidatedBy(target)) {
-      if (!scopesEqual(this.viewScopes[invalidated], used)) {
-        delete nextFreshness[invalidated];
-      }
-    }
-    this.freshness = nextFreshness;
-    this.hydratedViews = nextHydrated;
+    const next = stampHydratedViews(
+      this.freshness,
+      this.hydratedViews,
+      this.viewScopes,
+      target,
+      used,
+      grain,
+      capturedRevisions,
+    );
+    this.freshness = next.freshness;
+    this.hydratedViews = next.hydratedViews;
     this.emit();
   }
 
@@ -1085,16 +819,9 @@ export class UsageViewController {
     this.wideRefreshGeneration = null;
 
     const activeView = this.state.view;
-    const nextFreshness = { ...this.freshness };
-    const nextHydrated = new Set(this.hydratedViews);
-    for (const view of [...CURSOR_OVERLAY_VIEWS, "cursor" as const]) {
-      delete nextFreshness[view];
-      if (view !== activeView) {
-        nextHydrated.delete(view);
-      }
-    }
-    this.freshness = nextFreshness;
-    this.hydratedViews = nextHydrated;
+    const evicted = evictCursorOverlayViews(this.freshness, this.hydratedViews, activeView);
+    this.freshness = evicted.freshness;
+    this.hydratedViews = evicted.hydratedViews;
 
     this.patch({
       cursorAccountRevision: nextCursorRevision,

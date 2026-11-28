@@ -20,7 +20,7 @@ use super::{
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
     antigravity, claude_usage, codex_usage, copilot, cursor, devin, droid, grok, opencode,
-    QuotaEnv, QuotaSnapshot,
+    QuotaEnv, QuotaPaths, QuotaSnapshot,
 };
 
 /// 一次账号取数要带上的材料。`refresh` 只在已分离快照上有值。
@@ -234,6 +234,10 @@ fn matching_login<'a>(
     })
 }
 
+fn live_env_with_base(quota_base: Option<&str>) -> QuotaEnv {
+    QuotaEnv::live(QuotaPaths::app_data()).with_quota_base(quota_base.map(str::to_string))
+}
+
 /// `live_root` 有值时只认现场 access token。`quota_base` 把额度地址换到本地桩。
 /// 不刷新。
 pub fn fetch_account_row(
@@ -243,8 +247,25 @@ pub fn fetch_account_row(
     live_root: Option<&Path>,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
+    let env = live_env_with_base(quota_base);
+    fetch_account_row_in(
+        &env,
+        provider,
+        stored_access_token,
+        stored_account_id,
+        live_root,
+    )
+}
+
+fn fetch_account_row_in(
+    env: &QuotaEnv,
+    provider: OfficialQuotaProvider,
+    stored_access_token: &str,
+    stored_account_id: Option<&str>,
+    live_root: Option<&Path>,
+) -> Result<QuotaSnapshot, String> {
     let (token, account_id) = if let Some(root) = live_root {
-        let secret = capture::capture_secret(provider, root)?;
+        let secret = capture::capture_secret_at(provider, root, env.now())?;
         if secret.access_token.trim().is_empty() {
             return Err(MISSING_SECRET_TODO.to_string());
         }
@@ -262,7 +283,7 @@ pub fn fetch_account_row(
                 .map(str::to_string),
         )
     };
-    dispatch(provider, &token, account_id.as_deref(), quota_base)
+    dispatch_in(env, provider, &token, account_id.as_deref())
 }
 
 /// 已分离快照会在 access token 过期或上游拒绝登录时续期一次。
@@ -271,51 +292,8 @@ pub fn fetch_managed_account(
     target: &AccountTarget,
     quota_base: Option<&str>,
 ) -> Result<QuotaSnapshot, String> {
-    if target.live_default {
-        let secret = capture::capture_default(target.provider)?;
-        if secret.access_token.trim().is_empty() {
-            return Err(MISSING_SECRET_TODO.to_string());
-        }
-        return dispatch(
-            target.provider,
-            &secret.access_token,
-            secret.account_id.as_deref(),
-            quota_base,
-        );
-    }
-    if target.live_root.is_some() || target.refresh.is_none() {
-        return fetch_account_row(
-            target.provider,
-            &target.access_token,
-            target.account_id.as_deref(),
-            target.live_root.as_deref(),
-            quota_base,
-        );
-    }
-    let mut token = target.access_token.clone();
-    let mut refreshed = false;
-    if access_needs_refresh(&token, target.refresh.as_ref(), Utc::now()) {
-        token = apply_refresh(target, None)?;
-        refreshed = true;
-    }
-    match dispatch(
-        target.provider,
-        &token,
-        target.account_id.as_deref(),
-        quota_base,
-    ) {
-        Ok(snapshot) => Ok(snapshot),
-        Err(error) if !refreshed && is_auth_failure(&error) => {
-            let token = apply_refresh(target, None)?;
-            dispatch(
-                target.provider,
-                &token,
-                target.account_id.as_deref(),
-                quota_base,
-            )
-        }
-        Err(error) => Err(error),
-    }
+    let env = live_env_with_base(quota_base);
+    fetch_managed_account_in(&env, target)
 }
 
 pub fn fetch_managed_account_in(
@@ -334,47 +312,32 @@ pub fn fetch_managed_account_in(
             secret.account_id.as_deref(),
         );
     }
-    if let Some(root) = target.live_root.as_deref() {
-        let secret = capture::capture_secret_at(target.provider, root, env.now())?;
-        if secret.access_token.trim().is_empty() {
-            return Err(MISSING_SECRET_TODO.to_string());
-        }
-        return dispatch_in(
+    if target.live_root.is_some() || target.refresh.is_none() {
+        return fetch_account_row_in(
             env,
             target.provider,
-            &secret.access_token,
-            secret.account_id.as_deref(),
+            &target.access_token,
+            target.account_id.as_deref(),
+            target.live_root.as_deref(),
         );
-    }
-    if target.refresh.is_none() {
-        let token = target.access_token.trim();
-        if token.is_empty() {
-            return Err(MISSING_SECRET_TODO.to_string());
-        }
-        let account_id = target
-            .account_id
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty());
-        return dispatch_in(env, target.provider, token, account_id);
     }
     let mut token = target.access_token.clone();
     let mut refreshed = false;
     if access_needs_refresh(&token, target.refresh.as_ref(), env.now()) {
-        token = apply_refresh(target, Some(env))?;
+        token = apply_refresh(target, env)?;
         refreshed = true;
     }
     match dispatch_in(env, target.provider, &token, target.account_id.as_deref()) {
         Ok(snapshot) => Ok(snapshot),
         Err(error) if !refreshed && is_auth_failure(&error) => {
-            let token = apply_refresh(target, Some(env))?;
+            let token = apply_refresh(target, env)?;
             dispatch_in(env, target.provider, &token, target.account_id.as_deref())
         }
         Err(error) => Err(error),
     }
 }
 
-fn apply_refresh(target: &AccountTarget, env: Option<&QuotaEnv>) -> Result<String, String> {
+fn apply_refresh(target: &AccountTarget, env: &QuotaEnv) -> Result<String, String> {
     let Some(secret) = target.refresh.as_ref() else {
         return Err(MISSING_SECRET_TODO.to_string());
     };
@@ -385,11 +348,7 @@ fn apply_refresh(target: &AccountTarget, env: Option<&QuotaEnv>) -> Result<Strin
         provider: target.provider,
         secret,
     };
-    let refreshed = match env {
-        Some(env) => refresh::refresh_separated_in(env, &request),
-        None => refresh::refresh_separated(&request),
-    }
-    .map_err(|fail| match fail {
+    let refreshed = refresh::refresh_separated_in(env, &request).map_err(|fail| match fail {
         RefreshFail::Rejected => LOGIN_EXPIRED.to_string(),
         RefreshFail::Other(message) => message,
     })?;
@@ -451,37 +410,6 @@ fn is_auth_failure(error: &str) -> bool {
         || error.contains("HTTP 401")
         || error.contains("HTTP 403")
         || error.contains("Unauthorized")
-}
-
-fn dispatch(
-    provider: OfficialQuotaProvider,
-    token: &str,
-    account_id: Option<&str>,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    match provider {
-        OfficialQuotaProvider::Claude => {
-            claude_usage::fetch_with_access_token_at(token, quota_base).map(Into::into)
-        }
-        OfficialQuotaProvider::Codex => {
-            let auth = codex_usage::CodexAuth {
-                access_token: token.to_string(),
-                account_id: account_id.map(str::to_string),
-            };
-            codex_usage::fetch_with_access_token_at(&auth, quota_base)
-        }
-        OfficialQuotaProvider::Cursor => cursor::fetch_with_session_token_at(token, quota_base),
-        OfficialQuotaProvider::Grok => grok::fetch_with_access_token(token, account_id, quota_base),
-        OfficialQuotaProvider::Droid => droid::fetch_with_access_token_at(token, quota_base),
-        OfficialQuotaProvider::Antigravity => {
-            antigravity::fetch_with_access_token_at(token, quota_base)
-        }
-        OfficialQuotaProvider::OpenCode => {
-            opencode::fetch_with_access_token_at(token, quota_base).map(Into::into)
-        }
-        OfficialQuotaProvider::Copilot => copilot::fetch_with_access_token_at(token, quota_base),
-        OfficialQuotaProvider::Devin => devin::fetch_with_access_token_at(token, quota_base),
-    }
 }
 
 fn dispatch_in(

@@ -12,7 +12,6 @@
 use std::path::Path;
 use std::time::Duration;
 
-use chrono::Utc;
 use serde_json::{json, Value};
 
 use crate::domain::OfficialQuotaWindow;
@@ -42,18 +41,6 @@ pub fn fetch_usage_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
 }
 
 /// 用调用方给的 apiKey 取额度。不读本机库。
-pub(crate) fn fetch_with_access_token_at(
-    api_key: &str,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(&format!("{API_SERVER}/{SERVICE_PATH}"), quota_base);
-    let raw = request_user_status_via(&super::LiveQuotaTransport, api_key, &url)?;
-    Ok(
-        QuotaSnapshot::new(parse_user_status(&raw)?, Utc::now().to_rfc3339())
-            .with_plan(parse_plan(&raw)),
-    )
-}
-
 pub(crate) fn fetch_with_access_token_in(
     env: &QuotaEnv,
     api_key: &str,

@@ -164,7 +164,7 @@ pub fn resolve_target_with_accounts_in(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Result<FetchTarget, String> {
-    let accounts = accounts::with_live_profiles(accounts);
+    let accounts = accounts::with_live_profiles_at(accounts, env.now());
     if let Some(found) = accounts.iter().find(|account| account.config.id == id) {
         if !found.config.enabled {
             return Err(format!("「{}」已停用，先在设置页打开它", found.config.name));
@@ -279,7 +279,7 @@ pub fn targets_for_fetch_in(
     accounts: &[accounts::ResolvedQuotaAccount],
     logins: &[accounts::LocalLogin],
 ) -> Vec<FetchTarget> {
-    let accounts = accounts::with_live_profiles(accounts);
+    let accounts = accounts::with_live_profiles_at(accounts, env.now());
     let mut targets = Vec::new();
     for provider in OfficialQuotaProvider::ALL {
         match accounts::plan::plan_provider(provider, &accounts, logins) {

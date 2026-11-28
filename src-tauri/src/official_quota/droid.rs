@@ -51,24 +51,6 @@ pub fn fetch_rate_limits_in(env: &QuotaEnv) -> Result<QuotaSnapshot, String> {
 }
 
 /// 用调用方给的 access token 取限额。不读钥匙串，也不刷新。
-pub(crate) fn fetch_with_access_token_at(
-    token: &str,
-    quota_base: Option<&str>,
-) -> Result<QuotaSnapshot, String> {
-    let url = super::rebase_quota_url(LIMITS_URL, quota_base);
-    let transport = &super::LiveQuotaTransport;
-    let raw = request_limits_via(transport, token, &url)?;
-    let now = Utc::now();
-    let windows = parse_limits(&raw, now)?;
-    // 套餐接口失败不影响窗口。隔离目录的桩只接限额，不接套餐。
-    let plan = if quota_base.is_some() {
-        None
-    } else {
-        fetch_subscription_plan_via(transport, token, SUBSCRIPTION_SCHEDULE_URL, now)
-    };
-    Ok(QuotaSnapshot::new(windows, now.to_rfc3339()).with_plan(plan))
-}
-
 pub(crate) fn fetch_with_access_token_in(
     env: &QuotaEnv,
     token: &str,
@@ -77,6 +59,7 @@ pub(crate) fn fetch_with_access_token_in(
     let raw = request_limits_via(env.transport.as_ref(), token, &url)?;
     let now = env.now();
     let windows = parse_limits(&raw, now)?;
+    // 套餐接口失败不影响窗口。隔离目录的桩只接限额，不接套餐。
     let plan = if env.quota_base.is_some() {
         None
     } else {

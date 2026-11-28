@@ -9,7 +9,7 @@ use serde_json::Value;
 use super::AccountSecret;
 use crate::domain::OfficialQuotaProvider;
 use crate::official_quota::{
-    antigravity, codex_usage, grok, HttpRequest, LiveQuotaTransport, QuotaEnv, QuotaTransport,
+    antigravity, codex_usage, grok, HttpRequest, QuotaEnv, QuotaTransport,
 };
 
 const TIMEOUT: Duration = Duration::from_secs(12);
@@ -28,10 +28,6 @@ pub(crate) enum RefreshFail {
     /// 上游拒绝了这份 refresh token。调用方换成固定的「登录已失效」。
     Rejected,
     Other(String),
-}
-
-pub(crate) fn refresh_separated(request: &RefreshRequest<'_>) -> Result<Refreshed, RefreshFail> {
-    refresh_separated_via(&LiveQuotaTransport, request)
 }
 
 pub(crate) fn refresh_separated_in(

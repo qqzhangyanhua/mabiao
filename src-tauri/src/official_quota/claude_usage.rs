@@ -49,15 +49,6 @@ pub fn fetch_usage_in(env: &QuotaEnv) -> Result<(Vec<OfficialQuotaWindow>, Strin
 }
 
 /// 用调用方给的 access token 取用量。不读本机文件，也不刷新。
-pub(crate) fn fetch_with_access_token_at(
-    token: &str,
-    quota_base: Option<&str>,
-) -> Result<(Vec<OfficialQuotaWindow>, String), String> {
-    let url = super::rebase_quota_url(USAGE_URL, quota_base);
-    let raw = request_usage_via(&super::LiveQuotaTransport, token, &url)?;
-    Ok((parse_usage(&raw)?, Utc::now().to_rfc3339()))
-}
-
 pub(crate) fn fetch_with_access_token_in(
     env: &QuotaEnv,
     token: &str,
