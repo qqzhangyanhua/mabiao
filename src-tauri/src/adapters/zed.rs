@@ -6,10 +6,11 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::adapters::goose::parse_sql_timestamp;
-use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest;
+use crate::source_sqlite::{
+    open_wal_readonly, row_blob_or_text, sql_text, table_columns, wal_fingerprint,
+};
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
@@ -20,7 +21,7 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
@@ -41,12 +42,12 @@ pub(crate) struct LoadedThread {
 }
 
 pub(crate) fn load_threads(path: &Path) -> Result<Vec<LoadedThread>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     load_threads_from(&db, None)
 }
 
 pub(crate) fn load_thread(path: &Path, session_id: &str) -> Result<Option<LoadedThread>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     Ok(load_threads_from(&db, Some(session_id))?.into_iter().next())
 }
 
@@ -88,7 +89,7 @@ fn load_threads_from(
                 created_at: row.get(3)?,
                 parent_id: row.get(4)?,
                 data_type: row.get(5)?,
-                data: blob_or_text(row, 6)?,
+                data: row_blob_or_text(row, 6)?,
             })
         })
         .map_err(|error| error.to_string())?;
@@ -355,19 +356,5 @@ fn first_path(value: Option<&Value>) -> Option<String> {
         }
         Value::Array(items) => items.iter().find_map(|item| first_path(Some(item))),
         _ => None,
-    }
-}
-
-fn blob_or_text(row: &rusqlite::Row<'_>, idx: usize) -> rusqlite::Result<Vec<u8>> {
-    match row.get_ref(idx)? {
-        rusqlite::types::ValueRef::Blob(bytes) | rusqlite::types::ValueRef::Text(bytes) => {
-            Ok(bytes.to_vec())
-        }
-        rusqlite::types::ValueRef::Null => Ok(Vec::new()),
-        value => Err(rusqlite::Error::InvalidColumnType(
-            idx,
-            "data".to_string(),
-            value.data_type(),
-        )),
     }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { views } from "../hooks/viewCache";
+import { views } from "./viewHash";
 import {
   NAV_GROUPS,
   NAV_VIEWS,

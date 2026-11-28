@@ -1,3 +1,10 @@
+import {
+  BRAND_BY_SLUG,
+  BRAND_CHART_COLORS,
+  DEFAULT_BRAND_CHART_COLOR,
+  type BrandId,
+} from "../generated/displayIdentity";
+
 const PALETTE = [
   "var(--chart-1)",
   "var(--chart-2)",
@@ -7,58 +14,24 @@ const PALETTE = [
   "var(--chart-6)",
 ] as const;
 
-/** 来源 key 与桌面端 tone 对齐；其余维度按序取图表色。 */
-const SOURCE_COLOR: Record<string, string> = {
-  claude: "var(--tone-claude)",
-  codex: "var(--tone-codex)",
-  pi: "var(--tone-pi)",
-  omp: "var(--tone-omp)",
-  opencode: "var(--tone-open)",
-  kimi: "var(--tone-kimi)",
-  gemini: "var(--tone-gemini)",
-  grok: "var(--tone-grok)",
-  qwen: "var(--tone-qwen)",
-  cursor: "var(--tone-cursor)",
-  cursor_agent: "var(--tone-cursor)",
-  factory: "var(--tone-codex)",
-  droid: "var(--tone-codex)",
-  dsh: "var(--tone-open)",
-  copilot: "var(--tone-cursor)",
-  hermes: "var(--tone-pi)",
-  agy: "var(--tone-gemini)",
-  antigravity: "var(--tone-gemini)",
-  qoder: "var(--tone-qwen)",
-  qoder_cn: "var(--tone-qwen)",
-  cline: "var(--tone-open)",
-  workbuddy: "var(--tone-kimi)",
-  zcode: "var(--tone-omp)",
-  alma: "var(--tone-grok)",
-  codebuddy: "var(--tone-open)",
-  codebuddy_ide: "var(--tone-open)",
-  trae: "var(--tone-qwen)",
-  goose: "var(--tone-gemini)",
-  roo: "var(--tone-pi)",
-  kilo: "var(--tone-omp)",
-  amp: "var(--tone-kimi)",
-  zed: "var(--tone-grok)",
-  cherry: "var(--tone-claude)",
-  openclaw: "var(--tone-open)",
-  crush: "var(--tone-codex)",
-  aider: "var(--tone-pi)",
-  warp: "var(--tone-kimi)",
-  windsurf: "var(--tone-gemini)",
-};
-
-export function listedSourceTones(): ReadonlySet<string> {
-  return new Set(Object.keys(SOURCE_COLOR));
+function brandOfSlug(slug: string): BrandId | null {
+  if (!Object.hasOwn(BRAND_BY_SLUG, slug)) {
+    return null;
+  }
+  return BRAND_BY_SLUG[slug as keyof typeof BRAND_BY_SLUG];
 }
 
 export function sourceTone(source: string): string {
-  return SOURCE_COLOR[source] ?? "var(--tone-cursor)";
+  const brand = brandOfSlug(source);
+  return brand ? BRAND_CHART_COLORS[brand] : DEFAULT_BRAND_CHART_COLOR;
 }
 
 export function sliceColor(key: string, index: number): string {
-  return SOURCE_COLOR[key] ?? PALETTE[index % PALETTE.length] ?? "var(--chart-1)";
+  const brand = brandOfSlug(key);
+  if (brand) {
+    return BRAND_CHART_COLORS[brand];
+  }
+  return PALETTE[index % PALETTE.length] ?? "var(--chart-1)";
 }
 
 /** 纵轴上限取 1/2/2.5/5/10 × 10^n 里不小于 max 的最小值，四等分后刻度是整数。 */

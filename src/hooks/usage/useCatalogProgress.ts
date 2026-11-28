@@ -1,44 +1,52 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { composeStatus, isCatalogManagedStatus, isCatalogSyncing } from "../../lib/ingestStatus";
 import type { ConversationCatalogProgressDto, IngestIssue } from "../../types";
 
 const CATALOG_PROGRESS_EVENT = "conversation-catalog-progress";
 
 type CatalogProgressConfig = {
-  setSessionsRevision: Dispatch<SetStateAction<number>>;
-  setStatus: Dispatch<SetStateAction<string>>;
-  setConversationIssues: Dispatch<SetStateAction<IngestIssue[]>>;
+  bumpSessionsRevision: () => void;
+  setStatus: (next: string | ((current: string) => string)) => void;
+  setConversationIssues: (issues: IngestIssue[]) => void;
+  loadCatalogIssues?: () => Promise<IngestIssue[]>;
 };
 
 export function useCatalogProgress({
-  setSessionsRevision,
+  bumpSessionsRevision,
   setStatus,
   setConversationIssues,
+  loadCatalogIssues,
 }: CatalogProgressConfig) {
   const [progress, setProgress] = useState<ConversationCatalogProgressDto | null>(null);
   // 目录事件可能早于 `ingest` 命令返回到达，所以最新的目录状态和用量文案都放在 ref 里，
   // 谁后到谁按「用量文案 + 最新目录状态」重新拼，而不是各写各的。
   const latestRef = useRef<ConversationCatalogProgressDto | null>(null);
   const usageStatusRef = useRef("");
-  const configRef = useRef({ setSessionsRevision, setStatus, setConversationIssues });
+  const configRef = useRef({
+    bumpSessionsRevision,
+    setStatus,
+    setConversationIssues,
+    loadCatalogIssues,
+  });
   useEffect(() => {
-    configRef.current = { setSessionsRevision, setStatus, setConversationIssues };
-  }, [setSessionsRevision, setStatus, setConversationIssues]);
+    configRef.current = {
+      bumpSessionsRevision,
+      setStatus,
+      setConversationIssues,
+      loadCatalogIssues,
+    };
+  }, [bumpSessionsRevision, setStatus, setConversationIssues, loadCatalogIssues]);
 
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | null = null;
     const loadIssues = () => {
-      invoke<IngestIssue[]>("get_conversation_catalog_issues")
+      const fetchIssues =
+        configRef.current.loadCatalogIssues ??
+        (() => invoke<IngestIssue[]>("get_conversation_catalog_issues"));
+      fetchIssues()
         .then((issues) => {
           if (!disposed) {
             configRef.current.setConversationIssues(issues);
@@ -59,7 +67,7 @@ export function useCatalogProgress({
         isCatalogManagedStatus(current, usage) ? composeStatus(usage, next) : current,
       );
       if (next.finished) {
-        cfg.setSessionsRevision((n) => n + 1);
+        cfg.bumpSessionsRevision();
         loadIssues();
       }
     })

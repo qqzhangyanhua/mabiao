@@ -1,10 +1,10 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::adapters::finish;
-use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest;
+use crate::source_sqlite::{
+    open_wal_readonly, sql_aliased_nullable, sql_coalesce, table_columns, wal_fingerprint,
+};
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
@@ -15,11 +15,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let source_db = ingest::open_readonly_uri(path)?;
+    let source_db = open_wal_readonly(path)?;
     let usage_cols = table_columns(&source_db, "session_model_usage")?;
     let session_cols = table_columns(&source_db, "sessions")?;
     let sql = format!(
@@ -50,8 +50,8 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
         cache_write_tokens = sql_coalesce(&usage_cols, "u", "cache_write_tokens", "0"),
         reasoning_tokens = sql_coalesce(&usage_cols, "u", "reasoning_tokens", "0"),
         actual_cost_usd = sql_coalesce(&usage_cols, "u", "actual_cost_usd", "0"),
-        cost_source = sql_optional(&usage_cols, "u", "cost_source"),
-        started_at = sql_optional(&session_cols, "s", "started_at"),
+        cost_source = sql_aliased_nullable(&usage_cols, "u", "cost_source"),
+        started_at = sql_aliased_nullable(&session_cols, "s", "started_at"),
         cwd = sql_coalesce(&session_cols, "s", "cwd", "''"),
         git_repo_root = sql_coalesce(&session_cols, "s", "git_repo_root", "''"),
     );
@@ -121,22 +121,6 @@ impl ParsedUsage {
             total_tokens: 0,
             native_cost: native_cost(self.cost_source.as_deref(), self.actual_cost_usd),
         })
-    }
-}
-
-fn sql_coalesce(columns: &BTreeSet<String>, alias: &str, name: &str, fallback: &str) -> String {
-    if columns.contains(name) {
-        format!("COALESCE({alias}.{name}, {fallback})")
-    } else {
-        fallback.to_string()
-    }
-}
-
-fn sql_optional(columns: &BTreeSet<String>, alias: &str, name: &str) -> String {
-    if columns.contains(name) {
-        format!("{alias}.{name}")
-    } else {
-        "NULL".to_string()
     }
 }
 

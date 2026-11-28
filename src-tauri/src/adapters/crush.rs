@@ -4,12 +4,11 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde::Deserialize;
 
-use crate::adapters::sqlite::{sql_int, sql_real, sql_text};
 use crate::adapters::{finish, has_billable_tokens};
-
-pub(crate) use crate::adapters::sqlite::table_columns;
 use crate::domain::{Source, UsageRecord};
-use crate::ingest;
+use crate::source_sqlite::{
+    open_wal_readonly, sql_int, sql_real, sql_text, table_columns, wal_fingerprint,
+};
 
 #[derive(Deserialize)]
 struct ProjectList {
@@ -55,11 +54,11 @@ fn push_crush_db(paths: &mut Vec<PathBuf>, db: &Path) {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let columns = table_columns(&db, "sessions")?;
     if !columns.contains("id") {
         return Ok(Vec::new());

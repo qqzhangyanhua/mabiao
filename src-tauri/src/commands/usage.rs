@@ -1,13 +1,37 @@
-use crate::{query, report};
+use crate::{budget, query, report};
 use serde::Deserialize;
 use tauri::Manager;
 
 use crate::domain::{
     ApplicationAnalyticsDto, BillingWindowsDto, Filter, FilterOptions, LowCacheHitSessionsDto,
-    NamedAmount, OverviewDto, ReportDto, ReportPeriod, SeriesPoint, SessionPage, SessionQuery,
-    SessionRow, UnpricedGroupDto, UsageCallPage, WorkTimelineDto,
+    NamedAmount, OverviewBundleDto, OverviewBundleRequest, OverviewDto, ReportDto, ReportPeriod,
+    SeriesPoint, SessionPage, SessionQuery, SessionRow, UnpricedGroupDto, UsageCallPage,
+    WorkTimelineDto,
 };
 use crate::AppState;
+
+#[tauri::command]
+pub async fn get_overview_bundle(
+    app: tauri::AppHandle,
+    request: OverviewBundleRequest,
+) -> Result<OverviewBundleDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let conn = state.lock_read()?;
+        let prices = state.effective_prices();
+        let budget_config = budget::load_config(&state.budget_path);
+        query::overview_bundle(
+            &conn,
+            &request,
+            &prices,
+            &budget_config,
+            chrono::Utc::now(),
+            chrono::Local::now(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 pub async fn get_overview(app: tauri::AppHandle, filter: Filter) -> Result<OverviewDto, String> {

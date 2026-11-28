@@ -13,11 +13,11 @@ _Avoid_: 日志、log、message（这些是原始数据，不是归一后的记�
 _Avoid_: 工具、tool、渠道
 
 **品牌 (Brand)**：
-一个 AI 产品。来源 (Source) 和官方额度的内置提供方可以属于同一个品牌，共用图标和配色。权威名单是 `domain::Brand::ALL`（当前 33 个），字符串 ID 为 claude、codex、grok、gemini、kimi、qwen、copilot、opencode、factory、pi、omp、dsh、cursor、hermes、agy、qoder、cline、workbuddy、zcode、alma、codebuddy、trae、goose、roo、kilo、amp、zed、cherry、openclaw、crush、aider、warp、windsurf。归属由 `Source::brand()` 与 `OfficialQuotaProvider::brand()` 穷举登记：`qoder_cn` 属于 Qoder，`cursor_agent` 属于 Cursor；额度里的 droid 属于 factory、antigravity 属于 agy、cursor 属于 cursor，devin 没有品牌。Rust 只回答属于哪个品牌。SVG 和配色 class 留在前端，按品牌 ID 查，少一个品牌就过不了 tsc。重名 slug 的品牌以来源为准。见 ADR 0028。
-_Avoid_: 来源 (Source)、官方额度提供方、把 SVG 或配色 class 写进 Rust
+一个 AI 产品。来源 (Source) 和官方额度的内置提供方可以属于同一个品牌，共用图标和配色。权威名单是 `domain::Brand::ALL`（当前 33 个），字符串 ID 为 claude、codex、grok、gemini、kimi、qwen、copilot、opencode、factory、pi、omp、dsh、cursor、hermes、agy、qoder、cline、workbuddy、zcode、alma、codebuddy、trae、goose、roo、kilo、amp、zed、cherry、openclaw、crush、aider、warp、windsurf。归属由 `Source::brand()` 与 `OfficialQuotaProvider::brand()` 穷举登记：`qoder_cn` 属于 Qoder，`cursor_agent` 属于 Cursor，`codebuddy_ide` 属于 CodeBuddy；额度里的 droid 属于 factory、antigravity 属于 agy、cursor 属于 cursor，devin 没有品牌。生产 Rust（`domain::Brand`）保持纯领域枚举，不含 SVG 或 CSS；共享品牌图形（矢量路径与唯一源目录 `src-tauri/assets/source-icons/` 编码的 data URI）和确定性图表色由测试专用生成器 `src-tauri/src/tests/display_identity/` 双端生成到桌面端 `src/generated/` 与管理网页 `server/web/src/generated/`，不编进发布产物。桌面端徽章 CSS 配色 class 留在前端，有独立色板的品牌显式配置，其余统一回落 `tone-other`。重名 slug 的品牌以来源为准。见 ADR 0028。
+_Avoid_: 来源 (Source)、官方额度提供方、在生产 Rust 里塞 SVG 或 CSS、在管理网页手写重复映射或复制二进制图标
 
 **适配器 (Adapter)**：
-把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源要登记适配器表并写一个 Adapter，给 `Source` 补显示名、品牌和恢复命令，再重新生成展示身份文件。属于已有品牌时，前端只改额度模块的手排名单；新品牌才补 SVG 和配色。统计逻辑不感知原始格式。见 ADR 0001。对话记录不走这张表，见「对话记录适配器」。
+把某个 Source 的原始存储格式解析、归一化成「消耗记录」的模块。新增一个来源要登记适配器表并写一个 Adapter，给 `Source` 补显示名、品牌和恢复命令（以及 `CONVERSATION_ADAPTERS` 的 `has_conversation_body`），新品牌在 `tests/display_identity/marks.rs` 补图形，再运行一次展示身份快照生成器同时更新桌面端与管理网页。属于已有品牌时，前端只改额度模块的手排名单；新品牌默认沿用桌面端 `tone-other` 与确定性图表色，需要专属桌面色板时再补 CSS。统计逻辑不感知原始格式。见 ADR 0001、0028。对话记录不走这张表，见「对话记录适配器」。
 _Avoid_: parser、解析器、插件；不要用它指对话正文/事件的解析模块
 
 **Token 口径 (Token Dimension)**：

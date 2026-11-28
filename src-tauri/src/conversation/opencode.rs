@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::Value;
 
@@ -98,19 +98,13 @@ pub(super) fn source_revision(path: &Path) -> Result<String, String> {
     }
     fs::metadata(path).map_err(|error| format!("读取 OpenCode 数据库元数据失败：{error}"))?;
     let main = ingest::metadata_fingerprint(path);
-    let wal_path = sidecar_path(path, "-wal");
+    let wal_path = crate::source_sqlite::sqlite_sidecar_path(path, "-wal");
     let wal = match fs::metadata(&wal_path) {
         Ok(_) => ingest::metadata_fingerprint(&wal_path),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => "missing".to_string(),
         Err(error) => return Err(format!("读取 OpenCode WAL 元数据失败：{error}")),
     };
     serde_json::to_string(&(main, wal, INDEX_REVISION)).map_err(|error| error.to_string())
-}
-
-fn sidecar_path(path: &Path, suffix: &str) -> PathBuf {
-    let mut value = path.as_os_str().to_os_string();
-    value.push(suffix);
-    PathBuf::from(value)
 }
 
 fn fatal_issue(path: &Path, message: String) -> ConversationIndexIssue {

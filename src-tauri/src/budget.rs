@@ -105,6 +105,14 @@ pub fn status(
 ) -> Result<BudgetStatusDto, String> {
     let filter = local_month_filter(now);
     let overview = query::overview(conn, &filter, prices)?;
+    Ok(status_from_overview(&overview, config, now))
+}
+
+pub(crate) fn status_from_overview(
+    overview: &crate::domain::OverviewDto,
+    config: &BudgetConfig,
+    now: DateTime<Local>,
+) -> BudgetStatusDto {
     let date = now.date_naive();
     let days_elapsed = date.day() as i64;
     let total_days = days_in_month(date.year(), date.month());
@@ -120,7 +128,7 @@ pub fn status(
         (Some(proj), Some(budget)) if budget > 0.0 => Some(proj / budget * 100.0),
         _ => None,
     };
-    Ok(BudgetStatusDto {
+    BudgetStatusDto {
         monthly_budget: config.monthly_usd,
         month: date.format("%Y-%m").to_string(),
         days_elapsed,
@@ -131,7 +139,7 @@ pub fn status(
         percent_used,
         percent_projected,
         thresholds: THRESHOLDS.to_vec(),
-    })
+    }
 }
 
 /// 未配置预算或额度非正时跳过阈值检查，避免无谓的本月费用查询。

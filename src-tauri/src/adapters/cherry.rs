@@ -1,11 +1,11 @@
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::adapters::goose::unix_seconds_to_rfc3339;
-use crate::adapters::sqlite::{sql_text, table_columns};
 use crate::adapters::{finish, has_billable_tokens};
 use crate::domain::{Source, UsageRecord};
-use crate::ingest;
+use crate::source_sqlite::{
+    open_wal_readonly, sql_int, sql_nullable, sql_text, table_columns, wal_fingerprint,
+};
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
     Ok(roots
@@ -16,11 +16,11 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Result<Vec<PathBuf>, String> {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    wal_fingerprint(path)
 }
 
 pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let db = ingest::open_readonly_uri(path)?;
+    let db = open_wal_readonly(path)?;
     let columns = table_columns(&db, "ai_usage_record")?;
     if !columns.contains("id") {
         return Ok(Vec::new());
@@ -54,19 +54,15 @@ pub fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> 
         model_id = sql_text(&columns, "model_id"),
         model_name = sql_text(&columns, "model_name"),
         source_name = sql_text(&columns, "source_name"),
-        input_tokens = sql_opt_int(&columns, "input_tokens"),
-        output_tokens = sql_opt_int(&columns, "output_tokens"),
-        reasoning_tokens = sql_opt_int(&columns, "reasoning_tokens"),
-        no_cache_tokens = sql_opt_int(&columns, "no_cache_tokens"),
-        cache_read_tokens = sql_opt_int(&columns, "cache_read_tokens"),
-        cache_write_tokens = sql_opt_int(&columns, "cache_write_tokens"),
-        cost = sql_opt_real(&columns, "cost"),
+        input_tokens = sql_nullable(&columns, "input_tokens"),
+        output_tokens = sql_nullable(&columns, "output_tokens"),
+        reasoning_tokens = sql_nullable(&columns, "reasoning_tokens"),
+        no_cache_tokens = sql_nullable(&columns, "no_cache_tokens"),
+        cache_read_tokens = sql_nullable(&columns, "cache_read_tokens"),
+        cache_write_tokens = sql_nullable(&columns, "cache_write_tokens"),
+        cost = sql_nullable(&columns, "cost"),
         cost_currency = sql_text(&columns, "cost_currency"),
-        created_at = if columns.contains("created_at") {
-            "COALESCE(created_at, 0)"
-        } else {
-            "0"
-        },
+        created_at = sql_int(&columns, "created_at"),
     );
     let mut stmt = db.prepare(&sql).map_err(|error| error.to_string())?;
     let source_file = path.to_string_lossy().into_owned();
@@ -192,20 +188,4 @@ fn first_nonempty(values: &[&str]) -> String {
         .find(|value| !value.is_empty())
         .unwrap_or("")
         .to_string()
-}
-
-fn sql_opt_int(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        name.to_string()
-    } else {
-        "NULL".to_string()
-    }
-}
-
-fn sql_opt_real(columns: &BTreeSet<String>, name: &str) -> String {
-    if columns.contains(name) {
-        name.to_string()
-    } else {
-        "NULL".to_string()
-    }
 }

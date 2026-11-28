@@ -88,3 +88,24 @@ fn codebuddy_subagent_is_not_a_catalog_row() {
             .is_some_and(|session| session.session_id == "scout")
     }));
 }
+
+#[test]
+fn codebuddy_skips_meta_and_compact_internal_plumbing_lines() {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path();
+    let file = home.join(".codebuddy/projects/-work-cb/sess-plumb.jsonl");
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    let lines = [
+        r#"{"id":"u1","timestamp":1790503200000,"type":"message","role":"user","content":"Keep this prompt","sessionId":"sess-plumb","cwd":"/work/cb"}"#,
+        r#"{"id":"u2","timestamp":1790503201000,"type":"message","role":"user","isMeta":true,"content":"Hidden meta","sessionId":"sess-plumb","cwd":"/work/cb"}"#,
+        r#"{"id":"u3","timestamp":1790503202000,"type":"message","role":"assistant","isCompactInternal":true,"content":"Hidden compact","sessionId":"sess-plumb","cwd":"/work/cb"}"#,
+        r#"{"id":"u4","timestamp":1790503203000,"type":"message","role":"assistant","providerData":{"skipRun":true},"content":"Hidden skipRun","sessionId":"sess-plumb","cwd":"/work/cb"}"#,
+    ]
+    .join("\n");
+    std::fs::write(&file, format!("{lines}\n")).unwrap();
+
+    let conn = store::open_memory().unwrap();
+    ingest::ingest_all_with_overrides(&conn, home, &Default::default()).unwrap();
+    let detail = conversation::load_parsed_detail(&conn, home, "codebuddy", "sess-plumb").unwrap();
+    assert_eq!(message_texts(&detail), vec!["Keep this prompt".to_string()]);
+}
