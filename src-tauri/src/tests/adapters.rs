@@ -1738,6 +1738,48 @@ fn workbuddy_adapter_reads_legacy_usage_fields_and_meta_cwd() {
 }
 
 #[test]
+fn codebuddy_adapter_skips_incomplete_and_skip_run_and_reads_reasoning_and_message_usage() {
+    let content = [
+        r#"{"timestamp":1790503200000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"messageId":"m-skip","skipRun":true,"model":"glm-5.1","usage":{"inputTokens":500,"outputTokens":50}}}"#,
+        r#"{"timestamp":1790503201000,"type":"message","role":"assistant","status":"in_progress","sessionId":"s-cb","cwd":"/work/cb","providerData":{"messageId":"m-wip","model":"glm-5.1","usage":{"inputTokens":400,"outputTokens":40}}}"#,
+        r#"{"timestamp":1790503202000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"traceId":"t1"},"message":{"model":"claude-sonnet-4","usage":{"prompt_tokens":1000,"completion_tokens":100,"cache_read_input_tokens":200,"reasoningTokens":30}}}"#,
+        r#"{"timestamp":1790503203000,"type":"message","role":"assistant","status":"completed","sessionId":"s-cb","cwd":"/work/cb","providerData":{"traceId":"t1"},"message":{"model":"claude-sonnet-4","usage":{"prompt_tokens":1500,"completion_tokens":120,"cache_read_input_tokens":300,"reasoningTokens":45}}}"#,
+    ]
+    .join("\n");
+    let records = codebuddy::parse_codebuddy_jsonl(
+        &fixture_lines(&content),
+        "/home/dev/.codebuddy/projects/-work-cb/s-cb.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::CodeBuddy);
+    assert_eq!(records[0].model, "claude-sonnet-4");
+    assert_eq!(records[0].input_tokens, 1200);
+    assert_eq!(records[0].output_tokens, 120);
+    assert_eq!(records[0].cache_read_tokens, 300);
+    assert_eq!(records[0].reasoning_tokens, 45);
+}
+
+#[test]
+fn workbuddy_adapter_keeps_workbuddy_profile_semantics() {
+    let content = [
+        r#"{"timestamp":1790503200000,"type":"message","role":"assistant","status":"in_progress","sessionId":"s-wb","cwd":"/work/wb","providerData":{"messageId":"m1","skipRun":true,"requestModelId":"hy3","usage":{"inputTokens":600,"outputTokens":40,"inputTokensDetails":{"cached_tokens":100}}}}"#,
+        r#"{"timestamp":1790503201000,"type":"message","role":"assistant","status":"completed","sessionId":"s-wb","cwd":"/work/wb","providerData":{"messageId":"m1","requestModelId":"hy3","usage":{"inputTokens":800,"outputTokens":60,"inputTokensDetails":{"cached_tokens":200}}}}"#,
+    ]
+    .join("\n");
+    let records = workbuddy::parse_workbuddy_jsonl(
+        &fixture_lines(&content),
+        "/home/dev/.workbuddy/projects/-work-wb/s-wb.jsonl",
+    );
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].source, Source::WorkBuddy);
+    assert_eq!(records[0].model, "hy3");
+    assert_eq!(records[0].input_tokens, 600);
+    assert_eq!(records[0].output_tokens, 60);
+    assert_eq!(records[0].cache_read_tokens, 200);
+    assert_eq!(records[0].reasoning_tokens, 0);
+}
+
+#[test]
 fn zcode_adapter_subtracts_cache_from_ai_sdk_input() {
     let records = zcode::parse_zcode_messages(&zcode_fixture_messages());
     assert_eq!(records.len(), 2);
@@ -2736,7 +2778,7 @@ fn agy_adapter_readonly_parse_follows_uncheckpointed_wal() {
     assert!(records.iter().any(|row| row.input_tokens == 5));
 
     let immutable = rusqlite::Connection::open_with_flags(
-        ingest::sqlite_file_uri(&db, "immutable=1"),
+        crate::source_sqlite::sqlite_file_uri(&db, "immutable=1"),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
     )
     .unwrap();

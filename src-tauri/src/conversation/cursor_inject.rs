@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rusqlite::{Connection, OpenFlags};
+use rusqlite::Connection;
 use serde_json::{json, Map, Value};
 
 use crate::domain::{
@@ -17,6 +17,7 @@ use crate::domain::{
     ConversationContextLayer, ConversationContextLoadMode, ConversationSessionRow,
 };
 use crate::proto_wire;
+use crate::source_sqlite;
 
 const UNRECOGNIZED_ID: &str = "unrecognized";
 const COMPLETENESS_KEYS: [&str; 9] = [
@@ -98,7 +99,7 @@ fn incomplete_keys(message: &Value) -> Option<Vec<String>> {
 }
 
 fn restore_messages(path: &Path) -> Vec<Value> {
-    let Ok(conn) = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY) else {
+    let Ok(conn) = source_sqlite::open_plain_readonly(path) else {
         return Vec::new();
     };
     let Ok(meta_value) = conn.query_row("SELECT value FROM meta WHERE key = '0'", [], |row| {

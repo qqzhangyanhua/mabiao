@@ -29,6 +29,7 @@ use crate::adapters::project::session_id_from_source_file;
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
 use crate::proto_wire;
+use crate::source_sqlite;
 
 pub(crate) const PATH_ENV: &str = "AGY_DATA_DIR";
 const DEFAULT_ROOTS: [&str; 2] = [".gemini/antigravity-cli", ".gemini/antigravity-ide"];
@@ -93,11 +94,11 @@ pub(crate) fn detected(dirs: &[PathBuf]) -> bool {
 }
 
 pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
-    ingest::wal_fingerprint(path)
+    source_sqlite::wal_fingerprint(path)
 }
 
 pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, String> {
-    let Ok(conn) = ingest::open_readonly_uri(path) else {
+    let Ok(conn) = source_sqlite::open_wal_readonly(path) else {
         return Ok(Vec::new());
     };
     if !preflight(&conn) {
@@ -134,18 +135,9 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
 /// 前置校验：只读已打开、`steps`/`gen_metadata` 在、且至少能解出一行生成元数据。
 /// 不通过视为「不是 agy 数据」，静默排除。`trajectory_metadata_blob` 可选。
 fn preflight(conn: &rusqlite::Connection) -> bool {
-    table_exists(conn, "steps")
-        && table_exists(conn, "gen_metadata")
+    source_sqlite::table_exists(conn, "steps")
+        && source_sqlite::table_exists(conn, "gen_metadata")
         && decodes_at_least_one_generation(conn)
-}
-
-fn table_exists(conn: &rusqlite::Connection, name: &str) -> bool {
-    conn.query_row(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
-        [name],
-        |_| Ok(()),
-    )
-    .is_ok()
 }
 
 fn decodes_at_least_one_generation(conn: &rusqlite::Connection) -> bool {

@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use crate::adapters::{finish, has_billable_tokens, i64_field, text_field};
 use crate::domain::{Source, UsageRecord};
 use crate::ingest::{self, PathOverrides};
+use crate::source_sqlite::{self, column_exists, open_plain_readonly, table_exists};
 
 pub(crate) fn scan_dirs(overrides: &PathOverrides, home: &Path) -> Vec<PathBuf> {
     let roots = overrides
@@ -104,8 +105,7 @@ pub(crate) fn sidecar_fingerprint(path: &Path, _dirs: &[PathBuf]) -> String {
     if is_legacy_session(path) {
         return legacy_sidecar(path);
     }
-    let wal = PathBuf::from(format!("{}-wal", path.to_string_lossy()));
-    ingest::metadata_fingerprint(&wal)
+    source_sqlite::wal_fingerprint(path)
 }
 
 pub(crate) fn is_legacy_session(path: &Path) -> bool {
@@ -142,7 +142,7 @@ pub(crate) fn parse(path: &Path, _scan_dir: &Path) -> Result<Vec<UsageRecord>, S
     if is_legacy_session(path) {
         return parse_legacy_session(path);
     }
-    let source_db = ingest::open_readonly(path)?;
+    let source_db = open_plain_readonly(path)?;
     let loc = path.to_string_lossy().into_owned();
     let mut messages = Vec::new();
     if table_exists(&source_db, "session_message") {
@@ -353,32 +353,6 @@ fn v1_session_ids_to_skip(db: &Connection) -> Result<HashSet<String>, String> {
         .map_err(|e| e.to_string())?;
     ids.collect::<Result<HashSet<_>, _>>()
         .map_err(|e| e.to_string())
-}
-
-fn table_exists(db: &Connection, name: &str) -> bool {
-    db.query_row(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
-        [name],
-        |row| row.get::<_, i64>(0),
-    )
-    .ok()
-    .is_some_and(|n| n > 0)
-}
-
-fn column_exists(db: &Connection, table: &str, column: &str) -> bool {
-    let sql = match table {
-        "session_message" => "PRAGMA table_info(session_message)",
-        "session_v2" => "PRAGMA table_info(session_v2)",
-        _ => return false,
-    };
-    let Ok(mut stmt) = db.prepare(sql) else {
-        return false;
-    };
-    let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(1)) else {
-        return false;
-    };
-    let names: Vec<String> = rows.flatten().collect();
-    names.iter().any(|name| name == column)
 }
 
 fn list_opencode_dbs(root: &Path) -> Vec<PathBuf> {

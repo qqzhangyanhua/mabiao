@@ -10,10 +10,13 @@ use super::super::toolbox::{CAPABILITY_EVENTS, CAPABILITY_MESSAGES, CAPABILITY_U
 use super::{
     diagnostic, ConversationIndexIssue, DatabaseSnapshot, MessageRow, PartRow, SessionRow,
 };
-use crate::ingest;
+use crate::source_sqlite::{
+    open_plain_readonly, row_opt_string, sql_aliased_nullable, sql_fallback, table_columns,
+    table_names,
+};
 
 pub(super) fn read_snapshot(path: &Path) -> Result<DatabaseSnapshot, String> {
-    let mut source_db = ingest::open_readonly(path)
+    let mut source_db = open_plain_readonly(path)
         .map_err(|error| format!("只读打开 OpenCode 数据库失败：{error}"))?;
     source_db
         .busy_timeout(std::time::Duration::from_millis(250))
@@ -149,61 +152,23 @@ fn read_transaction(path: &Path, db: &Connection) -> Result<DatabaseSnapshot, St
     })
 }
 
-fn table_names(db: &Connection) -> Result<BTreeSet<String>, String> {
-    let mut statement = db
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(0))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows)
-}
-
-fn table_columns(db: &Connection, table: &str) -> Result<BTreeSet<String>, String> {
-    if !table
-        .chars()
-        .all(|character| character.is_ascii_alphanumeric() || character == '_')
-    {
-        return Err("不支持的 OpenCode 表".to_string());
-    }
-    let mut statement = db
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .map_err(|error| error.to_string())?;
-    let rows = statement
-        .query_map([], |row| row.get(1))
-        .map_err(|error| error.to_string())?
-        .collect::<Result<BTreeSet<_>, _>>()
-        .map_err(|error| error.to_string())?;
-    Ok(rows)
-}
-
-fn optional_column(columns: &BTreeSet<String>, column: &str, fallback: &str) -> String {
-    if columns.contains(column) {
-        column.to_string()
-    } else {
-        fallback.to_string()
-    }
-}
-
 fn read_sessions(db: &Connection, columns: &BTreeSet<String>) -> Result<Vec<SessionRow>, String> {
     let sql = format!(
         "SELECT id, {}, {}, {}, {}, {} FROM session ORDER BY id",
-        optional_column(columns, "title", "''"),
-        optional_column(columns, "directory", "''"),
-        optional_column(columns, "parent_id", "''"),
-        optional_column(columns, "time_created", "NULL"),
-        optional_column(columns, "time_updated", "NULL"),
+        sql_fallback(columns, "title", "''"),
+        sql_fallback(columns, "directory", "''"),
+        sql_fallback(columns, "parent_id", "''"),
+        sql_fallback(columns, "time_created", "NULL"),
+        sql_fallback(columns, "time_updated", "NULL"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
         .query_map([], |row| {
             Ok(SessionRow {
                 id: row.get(0)?,
-                title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                directory: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                parent_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                title: row_opt_string(row, 1)?,
+                directory: row_opt_string(row, 2)?,
+                parent_id: row_opt_string(row, 3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
             })
@@ -222,8 +187,8 @@ fn read_messages(
 ) -> Result<Vec<MessageRow>, String> {
     let sql = format!(
         "SELECT id, session_id, {}, data FROM message ORDER BY {}, id",
-        optional_column(columns, "time_created", "NULL"),
-        optional_column(columns, "time_created", "id"),
+        sql_fallback(columns, "time_created", "NULL"),
+        sql_fallback(columns, "time_created", "id"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let rows = statement
@@ -279,11 +244,7 @@ fn read_parts(
     } else {
         " JOIN message AS m ON m.id = p.message_id"
     };
-    let created_expression = if columns.contains("time_created") {
-        "p.time_created"
-    } else {
-        "NULL"
-    };
+    let created_expression = sql_aliased_nullable(columns, "p", "time_created");
     let sql = format!(
         "SELECT p.id, p.message_id, {session_expression}, {created_expression}, p.data FROM part AS p{join} ORDER BY {created_expression}, p.id"
     );
@@ -368,20 +329,20 @@ fn read_v2(_path: &Path, db: &Connection) -> Result<V2Tables, String> {
     let columns = table_columns(db, "session_v2")?;
     let sql = format!(
         "SELECT id, {}, {}, {}, {}, {} FROM session_v2 ORDER BY id",
-        optional_column(&columns, "title", "''"),
-        optional_column(&columns, "directory", "''"),
-        optional_column(&columns, "parent_id", "''"),
-        optional_column(&columns, "time_created", "NULL"),
-        optional_column(&columns, "time_updated", "NULL"),
+        sql_fallback(&columns, "title", "''"),
+        sql_fallback(&columns, "directory", "''"),
+        sql_fallback(&columns, "parent_id", "''"),
+        sql_fallback(&columns, "time_created", "NULL"),
+        sql_fallback(&columns, "time_updated", "NULL"),
     );
     let mut statement = db.prepare(&sql).map_err(|error| error.to_string())?;
     let sessions = statement
         .query_map([], |row| {
             Ok(SessionRow {
                 id: row.get(0)?,
-                title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                directory: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                parent_id: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                title: row_opt_string(row, 1)?,
+                directory: row_opt_string(row, 2)?,
+                parent_id: row_opt_string(row, 3)?,
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
             })

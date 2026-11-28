@@ -11,7 +11,7 @@
 - OpenCode：`opencode.db` / `opencode-*.db` + 对应 `-wal`。没有库、改读 `storage/` 旧 JSON 时，辅助指纹是该会话的 `message/` 与 `part/` 文件元数据
 - OMP：子代理 jsonl + 同名父会话 `{stem}.jsonl`（存在与否改变 `session_id` / `is_top_level`）
 - dsh：旧版 `session.jsonl.zstd` 同目录是否存在 v4 副本 `session.v4.jsonl.zstd`（存在则旧文件解析为空，避免重复计数）
-- Hermes、agy、Alma、Goose、Zed、Cherry Studio、Crush、Warp：SQLite 主库 + `-wal`（`ingest::wal_fingerprint`）。不算 `-shm`：它只是 WAL 索引，每次只读打开都会刷新它的 mtime，算进来就会让摄取自己的读取把下一轮判成已变化、每轮整份重解析
+- Hermes、agy、Alma、Goose、Zed、Cherry Studio、Crush、Warp、ZCode：SQLite 主库 + `-wal`（`source_sqlite::wal_fingerprint`）。不算 `-shm`：它只是 WAL 索引，每次只读打开都会刷新它的 mtime，算进来就会让摄取自己的读取把下一轮判成已变化、每轮整份重解析
 
 设置页暴露来源健康信息，并提供单来源或全部缓存重建。重建通过使缓存标记过期来强制重解析；只有新结果验证成功后才替换旧记录，不修改任何来源文件，也不会先清空最后一次正确缓存。
 

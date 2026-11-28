@@ -21,8 +21,8 @@ use super::toolbox::*;
 use super::{ConversationIndexBatch, ConversationIndexIssue};
 use crate::adapters::agy::{load_model_names, load_project, timestamp_at};
 use crate::adapters::project::session_id_from_source_file;
-use crate::ingest;
 use crate::proto_wire;
+use crate::source_sqlite;
 
 const STEP_USER_INPUT: i64 = 14;
 const STEP_PLANNER_RESPONSE: i64 = 15;
@@ -65,7 +65,7 @@ pub(super) fn detail(
 }
 
 pub(super) fn source_revision(path: &Path) -> Result<String, String> {
-    super::discover::wal_source_revision(path, "Antigravity")
+    source_sqlite::wal_source_revision(path, "Antigravity")
 }
 
 fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
@@ -78,10 +78,10 @@ fn fatal(path: &Path, message: String) -> ConversationIndexIssue {
 }
 
 fn project(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue> {
-    let db = ingest::open_readonly_uri(path)
+    let db = source_sqlite::open_wal_readonly(path)
         .map_err(|error| fatal(path, format!("只读打开 Antigravity 数据库失败：{error}")))?;
     // 没有 `step_payload` 列的是旧版或非 agy 数据，与消耗记录一样静默排除。
-    if !has_step_payload(&db) {
+    if !source_sqlite::column_exists(&db, "steps", "step_payload") {
         return Ok(ConversationIndexBatch {
             conversations: Vec::new(),
             diagnostics: Vec::new(),
@@ -92,15 +92,6 @@ fn project(path: &Path) -> Result<ConversationIndexBatch, ConversationIndexIssue
         conversations: vec![conversation],
         diagnostics: Vec::new(),
     })
-}
-
-fn has_step_payload(db: &Connection) -> bool {
-    db.query_row(
-        "SELECT 1 FROM pragma_table_info('steps') WHERE name = 'step_payload'",
-        [],
-        |_| Ok(()),
-    )
-    .is_ok()
 }
 
 fn project_session(path: &Path, db: &Connection) -> Result<ParsedConversation, String> {
