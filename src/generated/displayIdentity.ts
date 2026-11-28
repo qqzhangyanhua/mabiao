@@ -91,6 +91,13 @@ export const BRAND_IDS = [
   "windsurf",
 ] as const;
 
+/** 本机不存对话正文、目录按设计为空的来源 slug，由 `CONVERSATION_ADAPTERS` 推导。 */
+export const BODYLESS_CONVERSATION_SOURCES = [
+  "aider",
+  "warp",
+  "windsurf",
+] as const;
+
 /** 按 slug 索引的显示名。重名 slug 以来源 `application_name` 为准。 */
 export const DISPLAY_NAMES = {
   codex: "Codex",
@@ -215,6 +222,46 @@ export const RESUME_TEMPLATES = {
   warp: null,
   windsurf: null,
 } as const;
+
+/** 按品牌 ID 索引的确定性图表色（`#rrggbb`）。 */
+export const BRAND_CHART_COLORS = {
+  claude: "#ea580c",
+  codex: "#6d5ef6",
+  grok: "#db2777",
+  gemini: "#0284c7",
+  kimi: "#059669",
+  qwen: "#7c3aed",
+  copilot: "#7c3aed",
+  opencode: "#2563eb",
+  factory: "#059669",
+  pi: "#0891b2",
+  omp: "#c026d3",
+  dsh: "#0284c7",
+  cursor: "#64748b",
+  hermes: "#7c3aed",
+  agy: "#0284c7",
+  qoder: "#0284c7",
+  cline: "#d97706",
+  workbuddy: "#ea580c",
+  zcode: "#0284c7",
+  alma: "#0891b2",
+  codebuddy: "#ea580c",
+  trae: "#db2777",
+  goose: "#0284c7",
+  roo: "#c026d3",
+  kilo: "#0891b2",
+  amp: "#db2777",
+  zed: "#2563eb",
+  cherry: "#0891b2",
+  openclaw: "#0891b2",
+  crush: "#2563eb",
+  aider: "#2563eb",
+  warp: "#0d9488",
+  windsurf: "#059669",
+} as const;
+
+/** 未知或无品牌 slug 的默认图表色。 */
+export const DEFAULT_BRAND_CHART_COLOR = "#64748b";
 
 export type UsageSource = (typeof SOURCE_SLUGS)[number];
 export type BrandId = (typeof BRAND_IDS)[number];
