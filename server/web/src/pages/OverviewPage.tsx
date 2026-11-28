@@ -1,5 +1,5 @@
 import { Users } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useAuth } from "../auth";
 import { Empty, ErrorNote, Loading } from "../components/Feedback";
 import { PageHeader } from "../components/PageHeader";
@@ -10,24 +10,25 @@ import { usePageExports } from "../export-action";
 import { useAsync } from "../hooks";
 import { downloadCsv } from "../lib/csv";
 import { summaryRows } from "../lib/export";
-import { useScopeInsights } from "../useInsights";
+import { useScopeBehavior, useScopeComposition } from "../useInsights";
 import { useView } from "../view";
 
 export function OverviewPage() {
   const { api } = useAuth();
   const view = useView();
   const { bounds, offset } = view;
-  const load = useCallback(
-    () => (bounds ? api.summary(bounds, offset) : Promise.reject(new Error("日期范围不正确"))),
+  const load = useMemo(
+    () => (bounds ? () => api.summary(bounds, offset) : null),
     [api, bounds, offset],
   );
   const summary = useAsync(load);
-  const loadSessions = useCallback(
-    () => (bounds ? api.sessions(bounds, 1, 0) : Promise.reject(new Error("日期范围不正确"))),
+  const loadSessions = useMemo(
+    () => (bounds ? () => api.sessions(bounds, 1, 0) : null),
     [api, bounds],
   );
   const sessions = useAsync(loadSessions);
-  const insights = useScopeInsights(bounds);
+  const insights = useScopeComposition(bounds);
+  const behavior = useScopeBehavior(bounds);
 
   const data = summary.data;
   usePageExports(
@@ -57,33 +58,35 @@ export function OverviewPage() {
       ) : summary.loading || !data ? (
         <Loading />
       ) : (
-        <SummaryView
-          summary={data}
-          mode={view.mode}
-          range={{ fromDay: view.fromDay, toDay: view.toDay }}
-          showAccounts
-          linkAccounts
-          sessions={sessions.data?.total}
-          cacheHit={insights.cacheHit}
-          onUnpriced={insights.showUnpriced}
-          modelSplits={insights.modelSplits}
-          sourceSplits={insights.sourceSplits}
-          projectSplits={insights.projectSplits}
-        />
-      )}
-      {insights.scope && (
         <>
-          <BehaviorPanel report={insights.behavior} />
-          <UsageSection
-            scope={insights.scope}
-            showAccount
-            composition={insights.composition.data}
-            costSource={insights.costSource}
-            model={insights.model}
-            onCostSource={insights.setCostSource}
-            onModel={insights.setModel}
-            isAdmin
+          <SummaryView
+            summary={data}
+            mode={view.mode}
+            range={{ fromDay: view.fromDay, toDay: view.toDay }}
+            showAccounts
+            linkAccounts
+            sessions={sessions.data?.total}
+            cacheHit={insights.cacheHit}
+            onUnpriced={insights.showUnpriced}
+            modelSplits={insights.modelSplits}
+            sourceSplits={insights.sourceSplits}
+            projectSplits={insights.projectSplits}
           />
+          {insights.scope && (
+            <>
+              <BehaviorPanel report={behavior} />
+              <UsageSection
+                scope={insights.scope}
+                showAccount
+                composition={insights.composition.data}
+                costSource={insights.costSource}
+                model={insights.model}
+                onCostSource={insights.setCostSource}
+                onModel={insights.setModel}
+                isAdmin
+              />
+            </>
+          )}
         </>
       )}
     </>

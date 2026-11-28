@@ -3,10 +3,12 @@
 //! 聚合在服务端做，网页只展示。费用并列给统一价与客户端快照，两者都只是求和，
 //! 计价规则本体仍在 `team_pricing` / `crates/pricing`。
 
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use crate::error::AppError;
-use crate::usage_query::{Filter, Totals};
+use crate::scope::{self, Scope};
+use crate::usage_query::Totals;
 
 /// 单个维度最多返回的条数。按费用从高到低截断，长尾不重要。
 pub const MAX_BREAKDOWN_ROWS: i64 = 200;
@@ -17,7 +19,7 @@ const MAX_DAYS: i64 = 3660;
 pub const MIN_TZ_OFFSET_MINUTES: i32 = -12 * 60;
 pub const MAX_TZ_OFFSET_MINUTES: i32 = 14 * 60;
 
-#[derive(Debug, Clone, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, sqlx::FromRow)]
 pub struct BreakdownRow {
     /// 分组键：日期、账号名、来源、模型、项目 key（没有项目为空串）。
     pub key: String,
@@ -34,7 +36,7 @@ pub struct BreakdownRow {
     pub session_count: i64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Summary {
     pub totals: Totals,
     pub by_day: Vec<BreakdownRow>,
@@ -43,11 +45,6 @@ pub struct Summary {
     pub by_model: Vec<BreakdownRow>,
     pub by_project: Vec<BreakdownRow>,
 }
-
-const FILTER: &str = "($1::bigint IS NULL OR u.account_id = $1)
-    AND ($2::timestamptz IS NULL OR u.occurred_at >= $2)
-    AND ($3::timestamptz IS NULL OR u.occurred_at < $3)
-    AND ($4::bigint IS NULL OR u.project_id = $4)";
 
 const USAGE_METRICS: &str = "count(*)::bigint AS record_count,
     COALESCE(sum(u.total_tokens), 0)::bigint AS total_tokens,
@@ -63,33 +60,21 @@ const METRICS: &str = "count(*)::bigint AS record_count,
     (count(*) FILTER (WHERE u.unified_pricing_source = 'unpriced'))::bigint AS unpriced_count,
     0::bigint AS session_count";
 
-/// 与会话列表同一口径：结束时间，解析不了就退回开始、再退回推送时间。
-const SESSION_FILTER: &str = "($1::bigint IS NULL OR s.account_id = $1)
-    AND ($2::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) >= $2)
-    AND ($3::timestamptz IS NULL OR COALESCE(s.ended_at, s.started_at, s.pushed_at) < $3)
-    AND ($4::bigint IS NULL OR s.project_id = $4)";
-
 const RANKED: &str = "ORDER BY unified_cost DESC, total_tokens DESC, key ASC";
 
 async fn dimension(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     select_and_group: &str,
 ) -> Result<Vec<BreakdownRow>, AppError> {
     // 拼进去的都是本文件里的常量片段，没有任何用户输入。
     let sql = format!("{select_and_group} {RANKED} LIMIT {MAX_BREAKDOWN_ROWS}");
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(filter.bind_query_as(&sql).fetch_all(pool).await?)
 }
 
 async fn by_day(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     tz_offset_minutes: i32,
 ) -> Result<Vec<BreakdownRow>, AppError> {
     let sql = format!(
@@ -98,14 +83,12 @@ async fn by_day(
                 to_char((u.occurred_at AT TIME ZONE 'UTC') + $5::int * interval '1 minute',
                         'YYYY-MM-DD') AS label,
                 NULL::bigint AS id, {METRICS}
-         FROM usage_records u WHERE {FILTER}
-         GROUP BY 1 ORDER BY key ASC LIMIT {MAX_DAYS}"
+         FROM usage_records u WHERE {usage_where}
+         GROUP BY 1 ORDER BY key ASC LIMIT {MAX_DAYS}",
+        usage_where = scope::USAGE_WHERE,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
+    Ok(filter
+        .bind_query_as(&sql)
         .bind(tz_offset_minutes)
         .fetch_all(pool)
         .await?)
@@ -114,9 +97,10 @@ async fn by_day(
 /// `tz_offset_minutes` 只影响「按天」怎么切日界；调用方先用上面的范围常量校验。
 pub async fn build(
     pool: &PgPool,
-    filter: &Filter,
+    filter: &Scope,
     tz_offset_minutes: i32,
 ) -> Result<Summary, AppError> {
+    let usage_where = scope::USAGE_WHERE;
     let totals = crate::usage_query::totals(pool, filter).await?;
     let by_account = dimension(
         pool,
@@ -124,7 +108,7 @@ pub async fn build(
         &format!(
             "SELECT a.account AS key, a.account AS label, a.id AS id, {METRICS}
              FROM usage_records u JOIN remote_accounts a ON a.id = u.account_id
-             WHERE {FILTER} GROUP BY a.id, a.account"
+             WHERE {usage_where} GROUP BY a.id, a.account"
         ),
     )
     .await?;
@@ -134,7 +118,7 @@ pub async fn build(
         filter,
         &format!(
             "SELECT u.model AS key, u.model AS label, NULL::bigint AS id, {METRICS}
-             FROM usage_records u WHERE {FILTER} GROUP BY u.model"
+             FROM usage_records u WHERE {usage_where} GROUP BY u.model"
         ),
     )
     .await?;
@@ -145,7 +129,7 @@ pub async fn build(
             "SELECT COALESCE(p.key, '') AS key, COALESCE(p.name, '未归属项目') AS label,
                     p.id AS id, {METRICS}
              FROM usage_records u LEFT JOIN projects p ON p.id = u.project_id
-             WHERE {FILTER} GROUP BY p.id, p.key, p.name"
+             WHERE {usage_where} GROUP BY p.id, p.key, p.name"
         ),
     )
     .await?;
@@ -163,7 +147,7 @@ pub async fn build(
 ///
 /// 只有会话、没有消耗记录的来源（Qoder、Cursor Agent 常见）token 与费用是 0，
 /// `session_count` 仍让它们出现在「按 Agent 工具」里。费用与 token 仍只加总消耗记录。
-async fn source_rows(pool: &PgPool, filter: &Filter) -> Result<Vec<BreakdownRow>, AppError> {
+async fn source_rows(pool: &PgPool, filter: &Scope) -> Result<Vec<BreakdownRow>, AppError> {
     let sql = format!(
         "SELECT COALESCE(usage.key, sessions.key) AS key,
                 COALESCE(usage.key, sessions.key) AS label,
@@ -176,23 +160,19 @@ async fn source_rows(pool: &PgPool, filter: &Filter) -> Result<Vec<BreakdownRow>
                 COALESCE(sessions.session_count, 0)::bigint AS session_count
          FROM (
              SELECT u.source AS key, {USAGE_METRICS}
-             FROM usage_records u WHERE {FILTER}
+             FROM usage_records u WHERE {usage_where}
              GROUP BY u.source
          ) AS usage
          FULL OUTER JOIN (
              SELECT s.source AS key, count(*)::bigint AS session_count
-             FROM sessions s WHERE {SESSION_FILTER}
+             FROM sessions s WHERE {session_where}
              GROUP BY s.source
          ) AS sessions ON sessions.key = usage.key
-         {RANKED} LIMIT {MAX_BREAKDOWN_ROWS}"
+         {RANKED} LIMIT {MAX_BREAKDOWN_ROWS}",
+        usage_where = scope::USAGE_WHERE,
+        session_where = scope::SESSION_WHERE,
     );
-    Ok(sqlx::query_as(&sql)
-        .bind(filter.account_id)
-        .bind(filter.from)
-        .bind(filter.to)
-        .bind(filter.project_id)
-        .fetch_all(pool)
-        .await?)
+    Ok(filter.bind_query_as(&sql).fetch_all(pool).await?)
 }
 
 /// 一场会话自己的消耗：按模型拆开，合计由调用方求和。

@@ -116,8 +116,8 @@ export function MembersPage() {
     const offset = localOffsetMinutes(now);
     return queryBounds(presetRange("7d", now, offset), offset);
   }, []);
-  const loadWeek = useCallback(
-    () => (weekBounds ? api.summary(weekBounds, localOffsetMinutes()) : Promise.reject(new Error("日期范围不正确"))),
+  const loadWeek = useMemo(
+    () => (weekBounds ? () => api.summary(weekBounds, localOffsetMinutes()) : null),
     [api, weekBounds],
   );
   const week = useAsync(loadWeek);
